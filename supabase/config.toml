@@ -1,10 +1,10 @@
 project_id = "jdqgnhfduplfcrsrvrnn"
 
 [functions.telegram-auth]
-verify_jwt = false
+verify_jwt = true
 
 [functions.init-admin]
-verify_jwt = false
+verify_jwt = true
 
 [functions.import-1c]
 verify_jwt = false
@@ -13,25 +13,25 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.chat-assistant]
-verify_jwt = false
+verify_jwt = true
 
 [functions.notify-telegram]
-verify_jwt = false
+verify_jwt = true
 
 [functions.telegram-webhook]
-verify_jwt = false
+verify_jwt = true
 
 [functions.vk-auth]
-verify_jwt = false
+verify_jwt = true
 
 [functions.vk-callback]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-telegram-code]
-verify_jwt = false
+verify_jwt = true
 
 [functions.verify-telegram-code]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-magic-link-email]
-verify_jwt = false
+verify_jwt = true

@@ -48,7 +48,6 @@ interface ExchangeLog {
 
 interface StoreSettings {
   exchange_login: string | null;
-  exchange_password: string | null;
 }
 
 interface StockDiscrepancy {
@@ -70,7 +69,6 @@ export default function AdminExchange() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [errorDetailsLog, setErrorDetailsLog] = useState<ExchangeLog | null>(null);
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [isEditingCreds, setIsEditingCreds] = useState(false);
   const [editLogin, setEditLogin] = useState("");
   const [editPassword, setEditPassword] = useState("");
@@ -101,7 +99,7 @@ export default function AdminExchange() {
           .limit(100),
         supabase
           .from("store_settings")
-          .select("exchange_login, exchange_password")
+          .select("exchange_login")
           .single()
       ]);
       if (logsRes.data) setLogs(logsRes.data);
@@ -157,21 +155,32 @@ export default function AdminExchange() {
 
   const startEditCreds = () => {
     setEditLogin(settings?.exchange_login || "");
-    setEditPassword(settings?.exchange_password || "");
+    setEditPassword("");
     setIsEditingCreds(true);
   };
 
   const saveCreds = async () => {
     setIsSavingCreds(true);
     try {
+      const updates: { exchange_login: string; exchange_password?: string } = {
+        exchange_login: editLogin,
+      };
+      if (editPassword.trim()) {
+        updates.exchange_password = editPassword;
+      }
+
       const { error } = await supabase
         .from("store_settings")
-        .update({ exchange_login: editLogin, exchange_password: editPassword })
+        .update(updates)
         .not("id", "is", null);
       if (error) throw error;
-      setSettings({ exchange_login: editLogin, exchange_password: editPassword });
+      setSettings({ exchange_login: editLogin });
+      setEditPassword("");
       setIsEditingCreds(false);
-      toast({ title: "Учётные данные сохранены" });
+      toast({
+        title: "Учётные данные сохранены",
+        description: "Пароль скрыт и больше не передаётся обратно в браузер.",
+      });
     } catch (e: any) {
       toast({ title: "Ошибка сохранения", description: e.message, variant: "destructive" });
     } finally {
@@ -280,7 +289,14 @@ export default function AdminExchange() {
               </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Пароль</label>
-                <Input className="mt-1 font-mono" type="text" value={editPassword} onChange={e => setEditPassword(e.target.value)} />
+                <Input
+                  className="mt-1 font-mono"
+                  type="password"
+                  autoComplete="new-password"
+                  value={editPassword}
+                  onChange={e => setEditPassword(e.target.value)}
+                  placeholder="Оставьте пустым, чтобы не менять"
+                />
               </div>
               <div className="flex gap-2">
                 <Button onClick={saveCreds} disabled={isSavingCreds} size="sm">
@@ -293,18 +309,11 @@ export default function AdminExchange() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Логин</label>
-                <p className="mt-1 font-mono">{settings?.exchange_login || "—"}</p>
+                <p className="mt-1 font-mono">{settings?.exchange_login || "Не задан"}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Пароль</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="font-mono">{settings?.exchange_password ? (showPassword ? settings.exchange_password : "••••••••") : "—"}</p>
-                  {settings?.exchange_password && (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setShowPassword(!showPassword)}>
-                      {showPassword ? "Скрыть" : "Показать"}
-                    </Button>
-                  )}
-                </div>
+                <p className="mt-1 text-sm text-muted-foreground">Не отображается после сохранения</p>
               </div>
               <div>
                 <Button variant="outline" size="sm" onClick={startEditCreds}>

@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, cookie",
-  "Access-Control-Allow-Credentials": "true",
-};
+import { corsHeadersFor } from "../_shared/cors.ts";
+import { getClientIp, isAllowedOneCClient, secretsEqual } from "../_shared/security.ts";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -13,13 +9,6 @@ const MAX_REQUESTS_PER_WINDOW = 30;
 
 // In-memory rate limiter
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function getClientIP(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || req.headers.get("cf-connecting-ip")
-    || req.headers.get("x-real-ip")
-    || "unknown";
-}
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -328,11 +317,24 @@ function getSessionId(req: Request): string {
 }
 
 serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req, {
+    allowedHeaders: "authorization, x-client-info, apikey, content-type, cookie",
+    allowCredentials: true,
+  });
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const clientIP = getClientIP(req);
+  const clientIP = getClientIp(req);
+
+  if (!isAllowedOneCClient(req)) {
+    console.warn(`Rejected 1C exchange from non-allowlisted IP: ${clientIP}`);
+    return new Response("failure\nForbidden", {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
 
   // Rate limiting
   if (!checkRateLimit(clientIP)) {
@@ -348,7 +350,7 @@ serve(async (req) => {
   const mode = url.searchParams.get("mode") || "";
   const filename = url.searchParams.get("filename") || "";
 
-  console.log(`=== 1C Exchange: type=${type}, mode=${mode}, filename=${filename}, IP=${clientIP} ===`);
+  console.log(`1C exchange request: type=${type}, mode=${mode}, IP=${clientIP}`);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -373,47 +375,49 @@ serve(async (req) => {
   }
 
   try {
-    // === CHECKAUTH ===
-    if (mode === "checkauth") {
-      const authHeader = req.headers.get("authorization");
-      
-      if (!authHeader?.startsWith("Basic ")) {
-        return new Response("failure", {
-          status: 401,
-          headers: { 
-            ...corsHeaders, 
-            "Content-Type": "text/plain; charset=windows-1251", 
-            "WWW-Authenticate": 'Basic realm="1C"' 
-          },
-        });
-      }
+    const authHeader = req.headers.get("authorization");
+    let login = "";
+    let password = "";
 
-      let login: string, password: string;
+    if (authHeader?.startsWith("Basic ")) {
       try {
         const credentials = atob(authHeader.substring(6));
-        [login, password] = credentials.split(":");
+        const separator = credentials.indexOf(":");
+        if (separator >= 0) {
+          login = credentials.slice(0, separator);
+          password = credentials.slice(separator + 1);
+        }
       } catch {
-        console.warn(`Invalid base64 auth from IP: ${clientIP}`);
-        return new Response("failure", {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "text/plain; charset=windows-1251" },
-        });
+        // The generic authentication failure below avoids leaking parsing details.
       }
+    }
 
-      if (login !== validLogin || password !== validPassword) {
-        console.warn(`Auth failed from IP: ${clientIP}, login: ${login}`);
-        return new Response("failure", {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "text/plain; charset=windows-1251" },
-        });
-      }
+    const authenticated = login.length > 0
+      && password.length > 0
+      && await secretsEqual(login, validLogin)
+      && await secretsEqual(password, validPassword);
+
+    if (!authenticated) {
+      console.warn(`1C exchange authentication failed from IP: ${clientIP}`);
+      return new Response("failure", {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/plain; charset=windows-1251",
+          "WWW-Authenticate": 'Basic realm="1C"',
+        },
+      });
+    }
+
+    // === CHECKAUTH ===
+    if (mode === "checkauth") {
 
       const sessionId = crypto.randomUUID();
       const timestamp = Math.floor(Date.now() / 1000);
       
       await supabase.from("exchange_files").delete().lt("created_at", new Date(Date.now() - 3600000).toISOString());
       
-      console.log(`Auth OK: ${login}, session: ${sessionId}, IP: ${clientIP}`);
+      console.log(`1C exchange authenticated from IP: ${clientIP}`);
 
       const responseBody = `success\nsessid\n${sessionId}\nsessid=${sessionId}\n${timestamp}`;
       
@@ -421,7 +425,7 @@ serve(async (req) => {
         headers: { 
           ...corsHeaders, 
           "Content-Type": "text/plain; charset=windows-1251",
-          "Set-Cookie": `sessid=${sessionId}; Path=/`,
+          "Set-Cookie": `sessid=${sessionId}; Path=/; Secure; HttpOnly; SameSite=Strict`,
         },
       });
     }
@@ -455,7 +459,7 @@ serve(async (req) => {
         });
       }
 
-      console.log(`File upload: ${filename}, size: ${body.length} bytes, session: ${sessionId}, IP: ${clientIP}`);
+      console.log(`1C file upload: size=${body.length}, IP=${clientIP}`);
 
       if (body && body.length > 0) {
         // Limit files per session (max 20)
@@ -465,7 +469,7 @@ serve(async (req) => {
           .eq("session_id", sessionId);
 
         if ((count || 0) >= 20) {
-          console.warn(`Too many files for session ${sessionId} from IP ${clientIP}`);
+          console.warn(`1C file limit exceeded from IP: ${clientIP}`);
           return new Response("failure\nToo many files", {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" },
@@ -487,7 +491,7 @@ serve(async (req) => {
     // === IMPORT ===
     if (mode === "import") {
       const sessionId = getSessionId(req);
-      console.log(`Import mode, session: ${sessionId}, IP: ${clientIP}`);
+      console.log(`1C import started from IP: ${clientIP}`);
       
       const totalResults = { created: 0, updated: 0, errors: [] as string[] };
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save, Store, Clock, MessageSquare, Upload, Copy, Check, Eye, EyeOff, Share2 } from "lucide-react";
+import { Save, Store, Clock, MessageSquare, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,8 +17,6 @@ interface StoreSettings {
   timezone: string;
   chat_offline_autoreply: string | null;
   no_item_text: string | null;
-  exchange_login: string | null;
-  exchange_password: string | null;
   social_vk: string | null;
   social_whatsapp: string | null;
   social_telegram: string | null;
@@ -29,11 +27,7 @@ export default function AdminSettings() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
-
-  const exchangeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exchange-1c`;
 
   useEffect(() => {
     fetchSettings();
@@ -43,7 +37,7 @@ export default function AdminSettings() {
     try {
       const { data, error } = await supabase
         .from("store_settings")
-        .select("*")
+        .select("id, title, phone, address, telegram_nick, timezone, chat_offline_autoreply, no_item_text, social_vk, social_whatsapp, social_telegram, social_max")
         .maybeSingle();
 
       if (error) throw error;
@@ -87,8 +81,6 @@ export default function AdminSettings() {
           telegram_nick: settings.telegram_nick,
           chat_offline_autoreply: settings.chat_offline_autoreply,
           no_item_text: settings.no_item_text,
-          exchange_login: settings.exchange_login,
-          exchange_password: settings.exchange_password,
           social_vk: settings.social_vk,
           social_whatsapp: settings.social_whatsapp,
           social_telegram: settings.social_telegram,
@@ -283,81 +275,6 @@ export default function AdminSettings() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Обмен с 1С
-          </CardTitle>
-          <CardDescription>
-            Настройки для синхронизации с 1С через протокол CommerceML
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>URL для обмена</Label>
-            <div className="flex gap-2">
-              <Input value={exchangeUrl} readOnly className="font-mono text-sm" />
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => {
-                  navigator.clipboard.writeText(exchangeUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                  toast({ title: "URL скопирован" });
-                }}
-              >
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Укажите этот URL в настройках 1С: "Компания" → "Обмен с сайтом"
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Логин для 1С</Label>
-              <Input
-                value={settings.exchange_login || ""}
-                onChange={(e) => setSettings({ ...settings, exchange_login: e.target.value })}
-                placeholder="admin"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Пароль для 1С</Label>
-              <div className="flex gap-2">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  value={settings.exchange_password || ""}
-                  onChange={(e) => setSettings({ ...settings, exchange_password: e.target.value })}
-                  placeholder="••••••••"
-                />
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-secondary/50 rounded-lg p-4 text-sm space-y-2">
-            <p className="font-medium">Инструкция по настройке в 1С:</p>
-            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-              <li>Откройте "Компания" → "Обмен с сайтом" или "CRM" → "Обмен с сайтом"</li>
-              <li>Создайте узел обмена с типом "Сайт на 1С-Битрикс"</li>
-              <li>В поле "Адрес сайта" укажите URL выше</li>
-              <li>Введите логин и пароль из настроек</li>
-              <li>Настройте выгрузку номенклатуры, цен и остатков</li>
-              <li>Запустите синхронизацию</li>
-            </ol>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

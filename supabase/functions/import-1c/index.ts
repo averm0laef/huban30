@@ -1,10 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-1c-token",
-};
+import { corsHeadersFor } from "../_shared/cors.ts";
+import { getClientIp, isAllowedOneCClient, secretsEqual } from "../_shared/security.ts";
 
 const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_PRODUCTS_PER_REQUEST = 500;
@@ -13,13 +10,6 @@ const MAX_REQUESTS_PER_WINDOW = 10;
 
 // In-memory rate limiter (per isolate lifetime)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function getClientIP(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || req.headers.get("cf-connecting-ip")
-    || req.headers.get("x-real-ip")
-    || "unknown";
-}
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -67,11 +57,23 @@ interface ImportPayload {
 }
 
 serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req, {
+    allowedHeaders: "authorization, x-client-info, apikey, content-type, x-1c-token",
+  });
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const clientIP = getClientIP(req);
+  const clientIP = getClientIp(req);
+
+  if (!isAllowedOneCClient(req)) {
+    console.warn(`Rejected 1C import from non-allowlisted IP: ${clientIP}`);
+    return new Response(
+      JSON.stringify({ error: "Forbidden" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
 
   // Rate limiting
   if (!checkRateLimit(clientIP)) {
@@ -96,8 +98,8 @@ serve(async (req) => {
       .single();
 
     const expectedToken = settings?.exchange_password;
-    if (!authToken || !expectedToken || authToken !== expectedToken) {
-      console.warn(`Auth failed from IP: ${clientIP}, token: ${authToken ? "invalid" : "missing"}`);
+    if (!authToken || !expectedToken || !(await secretsEqual(authToken, expectedToken))) {
+      console.warn(`1C import authentication failed from IP: ${clientIP}`);
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
