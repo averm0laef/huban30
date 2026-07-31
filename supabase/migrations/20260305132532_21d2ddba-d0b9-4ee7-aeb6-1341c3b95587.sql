@@ -1,0 +1,1 @@
+UPDATE store_settings SET phone = '+7-924-474-26-05', address = 'пгт. Чернышевск, ул. Куйбышева 118А' WHERE true;

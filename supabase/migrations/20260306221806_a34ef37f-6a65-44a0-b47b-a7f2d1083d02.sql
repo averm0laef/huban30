@@ -1,0 +1,1 @@
+ALTER TABLE public.products ADD COLUMN display_title TEXT DEFAULT NULL;

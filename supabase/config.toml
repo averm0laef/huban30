@@ -1,0 +1,37 @@
+project_id = "jdqgnhfduplfcrsrvrnn"
+
+[functions.telegram-auth]
+verify_jwt = false
+
+[functions.init-admin]
+verify_jwt = false
+
+[functions.import-1c]
+verify_jwt = false
+
+[functions.exchange-1c]
+verify_jwt = false
+
+[functions.chat-assistant]
+verify_jwt = false
+
+[functions.notify-telegram]
+verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.vk-auth]
+verify_jwt = false
+
+[functions.vk-callback]
+verify_jwt = false
+
+[functions.send-telegram-code]
+verify_jwt = false
+
+[functions.verify-telegram-code]
+verify_jwt = false
+
+[functions.send-magic-link-email]
+verify_jwt = false
