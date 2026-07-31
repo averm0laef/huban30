@@ -59,7 +59,7 @@ export default function AdminActionLogs() {
     const logs = data || [];
     const userIds = [...new Set(logs.map(l => l.user_id).filter(Boolean))];
     
-    let profiles: Record<string, { full_name: string | null; email: string | null }> = {};
+    const profiles: Record<string, { full_name: string | null; email: string | null }> = {};
     if (userIds.length > 0) {
       const { data: profileData } = await supabase
         .from("profiles")

@@ -36,6 +36,9 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
 import { useToast } from "@/hooks/use-toast";
 
 const ITEMS_PER_PAGE = 50;
@@ -437,7 +440,7 @@ export default function AdminProducts() {
             title: product.title, brand: product.brand, sku: product.sku, generate_title: needsTitle
           });
 
-          const updateData: Record<string, any> = {};
+          const updateData: ProductUpdate = {};
           if (needsDesc && data?.description) updateData.description = data.description;
           if (needsTitle && data?.display_title) updateData.display_title = data.display_title;
 

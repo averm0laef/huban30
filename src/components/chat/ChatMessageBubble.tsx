@@ -22,7 +22,7 @@ const messageVariants = {
 const sanitizeBotText = (text: string) =>
   text
     .replace(/\*\*\s*\[\s*позвать\s+менеджера\s*\]\s*\*\*/gi, "")
-    .replace(/\[\s*позвать\s+менеджера\s*\]\([^\)]*\)/gi, "")
+    .replace(/\[\s*позвать\s+менеджера\s*\]\([^)]*\)/gi, "")
     .replace(/\[\s*позвать\s+менеджера\s*\]/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

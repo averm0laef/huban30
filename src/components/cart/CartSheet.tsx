@@ -61,7 +61,9 @@ export function CartSheet() {
             comment: form.comment,
           },
         });
-      } catch {}
+      } catch {
+        // Order creation must not fail when the optional notification is disabled.
+      }
 
       clearCart();
       setStep("done");

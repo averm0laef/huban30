@@ -10,6 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type ContactRequestUpdate = Database["public"]["Tables"]["contact_requests"]["Update"];
+type CartOrderUpdate = Database["public"]["Tables"]["cart_orders"]["Update"];
 
 interface ContactRequest {
   id: string;
@@ -159,7 +163,7 @@ export default function AdminRequests() {
   const updateRequest = async (id: string, status: string, notes?: string) => {
     setIsSaving(true);
     try {
-      const updateData: Record<string, string> = { status };
+      const updateData: ContactRequestUpdate = { status };
       if (notes !== undefined) updateData.admin_notes = notes;
       const { error } = await supabase.from("contact_requests").update(updateData).eq("id", id);
       if (error) throw error;
@@ -176,7 +180,7 @@ export default function AdminRequests() {
   const updateCartOrder = async (id: string, status: string, notes?: string) => {
     setIsSaving(true);
     try {
-      const updateData: Record<string, string> = { status };
+      const updateData: CartOrderUpdate = { status };
       if (notes !== undefined) updateData.admin_notes = notes;
       const { error } = await supabase.from("cart_orders").update(updateData).eq("id", id);
       if (error) throw error;

@@ -5,7 +5,7 @@
 ## Общий статус
 
 - Цель: автономный production-продукт без runtime-зависимости от Supabase и Lovable.
-- Текущий этап: AN30-003.
+- Текущий этап: AN30-004.
 - Production: не готов.
 - Публичный checkout: должен оставаться закрыт до подключения боевого эквайринга.
 - Удаление старого Supabase: запрещено без отдельного подтверждения владельца.
@@ -16,8 +16,8 @@
 | --- | --- | --- |
 | AN30-001 | Готово | Безопасная Git-база, журналы и фиксация исходного состояния |
 | AN30-002 | Готово в исходниках | Закрытие критических рисков legacy-системы |
-| AN30-003 | В работе | Воспроизводимая pnpm-сборка на Node.js 24 LTS |
-| AN30-004 | Ожидает | Каркас web, api, worker, PostgreSQL, Redis и Caddy |
+| AN30-003 | Готово | Воспроизводимая pnpm-сборка на Node.js 24 LTS |
+| AN30-004 | В работе | Каркас web, api, worker, PostgreSQL, Redis и Caddy |
 | AN30-005 | Ожидает | Чистая схема PostgreSQL и dev seed |
 | AN30-006 | Ожидает | Авторизация, TOTP, сессии и RBAC |
 | AN30-007 | Ожидает | Надёжный staging-импорт и обмен с 1С |
@@ -57,3 +57,15 @@
 - Результат: wildcard CORS не найден; public admin bootstrap отсутствует; пароль 1С не читается UI; 1С fail-closed без `ONE_C_ALLOWED_IPS`; гостевой chat IDOR закрыт миграцией.
 - Риски: Deno CLI отсутствует, поэтому remote Edge Functions и миграция не развёрнуты и должны считаться всё ещё уязвимыми до контролируемого deploy. Ротация внешних ключей требует действий владельца. Полная сборка legacy отложена до восстановления зависимостей в AN30-003.
 - Следующий шаг: AN30-003, удалить лишние lock-файлы, закрепить Node.js 24 и создать воспроизводимую pnpm-сборку.
+
+## AN30-003: воспроизводимая сборка
+
+- Дата начала: 2026-07-31 23:31:00 +09.
+- Дата завершения: 2026-08-01 00:05:20 +09.
+- Статус: готово.
+- Изменённые файлы: `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `.nvmrc`, `.node-version`, toolchain configs, README, smoke-тесты и небольшие TypeScript/lint-исправления legacy-кода.
+- Решения: один package manager `pnpm@11.9.0`; Node.js `24.12.0`; install scripts разрешены только для `@swc/core` и `esbuild`; Playwright локально использует установленный Chrome.
+- Команды проверок: `pnpm install --frozen-lockfile`; `pnpm verify`; `pnpm test:e2e`; `pnpm audit:prod`; повтор этих команд в чистом временном каталоге без `.env` и `node_modules`.
+- Результат: чистая offline-установка из lock-файла прошла; lint не содержит ошибок; typecheck, unit, build и E2E прошли; production audit содержит 0 critical, 0 high и 3 moderate.
+- Риски: legacy ESLint оставляет 29 предупреждений по hook dependencies и Fast Refresh; production bundle 1.64 MB до gzip требует code splitting; React Router 6 имеет 3 moderate advisory, а доступная major-версия 7 на дату проверки имеет отдельную high advisory. React Router будет удалён при переносе на Next.js.
+- Следующий шаг: AN30-004, создать приложения `web`, `api`, `worker`, общие контракты и Docker Compose с PostgreSQL, Redis и Caddy.

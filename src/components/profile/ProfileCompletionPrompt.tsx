@@ -6,6 +6,9 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 interface ProfileCompletionPromptProps {
   userId: string;
@@ -38,7 +41,7 @@ export function ProfileCompletionPrompt({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const updates: Record<string, string> = {};
+      const updates: ProfileUpdate = {};
       
       if (needsPhone && phone.trim()) {
         updates.phone = phone.trim();
