@@ -5,6 +5,7 @@ import { validateEnvironment } from "./config.js";
 const secrets = {
   DATA_ENCRYPTION_KEY: "test-data-encryption-key-with-more-than-32-characters",
   SESSION_SECRET: "test-session-hmac-secret-with-more-than-32-characters",
+  SANDBOX_PAYMENT_WEBHOOK_SECRET: "test-sandbox-webhook-secret-with-more-than-32-characters",
 };
 
 describe("API environment", () => {
@@ -30,5 +31,23 @@ describe("API environment", () => {
 
     expect(environment.AUTH_DEBUG_TOKENS).toBe(true);
     expect(environment.COOKIE_SECURE).toBe(false);
+  });
+
+  it("blocks sandbox checkout in production but permits it in staging", () => {
+    expect(() => validateEnvironment({
+      ...secrets,
+      DEPLOYMENT_ENVIRONMENT: "production",
+      ENABLE_PUBLIC_CHECKOUT: "true",
+      PAYMENTS_PROVIDER: "sandbox",
+    })).toThrow(/Production public checkout cannot use the sandbox/);
+
+    const staging = validateEnvironment({
+      ...secrets,
+      DEPLOYMENT_ENVIRONMENT: "staging",
+      ENABLE_PUBLIC_CHECKOUT: "true",
+      PAYMENTS_PROVIDER: "sandbox",
+    });
+    expect(staging.ENABLE_PUBLIC_CHECKOUT).toBe(true);
+    expect(staging.PAYMENTS_PROVIDER).toBe("sandbox");
   });
 });

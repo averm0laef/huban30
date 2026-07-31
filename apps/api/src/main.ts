@@ -9,6 +9,7 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 
 import { AppModule } from "./app.module.js";
+import { DatabaseService } from "./infrastructure/database.service.js";
 import { StructuredLogger } from "./security/structured-logger.js";
 
 async function bootstrap() {
@@ -20,6 +21,15 @@ async function bootstrap() {
     logger: new StructuredLogger(),
   });
   const config = app.get(ConfigService);
+  const databaseEnvironment = (await app.get(DatabaseService).query<{ environment: string }>(
+    "SELECT environment FROM app.deployment_settings WHERE singleton",
+  )).rows[0]?.environment;
+  const configuredEnvironment = config.getOrThrow<string>("DEPLOYMENT_ENVIRONMENT");
+  if (databaseEnvironment !== configuredEnvironment) {
+    throw new Error(
+      `Deployment environment mismatch: API=${configuredEnvironment}, database=${databaseEnvironment ?? "missing"}`,
+    );
+  }
 
   await app.register(cookie);
   await app.register(helmet, {

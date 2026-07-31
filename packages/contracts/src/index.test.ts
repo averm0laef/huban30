@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CheckoutRequestSchema,
   MoneySchema,
   OneCImportEnvelopeSchema,
   OrderStatusSchema,
@@ -21,6 +22,26 @@ describe("public contracts", () => {
     expect(MoneySchema.parse(125_099)).toBe(125_099);
     expect(MoneySchema.safeParse(12.5).success).toBe(false);
     expect(MoneySchema.safeParse(-1).success).toBe(false);
+  });
+
+  it("validates checkout identity, quantities and duplicate products", () => {
+    const request = {
+      contact: { email: "client@example.com", name: "Антон Ермолаев", phone: "+79141234567" },
+      delivery: { method: "pickup" },
+      idempotencyKey: "019bf9ea-0d3e-7def-9c9a-000000000001",
+      items: [{ productId: "019bf9ea-0d3e-7def-9c9a-000000000002", quantity: 2 }],
+      sandboxScenario: "success",
+    };
+
+    expect(CheckoutRequestSchema.parse(request).customerNote).toBeNull();
+    expect(CheckoutRequestSchema.safeParse({
+      ...request,
+      contact: { ...request.contact, phone: "89141234567" },
+    }).success).toBe(false);
+    expect(CheckoutRequestSchema.safeParse({
+      ...request,
+      items: [request.items[0], request.items[0]],
+    }).success).toBe(false);
   });
 
   it("keeps privileged staff actions out of customer and manager roles", () => {

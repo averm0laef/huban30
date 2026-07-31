@@ -20,5 +20,6 @@ generate_secret app_database_password.txt
 generate_secret redis_password.txt
 generate_secret session_secret.txt
 generate_secret data_encryption_key.txt
+generate_secret sandbox_payment_webhook_secret.txt
 
 echo "Secrets created in $secrets_dir with mode 600. Values were not printed."

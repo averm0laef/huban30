@@ -6,6 +6,7 @@
   "scripts": {
     "auth:smoke": "node dist/cli/auth-smoke.js",
     "build": "nest build",
+    "checkout:smoke": "node dist/cli/checkout-smoke.js",
     "dev": "nest start --watch",
     "lint": "eslint src",
     "one-c:smoke": "node dist/cli/one-c-import-smoke.js",

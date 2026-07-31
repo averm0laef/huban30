@@ -36,6 +36,13 @@
 - Request body ограничен 10 MiB; повреждённые строки 1С остаются в staging и не
   могут попасть в каталог без отдельного server-authorized apply.
 - Production checkout не стартует с sandbox-провайдером.
+- Гостевой заказ читается только по высокоэнтропийному токену в заголовке; в БД
+  хранится purpose-separated HMAC, а не сам токен.
+- Цена, склад, сумма и статус checkout вычисляются сервером. Резерв, заказ и
+  платёж создаются транзакционно, а одна live-оплата товара гарантируется
+  уникальным partial index.
+- Sandbox webhook требует HMAC-подпись; event ID, checkout, платёж доставки и
+  возврат имеют независимые idempotency keys с проверкой payload.
 - В production используются same-origin CORS, CSP, HSTS, CSRF и rate limiting.
 - Production-зависимости не должны содержать critical/high уязвимостей.
 - Метка окружения PostgreSQL неизменяема после инициализации; demo-каталог

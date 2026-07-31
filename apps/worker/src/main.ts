@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
 import pino from "pino";
+import { Pool } from "pg";
 
 import { WorkerJobSchema } from "@an30/contracts";
 
@@ -11,6 +12,7 @@ import { readWorkerConfig } from "./config.js";
 const config = readWorkerConfig(process.env);
 const logger = pino({ name: "an30-worker", level: process.env.LOG_LEVEL ?? "info" });
 const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
+const database = new Pool({ connectionString: config.databaseUrl, max: 2, statement_timeout: 15_000 });
 redis.on("error", (error: Error) => logger.error({ error }, "Redis connection error"));
 
 const worker = new Worker(
@@ -29,6 +31,27 @@ const worker = new Worker(
 worker.on("completed", (job) => logger.info({ jobId: job.id, jobName: job.name }, "Job completed"));
 worker.on("failed", (job, error) => logger.error({ error, jobId: job?.id, jobName: job?.name }, "Job failed"));
 
+let expiryRunning = false;
+async function releaseExpiredReservations() {
+  if (expiryRunning) return;
+  expiryRunning = true;
+  try {
+    const result = await database.query<{ expired_count: number }>(
+      "SELECT app.expire_stock_reservations(100) AS expired_count",
+    );
+    const expiredCount = result.rows[0]?.expired_count ?? 0;
+    if (expiredCount > 0) logger.info({ expiredCount }, "Expired stock reservations released");
+  } catch (error) {
+    logger.error({ error }, "Reservation expiry sweep failed");
+  } finally {
+    expiryRunning = false;
+  }
+}
+
+const expiryTimer = setInterval(() => void releaseExpiredReservations(), 30_000);
+expiryTimer.unref();
+void releaseExpiredReservations();
+
 const healthServer = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Cache-Control", "no-store");
@@ -41,13 +64,13 @@ const healthServer = createServer(async (request, response) => {
 
   if (request.url === "/health/ready") {
     try {
-      await redis.ping();
+      await Promise.all([redis.ping(), database.query("SELECT 1")]);
       response.statusCode = worker.isRunning() ? 200 : 503;
       response.end(JSON.stringify({
         status: worker.isRunning() ? "ok" : "degraded",
         service: "worker",
         timestamp: new Date().toISOString(),
-        checks: { redis: "up", queue: worker.isRunning() ? "up" : "down" },
+        checks: { postgres: "up", redis: "up", queue: worker.isRunning() ? "up" : "down" },
       }));
     } catch {
       response.statusCode = 503;
@@ -55,7 +78,7 @@ const healthServer = createServer(async (request, response) => {
         status: "degraded",
         service: "worker",
         timestamp: new Date().toISOString(),
-        checks: { redis: "down", queue: "down" },
+        checks: { postgres: "down", redis: "down", queue: "down" },
       }));
     }
     return;
@@ -72,7 +95,9 @@ healthServer.listen(config.healthPort, "0.0.0.0", () => {
 async function shutdown(signal: string) {
   logger.info({ signal }, "Worker shutdown started");
   healthServer.close();
+  clearInterval(expiryTimer);
   await worker.close();
+  await database.end();
   await redis.quit();
 }
 

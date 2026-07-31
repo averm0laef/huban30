@@ -82,3 +82,10 @@ docker compose -f compose.yaml -f compose.dev.yaml config --quiet
 `docs/AUTHENTICATION.md`.
 Безопасный обмен, preview/apply/rollback и smoke-сценарий 1С описаны в
 `docs/ONE_C_INTEGRATION.md`.
+Checkout, TTL-резервы, sandbox-сценарии и production gate описаны в
+`docs/CHECKOUT_AND_PAYMENTS.md`. Полный локальный smoke запускается командой:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml exec -T api \
+  node dist/cli/checkout-smoke.js
+```

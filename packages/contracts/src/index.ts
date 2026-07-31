@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const SAFE_SINGLE_LINE = /^[^\u0000-\u001F\u007F]+$/u;
+
 export const ROLES = ["customer", "manager", "director", "admin"] as const;
 export const RoleSchema = z.enum(ROLES);
 export type Role = z.infer<typeof RoleSchema>;
@@ -11,6 +13,7 @@ export const PERMISSIONS = [
   "orders:read:self",
   "orders:read:any",
   "orders:update:any",
+  "payments:refund",
   "chat:use:self",
   "chat:manage:any",
   "catalog:read",
@@ -40,6 +43,7 @@ export const ROLE_PERMISSIONS = {
     "account:update:self",
     "orders:read:any",
     "orders:update:any",
+    "payments:refund",
     "chat:manage:any",
     "catalog:read",
     "catalog:write",
@@ -50,6 +54,7 @@ export const ROLE_PERMISSIONS = {
     "account:update:self",
     "orders:read:any",
     "orders:update:any",
+    "payments:refund",
     "chat:manage:any",
     "catalog:read",
     "catalog:write",
@@ -88,6 +93,78 @@ export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
 export const MoneySchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export type Money = z.infer<typeof MoneySchema>;
 
+export const CHECKOUT_SANDBOX_SCENARIOS = ["success", "decline", "timeout", "cancel"] as const;
+export const CheckoutSandboxScenarioSchema = z.enum(CHECKOUT_SANDBOX_SCENARIOS);
+export type CheckoutSandboxScenario = z.infer<typeof CheckoutSandboxScenarioSchema>;
+
+const CheckoutIdempotencyKeySchema = z.uuid();
+const CheckoutPhoneSchema = z.string().trim().min(7).max(32).regex(/^\+[1-9]\d{6,14}$/u);
+
+export const CheckoutItemSchema = z.object({
+  productId: z.uuid(),
+  quantity: z.number().int().min(1).max(100),
+}).strict();
+export type CheckoutItem = z.infer<typeof CheckoutItemSchema>;
+
+export const CheckoutContactSchema = z.object({
+  email: z.email().trim().toLowerCase().max(254),
+  name: z.string().trim().min(2).max(160).regex(SAFE_SINGLE_LINE),
+  phone: CheckoutPhoneSchema,
+}).strict();
+export type CheckoutContact = z.infer<typeof CheckoutContactSchema>;
+
+export const CheckoutDeliverySchema = z.discriminatedUnion("method", [
+  z.object({ method: z.literal("pickup") }).strict(),
+  z.object({
+    address: z.string().trim().min(5).max(1_000),
+    method: z.literal("needs_quote"),
+  }).strict(),
+]);
+export type CheckoutDelivery = z.infer<typeof CheckoutDeliverySchema>;
+
+export const CheckoutRequestSchema = z.object({
+  contact: CheckoutContactSchema,
+  customerNote: z.string().trim().max(2_000).nullable().default(null),
+  delivery: CheckoutDeliverySchema,
+  idempotencyKey: CheckoutIdempotencyKeySchema,
+  items: z.array(CheckoutItemSchema).min(1).max(100),
+  sandboxScenario: CheckoutSandboxScenarioSchema.optional(),
+}).strict().superRefine((value, context) => {
+  const seen = new Set<string>();
+  for (const [index, item] of value.items.entries()) {
+    if (seen.has(item.productId)) {
+      context.addIssue({
+        code: "custom",
+        message: "duplicate product in checkout",
+        path: ["items", index, "productId"],
+      });
+    }
+    seen.add(item.productId);
+  }
+});
+export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
+
+export const RefundRequestSchema = z.object({
+  amountKopeks: MoneySchema.refine((value) => value > 0, "refund amount must be positive"),
+  idempotencyKey: CheckoutIdempotencyKeySchema,
+  reason: z.string().trim().min(3).max(1_000),
+}).strict();
+export type RefundRequest = z.infer<typeof RefundRequestSchema>;
+
+export const DeliveryPaymentRequestSchema = z.object({
+  amountKopeks: MoneySchema.refine((value) => value > 0, "delivery amount must be positive"),
+  idempotencyKey: CheckoutIdempotencyKeySchema,
+  sandboxScenario: CheckoutSandboxScenarioSchema,
+}).strict();
+export type DeliveryPaymentRequest = z.infer<typeof DeliveryPaymentRequestSchema>;
+
+export const OrderStatusUpdateSchema = z.object({
+  reason: z.string().trim().min(3).max(1_000),
+  status: OrderStatusSchema,
+  version: z.number().int().positive(),
+}).strict();
+export type OrderStatusUpdate = z.infer<typeof OrderStatusUpdateSchema>;
+
 export const CATALOG_IMPORT_ENTITY_TYPES = [
   "brand",
   "category",
@@ -99,7 +176,6 @@ export const CATALOG_IMPORT_ENTITY_TYPES = [
 export const CatalogImportEntityTypeSchema = z.enum(CATALOG_IMPORT_ENTITY_TYPES);
 export type CatalogImportEntityType = z.infer<typeof CatalogImportEntityTypeSchema>;
 
-const SAFE_SINGLE_LINE = /^[^\u0000-\u001F\u007F]+$/u;
 const ExternalIdSchema = z.string().trim().min(1).max(128).regex(SAFE_SINGLE_LINE);
 const SourceVersionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const CatalogNameSchema = z.string().trim().min(1).max(240).regex(SAFE_SINGLE_LINE);

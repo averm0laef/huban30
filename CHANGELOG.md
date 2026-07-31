@@ -19,6 +19,9 @@
 - AN30-007: добавлен versioned JSON-контракт выгрузки 1С для брендов, категорий, складов, товаров, цен и остатков.
 - AN30-007: добавлены staging validation/preview, conflict report, атомарный apply, immutable revision journal и безопасный rollback.
 - AN30-007: добавлен append-only журнал машинных запросов 1С и воспроизводимый 25-step integration smoke.
+- AN30-008: добавлен серверный checkout для гостя и клиента, атомарные TTL-резервы и защищённое чтение гостевого заказа.
+- AN30-008: добавлены sandbox-адаптер платежей, подписанные идемпотентные webhook, отдельный платёж доставки и частичные/полные возвраты.
+- AN30-008: worker освобождает просроченные резервы каждые 30 секунд; добавлен воспроизводимый 36-step integration smoke.
 
 ### Changed
 
@@ -35,6 +38,7 @@
 - AN30-006: API-логи переведены в JSON с маскированием credential-полей, email и IP.
 - AN30-006: production runtime-образы очищены от workspace lock-метаданных и документации зависимостей с legacy-упоминаниями.
 - AN30-007: Caddy и Fastify ограничивают request body 1С до 10 MiB; API принимает не более 5 000 строк в batch.
+- AN30-008: worker получил least-privilege подключение PostgreSQL; readiness теперь проверяет Redis, очередь и БД.
 
 ### Security
 
@@ -56,3 +60,5 @@
 - AN30-006: TOTP-секреты и auth-токены outbox защищены AES-256-GCM; audit log фиксирует критические auth-события.
 - AN30-006: Caddy выдаёт CSP, HSTS, COOP/CORP, Permissions-Policy и запрет встраивания; API принимает credential CORS только с origin сайта.
 - AN30-007: Basic Auth 1С защищён шифрованием write-only пароля, CIDR allowlist, rate limit и generic 401; apply повторно проверяет версии и текущие резервы.
+- AN30-008: production startup блокирует публичный sandbox checkout; секрет webhook хранится только в Compose secret.
+- AN30-008: снимки позиций заказа/резерва неизменяемы, live goods payment уникален, а повтор webhook не может повторно списать товар.

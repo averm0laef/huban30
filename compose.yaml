@@ -92,16 +92,21 @@ services:
       AUTH_DEBUG_TOKENS: "false"
       COOKIE_SECURE: "true"
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
       DB_HOST: postgres
       DB_NAME: an30
       DB_PORT: 5432
       DB_USER: an30_app
       NODE_ENV: production
+      ENABLE_PUBLIC_CHECKOUT: ${ENABLE_PUBLIC_CHECKOUT:-false}
+      PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-disabled}
       PORT: 4000
       POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
       REDIS_HOST: redis
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
       REDIS_PORT: 6379
+      RESERVATION_TTL_MINUTES: ${RESERVATION_TTL_MINUTES:-20}
+      SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: /run/secrets/sandbox_payment_webhook_secret
       SESSION_SECRET_FILE: /run/secrets/session_secret
       TRUST_PROXY: "true"
     secrets:
@@ -109,6 +114,7 @@ services:
       - redis_password
       - session_secret
       - data_encryption_key
+      - sandbox_payment_webhook_secret
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -135,15 +141,23 @@ services:
       dockerfile: apps/worker/Dockerfile
     restart: unless-stopped
     environment:
+      DB_HOST: postgres
+      DB_NAME: an30
+      DB_PORT: 5432
+      DB_USER: an30_app
       NODE_ENV: production
+      POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
       REDIS_HOST: redis
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
       REDIS_PORT: 6379
       WORKER_HEALTH_PORT: 4001
     secrets:
+      - app_database_password
       - redis_password
       - data_encryption_key
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     deploy:
@@ -226,6 +240,8 @@ secrets:
     file: ${AN30_SECRETS_DIR:-./secrets}/session_secret.txt
   data_encryption_key:
     file: ${AN30_SECRETS_DIR:-./secrets}/data_encryption_key.txt
+  sandbox_payment_webhook_secret:
+    file: ${AN30_SECRETS_DIR:-./secrets}/sandbox_payment_webhook_secret.txt
 
 volumes:
   caddy_config:

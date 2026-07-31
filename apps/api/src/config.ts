@@ -7,6 +7,8 @@ const RawEnvironmentSchema = z.object({
   COOKIE_SECURE: z.enum(["true", "false"]).default("true"),
   DATA_ENCRYPTION_KEY: z.string().min(32).optional(),
   DATA_ENCRYPTION_KEY_FILE: z.string().min(1).optional(),
+  DEPLOYMENT_ENVIRONMENT: z.enum(["development", "staging", "production"]).default("development"),
+  ENABLE_PUBLIC_CHECKOUT: z.enum(["true", "false"]).default("false"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
   APP_ORIGIN: z.string().url().default("http://localhost:3000"),
@@ -17,11 +19,15 @@ const RawEnvironmentSchema = z.object({
   DB_USER: z.string().min(1).default("an30"),
   POSTGRES_PASSWORD: z.string().min(1).optional(),
   POSTGRES_PASSWORD_FILE: z.string().min(1).optional(),
+  PAYMENTS_PROVIDER: z.enum(["disabled", "sandbox"]).default("disabled"),
   REDIS_URL: z.string().url().optional(),
   REDIS_HOST: z.string().min(1).default("127.0.0.1"),
   REDIS_PORT: z.coerce.number().int().min(1).max(65_535).default(6379),
   REDIS_PASSWORD: z.string().min(1).optional(),
   REDIS_PASSWORD_FILE: z.string().min(1).optional(),
+  RESERVATION_TTL_MINUTES: z.coerce.number().int().min(5).max(120).default(20),
+  SANDBOX_PAYMENT_WEBHOOK_SECRET: z.string().min(32).optional(),
+  SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: z.string().min(1).optional(),
   SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(1_440).default(30),
   SESSION_SECRET: z.string().min(32).optional(),
   SESSION_SECRET_FILE: z.string().min(1).optional(),
@@ -43,6 +49,8 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     ?? readSecret(environment.SESSION_SECRET_FILE);
   const dataEncryptionKey = environment.DATA_ENCRYPTION_KEY
     ?? readSecret(environment.DATA_ENCRYPTION_KEY_FILE);
+  const sandboxPaymentWebhookSecret = environment.SANDBOX_PAYMENT_WEBHOOK_SECRET
+    ?? readSecret(environment.SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE);
 
   if (environment.NODE_ENV === "production" && !environment.DATABASE_URL && !databasePassword) {
     throw new Error("Production database credentials are not configured");
@@ -55,6 +63,20 @@ export function validateEnvironment(raw: Record<string, unknown>) {
   }
   if (!dataEncryptionKey || dataEncryptionKey.length < 32) {
     throw new Error("Data encryption key must contain at least 32 characters");
+  }
+  if (environment.PAYMENTS_PROVIDER === "sandbox"
+    && (!sandboxPaymentWebhookSecret || sandboxPaymentWebhookSecret.length < 32)) {
+    throw new Error("Sandbox payment webhook secret must contain at least 32 characters");
+  }
+  if (environment.ENABLE_PUBLIC_CHECKOUT === "true" && environment.PAYMENTS_PROVIDER === "disabled") {
+    throw new Error("Public checkout requires a configured payment provider");
+  }
+  if (
+    environment.DEPLOYMENT_ENVIRONMENT === "production"
+    && environment.ENABLE_PUBLIC_CHECKOUT === "true"
+    && environment.PAYMENTS_PROVIDER === "sandbox"
+  ) {
+    throw new Error("Production public checkout cannot use the sandbox payment provider");
   }
   if (
     environment.AUTH_DEBUG_TOKENS === "true"
@@ -81,7 +103,9 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     COOKIE_SECURE: environment.COOKIE_SECURE === "true",
     DATA_ENCRYPTION_KEY: dataEncryptionKey,
     DATABASE_URL: databaseUrl,
+    ENABLE_PUBLIC_CHECKOUT: environment.ENABLE_PUBLIC_CHECKOUT === "true",
     REDIS_URL: redisUrl,
+    SANDBOX_PAYMENT_WEBHOOK_SECRET: sandboxPaymentWebhookSecret,
     SESSION_SECRET: sessionSecret,
   };
 }

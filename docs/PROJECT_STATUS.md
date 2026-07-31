@@ -5,7 +5,7 @@
 ## Общий статус
 
 - Цель: автономный production-продукт без runtime-зависимости от Supabase и Lovable.
-- Текущий этап: AN30-008.
+- Текущий этап: AN30-009.
 - Production: не готов.
 - Публичный checkout: должен оставаться закрыт до подключения боевого эквайринга.
 - Удаление старого Supabase: запрещено без отдельного подтверждения владельца.
@@ -21,7 +21,7 @@
 | AN30-005 | Готово | Чистая схема PostgreSQL, миграции и защищённый dev seed |
 | AN30-006 | Готово | Авторизация, TOTP, защищённые сессии и серверная RBAC |
 | AN30-007 | Готово | Надёжный staging-импорт и обмен с 1С |
-| AN30-008 | Ожидает | Заказы, резервы и sandbox-платежи |
+| AN30-008 | Готово | Заказы, резервы и sandbox-платежи |
 | AN30-009 | Ожидает | Чат и отключаемые внешние адаптеры |
 | AN30-010 | Ожидает | Рабочие интерфейсы персонала |
 | AN30-011 | Ожидает | Обновлённый клиентский интерфейс |
@@ -128,3 +128,23 @@
 - Удалённые тестовые данные: временные `an30-an30007-postgres`, `an30_an30007_pgdata` и `an30-an30007-net` удалены без возможности восстановления; они содержали только чистую тестовую production-схему. Активный smoke-владелец, пароль 1С и smoke-товары удалены/обезличены; append-only локальные журналы и компенсирующие движения сохранены. Рабочий local volume и старый Supabase не удалялись.
 - Риски: реальные реквизиты 1С и производственный allowlist ещё не предоставлены, поэтому связь с production 1С не проверена; интерфейс preview/apply появится в AN30-010; 29 legacy lint warnings остаются до удаления legacy; автоматический HTTPS проверяется на VPS в AN30-014/015.
 - Следующий шаг: AN30-008, реализовать гостевой и пользовательский checkout, атомарные резервы с TTL и sandbox-платежи с idempotency, webhook и возвратами.
+
+## AN30-008: заказы, резервы и sandbox-платежи
+
+- Дата начала: 2026-08-01 03:24:00 +09.
+- Дата завершения: 2026-08-01 03:57:09 +09.
+- Статус: готово; production checkout намеренно закрыт до выбора боевого эквайринга и параметров чеков.
+- Изменённые файлы: migration `0010_checkout_reservations`; checkout/payment/order модуль NestJS и 36-step CLI smoke; sandbox `PaymentProvider`; строгие контракты checkout/доставки/возврата; worker PostgreSQL TTL sweep; Compose secret/configuration gate; `docs/CHECKOUT_AND_PAYMENTS.md`, база, локальный запуск, безопасность, решения и журнал.
+- Решения: клиент передаёт только товар и количество; API под shared catalog lock повторно читает цену, блокирует строку остатка и одной транзакцией создаёт резерв, immutable snapshots заказа и pending goods payment. Гостевой доступ защищён purpose-separated HMAC токена. Checkout, payment, webhook и refund имеют отдельные idempotency boundaries с проверкой payload.
+- Резервы: строки остатков блокируются в стабильном порядке; последняя единица может быть зарезервирована только одним checkout. Успешный webhook уменьшает on-hand/reserved ровно один раз; отказ/отмена освобождает резерв. Worker с least-privilege ролью каждые 30 секунд вызывает `app.expire_stock_reservations(100)`, отменяя просроченные pending order/payment и создавая компенсирующие append-only inventory events.
+- Платежи: sandbox поддерживает success, decline, timeout и cancel; webhook HMAC-подписан, external event ID и checksum защищают replay. Частичный/полный refund идемпотентен. Доставка согласуется отдельно, затем персонал создаёт отдельный payment. Для заказа существует не более одного live goods payment.
+- Production gate: `production + ENABLE_PUBLIC_CHECKOUT=true + PAYMENTS_PROVIDER=sandbox` является ошибкой запуска; API до открытия порта сверяет конфигурацию с неизменяемой environment-меткой PostgreSQL. Production по умолчанию использует `PAYMENTS_PROVIDER=disabled` и закрытый checkout; staging может использовать sandbox. Секрет webhook добавлен только как Compose secret и локальное заведомо публичное значение в dev override.
+- Команды проверок: `pnpm install --frozen-lockfile`; `pnpm peers check`; `pnpm verify:full`; production/dev Compose config; полный Docker build/up; schema smoke; миграция чистой production-БД из финального image; migration status; DDL denial и production seed rejection; 36-step checkout smoke; 25-step регрессия 1С; самостоятельный worker TTL smoke; OpenAPI/health/runtime scans; production sandbox startup guard.
+- Результат БД: 10 миграций, 49 таблиц + 2 представления, 73 FK и 185 индексов; чистая БД показывает `applied: 10, pending: 0`, `schema_smoke=ok`; `an30_app` не может выполнять DDL, production seed отклонён. Currency RUB, immutable checkout items, unique live goods payment и TTL function проверены SQL smoke.
+- Проверенная бизнес-логика: checkout из аккаунта требует cookie+CSRF, гостевой заказ не читается с чужим токеном; exact replay возвращает тот же заказ, а другой payload с тем же ключом получает `409`; два параллельных checkout последней единицы дают ровно `201 + 409`; неверная подпись webhook получает `401`; повтор того же и отдельный success event не списывают товар дважды; decline/cancel/timeout освобождают резерв; partial/full refund и их replay безопасны; отдельный delivery payment меняет total/paid ровно один раз.
+- Worker smoke: специально созданный expired reservation автоматически перешёл в `expired`, reserved стал `0`, а worker записал `expiredCount: 1`; readiness worker подтверждает PostgreSQL, Redis и очередь.
+- API/качество: OpenAPI публикует 10 checkout/order/payment путей; API и worker healthy. Lint без ошибок; 31 unit-тест, Playwright и production-сборки прошли; production audit содержит 0 critical/high и 3 moderate только в legacy. Финальные API/web/worker/Caddy runtime-образы не содержат Supabase/Lovable зависимостей, ключей или URL.
+- Исправленные при smoke ошибки: параметры enum в SQL получили явные casts; TTL test сохраняет check `expires_at > created_at`; smoke-пользователи soft-delete вместо изменения append-only order history через FK; полный refund replay проверяется до проверки текущего payment status; webhook verification и provider idempotency key перенесены в границу `PaymentProvider`.
+- Удалённые тестовые данные: временные `an30-an30008-postgres`, `an30_an30008_pgdata` и `an30-an30008-net` удалены без возможности восстановления; они содержали только чистую тестовую production-схему. Активные checkout-smoke пользователи, товары, склады и резервы удалены/soft-delete; неизменяемые локальные заказы, платежи, возвраты, audit и inventory history сохранены. Локальные rate-limit ключи очищались перед воспроизводимыми smoke. Рабочие volumes и старый Supabase не удалялись.
+- Риски: боевой эквайринг, ключи, webhook-формат, параметры чеков и юридические реквизиты ещё не выбраны; поэтому production checkout остаётся технически закрыт. Checkout UI появится в AN30-011, staff queue/payment controls — в AN30-010. Реальные банковские timeout/reconciliation и receipt contract должны быть contract-tested после выбора провайдера.
+- Следующий шаг: AN30-009, перенести WebSocket-чат, защищённые вложения и отключаемые notification/social/AI/storage адаптеры без обязательных облачных сервисов.

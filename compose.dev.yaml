@@ -32,13 +32,18 @@ services:
       AUTH_DEBUG_TOKENS: "true"
       COOKIE_SECURE: "false"
       DATA_ENCRYPTION_KEY: an30-local-data-encryption-key-public-only
+      DEPLOYMENT_ENVIRONMENT: development
+      ENABLE_PUBLIC_CHECKOUT: "true"
+      PAYMENTS_PROVIDER: sandbox
       POSTGRES_PASSWORD: an30-app-local-development-only
       REDIS_PASSWORD: an30-local-development-only
+      SANDBOX_PAYMENT_WEBHOOK_SECRET: an30-local-sandbox-webhook-secret-public-only
       SESSION_SECRET: an30-local-session-hmac-secret-public-only
     secrets: !reset []
 
   worker:
     environment:
+      POSTGRES_PASSWORD: an30-app-local-development-only
       REDIS_PASSWORD: an30-local-development-only
     secrets: !reset []
 

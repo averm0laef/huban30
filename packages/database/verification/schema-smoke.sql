@@ -96,6 +96,31 @@ END;
 $$;
 
 DO $$
+BEGIN
+  IF to_regprocedure('app.expire_stock_reservations(integer)') IS NULL THEN
+    RAISE EXCEPTION 'Reservation expiry function is missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'app'
+      AND indexname = 'payments_one_live_goods_per_order_uidx'
+  ) THEN
+    RAISE EXCEPTION 'Live goods payment uniqueness index is missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'app.order_items'::regclass
+      AND tgname = 'order_items_immutable'
+      AND NOT tgisinternal
+  ) THEN
+    RAISE EXCEPTION 'Order item snapshots are not immutable';
+  END IF;
+END;
+$$;
+
+DO $$
 DECLARE
   audit_id bigint;
 BEGIN
