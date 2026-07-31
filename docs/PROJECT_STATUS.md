@@ -5,7 +5,7 @@
 ## Общий статус
 
 - Цель: автономный production-продукт без runtime-зависимости от Supabase и Lovable.
-- Текущий этап: AN30-004.
+- Текущий этап: AN30-005.
 - Production: не готов.
 - Публичный checkout: должен оставаться закрыт до подключения боевого эквайринга.
 - Удаление старого Supabase: запрещено без отдельного подтверждения владельца.
@@ -17,7 +17,7 @@
 | AN30-001 | Готово | Безопасная Git-база, журналы и фиксация исходного состояния |
 | AN30-002 | Готово в исходниках | Закрытие критических рисков legacy-системы |
 | AN30-003 | Готово | Воспроизводимая pnpm-сборка на Node.js 24 LTS |
-| AN30-004 | В работе | Каркас web, api, worker, PostgreSQL, Redis и Caddy |
+| AN30-004 | Готово | Каркас web, api, worker, PostgreSQL, Redis и Caddy |
 | AN30-005 | Ожидает | Чистая схема PostgreSQL и dev seed |
 | AN30-006 | Ожидает | Авторизация, TOTP, сессии и RBAC |
 | AN30-007 | Ожидает | Надёжный staging-импорт и обмен с 1С |
@@ -69,3 +69,16 @@
 - Результат: чистая offline-установка из lock-файла прошла; lint не содержит ошибок; typecheck, unit, build и E2E прошли; production audit содержит 0 critical, 0 high и 3 moderate.
 - Риски: legacy ESLint оставляет 29 предупреждений по hook dependencies и Fast Refresh; production bundle 1.64 MB до gzip требует code splitting; React Router 6 имеет 3 moderate advisory, а доступная major-версия 7 на дату проверки имеет отдельную high advisory. React Router будет удалён при переносе на Next.js.
 - Следующий шаг: AN30-004, создать приложения `web`, `api`, `worker`, общие контракты и Docker Compose с PostgreSQL, Redis и Caddy.
+
+## AN30-004: автономный инфраструктурный каркас
+
+- Дата начала: 2026-08-01 00:06:00 +09.
+- Дата завершения: 2026-08-01 01:13:15 +09.
+- Статус: готово.
+- Изменённые файлы: новые `apps/web`, `apps/api`, `apps/worker`, `packages/contracts`, `compose.yaml`, `compose.dev.yaml`, Dockerfile каждого сервиса, образ и конфигурация Caddy, root-only генератор секретов, настройки workspace/toolchain, E2E и `docs/LOCAL_DEVELOPMENT.md`.
+- Решения: новый стек работает рядом с legacy до последовательного переноса функций; production использует внешние Compose secrets, а локальный override содержит только публичные тестовые пароли; REST имеет префикс `/api/v1`, OpenAPI публикуется как JSON без уязвимого Swagger UI; runtime-образы содержат только production-зависимости выбранного приложения.
+- Команды проверок: `pnpm verify`; `pnpm test:e2e`; `pnpm peers check`; `pnpm audit:prod`; `docker compose config --quiet`; `docker compose -f compose.yaml -f compose.dev.yaml config --quiet`; `docker compose -f compose.yaml -f compose.dev.yaml build`; полный `up --force-recreate`; HTTP smoke для `/`, `/health/live`, `/health/ready`, `/api/v1/health/*`, `/api/health/ready`, `/api/v1/openapi.json`; проверка runtime-образов на отсутствие Supabase.
+- Результат: PostgreSQL 18.4, Redis 8, NestJS API, BullMQ worker, Next.js web и Caddy одновременно healthy; readiness подтверждает реальные подключения к PostgreSQL и Redis; OpenAPI и reverse proxy доступны; API/worker runtime не содержат Supabase; production audit содержит 0 critical, 0 high и 3 moderate; peer-конфликтов нет.
+- Исправленные при smoke ошибки: путь тома PostgreSQL 18; отсутствующие runtime-пакеты ValidationPipe; приоритет API-маршрута Caddy; нежелательная локальная ACME-попытка; устаревшая E2E-конфигурация; установка всего legacy workspace в runtime-образы; пять high advisory в транзитивных зависимостях.
+- Риски: чистая бизнес-схема и миграции ещё не созданы; storefront и admin пока являются честными каркасами без каталога и операций; 3 moderate advisory и 29 lint-предупреждений остаются только в legacy; production secrets и автоматический HTTPS будут проверены на Linux/VPS, потому что Docker Desktop macOS блокирует bind-mount секретов из защищённой папки Downloads; домен пока не направлен на сервер.
+- Следующий шаг: AN30-005, создать чистую PostgreSQL-схему, миграционный runner и dev-only seed без переноса production-данных Supabase.

@@ -1,0 +1,30 @@
+# Local-only override. Values here are intentionally public and must never be
+# used outside a developer workstation.
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: an30-local-development-only
+      POSTGRES_PASSWORD_FILE: !reset null
+    secrets: !reset []
+
+  redis:
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass an30-local-development-only
+    secrets: !reset []
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a an30-local-development-only ping | grep -q PONG
+
+  api:
+    environment:
+      POSTGRES_PASSWORD: an30-local-development-only
+      REDIS_PASSWORD: an30-local-development-only
+    secrets: !reset []
+
+  worker:
+    environment:
+      REDIS_PASSWORD: an30-local-development-only
+    secrets: !reset []

@@ -9,6 +9,8 @@
 - AN30-001: создан безопасный шаблон конфигурации `.env.example`.
 - AN30-001: добавлены проектный журнал, журнал решений, базовый аудит и политика безопасности.
 - AN30-003: добавлены unit и Playwright smoke-тесты, команды `typecheck`, `test`, `test:e2e`, `audit:prod`, `verify` и `verify:full`.
+- AN30-004: добавлены автономные приложения Next.js, NestJS и BullMQ worker, общие Zod-контракты, PostgreSQL 18, Redis 8 и Caddy.
+- AN30-004: добавлены live/ready healthcheck, OpenAPI JSON, Docker healthcheck, локальный Compose override и руководство запуска.
 
 ### Changed
 
@@ -18,6 +20,8 @@
 - AN30-003: проект закреплён на Node.js 24 и pnpm 11 с одним `pnpm-lock.yaml`.
 - AN30-003: Vite, TypeScript, ESLint и test toolchain обновлены до совместимых актуальных версий.
 - AN30-003: базовые canonical, Open Graph и Schema.org URL изменены с legacy-хостинга на `an30.ru`.
+- AN30-004: Playwright smoke-тест переведён с legacy Vite/Supabase на автономный Next storefront.
+- AN30-004: Docker-образы собираются из минимального workspace-графа и разворачивают только production-зависимости приложения.
 
 ### Security
 
@@ -29,3 +33,6 @@
 - AN30-002: добавлен проверяемый список ротации ранее использованных ключей и паролей.
 - AN30-003: удалён `lovable-tagger`; supply-chain policy разрешает install scripts только SWC и esbuild.
 - AN30-003: production audit не содержит high или critical уязвимостей.
+- AN30-004: production secrets вынесены в Compose secrets с поддержкой root-only каталога вне репозитория.
+- AN30-004: CORS API ограничен origin сайта; Caddy добавляет базовые security headers и готов к автоматическому HTTPS.
+- AN30-004: исправленные версии `sharp`, `postcss`, `find-my-way` и `js-yaml` закреплены overrides; production audit снова содержит 0 high/critical.

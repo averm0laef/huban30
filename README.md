@@ -6,19 +6,29 @@
 
 - Node.js 24 LTS
 - pnpm 11
+- Docker с Compose v2 для полного автономного стека
 - Google Chrome для локального Playwright smoke-теста
 
 Версии закреплены в `.nvmrc`, `.node-version`, `package.json` и `pnpm-lock.yaml`.
 
-## Быстрый старт legacy-витрины
+## Быстрый старт автономного стека
 
 ```bash
 pnpm install --frozen-lockfile
-cp .env.example .env
 pnpm dev
 ```
 
-Legacy-витрине временно нужны значения `VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_ID` и `VITE_SUPABASE_PUBLISHABLE_KEY` в локальном `.env`. Они будут удалены вместе с прямыми Supabase-вызовами в следующих задачах. `.env` запрещено добавлять в Git.
+Полный стек с PostgreSQL, Redis и Caddy запускается так:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build
+```
+
+Подробности и production-вариант с Compose secrets описаны в `docs/LOCAL_DEVELOPMENT.md`.
+
+Legacy-витрина временно запускается отдельной командой `pnpm dev:legacy` и требует
+локальные Supabase-переменные. Она будет удалена после последовательного переноса
+функций; `.env` запрещено добавлять в Git.
 
 ## Проверки
 

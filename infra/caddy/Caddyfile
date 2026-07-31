@@ -1,0 +1,39 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	@api path /api/v1/* /ws*
+	handle @api {
+		reverse_proxy api:4000
+	}
+
+	@health path /health/live /health/ready
+	handle @health {
+		rewrite * /api/v1{uri}
+		reverse_proxy api:4000
+	}
+
+	handle /proxy-health {
+		respond "ok" 200
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		-Server
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+}
+
+{$WWW_SITE_ADDRESS} {
+	redir https://an30.ru{uri} permanent
+}

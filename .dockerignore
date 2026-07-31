@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+.next
+.pnpm-store
+coverage
+dist
+node_modules
+playwright-report
+secrets
+storage
+test-results
+**/.next
+**/dist
+**/node_modules

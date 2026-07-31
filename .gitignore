@@ -26,6 +26,7 @@ secrets/
 coverage/
 playwright-report/
 test-results/
+*.tsbuildinfo
 
 # Runtime data and backups
 storage/

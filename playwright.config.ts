@@ -7,7 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://127.0.0.1:8080",
+    baseURL: "http://127.0.0.1:3000",
     trace: "on-first-retry",
   },
   projects: [
@@ -17,13 +17,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: "http://127.0.0.1:8080",
-    env: {
-      VITE_SUPABASE_PROJECT_ID: "local-placeholder",
-      VITE_SUPABASE_PUBLISHABLE_KEY: "local-placeholder",
-      VITE_SUPABASE_URL: "http://127.0.0.1:54321",
-    },
+    command: "pnpm --filter @an30/web dev",
+    url: "http://127.0.0.1:3000/api/health/live",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

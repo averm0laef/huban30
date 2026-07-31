@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+secrets_dir=${AN30_SECRETS_DIR:-"$project_root/secrets"}
+
+umask 077
+mkdir -p "$secrets_dir"
+
+generate_secret() {
+  target="$secrets_dir/$1"
+  if [ ! -s "$target" ]; then
+    openssl rand -base64 48 | tr -d '\n' > "$target"
+    chmod 600 "$target"
+  fi
+}
+
+generate_secret postgres_password.txt
+generate_secret redis_password.txt
+generate_secret session_secret.txt
+generate_secret data_encryption_key.txt
+
+echo "Secrets created in $secrets_dir with mode 600. Values were not printed."

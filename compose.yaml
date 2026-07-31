@@ -1,0 +1,200 @@
+name: an30
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: an30
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_USER: an30
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U an30 -d an30"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 2G
+        reservations:
+          memory: 512M
+    networks: [backend]
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["/bin/sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$(cat /run/secrets/redis_password)\""]
+    secrets:
+      - redis_password
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 768M
+        reservations:
+          memory: 128M
+    networks: [backend]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_BASE_URL:-http://localhost}
+      DB_HOST: postgres
+      DB_NAME: an30
+      DB_PORT: 5432
+      DB_USER: an30
+      NODE_ENV: production
+      PORT: 4000
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      REDIS_HOST: redis
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      REDIS_PORT: 6379
+      TRUST_PROXY: "true"
+    secrets:
+      - postgres_password
+      - redis_password
+      - session_secret
+      - data_encryption_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 1536M
+        reservations:
+          memory: 256M
+    networks: [backend]
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      REDIS_HOST: redis
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      REDIS_PORT: 6379
+      WORKER_HEALTH_PORT: 4001
+    secrets:
+      - redis_password
+      - data_encryption_key
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 128M
+    networks: [backend]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        APP_BASE_URL: ${APP_BASE_URL:-http://localhost}
+    restart: unless-stopped
+    environment:
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost}
+      INTERNAL_API_URL: http://api:4000
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 128M
+    networks: [backend]
+
+  caddy:
+    build:
+      context: ./infra/caddy
+      dockerfile: Dockerfile
+    image: an30-caddy:local
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-admin@an30.ru}
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+      WWW_SITE_ADDRESS: ${WWW_SITE_ADDRESS:-http://www.localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/proxy-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          memory: 64M
+    networks: [backend]
+
+secrets:
+  postgres_password:
+    file: ${AN30_SECRETS_DIR:-./secrets}/postgres_password.txt
+  redis_password:
+    file: ${AN30_SECRETS_DIR:-./secrets}/redis_password.txt
+  session_secret:
+    file: ${AN30_SECRETS_DIR:-./secrets}/session_secret.txt
+  data_encryption_key:
+    file: ${AN30_SECRETS_DIR:-./secrets}/data_encryption_key.txt
+
+volumes:
+  caddy_config:
+  caddy_data:
+  postgres_data:
+  redis_data:
+
+networks:
+  backend:
+    driver: bridge
