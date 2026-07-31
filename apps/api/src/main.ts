@@ -9,13 +9,14 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 
 import { AppModule } from "./app.module.js";
+import { StructuredLogger } from "./security/structured-logger.js";
 
 async function bootstrap() {
   const adapter = new FastifyAdapter({
     trustProxy: process.env.TRUST_PROXY === "true",
   });
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
-    bufferLogs: true,
+    logger: new StructuredLogger(),
   });
   const config = app.get(ConfigService);
 

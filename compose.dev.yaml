@@ -20,6 +20,8 @@ services:
 
   migrate:
     environment:
+      APP_POSTGRES_PASSWORD: an30-app-local-development-only
+      APP_POSTGRES_PASSWORD_FILE: !reset null
       DATABASE_ENVIRONMENT: development
       POSTGRES_PASSWORD: an30-local-development-only
       POSTGRES_PASSWORD_FILE: !reset null
@@ -27,8 +29,12 @@ services:
 
   api:
     environment:
-      POSTGRES_PASSWORD: an30-local-development-only
+      AUTH_DEBUG_TOKENS: "true"
+      COOKIE_SECURE: "false"
+      DATA_ENCRYPTION_KEY: an30-local-data-encryption-key-public-only
+      POSTGRES_PASSWORD: an30-app-local-development-only
       REDIS_PASSWORD: an30-local-development-only
+      SESSION_SECRET: an30-local-session-hmac-secret-public-only
     secrets: !reset []
 
   worker:

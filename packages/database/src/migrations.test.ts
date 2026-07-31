@@ -18,6 +18,7 @@ describe("database migrations", () => {
       "0004_catalog_revision_changes",
       "0005_wishlist",
       "0006_foreign_key_indexes",
+      "0007_auth_security",
     ]);
     expect(migrations.every(({ checksum }) => /^[a-f0-9]{64}$/.test(checksum))).toBe(true);
     expect(migrations[0]?.sql).toContain("CREATE SCHEMA app");

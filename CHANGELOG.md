@@ -13,6 +13,9 @@
 - AN30-004: добавлены live/ready healthcheck, OpenAPI JSON, Docker healthcheck, локальный Compose override и руководство запуска.
 - AN30-005: добавлена чистая PostgreSQL-схема для пользователей, каталога, 1С, остатков, резервов, заказов, платежей, чата, контента, персонала, отчётов и аудита.
 - AN30-005: добавлены checksum-защищённые forward-only миграции, Compose migration gate, SQL smoke-тест и идемпотентный dev-only seed.
+- AN30-006: добавлены клиентская регистрация, подтверждение email, вход, выход и восстановление пароля.
+- AN30-006: добавлены одноразовые приглашения персонала, обязательный TOTP, recovery-коды и контейнерная команда первого владельца.
+- AN30-006: добавлена типизированная серверная RBAC-матрица для customer, manager, director и admin.
 
 ### Changed
 
@@ -25,6 +28,9 @@
 - AN30-004: Playwright smoke-тест переведён с legacy Vite/Supabase на автономный Next storefront.
 - AN30-004: Docker-образы собираются из минимального workspace-графа и разворачивают только production-зависимости приложения.
 - AN30-005: API запускается только после успешного применения схемы; production-каталог остаётся пустым до импорта из 1С.
+- AN30-006: API переведён с владельца схемы PostgreSQL на отдельную least-privilege роль `an30_app`.
+- AN30-006: API-логи переведены в JSON с маскированием credential-полей, email и IP.
+- AN30-006: production runtime-образы очищены от workspace lock-метаданных и документации зависимостей с legacy-упоминаниями.
 
 ### Security
 
@@ -41,3 +47,7 @@
 - AN30-004: исправленные версии `sharp`, `postcss`, `find-my-way` и `js-yaml` закреплены overrides; production audit снова содержит 0 high/critical.
 - AN30-005: environment-метка БД становится неизменяемой после инициализации; demo-товары отклоняются триггером вне development.
 - AN30-005: движения остатков, история заказов, табель и аудит защищены append-only триггерами; деньги хранятся целыми копейками.
+- AN30-006: пароли защищены Argon2id; opaque-сессии и токены хранятся только как purpose-separated HMAC.
+- AN30-006: добавлены точный same-origin CORS/Origin, double-submit CSRF, Redis rate limit, блокировка аккаунта и ротация сессий после MFA.
+- AN30-006: TOTP-секреты и auth-токены outbox защищены AES-256-GCM; audit log фиксирует критические auth-события.
+- AN30-006: Caddy выдаёт CSP, HSTS, COOP/CORP, Permissions-Policy и запрет встраивания; API принимает credential CORS только с origin сайта.

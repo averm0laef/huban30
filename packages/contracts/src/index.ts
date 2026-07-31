@@ -4,6 +4,62 @@ export const ROLES = ["customer", "manager", "director", "admin"] as const;
 export const RoleSchema = z.enum(ROLES);
 export type Role = z.infer<typeof RoleSchema>;
 
+export const PERMISSIONS = [
+  "account:read:self",
+  "account:update:self",
+  "wishlist:manage:self",
+  "orders:read:self",
+  "orders:read:any",
+  "orders:update:any",
+  "chat:use:self",
+  "chat:manage:any",
+  "catalog:read",
+  "catalog:write",
+  "catalog:import",
+  "reports:read",
+  "staff:read",
+  "staff:invite",
+  "staff:manage",
+  "settings:manage",
+  "audit:read",
+] as const;
+export const PermissionSchema = z.enum(PERMISSIONS);
+export type Permission = z.infer<typeof PermissionSchema>;
+
+export const ROLE_PERMISSIONS = {
+  customer: [
+    "account:read:self",
+    "account:update:self",
+    "wishlist:manage:self",
+    "orders:read:self",
+    "chat:use:self",
+    "catalog:read",
+  ],
+  manager: [
+    "account:read:self",
+    "account:update:self",
+    "orders:read:any",
+    "orders:update:any",
+    "chat:manage:any",
+    "catalog:read",
+    "catalog:write",
+    "catalog:import",
+  ],
+  director: [
+    "account:read:self",
+    "account:update:self",
+    "orders:read:any",
+    "orders:update:any",
+    "chat:manage:any",
+    "catalog:read",
+    "catalog:write",
+    "catalog:import",
+    "reports:read",
+    "staff:read",
+  ],
+  admin: PERMISSIONS,
+} as const satisfies Record<Role, readonly Permission[]>;
+
 export const ORDER_STATUSES = [
   "pending_payment",
   "paid",

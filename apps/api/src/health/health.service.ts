@@ -1,9 +1,9 @@
-import { Injectable, OnModuleDestroy } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { Redis } from "ioredis";
-import { Pool } from "pg";
+import { Injectable } from "@nestjs/common";
 
 import type { HealthResponse } from "@an30/contracts";
+
+import { DatabaseService } from "../infrastructure/database.service.js";
+import { RedisService } from "../infrastructure/redis.service.js";
 
 async function within<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   const controller = new AbortController();
@@ -22,23 +22,11 @@ async function within<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 @Injectable()
-export class HealthService implements OnModuleDestroy {
-  private readonly postgres: Pool;
-  private readonly redis: Redis;
-
-  constructor(config: ConfigService) {
-    this.postgres = new Pool({
-      connectionString: config.getOrThrow<string>("DATABASE_URL"),
-      connectionTimeoutMillis: 1_500,
-      max: 2,
-    });
-    this.redis = new Redis(config.getOrThrow<string>("REDIS_URL"), {
-      connectTimeout: 1_500,
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-    });
-    this.redis.on("error", () => undefined);
-  }
+export class HealthService {
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly redis: RedisService,
+  ) {}
 
   live(): HealthResponse {
     return {
@@ -55,7 +43,7 @@ export class HealthService implements OnModuleDestroy {
     };
 
     const [postgres, redis] = await Promise.allSettled([
-      within(this.postgres.query("SELECT 1"), 2_000),
+      within(this.database.query("SELECT 1"), 2_000),
       within(this.pingRedis(), 2_000),
     ]);
     if (postgres.status === "fulfilled") checks.postgres = "up";
@@ -69,15 +57,8 @@ export class HealthService implements OnModuleDestroy {
     };
   }
 
-  async onModuleDestroy() {
-    await Promise.allSettled([
-      this.postgres.end(),
-      this.redis.quit(),
-    ]);
-  }
-
   private async pingRedis() {
-    if (this.redis.status === "wait") await this.redis.connect();
-    return this.redis.ping();
+    await this.redis.ensureConnected();
+    return this.redis.client.ping();
   }
 }

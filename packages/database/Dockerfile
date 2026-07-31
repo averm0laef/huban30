@@ -17,5 +17,6 @@ ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S an30 && adduser -S -G an30 an30
 COPY --from=build --chown=an30:an30 /opt/an30/database ./
+RUN rm -f pnpm-lock.yaml
 USER an30
 CMD ["node", "dist/migrate.js", "up"]

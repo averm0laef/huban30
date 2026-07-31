@@ -16,6 +16,7 @@ generate_secret() {
 }
 
 generate_secret postgres_password.txt
+generate_secret app_database_password.txt
 generate_secret redis_password.txt
 generate_secret session_secret.txt
 generate_secret data_encryption_key.txt

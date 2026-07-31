@@ -4,6 +4,7 @@ import {
   MoneySchema,
   OrderStatusSchema,
   PaymentStatusSchema,
+  ROLE_PERMISSIONS,
   RoleSchema,
 } from "./index.js";
 
@@ -19,5 +20,11 @@ describe("public contracts", () => {
     expect(MoneySchema.parse(125_099)).toBe(125_099);
     expect(MoneySchema.safeParse(12.5).success).toBe(false);
     expect(MoneySchema.safeParse(-1).success).toBe(false);
+  });
+
+  it("keeps privileged staff actions out of customer and manager roles", () => {
+    expect(ROLE_PERMISSIONS.customer).not.toContain("orders:read:any");
+    expect(ROLE_PERMISSIONS.manager).not.toContain("staff:invite");
+    expect(ROLE_PERMISSIONS.admin).toContain("staff:invite");
   });
 });

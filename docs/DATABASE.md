@@ -69,6 +69,12 @@ docker compose -f compose.yaml -f compose.dev.yaml logs migrate
 
 Статус `Exited (0)` у сервиса `migrate` после старта является нормальным.
 
+Migration service подключается владельцем схемы и после применения миграций
+создаёт либо ротирует отдельную роль `an30_app`. Она может выполнять DML только
+в схеме `app`, но не имеет `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `BYPASSRLS`
+и права `CREATE` в схемах. API подключается только этой ролью. Пароль владельца
+БД не монтируется в API-контейнер.
+
 ## Development seed
 
 Seed идемпотентно создаёт только два явно помеченных демонстрационных товара.
@@ -94,3 +100,5 @@ docker compose -f compose.yaml -f compose.dev.yaml exec -T postgres \
 
 Она проверяет контракты ролей и состояний, тип денег, запрет oversell,
 append-only аудит, неизменяемость окружения и запрет demo-данных вне development.
+
+Авторизация, сессии, TOTP и матрица прав описаны в `docs/AUTHENTICATION.md`.

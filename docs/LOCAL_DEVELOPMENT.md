@@ -78,3 +78,5 @@ docker compose -f compose.yaml -f compose.dev.yaml config --quiet
 ```
 
 Устройство схемы, правила миграций и SQL smoke-тест описаны в `docs/DATABASE.md`.
+Первичный владелец, auth endpoints, TOTP и RBAC описаны в
+`docs/AUTHENTICATION.md`.

@@ -2,10 +2,14 @@
   "name": "@an30/api",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "auth:smoke": "node dist/cli/auth-smoke.js",
     "build": "nest build",
     "dev": "nest start --watch",
     "lint": "eslint src",
+    "owner:create": "node dist/cli/create-owner.js",
+    "staff-auth:smoke": "node dist/cli/staff-auth-smoke.js",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests"

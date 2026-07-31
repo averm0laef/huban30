@@ -19,6 +19,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S an30 && adduser -S -G an30 an30
 COPY --from=build --chown=an30:an30 /opt/an30/worker ./
+RUN rm -f pnpm-lock.yaml
 USER an30
 EXPOSE 4001
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \

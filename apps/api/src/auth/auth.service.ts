@@ -1,0 +1,721 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import type { PoolClient } from "pg";
+
+import { RoleSchema, type Role } from "@an30/contracts";
+
+import { DatabaseService, type DatabaseExecutor } from "../infrastructure/database.service.js";
+import { AuditService } from "../security/audit.service.js";
+import { CryptoService } from "../security/crypto.service.js";
+import { PasswordService } from "../security/password.service.js";
+import { TotpService } from "../security/totp.service.js";
+import type { AuthContext } from "./auth-context.js";
+import type {
+  AcceptStaffInvitationDto,
+  InviteStaffDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+} from "./auth.dto.js";
+import { SessionService, type CreatedSession } from "./session.service.js";
+
+interface RequestMetadata {
+  ipAddress: string;
+  userAgent?: string;
+}
+
+interface LoginAccountRow {
+  email: string;
+  failed_login_count: number;
+  id: string;
+  locked_until: Date | null;
+  password_hash: string | null;
+  role: string | null;
+  staff_status: string | null;
+  status: string;
+  totp_confirmed_at: Date | null;
+}
+
+interface AuthResult {
+  body: Record<string, unknown>;
+  session: CreatedSession;
+}
+
+const GENERIC_EMAIL_MESSAGE = "Если адрес подходит, инструкция будет отправлена.";
+const COMMON_PASSWORDS = new Set([
+  "123456789012",
+  "password1234",
+  "qwerty123456",
+  "пароль123456",
+]);
+
+@Injectable()
+export class AuthService {
+  private readonly debugTokens: boolean;
+
+  constructor(
+    config: ConfigService,
+    private readonly audit: AuditService,
+    private readonly crypto: CryptoService,
+    private readonly database: DatabaseService,
+    private readonly passwords: PasswordService,
+    private readonly sessions: SessionService,
+    private readonly totp: TotpService,
+  ) {
+    this.debugTokens = config.getOrThrow<boolean>("AUTH_DEBUG_TOKENS");
+  }
+
+  async register(input: RegisterDto, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+    this.assertPassword(input.password, input.email);
+    const passwordHash = await this.passwords.hash(input.password);
+    const rawToken = this.crypto.randomToken();
+    const debugToken = await this.database.transaction(async (client) => {
+      const existing = await client.query<{ id: string; status: string }>(
+        "SELECT id, status::text FROM app.users WHERE email = $1 FOR UPDATE",
+        [input.email],
+      );
+      let userId = existing.rows[0]?.id;
+      if (existing.rows[0]?.status === "active") return null;
+
+      if (userId) {
+        await client.query(
+          `
+            UPDATE app.users
+            SET display_name = $2, password_hash = $3, password_changed_at = clock_timestamp()
+            WHERE id = $1
+          `,
+          [userId, this.normalizeDisplayName(input.displayName), passwordHash],
+        );
+      } else {
+        const created = await client.query<{ id: string }>(
+          `
+            INSERT INTO app.users (email, display_name, password_hash, password_changed_at)
+            VALUES ($1, $2, $3, clock_timestamp())
+            RETURNING id
+          `,
+          [input.email, this.normalizeDisplayName(input.displayName), passwordHash],
+        );
+        userId = created.rows[0]?.id;
+      }
+      if (!userId) throw new Error("Registration did not resolve a user identifier");
+
+      await client.query(
+        `UPDATE app.email_verification_tokens SET used_at = clock_timestamp()
+         WHERE user_id = $1 AND used_at IS NULL`,
+        [userId],
+      );
+      await client.query(
+        `
+          INSERT INTO app.email_verification_tokens (user_id, token_hash, expires_at)
+          VALUES ($1, $2, clock_timestamp() + interval '24 hours')
+        `,
+        [userId, this.crypto.opaqueHash("email-verification", rawToken)],
+      );
+      await this.enqueueSecretEmail(
+        client,
+        "auth.email.verify",
+        userId,
+        input.email,
+        rawToken,
+      );
+      await this.audit.record({
+        action: "auth.registration.requested",
+        entityId: userId,
+        entityType: "user",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return rawToken;
+    });
+
+    return {
+      message: GENERIC_EMAIL_MESSAGE,
+      ...(this.debugTokens && debugToken ? { developmentToken: debugToken } : {}),
+    };
+  }
+
+  async verifyEmail(rawToken: string, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+    const userId = await this.database.transaction(async (client) => {
+      const selected = await client.query<{ id: string; user_id: string }>(
+        `
+          SELECT id, user_id
+          FROM app.email_verification_tokens
+          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
+          FOR UPDATE
+        `,
+        [this.crypto.opaqueHash("email-verification", rawToken)],
+      );
+      const token = selected.rows[0];
+      if (!token) throw new BadRequestException("Ссылка подтверждения недействительна или истекла");
+      await client.query(
+        "UPDATE app.email_verification_tokens SET used_at = clock_timestamp() WHERE id = $1",
+        [token.id],
+      );
+      await client.query(
+        `
+          UPDATE app.users
+          SET status = 'active', email_verified_at = COALESCE(email_verified_at, clock_timestamp())
+          WHERE id = $1 AND deleted_at IS NULL
+        `,
+        [token.user_id],
+      );
+      await this.audit.record({
+        action: "auth.email.verified",
+        entityId: token.user_id,
+        entityType: "user",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return token.user_id;
+    });
+    return { message: "Email подтверждён", userId };
+  }
+
+  async login(input: LoginDto, metadata: RequestMetadata): Promise<AuthResult> {
+    const result = await this.database.query<LoginAccountRow>(
+      `
+        SELECT
+          account.id,
+          account.email::text,
+          account.password_hash,
+          account.status::text,
+          account.failed_login_count,
+          account.locked_until,
+          staff.role::text,
+          staff.status::text AS staff_status,
+          staff.totp_confirmed_at
+        FROM app.users AS account
+        LEFT JOIN app.staff_members AS staff ON staff.user_id = account.id
+        WHERE account.email = $1 AND account.deleted_at IS NULL
+        LIMIT 1
+      `,
+      [input.email],
+    );
+    const account = result.rows[0];
+    const validPassword = await this.passwords.verify(input.password, account?.password_hash);
+    const locked = account?.locked_until ? account.locked_until.getTime() > Date.now() : false;
+    const eligible = account?.status === "active"
+      && (!account.role || account.staff_status === "active");
+
+    if (!account || !validPassword || locked || !eligible) {
+      await this.recordFailedLogin(account, input.email, metadata);
+      throw new UnauthorizedException("Неверный email или пароль");
+    }
+
+    const role: Role = account.role ? RoleSchema.parse(account.role) : "customer";
+    return this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE app.users
+          SET failed_login_count = 0, locked_until = NULL, last_failed_login_at = NULL,
+              last_login_at = clock_timestamp()
+          WHERE id = $1
+        `,
+        [account.id],
+      );
+      await client.query(
+        `
+          INSERT INTO app.auth_attempts (email, ip_address, purpose, succeeded)
+          VALUES ($1, $2, 'login', true)
+        `,
+        [input.email, metadata.ipAddress],
+      );
+      const session = await this.sessions.create(
+        account.id,
+        metadata.ipAddress,
+        metadata.userAgent,
+        false,
+        client,
+      );
+      await this.audit.record({
+        action: "auth.login.succeeded",
+        actorRole: role,
+        actorUserId: account.id,
+        entityId: account.id,
+        entityType: "user",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return {
+        body: {
+          csrfToken: session.csrfToken,
+          mfaRequired: role !== "customer",
+          role,
+          totpSetupRequired: role !== "customer" && account.totp_confirmed_at === null,
+          userId: account.id,
+        },
+        session,
+      };
+    });
+  }
+
+  async forgotPassword(email: string, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+    const rawToken = this.crypto.randomToken();
+    const debugToken = await this.database.transaction(async (client) => {
+      const account = await client.query<{ id: string }>(
+        `SELECT id FROM app.users
+         WHERE email = $1 AND status = 'active' AND deleted_at IS NULL
+         FOR UPDATE`,
+        [email],
+      );
+      const userId = account.rows[0]?.id;
+      if (!userId) return null;
+      await client.query(
+        `UPDATE app.password_reset_tokens SET used_at = clock_timestamp()
+         WHERE user_id = $1 AND used_at IS NULL`,
+        [userId],
+      );
+      await client.query(
+        `
+          INSERT INTO app.password_reset_tokens (user_id, token_hash, expires_at, requested_ip)
+          VALUES ($1, $2, clock_timestamp() + interval '30 minutes', $3)
+        `,
+        [userId, this.crypto.opaqueHash("password-reset", rawToken), metadata.ipAddress],
+      );
+      await this.enqueueSecretEmail(client, "auth.password.reset", userId, email, rawToken);
+      await this.audit.record({
+        action: "auth.password.reset_requested",
+        entityId: userId,
+        entityType: "user",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return rawToken;
+    });
+    return {
+      message: GENERIC_EMAIL_MESSAGE,
+      ...(this.debugTokens && debugToken ? { developmentToken: debugToken } : {}),
+    };
+  }
+
+  async resetPassword(input: ResetPasswordDto, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+    this.assertPassword(input.password);
+    const passwordHash = await this.passwords.hash(input.password);
+    await this.database.transaction(async (client) => {
+      const selected = await client.query<{ id: string; user_id: string }>(
+        `
+          SELECT id, user_id
+          FROM app.password_reset_tokens
+          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
+          FOR UPDATE
+        `,
+        [this.crypto.opaqueHash("password-reset", input.token)],
+      );
+      const token = selected.rows[0];
+      if (!token) throw new BadRequestException("Ссылка восстановления недействительна или истекла");
+      await client.query(
+        "UPDATE app.password_reset_tokens SET used_at = clock_timestamp() WHERE id = $1",
+        [token.id],
+      );
+      await client.query(
+        `
+          UPDATE app.users
+          SET password_hash = $2, password_changed_at = clock_timestamp(),
+              token_version = token_version + 1,
+              session_invalid_before = clock_timestamp(),
+              failed_login_count = 0, locked_until = NULL, last_failed_login_at = NULL
+          WHERE id = $1
+        `,
+        [token.user_id, passwordHash],
+      );
+      await client.query(
+        `
+          UPDATE app.auth_sessions
+          SET revoked_at = COALESCE(revoked_at, clock_timestamp()),
+              revoke_reason = COALESCE(revoke_reason, 'password_reset')
+          WHERE user_id = $1 AND revoked_at IS NULL
+        `,
+        [token.user_id],
+      );
+      await this.audit.record({
+        action: "auth.password.reset_completed",
+        entityId: token.user_id,
+        entityType: "user",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+    });
+    return { message: "Пароль изменён. Выполните вход заново." };
+  }
+
+  async logout(auth: AuthContext, metadata: RequestMetadata): Promise<void> {
+    await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          UPDATE app.auth_sessions
+          SET revoked_at = COALESCE(revoked_at, clock_timestamp()),
+              revoke_reason = COALESCE(revoke_reason, 'logout')
+          WHERE id = $1
+        `,
+        [auth.sessionId],
+      );
+      await this.audit.record({
+        action: "auth.logout",
+        actorRole: auth.role,
+        actorUserId: auth.userId,
+        entityId: auth.sessionId,
+        entityType: "auth_session",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+    });
+  }
+
+  async inviteStaff(
+    input: InviteStaffDto,
+    actor: AuthContext,
+    metadata: RequestMetadata,
+  ): Promise<Record<string, unknown>> {
+    const rawToken = this.crypto.randomToken();
+    const invitationId = await this.database.transaction(async (client) => {
+      const existingUser = await client.query("SELECT 1 FROM app.users WHERE email = $1", [input.email]);
+      if (existingUser.rowCount) throw new ConflictException("Пользователь с таким email уже существует");
+      await client.query(
+        `
+          UPDATE app.staff_invitations
+          SET revoked_at = clock_timestamp()
+          WHERE email = $1 AND accepted_at IS NULL AND revoked_at IS NULL
+        `,
+        [input.email],
+      );
+      const created = await client.query<{ id: string }>(
+        `
+          INSERT INTO app.staff_invitations (email, role, token_hash, invited_by, expires_at)
+          VALUES ($1, $2, $3, $4, clock_timestamp() + interval '72 hours')
+          RETURNING id
+        `,
+        [input.email, input.role, this.crypto.opaqueHash("staff-invitation", rawToken), actor.userId],
+      );
+      const id = created.rows[0]?.id;
+      if (!id) throw new Error("Staff invitation did not return an identifier");
+      await this.enqueueSecretEmail(client, "auth.staff.invitation", id, input.email, rawToken, {
+        role: input.role,
+      });
+      await this.audit.record({
+        action: "staff.invitation.created",
+        actorRole: actor.role,
+        actorUserId: actor.userId,
+        afterState: { emailDomain: input.email.split("@")[1], role: input.role },
+        entityId: id,
+        entityType: "staff_invitation",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return id;
+    });
+    return {
+      invitationId,
+      message: "Приглашение создано",
+      ...(this.debugTokens ? { developmentToken: rawToken } : {}),
+    };
+  }
+
+  async acceptStaffInvitation(
+    input: AcceptStaffInvitationDto,
+    metadata: RequestMetadata,
+  ): Promise<Record<string, unknown>> {
+    this.assertPassword(input.password);
+    const passwordHash = await this.passwords.hash(input.password);
+    const userId = await this.database.transaction(async (client) => {
+      const selected = await client.query<{
+        email: string;
+        id: string;
+        invited_by: string;
+        role: string;
+      }>(
+        `
+          SELECT id, email::text, role::text, invited_by
+          FROM app.staff_invitations
+          WHERE token_hash = $1 AND accepted_at IS NULL AND revoked_at IS NULL
+            AND expires_at > clock_timestamp()
+          FOR UPDATE
+        `,
+        [this.crypto.opaqueHash("staff-invitation", input.token)],
+      );
+      const invitation = selected.rows[0];
+      if (!invitation) throw new BadRequestException("Приглашение недействительно или истекло");
+      const existing = await client.query("SELECT 1 FROM app.users WHERE email = $1", [invitation.email]);
+      if (existing.rowCount) throw new ConflictException("Пользователь с таким email уже существует");
+      const account = await client.query<{ id: string }>(
+        `
+          INSERT INTO app.users (
+            email, display_name, password_hash, status, email_verified_at, password_changed_at
+          ) VALUES ($1, $2, $3, 'active', clock_timestamp(), clock_timestamp())
+          RETURNING id
+        `,
+        [invitation.email, this.normalizeDisplayName(input.displayName), passwordHash],
+      );
+      const id = account.rows[0]?.id;
+      if (!id) throw new Error("Staff account did not return an identifier");
+      await client.query(
+        `
+          INSERT INTO app.staff_members (user_id, role, status, invited_by)
+          VALUES ($1, $2, 'active', $3)
+        `,
+        [id, invitation.role, invitation.invited_by],
+      );
+      await client.query(
+        "UPDATE app.staff_invitations SET accepted_at = clock_timestamp() WHERE id = $1",
+        [invitation.id],
+      );
+      await this.audit.record({
+        action: "staff.invitation.accepted",
+        actorRole: RoleSchema.parse(invitation.role),
+        actorUserId: id,
+        entityId: id,
+        entityType: "staff_member",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return id;
+    });
+    return { message: "Приглашение принято. Войдите и настройте TOTP.", userId };
+  }
+
+  async setupTotp(auth: AuthContext, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+    if (auth.role === "customer") throw new ForbiddenException("TOTP предназначен для персонала");
+    const secret = this.totp.generateSecret();
+    await this.database.transaction(async (client) => {
+      const staff = await client.query<{ totp_confirmed_at: Date | null }>(
+        "SELECT totp_confirmed_at FROM app.staff_members WHERE user_id = $1 FOR UPDATE",
+        [auth.userId],
+      );
+      if (!staff.rows[0]) throw new ForbiddenException("Профиль сотрудника не найден");
+      if (staff.rows[0].totp_confirmed_at) throw new ConflictException("TOTP уже настроен");
+      await client.query(
+        `
+          UPDATE app.staff_members
+          SET totp_secret_ciphertext = $2, totp_last_used_step = NULL
+          WHERE user_id = $1
+        `,
+        [auth.userId, this.crypto.encrypt(secret, `totp:${auth.userId}`)],
+      );
+      await client.query("DELETE FROM app.staff_recovery_codes WHERE user_id = $1", [auth.userId]);
+      await this.audit.record({
+        action: "auth.totp.setup_started",
+        actorRole: auth.role,
+        actorUserId: auth.userId,
+        entityId: auth.userId,
+        entityType: "staff_member",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+    });
+    return {
+      provisioningUri: this.totp.provisioningUri(secret, auth.email),
+      secret,
+    };
+  }
+
+  async confirmTotp(
+    auth: AuthContext,
+    code: string,
+    metadata: RequestMetadata,
+  ): Promise<{ body: Record<string, unknown>; session: CreatedSession }> {
+    if (auth.role === "customer") throw new ForbiddenException("TOTP предназначен для персонала");
+    return this.database.transaction(async (client) => {
+      const staff = await client.query<{
+        totp_confirmed_at: Date | null;
+        totp_last_used_step: string | null;
+        totp_secret_ciphertext: Buffer | null;
+      }>(
+        `
+          SELECT totp_secret_ciphertext, totp_confirmed_at, totp_last_used_step
+          FROM app.staff_members WHERE user_id = $1 FOR UPDATE
+        `,
+        [auth.userId],
+      );
+      const row = staff.rows[0];
+      if (!row?.totp_secret_ciphertext || row.totp_confirmed_at) {
+        throw new BadRequestException("Сначала начните настройку TOTP");
+      }
+      const secret = this.crypto.decrypt(row.totp_secret_ciphertext, `totp:${auth.userId}`);
+      const step = this.totp.verify(secret, code);
+      if (step === null || (row.totp_last_used_step !== null && step <= Number(row.totp_last_used_step))) {
+        throw new UnauthorizedException("Неверный или уже использованный TOTP-код");
+      }
+      const recoveryCodes = this.totp.generateRecoveryCodes();
+      await client.query(
+        `
+          UPDATE app.staff_members
+          SET totp_confirmed_at = clock_timestamp(), totp_last_used_step = $2
+          WHERE user_id = $1
+        `,
+        [auth.userId, step],
+      );
+      await client.query("DELETE FROM app.staff_recovery_codes WHERE user_id = $1", [auth.userId]);
+      for (const recoveryCode of recoveryCodes) {
+        await client.query(
+          "INSERT INTO app.staff_recovery_codes (user_id, code_hash) VALUES ($1, $2)",
+          [auth.userId, this.crypto.opaqueHash("recovery-code", recoveryCode.toUpperCase())],
+        );
+      }
+      const session = await this.sessions.rotateWithMfa(
+        auth.sessionId,
+        metadata.ipAddress,
+        metadata.userAgent,
+        client,
+      );
+      await this.audit.record({
+        action: "auth.totp.confirmed",
+        actorRole: auth.role,
+        actorUserId: auth.userId,
+        entityId: auth.userId,
+        entityType: "staff_member",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return {
+        body: { csrfToken: session.csrfToken, recoveryCodes },
+        session,
+      };
+    });
+  }
+
+  async verifyTotp(
+    auth: AuthContext,
+    suppliedCode: string,
+    metadata: RequestMetadata,
+  ): Promise<{ body: Record<string, unknown>; session: CreatedSession }> {
+    if (auth.role === "customer") throw new ForbiddenException("TOTP предназначен для персонала");
+    const code = suppliedCode.toUpperCase();
+    return this.database.transaction(async (client) => {
+      const staff = await client.query<{
+        totp_confirmed_at: Date | null;
+        totp_last_used_step: string | null;
+        totp_secret_ciphertext: Buffer | null;
+      }>(
+        `
+          SELECT totp_secret_ciphertext, totp_confirmed_at, totp_last_used_step
+          FROM app.staff_members WHERE user_id = $1 FOR UPDATE
+        `,
+        [auth.userId],
+      );
+      const row = staff.rows[0];
+      if (!row?.totp_secret_ciphertext || !row.totp_confirmed_at) {
+        throw new BadRequestException("TOTP ещё не настроен");
+      }
+
+      let accepted = false;
+      if (/^\d{6}$/u.test(code)) {
+        const secret = this.crypto.decrypt(row.totp_secret_ciphertext, `totp:${auth.userId}`);
+        const step = this.totp.verify(secret, code);
+        if (step !== null && (row.totp_last_used_step === null || step > Number(row.totp_last_used_step))) {
+          await client.query(
+            "UPDATE app.staff_members SET totp_last_used_step = $2 WHERE user_id = $1",
+            [auth.userId, step],
+          );
+          accepted = true;
+        }
+      } else {
+        const recoveryHash = this.crypto.opaqueHash("recovery-code", code);
+        const consumed = await client.query(
+          `
+            UPDATE app.staff_recovery_codes
+            SET used_at = clock_timestamp()
+            WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+            RETURNING id
+          `,
+          [auth.userId, recoveryHash],
+        );
+        accepted = Boolean(consumed.rowCount);
+      }
+      if (!accepted) throw new UnauthorizedException("Неверный или уже использованный код");
+
+      const session = await this.sessions.rotateWithMfa(
+        auth.sessionId,
+        metadata.ipAddress,
+        metadata.userAgent,
+        client,
+      );
+      await this.audit.record({
+        action: "auth.mfa.verified",
+        actorRole: auth.role,
+        actorUserId: auth.userId,
+        entityId: auth.sessionId,
+        entityType: "auth_session",
+        ipAddress: metadata.ipAddress,
+        metadata: { method: /^\d{6}$/u.test(code) ? "totp" : "recovery_code" },
+        userAgent: metadata.userAgent,
+      }, client);
+      return { body: { csrfToken: session.csrfToken, verified: true }, session };
+    });
+  }
+
+  private assertPassword(password: string, email?: string): void {
+    const lower = password.toLocaleLowerCase("ru-RU");
+    const localPart = email?.split("@")[0]?.toLocaleLowerCase("ru-RU");
+    if (
+      password.length < 12
+      || password.length > 128
+      || COMMON_PASSWORDS.has(lower)
+      || (localPart && localPart.length >= 4 && lower.includes(localPart))
+    ) {
+      throw new BadRequestException("Используйте уникальную парольную фразу длиной от 12 символов");
+    }
+  }
+
+  private normalizeDisplayName(value: string): string {
+    const normalized = value.normalize("NFKC").trim().replace(/\s+/gu, " ");
+    if (normalized.length < 2 || normalized.length > 120) {
+      throw new BadRequestException("Некорректное отображаемое имя");
+    }
+    return normalized;
+  }
+
+  private async recordFailedLogin(
+    account: LoginAccountRow | undefined,
+    email: string,
+    metadata: RequestMetadata,
+  ): Promise<void> {
+    await this.database.transaction(async (client) => {
+      if (account) {
+        await client.query(
+          `
+            UPDATE app.users
+            SET
+              failed_login_count = failed_login_count + 1,
+              last_failed_login_at = clock_timestamp(),
+              locked_until = CASE
+                WHEN failed_login_count + 1 >= 5 THEN clock_timestamp() + interval '15 minutes'
+                ELSE locked_until
+              END
+            WHERE id = $1
+          `,
+          [account.id],
+        );
+      }
+      await client.query(
+        `
+          INSERT INTO app.auth_attempts (email, ip_address, purpose, succeeded, failure_code)
+          VALUES ($1, $2, 'login', false, 'invalid_credentials')
+        `,
+        [email, metadata.ipAddress],
+      );
+    });
+  }
+
+  private async enqueueSecretEmail(
+    client: PoolClient,
+    topic: string,
+    aggregateId: string,
+    recipient: string,
+    token: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<void> {
+    const encryptedToken = this.crypto.encrypt(token, `${topic}:${aggregateId}`).toString("base64url");
+    await client.query(
+      `
+        INSERT INTO app.outbox_events (topic, aggregate_type, aggregate_id, payload)
+        VALUES ($1, 'auth', $2, $3::jsonb)
+      `,
+      [topic, aggregateId, JSON.stringify({ encryptedToken, recipient, ...extra })],
+    );
+  }
+}

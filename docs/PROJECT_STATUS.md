@@ -5,7 +5,7 @@
 ## Общий статус
 
 - Цель: автономный production-продукт без runtime-зависимости от Supabase и Lovable.
-- Текущий этап: AN30-006.
+- Текущий этап: AN30-007.
 - Production: не готов.
 - Публичный checkout: должен оставаться закрыт до подключения боевого эквайринга.
 - Удаление старого Supabase: запрещено без отдельного подтверждения владельца.
@@ -19,7 +19,7 @@
 | AN30-003 | Готово | Воспроизводимая pnpm-сборка на Node.js 24 LTS |
 | AN30-004 | Готово | Каркас web, api, worker, PostgreSQL, Redis и Caddy |
 | AN30-005 | Готово | Чистая схема PostgreSQL, миграции и защищённый dev seed |
-| AN30-006 | Ожидает | Авторизация, TOTP, сессии и RBAC |
+| AN30-006 | Готово | Авторизация, TOTP, защищённые сессии и серверная RBAC |
 | AN30-007 | Ожидает | Надёжный staging-импорт и обмен с 1С |
 | AN30-008 | Ожидает | Заказы, резервы и sandbox-платежи |
 | AN30-009 | Ожидает | Чат и отключаемые внешние адаптеры |
@@ -96,3 +96,18 @@
 - Удалённые тестовые данные: две временные БД и одноразовые verification-контейнеры удалены после smoke; они содержали только сгенерированную тестовую схему и не подлежат восстановлению. Рабочий local development volume и старый Supabase не удалялись.
 - Риски: API ещё не реализует доменные репозитории и использует bootstrap-владельца PostgreSQL; отдельная least-privilege runtime-роль, авторизация, IDOR-защита и RBAC входят в AN30-006. Production-каталог намеренно пуст до AN30-007 и импорта 1С. Legacy остаётся рядом до последовательного переноса.
 - Следующий шаг: AN30-006, реализовать Argon2id, opaque-сессии, email flows, приглашения, TOTP/recovery-коды, серверную RBAC и аудит безопасности.
+
+## AN30-006: безопасность, авторизация и роли
+
+- Дата начала: 2026-08-01 01:52:00 +09.
+- Дата завершения: 2026-08-01 02:41:20 +09.
+- Статус: готово.
+- Изменённые файлы: migration `0007_auth_security`; auth/security/infrastructure модули NestJS; typed RBAC в `packages/contracts`; owner/customer/staff smoke CLI; Compose secrets и least-privilege DB provisioning; Dockerfile runtime-образов; Caddy headers; `docs/AUTHENTICATION.md`, база, локальный запуск, политика безопасности и журналы.
+- Решения: Argon2id с 64 MiB/3 проходами; HMAC-хеши opaque-сессий, CSRF и одноразовых токенов; AES-256-GCM для TOTP/outbox; точный same-origin Origin + CSRF; Redis rate limit fail-closed и блокировка аккаунта после 5 попыток; обязательная ротация staff-сессии после TOTP; первый admin только контейнерной командой; API работает как `an30_app` без DDL и административных атрибутов PostgreSQL.
+- Команды проверок: `pnpm install --frozen-lockfile`; `pnpm peers check`; `pnpm verify:full`; production/dev Compose config; полный Docker build/up; миграция чистой временной production-БД; SQL schema smoke под `an30_app`; проверка запрета DDL и production seed; HTTP security headers; customer auth smoke (18 проверок); owner/TOTP/staff/RBAC smoke (10 проверок); поиск `supabase|lovable` во всех финальных runtime-образах.
+- Результат: 7 миграций, 50 объектов схемы `app`, 72 FK и 178 индексов; `an30_app` не имеет `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `BYPASSRLS` и DDL; API публикует 12 auth routes; регистрация, email verify, generic login, CSRF logout, reset с отзывом сессий, brute-force lock, одноразовые приглашения, TOTP anti-replay, recovery-коды и role denial прошли на реальных PostgreSQL/Redis/API. Runtime-образы не содержат Supabase/Lovable строк, lock-метаданных или пакетов. Весь Compose-стек healthy, migrate завершён с кодом 0.
+- Качество: lint без ошибок; 20 unit-тестов по workspace, Playwright и все production-сборки прошли; `pnpm audit:prod` содержит 0 critical/high и 3 moderate только в legacy. API пишет структурированный JSON и маскирует credential-поля, email и IP. Caddy выдаёт CSP, HSTS, COOP/CORP, Permissions-Policy, Referrer-Policy, nosniff и DENY frame policy.
+- Исправленные при smoke ошибки: ESM-режим API для общих контрактов; неоднозначный тип SQL-параметра owner audit; отсутствующий новый Compose secret; устаревший database image без migration 0007; накопленные локальные rate-limit ключи корректно вызвали 429 и были очищены перед воспроизводимым прогоном.
+- Удалённые тестовые данные: одноразовые production PostgreSQL container/volume/network и диагностические файлы удалены; 25 локальных Redis rate-limit ключей удалены перед финальным smoke. Тестовые auth-аккаунты обезличены и soft-delete, их append-only audit events сохранены. Ни рабочий local volume, ни старый Supabase не удалялись.
+- Риски: SMTP-адаптер пока не отправляет outbox-письма; UI регистрации/TOTP и ownership-проверки будущих заказов/чатов добавляются с соответствующими доменными endpoints; CSP временно допускает inline script/style для Next.js и будет ужесточена через nonce на интерфейсном/SEO этапах; 29 legacy lint warnings и 3 moderate advisory исчезнут при удалении legacy React Router.
+- Следующий шаг: AN30-007, реализовать безопасный идемпотентный staging-импорт 1С с preview, apply, rollback, ревизиями и журналом конфликтов.

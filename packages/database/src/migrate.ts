@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Client } from "pg";
+import { Client, escapeIdentifier, escapeLiteral } from "pg";
 
 import { getDatabaseConfig } from "./config.js";
 import { log } from "./logger.js";
@@ -81,9 +81,76 @@ async function assertDatabaseEnvironment(
   }
 }
 
+async function provisionApplicationRole(
+  client: Client,
+  applicationUser: string,
+  applicationPassword: string,
+): Promise<void> {
+  const role = escapeIdentifier(applicationUser);
+  const password = escapeLiteral(applicationPassword);
+  const identity = await client.query<{ current_database: string; current_user: string }>(
+    "SELECT current_database(), current_user",
+  );
+  const databaseName = identity.rows[0]?.current_database;
+  const ownerName = identity.rows[0]?.current_user;
+  if (!databaseName || !ownerName) {
+    throw new Error("Unable to resolve the migration owner and database name");
+  }
+
+  const database = escapeIdentifier(databaseName);
+  const owner = escapeIdentifier(ownerName);
+
+  await client.query(`
+    DO $role$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${escapeLiteral(applicationUser)}) THEN
+        CREATE ROLE ${role}
+          LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS;
+      END IF;
+    END
+    $role$;
+
+    ALTER ROLE ${role}
+      WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS
+      PASSWORD ${password};
+    GRANT CONNECT ON DATABASE ${database} TO ${role};
+    GRANT USAGE ON SCHEMA app TO ${role};
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO ${role};
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO ${role};
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO ${role};
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} IN SCHEMA app
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${role};
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} IN SCHEMA app
+      GRANT USAGE, SELECT ON SEQUENCES TO ${role};
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} IN SCHEMA app
+      GRANT EXECUTE ON FUNCTIONS TO ${role};
+  `);
+}
+
+async function assertApplicationRole(client: Client, applicationUser: string): Promise<void> {
+  const result = await client.query<{ exists: boolean }>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_roles
+        WHERE rolname = $1
+          AND rolcanlogin
+          AND NOT rolsuper
+          AND NOT rolcreatedb
+          AND NOT rolcreaterole
+          AND NOT rolbypassrls
+      ) AS exists
+    `,
+    [applicationUser],
+  );
+  if (!result.rows[0]?.exists) {
+    throw new Error(`Least-privilege application role ${applicationUser} is missing or unsafe`);
+  }
+}
+
 async function migrate(
   client: Client,
-  databaseEnvironment: "development" | "production" | "staging",
+  config: ReturnType<typeof getDatabaseConfig>,
 ): Promise<void> {
   const migrations = await loadMigrations(migrationDirectory);
   await client.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [migrationLockName]);
@@ -127,7 +194,14 @@ async function migrate(
       log("info", "migration.completed", { migration: migration.id });
     }
 
-    await ensureDatabaseEnvironment(client, databaseEnvironment);
+    await ensureDatabaseEnvironment(client, config.databaseEnvironment);
+    if (config.provisionApplicationRole) {
+      await provisionApplicationRole(
+        client,
+        config.applicationUser,
+        config.applicationPassword ?? "",
+      );
+    }
   } finally {
     await client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [migrationLockName]);
   }
@@ -148,12 +222,15 @@ async function main(): Promise<void> {
       const status = await migrationStatus(client);
       if (status.pending === 0) {
         await assertDatabaseEnvironment(client, config.databaseEnvironment);
+        if (config.provisionApplicationRole) {
+          await assertApplicationRole(client, config.applicationUser);
+        }
       }
       log("info", "migration.status", status);
       return;
     }
 
-    await migrate(client, config.databaseEnvironment);
+    await migrate(client, config);
     log("info", "migration.status", await migrationStatus(client));
   } finally {
     await client.end();

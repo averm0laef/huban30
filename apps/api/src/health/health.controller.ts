@@ -4,9 +4,11 @@ import type { FastifyReply } from "fastify";
 
 import type { HealthResponse } from "@an30/contracts";
 
+import { Public } from "../auth/auth.decorators.js";
 import { HealthService } from "./health.service.js";
 
 @ApiTags("health")
+@Public()
 @Controller("health")
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}

@@ -19,6 +19,8 @@ ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S an30 && adduser -S -G an30 an30
 COPY --from=build --chown=an30:an30 /opt/an30/api ./
+RUN rm -f pnpm-lock.yaml && \
+  find node_modules -type d -path '*/fastify/docs' -prune -exec rm -rf '{}' +
 USER an30
 EXPOSE 4000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \

@@ -57,6 +57,8 @@ services:
     image: an30-database:local
     restart: "no"
     environment:
+      APP_DB_USER: an30_app
+      APP_POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
       DB_HOST: postgres
       DB_NAME: an30
       DB_PORT: 5432
@@ -64,8 +66,10 @@ services:
       DATABASE_ENVIRONMENT: production
       NODE_ENV: production
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PROVISION_APP_ROLE: "true"
     secrets:
       - postgres_password
+      - app_database_password
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,19 +89,23 @@ services:
     restart: unless-stopped
     environment:
       APP_ORIGIN: ${APP_BASE_URL:-http://localhost}
+      AUTH_DEBUG_TOKENS: "false"
+      COOKIE_SECURE: "true"
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       DB_HOST: postgres
       DB_NAME: an30
       DB_PORT: 5432
-      DB_USER: an30
+      DB_USER: an30_app
       NODE_ENV: production
       PORT: 4000
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
       REDIS_HOST: redis
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
       REDIS_PORT: 6379
+      SESSION_SECRET_FILE: /run/secrets/session_secret
       TRUST_PROXY: "true"
     secrets:
-      - postgres_password
+      - app_database_password
       - redis_password
       - session_secret
       - data_encryption_key
@@ -210,6 +218,8 @@ services:
 secrets:
   postgres_password:
     file: ${AN30_SECRETS_DIR:-./secrets}/postgres_password.txt
+  app_database_password:
+    file: ${AN30_SECRETS_DIR:-./secrets}/app_database_password.txt
   redis_password:
     file: ${AN30_SECRETS_DIR:-./secrets}/redis_password.txt
   session_secret:
