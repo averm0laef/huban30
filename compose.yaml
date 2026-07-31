@@ -50,6 +50,34 @@ services:
           memory: 128M
     networks: [backend]
 
+  migrate:
+    build:
+      context: .
+      dockerfile: packages/database/Dockerfile
+    image: an30-database:local
+    restart: "no"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: an30
+      DB_PORT: 5432
+      DB_USER: an30
+      DATABASE_ENVIRONMENT: production
+      NODE_ENV: production
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          memory: 64M
+    networks: [backend]
+
   api:
     build:
       context: .
@@ -74,8 +102,8 @@ services:
       - session_secret
       - data_encryption_key
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:

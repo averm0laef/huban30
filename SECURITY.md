@@ -30,4 +30,7 @@
 - Production checkout не стартует с sandbox-провайдером.
 - В production используются same-origin CORS, CSP, HSTS, CSRF и rate limiting.
 - Production-зависимости не должны содержать critical/high уязвимостей.
+- Метка окружения PostgreSQL неизменяема после инициализации; demo-каталог
+  блокируется внутри БД в staging и production.
+- История остатков, состояний заказов, табель и audit log являются append-only.
 - До переключения трафика обязательно проходят smoke, E2E и проверенное восстановление резервной копии.

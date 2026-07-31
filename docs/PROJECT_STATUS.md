@@ -5,7 +5,7 @@
 ## Общий статус
 
 - Цель: автономный production-продукт без runtime-зависимости от Supabase и Lovable.
-- Текущий этап: AN30-005.
+- Текущий этап: AN30-006.
 - Production: не готов.
 - Публичный checkout: должен оставаться закрыт до подключения боевого эквайринга.
 - Удаление старого Supabase: запрещено без отдельного подтверждения владельца.
@@ -18,7 +18,7 @@
 | AN30-002 | Готово в исходниках | Закрытие критических рисков legacy-системы |
 | AN30-003 | Готово | Воспроизводимая pnpm-сборка на Node.js 24 LTS |
 | AN30-004 | Готово | Каркас web, api, worker, PostgreSQL, Redis и Caddy |
-| AN30-005 | Ожидает | Чистая схема PostgreSQL и dev seed |
+| AN30-005 | Готово | Чистая схема PostgreSQL, миграции и защищённый dev seed |
 | AN30-006 | Ожидает | Авторизация, TOTP, сессии и RBAC |
 | AN30-007 | Ожидает | Надёжный staging-импорт и обмен с 1С |
 | AN30-008 | Ожидает | Заказы, резервы и sandbox-платежи |
@@ -82,3 +82,17 @@
 - Исправленные при smoke ошибки: путь тома PostgreSQL 18; отсутствующие runtime-пакеты ValidationPipe; приоритет API-маршрута Caddy; нежелательная локальная ACME-попытка; устаревшая E2E-конфигурация; установка всего legacy workspace в runtime-образы; пять high advisory в транзитивных зависимостях.
 - Риски: чистая бизнес-схема и миграции ещё не созданы; storefront и admin пока являются честными каркасами без каталога и операций; 3 moderate advisory и 29 lint-предупреждений остаются только в legacy; production secrets и автоматический HTTPS будут проверены на Linux/VPS, потому что Docker Desktop macOS блокирует bind-mount секретов из защищённой папки Downloads; домен пока не направлен на сервер.
 - Следующий шаг: AN30-005, создать чистую PostgreSQL-схему, миграционный runner и dev-only seed без переноса production-данных Supabase.
+
+## AN30-005: чистая автономная база
+
+- Дата начала: 2026-08-01 01:14:00 +09.
+- Дата завершения: 2026-08-01 01:51:05 +09.
+- Статус: готово.
+- Изменённые файлы: новый пакет `packages/database` с 6 SQL-миграциями, runner, dev-seed, unit- и SQL smoke-тестами; `compose.yaml`, `compose.dev.yaml`, lock-файл, `.env.example`, `docs/DATABASE.md`, руководства, политика безопасности и журналы.
+- Решения: 48 таблиц и 2 представления в отдельной схеме `app`; деньги только в `bigint`-копейках; order items содержат неизменяемый снимок цены; миграции forward-only с advisory lock, транзакцией и SHA-256; окружение БД инициализируется один раз; demo-каталог запрещён триггером вне development; production-данные Supabase не переносятся.
+- Команды проверок: `pnpm verify:full`; `pnpm peers check`; frozen install; Compose config для production/dev/dev-tools; полный Docker build; миграция чистой временной production-БД из финального образа; повторная миграция; production seed rejection; `schema-smoke.sql`; полный HTTP/OpenAPI/health smoke.
+- Результат: чистая PostgreSQL 18 получила 6 миграций и повторно показала `pending: 0`; схема содержит 50 объектов (48 таблиц + 2 view), 72 внешних ключа и 176 индексов; все внешние ключи покрыты индексами; append-only, oversell, enum, money, environment и demo-ограничения прошли; dev-seed идемпотентно оставляет 2 demo-товара; production-маркер отклоняет seed; весь стек healthy, migration service завершён с кодом 0.
+- Качество: lint без ошибок; typecheck, 9 unit-тестов, обе production-сборки и Playwright прошли; 0 critical/high, 3 moderate только в legacy; peer-конфликтов нет.
+- Удалённые тестовые данные: две временные БД и одноразовые verification-контейнеры удалены после smoke; они содержали только сгенерированную тестовую схему и не подлежат восстановлению. Рабочий local development volume и старый Supabase не удалялись.
+- Риски: API ещё не реализует доменные репозитории и использует bootstrap-владельца PostgreSQL; отдельная least-privilege runtime-роль, авторизация, IDOR-защита и RBAC входят в AN30-006. Production-каталог намеренно пуст до AN30-007 и импорта 1С. Legacy остаётся рядом до последовательного переноса.
+- Следующий шаг: AN30-006, реализовать Argon2id, opaque-сессии, email flows, приглашения, TOTP/recovery-коды, серверную RBAC и аудит безопасности.

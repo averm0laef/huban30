@@ -31,6 +31,18 @@ pnpm dev:legacy
 docker compose -f compose.yaml -f compose.dev.yaml up -d --build
 ```
 
+Перед запуском API одноразовый сервис `migrate` применяет checksum-защищённые
+forward-only миграции. Его состояние `Exited (0)` после старта — ожидаемое.
+
+Демонстрационный каталог включается только явной командой development-профиля:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml --profile dev-tools run --rm seed
+```
+
+Повторный запуск безопасен: остаются те же два demo-товара. В staging и
+production команда блокируется меткой окружения внутри самой БД.
+
 Проверка состояния:
 
 ```bash
@@ -64,3 +76,5 @@ pnpm audit:prod
 docker compose config --quiet
 docker compose -f compose.yaml -f compose.dev.yaml config --quiet
 ```
+
+Устройство схемы, правила миграций и SQL smoke-тест описаны в `docs/DATABASE.md`.

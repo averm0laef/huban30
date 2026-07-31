@@ -18,6 +18,13 @@ services:
         - CMD-SHELL
         - redis-cli -a an30-local-development-only ping | grep -q PONG
 
+  migrate:
+    environment:
+      DATABASE_ENVIRONMENT: development
+      POSTGRES_PASSWORD: an30-local-development-only
+      POSTGRES_PASSWORD_FILE: !reset null
+    secrets: !reset []
+
   api:
     environment:
       POSTGRES_PASSWORD: an30-local-development-only
@@ -28,3 +35,29 @@ services:
     environment:
       REDIS_PASSWORD: an30-local-development-only
     secrets: !reset []
+
+  seed:
+    image: an30-database:local
+    profiles: [dev-tools]
+    restart: "no"
+    command: ["node", "dist/seed.js"]
+    environment:
+      ALLOW_DEV_SEED: "true"
+      DATABASE_ENVIRONMENT: development
+      DB_HOST: postgres
+      DB_NAME: an30
+      DB_PORT: 5432
+      DB_USER: an30
+      NODE_ENV: development
+      POSTGRES_PASSWORD: an30-local-development-only
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          memory: 64M
+    networks: [backend]

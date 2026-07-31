@@ -51,5 +51,6 @@ pnpm audit:prod
 - Исходный аудит: `docs/AUDIT_BASELINE.md`
 - Политика безопасности: `SECURITY.md`
 - Ротация секретов: `docs/SECRET_ROTATION.md`
+- Схема и миграции PostgreSQL: `docs/DATABASE.md`
 
 Старый Supabase-проект не удаляется и не отключается без отдельного подтверждения владельца.
