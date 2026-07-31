@@ -8,6 +8,7 @@
     "build": "nest build",
     "dev": "nest start --watch",
     "lint": "eslint src",
+    "one-c:smoke": "node dist/cli/one-c-import-smoke.js",
     "owner:create": "node dist/cli/create-owner.js",
     "staff-auth:smoke": "node dist/cli/staff-auth-smoke.js",
     "start": "node dist/main.js",

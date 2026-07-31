@@ -13,6 +13,7 @@ import { StructuredLogger } from "./security/structured-logger.js";
 
 async function bootstrap() {
   const adapter = new FastifyAdapter({
+    bodyLimit: 10 * 1024 * 1024,
     trustProxy: process.env.TRUST_PROXY === "true",
   });
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {

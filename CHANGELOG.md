@@ -16,6 +16,9 @@
 - AN30-006: добавлены клиентская регистрация, подтверждение email, вход, выход и восстановление пароля.
 - AN30-006: добавлены одноразовые приглашения персонала, обязательный TOTP, recovery-коды и контейнерная команда первого владельца.
 - AN30-006: добавлена типизированная серверная RBAC-матрица для customer, manager, director и admin.
+- AN30-007: добавлен versioned JSON-контракт выгрузки 1С для брендов, категорий, складов, товаров, цен и остатков.
+- AN30-007: добавлены staging validation/preview, conflict report, атомарный apply, immutable revision journal и безопасный rollback.
+- AN30-007: добавлен append-only журнал машинных запросов 1С и воспроизводимый 25-step integration smoke.
 
 ### Changed
 
@@ -31,6 +34,7 @@
 - AN30-006: API переведён с владельца схемы PostgreSQL на отдельную least-privilege роль `an30_app`.
 - AN30-006: API-логи переведены в JSON с маскированием credential-полей, email и IP.
 - AN30-006: production runtime-образы очищены от workspace lock-метаданных и документации зависимостей с legacy-упоминаниями.
+- AN30-007: Caddy и Fastify ограничивают request body 1С до 10 MiB; API принимает не более 5 000 строк в batch.
 
 ### Security
 
@@ -51,3 +55,4 @@
 - AN30-006: добавлены точный same-origin CORS/Origin, double-submit CSRF, Redis rate limit, блокировка аккаунта и ротация сессий после MFA.
 - AN30-006: TOTP-секреты и auth-токены outbox защищены AES-256-GCM; audit log фиксирует критические auth-события.
 - AN30-006: Caddy выдаёт CSP, HSTS, COOP/CORP, Permissions-Policy и запрет встраивания; API принимает credential CORS только с origin сайта.
+- AN30-007: Basic Auth 1С защищён шифрованием write-only пароля, CIDR allowlist, rate limit и generic 401; apply повторно проверяет версии и текущие резервы.

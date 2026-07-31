@@ -5,6 +5,9 @@
 
 {$SITE_ADDRESS} {
 	encode zstd gzip
+	request_body {
+		max_size 10MB
+	}
 
 	@api path /api/v1/* /ws*
 	handle @api {

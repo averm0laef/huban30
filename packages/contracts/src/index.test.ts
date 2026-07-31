@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   MoneySchema,
+  OneCImportEnvelopeSchema,
   OrderStatusSchema,
   PaymentStatusSchema,
   ROLE_PERMISSIONS,
@@ -26,5 +27,55 @@ describe("public contracts", () => {
     expect(ROLE_PERMISSIONS.customer).not.toContain("orders:read:any");
     expect(ROLE_PERMISSIONS.manager).not.toContain("staff:invite");
     expect(ROLE_PERMISSIONS.admin).toContain("staff:invite");
+  });
+
+  it("validates the versioned 1C envelope and integer kopeks", () => {
+    const parsed = OneCImportEnvelopeSchema.parse({
+      exportedAt: "2026-08-01T00:00:00+09:00",
+      externalBatchId: "exchange-42",
+      rows: [{
+        amountKopeks: 123_45,
+        entityType: "price",
+        productExternalId: "product-1",
+        version: 7,
+      }],
+      schemaVersion: 1,
+    });
+
+    expect(parsed.rows[0]).toMatchObject({ amountKopeks: 123_45, currency: "RUB" });
+    expect(() => OneCImportEnvelopeSchema.parse({
+      ...parsed,
+      rows: [{ ...parsed.rows[0], amountKopeks: 123.45 }],
+    })).toThrow();
+  });
+
+  it("rejects control characters and pathologically deep 1C attributes", () => {
+    const deep: Record<string, unknown> = {};
+    let cursor = deep;
+    for (let index = 0; index < 14; index += 1) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+    const base = {
+      exportedAt: "2026-08-01T00:00:00+09:00",
+      externalBatchId: "exchange-safe",
+      rows: [{
+        attributes: deep,
+        entityType: "product",
+        externalId: "product-1",
+        name: "Product",
+        sku: "SKU-1",
+        slug: "product-1",
+        version: 1,
+      }],
+      schemaVersion: 1,
+    };
+    expect(OneCImportEnvelopeSchema.safeParse(base).success).toBe(false);
+    expect(OneCImportEnvelopeSchema.safeParse({
+      ...base,
+      externalBatchId: "unsafe\nrequest",
+      rows: [],
+    }).success).toBe(false);
   });
 });

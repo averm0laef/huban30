@@ -6,6 +6,7 @@ import { AuthGuard } from "./auth/auth.guard.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { CsrfGuard } from "./auth/csrf.guard.js";
 import { PermissionsGuard } from "./auth/permissions.guard.js";
+import { CatalogModule } from "./catalog/catalog.module.js";
 import { validateEnvironment } from "./config.js";
 import { HealthModule } from "./health/health.module.js";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module.js";
@@ -21,6 +22,7 @@ import { SecurityModule } from "./security/security.module.js";
     InfrastructureModule,
     SecurityModule,
     AuthModule,
+    CatalogModule,
     HealthModule,
   ],
   providers: [

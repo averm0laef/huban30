@@ -31,6 +31,10 @@
 - Все небезопасные методы требуют точный same-origin `Origin`; авторизованные запросы дополнительно требуют CSRF-токен.
 - Opaque-сессии ротируются после MFA, имеют абсолютный и idle timeout и отзываются после reset пароля.
 - Структурированные API-логи маскируют credential-поля, email и IP до сериализации.
+- Endpoint 1С выключен по умолчанию и принимает Basic Auth только поверх HTTPS,
+  из CIDR allowlist и под Redis rate limit; сохранённый пароль никогда не возвращается API/UI.
+- Request body ограничен 10 MiB; повреждённые строки 1С остаются в staging и не
+  могут попасть в каталог без отдельного server-authorized apply.
 - Production checkout не стартует с sandbox-провайдером.
 - В production используются same-origin CORS, CSP, HSTS, CSRF и rate limiting.
 - Production-зависимости не должны содержать critical/high уязвимостей.

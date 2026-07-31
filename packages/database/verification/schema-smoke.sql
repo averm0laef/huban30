@@ -192,6 +192,44 @@ BEGIN
 END;
 $$;
 
+DO $$
+DECLARE
+  version_columns integer;
+BEGIN
+  SELECT count(*) INTO version_columns
+  FROM information_schema.columns
+  WHERE table_schema = 'app'
+    AND table_name IN ('warehouses', 'product_prices')
+    AND column_name = 'source_version'
+    AND data_type = 'bigint';
+
+  IF version_columns <> 2 THEN
+    RAISE EXCEPTION '1C source version columns are missing or use the wrong type';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_enum AS value
+    JOIN pg_type AS type ON type.oid = value.enumtypid
+    JOIN pg_namespace AS namespace ON namespace.oid = type.typnamespace
+    WHERE namespace.nspname = 'app'
+      AND type.typname = 'inventory_event_type'
+      AND value.enumlabel = 'import_rollback'
+  ) THEN
+    RAISE EXCEPTION 'Inventory rollback event type is missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'app.integration_request_log'::regclass
+      AND tgname = 'integration_request_log_append_only'
+      AND NOT tgisinternal
+  ) THEN
+    RAISE EXCEPTION '1C integration request journal is not append-only';
+  END IF;
+END;
+$$;
+
 SELECT
   'schema_smoke=ok' AS result,
   (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app') AS app_tables,

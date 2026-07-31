@@ -6,9 +6,11 @@ import {
   Injectable,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Reflector } from "@nestjs/core";
 import type { FastifyRequest } from "fastify";
 
 import { SessionService } from "./session.service.js";
+import { SKIP_CSRF_KEY } from "./auth.decorators.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -16,11 +18,20 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 export class CsrfGuard implements CanActivate {
   private readonly appOrigin: string;
 
-  constructor(config: ConfigService, private readonly sessions: SessionService) {
+  constructor(
+    config: ConfigService,
+    private readonly reflector: Reflector,
+    private readonly sessions: SessionService,
+  ) {
     this.appOrigin = config.getOrThrow<string>("APP_ORIGIN");
   }
 
   canActivate(context: ExecutionContext): boolean {
+    const skipCsrf = this.reflector.getAllAndOverride<boolean>(SKIP_CSRF_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skipCsrf) return true;
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     if (SAFE_METHODS.has(request.method)) return true;
     if (request.headers.origin !== this.appOrigin) {
