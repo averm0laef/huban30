@@ -11,30 +11,22 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { errorText, readSession, type SessionView } from "../_lib/storefront-api";
 import {
-  API_PREFIX,
-  StorefrontApiError,
-  apiErrorMessage,
-  errorText,
-  readSession,
-  type SessionView,
-} from "../_lib/storefront-api";
-import {
+  CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
-  attachmentSignatureError,
-  isChatMessage,
+  STATUS_LABELS,
+  chatRequest,
+  formatDate,
   isChatThread,
-  latestSequence,
-  mergeMessages,
+  isOwnMessage,
   parseStoredGuestThreads,
-  reconnectDelay,
-  safeDownloadName,
+  senderLabel,
   serializeGuestThreads,
   upsertThread,
-  type ChatAttachment,
-  type ChatMessage,
   type ChatThread,
 } from "./chat-state";
+import { useChatThread } from "./use-chat-thread";
 import styles from "./chat.module.css";
 
 type Viewer =
@@ -44,152 +36,8 @@ type Viewer =
   | { kind: "loading" }
   | { kind: "staff" };
 
-type ChatAccess = { kind: "customer" } | { guestToken: string; kind: "guest" };
-type ConnectionState = "connecting" | "error" | "idle" | "live" | "offline" | "reconnecting";
-
 interface ThreadListResponse { items: ChatThread[] }
 interface GuestThreadResponse extends ChatThread { guestToken: string }
-interface HistoryResponse { items: ChatMessage[]; nextSequence: string }
-
-const STATUS_LABELS: Record<ChatThread["status"], string> = {
-  closed: "Закрыт",
-  open: "Открыт",
-  waiting_customer: "Ждём ваш ответ",
-  waiting_staff: "Ждёт сотрудника",
-};
-
-const CONNECTION_LABELS: Record<ConnectionState, string> = {
-  connecting: "Подключение",
-  error: "Ошибка связи",
-  idle: "Не подключён",
-  live: "Онлайн",
-  offline: "Нет сети",
-  reconnecting: "Восстановление связи",
-};
-
-function cookieValue(name: string): string | null {
-  const prefix = `${encodeURIComponent(name)}=`;
-  for (const part of document.cookie.split(";")) {
-    const value = part.trim();
-    if (value.startsWith(prefix)) return decodeURIComponent(value.slice(prefix.length));
-  }
-  return null;
-}
-
-async function responsePayload(response: Response): Promise<unknown> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (response.status === 204) return null;
-  if (contentType.includes("application/json")) {
-    try { return await response.json(); } catch { return null; }
-  }
-  try { return await response.text(); } catch { return null; }
-}
-
-async function chatRequest<T>(
-  path: string,
-  access?: ChatAccess,
-  options: { body?: unknown; method?: string } = {},
-): Promise<T> {
-  const method = (options.method ?? "GET").toUpperCase();
-  const headers = new Headers({ Accept: "application/json" });
-  if (options.body !== undefined) headers.set("Content-Type", "application/json");
-  if (access?.kind === "guest") headers.set("X-Guest-Chat-Token", access.guestToken);
-  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const csrf = cookieValue("an30_csrf");
-    if (csrf) headers.set("X-CSRF-Token", csrf);
-  }
-  let response: Response;
-  try {
-    response = await fetch(`${API_PREFIX}${path}`, {
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      cache: "no-store",
-      credentials: "include",
-      headers,
-      method,
-    });
-  } catch {
-    throw new StorefrontApiError("Нет соединения с сервером", 0, null);
-  }
-  const payload = await responsePayload(response);
-  if (!response.ok) throw new StorefrontApiError(apiErrorMessage(payload, response.status), response.status, payload);
-  return payload as T;
-}
-
-function messagePath(threadId: string, access: ChatAccess): string {
-  return access.kind === "guest"
-    ? `/chat/guest/threads/${threadId}/messages`
-    : `/chat/threads/${threadId}/messages`;
-}
-
-function readPath(threadId: string, messageId: string, access: ChatAccess): string {
-  return access.kind === "guest"
-    ? `/chat/guest/threads/${threadId}/read/${messageId}`
-    : `/chat/threads/${threadId}/read/${messageId}`;
-}
-
-function attachmentPath(attachmentId: string, access: ChatAccess): string {
-  return access.kind === "guest"
-    ? `/chat/guest/attachments/${attachmentId}`
-    : `/chat/attachments/${attachmentId}`;
-}
-
-function uploadPath(threadId: string, access: ChatAccess): string {
-  return access.kind === "guest"
-    ? `/chat/guest/threads/${threadId}/attachments`
-    : `/chat/threads/${threadId}/attachments`;
-}
-
-function accessFor(viewer: Viewer, thread: ChatThread): ChatAccess | null {
-  if (viewer.kind === "customer") return { kind: "customer" };
-  if (viewer.kind === "guest" && thread.guestToken) return { guestToken: thread.guestToken, kind: "guest" };
-  return null;
-}
-
-async function loadCompleteHistory(
-  thread: ChatThread,
-  access: ChatAccess,
-  isActive: () => boolean,
-  onPage: (messages: ChatMessage[]) => void,
-): Promise<{ cursor: string; messages: ChatMessage[] }> {
-  let cursor = "0";
-  let messages: ChatMessage[] = [];
-  for (let page = 0; page < 101; page += 1) {
-    const history = await chatRequest<HistoryResponse>(
-      `${messagePath(thread.id, access)}?after=${encodeURIComponent(cursor)}`,
-      access,
-    );
-    if (!isActive()) return { cursor, messages };
-    if (!Array.isArray(history.items)
-      || history.items.some((message) => !isChatMessage(message))
-      || typeof history.nextSequence !== "string"
-      || !/^(0|[1-9]\d{0,18})$/u.test(history.nextSequence)) {
-      throw new Error("Сервер вернул повреждённую страницу истории");
-    }
-    if (page === 100 && history.items.length > 0) {
-      throw new Error("История превышает 10 000 сообщений. Обратитесь в магазин для получения архива");
-    }
-    messages = mergeMessages(messages, history.items);
-    onPage(messages);
-    if (history.items.length < 100 || history.nextSequence === cursor) {
-      return { cursor: history.nextSequence, messages };
-    }
-    cursor = history.nextSequence;
-  }
-  throw new Error("Не удалось определить конец истории сообщений");
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "Нет сообщений";
-  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-}
-
-function senderLabel(kind: ChatMessage["senderKind"]): string {
-  return kind === "staff" ? "АН-30" : kind === "system" ? "Система" : "Вы";
-}
-
-function isOwnMessage(message: ChatMessage): boolean {
-  return message.senderKind === "customer" || message.senderKind === "guest";
-}
 
 export function ChatClient() {
   const [viewer, setViewer] = useState<Viewer>({ kind: "loading" });
@@ -203,39 +51,39 @@ export function ChatClient() {
   const [storageWarning, setStorageWarning] = useState("");
   const [forgetId, setForgetId] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState("");
-  const [historyRevision, setHistoryRevision] = useState(0);
-  const [connection, setConnection] = useState<ConnectionState>("idle");
-  const [connectionError, setConnectionError] = useState("");
-  const [lastStaffReadMessageId, setLastStaffReadMessageId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [sendAttemptId, setSendAttemptId] = useState<string | null>(null);
-  const [sendPending, setSendPending] = useState(false);
-  const [sendError, setSendError] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileAttempt, setFileAttempt] = useState<{ fingerprint: string; id: string } | null>(null);
-  const [filePending, setFilePending] = useState(false);
-  const [fileError, setFileError] = useState("");
-  const [downloadError, setDownloadError] = useState("");
-  const socketRef = useRef<WebSocket | null>(null);
-  const cursorRef = useRef("0");
-  const sendInFlight = useRef(false);
-  const uploadInFlight = useRef(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const messageEnd = useRef<HTMLDivElement | null>(null);
-  const messagesRef = useRef<ChatMessage[]>([]);
-  const ackWaiters = useRef(new Map<string, {
-    reject: (error: Error) => void;
-    resolve: () => void;
-    timer: ReturnType<typeof setTimeout>;
-  }>());
 
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedId) ?? null,
     [selectedId, threads],
   );
+
+  // "loading"/"error"/"staff" viewers never resolve to a thread channel.
+  const viewerKind = viewer.kind === "customer" ? "customer" : viewer.kind === "guest" ? "guest" : null;
+
+  const {
+    connection,
+    connectionError,
+    downloadAttachment,
+    downloadError,
+    fileError,
+    filePending,
+    historyError,
+    historyLoading,
+    lastStaffReadMessageId,
+    messages,
+    resetFileAttempt,
+    resetSendAttempt,
+    retryHistory,
+    sendAttemptId,
+    sendError,
+    sendMessage: submitDraft,
+    sendPending,
+    uploadAttachment: submitAttachment,
+  } = useChatThread(selectedThread, viewerKind, true);
 
   const persistGuestThreads = useCallback((next: ChatThread[]) => {
     try {
@@ -312,165 +160,8 @@ export function ChatClient() {
   }, [viewer.kind]);
 
   useEffect(() => {
-    messagesRef.current = messages;
     messageEnd.current?.scrollIntoView({ block: "end" });
   }, [messages]);
-
-  useEffect(() => {
-    const thread = selectedThread;
-    const access = thread ? accessFor(viewer, thread) : null;
-    if (!thread || !access) {
-      messagesRef.current = [];
-      setMessages([]);
-      setConnection("idle");
-      return;
-    }
-    const activeThread = thread;
-    const activeAccess = access;
-    let active = true;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let reconnectAttempt = 0;
-    let lastReadMessageId = "";
-    let readInFlightMessageId = "";
-    messagesRef.current = [];
-    setMessages([]);
-    setHistoryLoading(true);
-    setHistoryError("");
-    setConnectionError("");
-    setLastStaffReadMessageId(null);
-    setConnection("connecting");
-    cursorRef.current = "0";
-
-    function rejectAcks(message: string): void {
-      for (const waiter of ackWaiters.current.values()) {
-        clearTimeout(waiter.timer);
-        waiter.reject(new Error(message));
-      }
-      ackWaiters.current.clear();
-    }
-
-    function markLatestRead(incoming: ChatMessage[], preferredSocket?: WebSocket | null): void {
-      if (document.visibilityState !== "visible") return;
-      const latest = [...incoming].reverse().find((message) => !isOwnMessage(message));
-      if (!latest || latest.id === lastReadMessageId || latest.id === readInFlightMessageId) return;
-      if (preferredSocket?.readyState === WebSocket.OPEN) {
-        lastReadMessageId = latest.id;
-        preferredSocket.send(JSON.stringify({ messageId: latest.id, type: "receipt.read" }));
-      } else {
-        readInFlightMessageId = latest.id;
-        void chatRequest(readPath(activeThread.id, latest.id, activeAccess), activeAccess, { method: "POST" })
-          .then(() => { if (active) lastReadMessageId = latest.id; })
-          .catch((caught: unknown) => { if (active) setConnectionError(errorText(caught)); })
-          .finally(() => { if (readInFlightMessageId === latest.id) readInFlightMessageId = ""; });
-      }
-    }
-
-    function connect(): void {
-      if (!active) return;
-      if (!window.navigator.onLine) {
-        setConnection("offline");
-        reconnectAttempt += 1;
-        reconnectTimer = setTimeout(connect, reconnectDelay(reconnectAttempt));
-        return;
-      }
-      setConnection(reconnectAttempt === 0 ? "connecting" : "reconnecting");
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-      socketRef.current = socket;
-      socket.addEventListener("open", () => {
-        socket?.send(JSON.stringify({
-          afterSequence: cursorRef.current,
-          ...(activeAccess.kind === "guest" ? { guestToken: activeAccess.guestToken } : {}),
-          threadId: activeThread.id,
-          type: "subscribe",
-        }));
-      });
-      socket.addEventListener("message", (event) => {
-        let payload: unknown;
-        try { payload = JSON.parse(String(event.data)); } catch { return; }
-        if (!payload || typeof payload !== "object" || !("type" in payload)) return;
-        const record = payload as Record<string, unknown>;
-        if (record.type === "subscribed" && Array.isArray(record.items)) {
-          if (record.items.some((message) => !isChatMessage(message))) {
-            setConnectionError("Сервер вернул повреждённую историю чата");
-            socket?.close(1008, "invalid_payload");
-            return;
-          }
-          const incoming = record.items as ChatMessage[];
-          setMessages((current) => mergeMessages(current, incoming));
-          cursorRef.current = typeof record.nextSequence === "string"
-            ? latestSequence(cursorRef.current, record.nextSequence)
-            : cursorRef.current;
-          reconnectAttempt = 0;
-          setConnection("live");
-          setConnectionError("");
-          markLatestRead(incoming, socket);
-        } else if (record.type === "message") {
-          if (!isChatMessage(record.message)) {
-            setConnectionError("Сервер вернул повреждённое сообщение");
-            socket?.close(1008, "invalid_payload");
-            return;
-          }
-          const incoming = record.message;
-          cursorRef.current = latestSequence(cursorRef.current, incoming.sequence);
-          setMessages((current) => mergeMessages(current, [incoming]));
-          markLatestRead([incoming], socket);
-        } else if (record.type === "message.ack" && typeof record.clientMessageId === "string") {
-          const waiter = ackWaiters.current.get(record.clientMessageId);
-          if (waiter) {
-            clearTimeout(waiter.timer);
-            ackWaiters.current.delete(record.clientMessageId);
-            waiter.resolve();
-          }
-        } else if (record.type === "receipt.read" && record.readerKind === "staff" && typeof record.messageId === "string") {
-          setLastStaffReadMessageId(record.messageId);
-        } else if (record.type === "error") {
-          const message = typeof record.message === "string" ? record.message : "Ошибка канала чата";
-          setConnectionError(message);
-          rejectAcks(message);
-        }
-      });
-      socket.addEventListener("close", () => {
-        if (!active) return;
-        socketRef.current = null;
-        rejectAcks("Связь прервалась. Повторите отправку тем же сообщением");
-        setConnection(window.navigator.onLine ? "reconnecting" : "offline");
-        reconnectAttempt += 1;
-        reconnectTimer = setTimeout(connect, reconnectDelay(reconnectAttempt));
-      });
-      socket.addEventListener("error", () => {
-        if (active) setConnectionError("Не удалось подключиться к чату");
-      });
-    }
-
-    loadCompleteHistory(activeThread, activeAccess, () => active, (loaded) => setMessages(loaded))
-      .then(({ cursor, messages: loaded }) => {
-        if (!active) return;
-        cursorRef.current = cursor;
-        markLatestRead(loaded);
-        connect();
-      })
-      .catch((caught: unknown) => {
-        if (!active) return;
-        setHistoryError(errorText(caught));
-        setConnection("error");
-      })
-      .finally(() => { if (active) setHistoryLoading(false); });
-
-    const readVisible = () => {
-      if (document.visibilityState === "visible") markLatestRead(messagesRef.current, socket);
-    };
-    document.addEventListener("visibilitychange", readVisible);
-    return () => {
-      active = false;
-      document.removeEventListener("visibilitychange", readVisible);
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      rejectAcks("Открыт другой чат");
-      socket?.close(1000, "view_changed");
-      if (socketRef.current === socket) socketRef.current = null;
-    };
-  }, [historyRevision, selectedThread, viewer]);
 
   async function createThread(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -508,130 +199,23 @@ export function ChatClient() {
 
   async function sendMessage(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (sendInFlight.current || !selectedThread || !online) return;
-    const access = accessFor(viewer, selectedThread);
+    if (!selectedThread || !online) return;
     const body = draft.trim();
-    if (!access || !body || body.length > 4_000) return;
-    const clientMessageId = sendAttemptId ?? crypto.randomUUID();
-    setSendAttemptId(clientMessageId);
-    sendInFlight.current = true;
-    setSendPending(true);
-    setSendError("");
-    try {
-      const socket = socketRef.current;
-      if (connection === "live" && socket?.readyState === WebSocket.OPEN) {
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(() => {
-            ackWaiters.current.delete(clientMessageId);
-            reject(new Error("Сервер не подтвердил сообщение. Повторите отправку"));
-          }, 8_000);
-          ackWaiters.current.set(clientMessageId, { reject, resolve, timer });
-          socket.send(JSON.stringify({ body, clientMessageId, replyToId: null, type: "message.send" }));
-        });
-      } else {
-        const created = await chatRequest<ChatMessage>(messagePath(selectedThread.id, access), access, {
-          body: { body, clientMessageId, replyToId: null }, method: "POST",
-        });
-        if (!isChatMessage(created)) throw new Error("Сервер вернул повреждённое сообщение");
-        setMessages((current) => mergeMessages(current, [created]));
-        cursorRef.current = latestSequence(cursorRef.current, created.sequence);
-      }
-      setDraft("");
-      setSendAttemptId(null);
-    } catch (caught) {
-      setSendError(errorText(caught));
-      if (caught instanceof StorefrontApiError && caught.status === 409) {
-        setThreads((current) => current.map((thread) => thread.id === selectedThread.id
-          ? { ...thread, status: "closed" } : thread));
-      }
-    } finally {
-      sendInFlight.current = false;
-      setSendPending(false);
+    if (!body || body.length > 4_000) return;
+    const result = await submitDraft(body);
+    if (result.ok) setDraft("");
+    if (result.closed) {
+      setThreads((current) => current.map((thread) => thread.id === selectedThread.id
+        ? { ...thread, status: "closed" } : thread));
     }
   }
 
   async function uploadAttachment(): Promise<void> {
-    if (uploadInFlight.current || !selectedThread || !selectedFile || !online) return;
-    const access = accessFor(viewer, selectedThread);
-    if (!access) return;
-    uploadInFlight.current = true;
-    setFilePending(true);
-    setFileError("");
-    const fingerprint = `${selectedFile.name}:${selectedFile.size}:${selectedFile.type}:${selectedFile.lastModified}`;
-    const clientMessageId = fileAttempt?.fingerprint === fingerprint ? fileAttempt.id : crypto.randomUUID();
-    setFileAttempt({ fingerprint, id: clientMessageId });
-    try {
-      const signature = new Uint8Array(await selectedFile.slice(0, 16).arrayBuffer());
-      const validationError = attachmentSignatureError(selectedFile, signature);
-      if (validationError) throw new Error(validationError);
-      const form = new FormData();
-      form.set("file", selectedFile, selectedFile.name);
-      const headers = new Headers({ Accept: "application/json", "X-Client-Message-Id": clientMessageId });
-      if (access.kind === "guest") headers.set("X-Guest-Chat-Token", access.guestToken);
-      const csrf = cookieValue("an30_csrf");
-      if (csrf) headers.set("X-CSRF-Token", csrf);
-      let response: Response;
-      try {
-        response = await fetch(`${API_PREFIX}${uploadPath(selectedThread.id, access)}`, {
-          body: form,
-          cache: "no-store",
-          credentials: "include",
-          headers,
-          method: "POST",
-        });
-      } catch {
-        throw new StorefrontApiError("Нет соединения с сервером", 0, null);
-      }
-      const payload = await responsePayload(response);
-      if (!response.ok) throw new StorefrontApiError(apiErrorMessage(payload, response.status), response.status, payload);
-      if (!isChatMessage(payload)) throw new Error("Сервер вернул повреждённое вложение");
-      const created = payload;
-      setMessages((current) => mergeMessages(current, [created]));
-      cursorRef.current = latestSequence(cursorRef.current, created.sequence);
+    if (!selectedFile || !online) return;
+    const ok = await submitAttachment(selectedFile);
+    if (ok) {
       setSelectedFile(null);
-      setFileAttempt(null);
       if (fileInput.current) fileInput.current.value = "";
-    } catch (caught) {
-      setFileError(errorText(caught));
-    } finally {
-      uploadInFlight.current = false;
-      setFilePending(false);
-    }
-  }
-
-  async function downloadAttachment(attachment: ChatAttachment): Promise<void> {
-    if (!selectedThread) return;
-    const access = accessFor(viewer, selectedThread);
-    if (!access) return;
-    setDownloadError("");
-    const headers = new Headers();
-    if (access.kind === "guest") headers.set("X-Guest-Chat-Token", access.guestToken);
-    try {
-      const response = await fetch(`${API_PREFIX}${attachmentPath(attachment.id, access)}`, {
-        cache: "no-store", credentials: "include", headers,
-      });
-      const contentType = response.headers.get("content-type")?.split(";", 1)[0] ?? "";
-      if (!response.ok) {
-        const payload = await responsePayload(response);
-        throw new StorefrontApiError(apiErrorMessage(payload, response.status), response.status, payload);
-      }
-      const blob = await response.blob();
-      if (blob.size !== attachment.byteSize || contentType !== attachment.mimeType) {
-        throw new Error("Полученный файл не совпадает с проверенными метаданными");
-      }
-      const objectUrl = URL.createObjectURL(blob);
-      try {
-        const link = document.createElement("a");
-        link.href = objectUrl;
-        link.download = safeDownloadName(attachment.originalName);
-        link.hidden = true;
-        document.body.append(link);
-        try { link.click(); } finally { link.remove(); }
-      } finally {
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-      }
-    } catch (caught) {
-      setDownloadError(errorText(caught));
     }
   }
 
@@ -732,7 +316,7 @@ export function ChatClient() {
                 <span className={styles.connection} data-state={connection}>{CONNECTION_LABELS[connection]}</span>
               </header>
               {connectionError ? <div className={styles.inlineError} role="alert">{connectionError}</div> : null}
-              {historyError ? <div className={styles.historyError} role="alert"><strong>История не загружена</strong><span>{historyError}</span><button type="button" onClick={() => setHistoryRevision((value) => value + 1)}>Повторить</button></div> : null}
+              {historyError ? <div className={styles.historyError} role="alert"><strong>История не загружена</strong><span>{historyError}</span><button type="button" onClick={retryHistory}>Повторить</button></div> : null}
               {historyLoading ? <div className={styles.historyState} role="status">Загружаем историю</div> : (
                 <div className={styles.messages} role="log" aria-live="polite" aria-relevant="additions text">
                   {messages.length === 0 ? <div className={styles.emptyMessages}><strong>Сообщений пока нет</strong><span>Напишите вопрос, и сотрудник ответит в этом чате.</span></div> : null}
@@ -762,7 +346,7 @@ export function ChatClient() {
                         id="chat-message"
                         maxLength={4_000}
                         onChange={(event) => {
-                          if (event.target.value !== draft) setSendAttemptId(null);
+                          if (event.target.value !== draft) resetSendAttempt();
                           setDraft(event.target.value);
                         }}
                         onKeyDown={(event) => {
@@ -782,13 +366,12 @@ export function ChatClient() {
                         id="chat-attachment"
                         onChange={(event) => {
                           setSelectedFile(event.target.files?.[0] ?? null);
-                          setFileAttempt(null);
-                          setFileError("");
+                          resetFileAttempt();
                         }}
                         ref={fileInput}
                         type="file"
                       />
-                      <button disabled={!selectedFile || filePending || !online} onClick={() => void uploadAttachment()} type="button">{filePending ? "Проверяем и загружаем..." : fileAttempt ? "Повторить загрузку" : "Отправить изображение"}</button>
+                      <button disabled={!selectedFile || filePending || !online} onClick={() => void uploadAttachment()} type="button">{filePending ? "Проверяем и загружаем..." : fileError ? "Повторить загрузку" : "Отправить изображение"}</button>
                     </div>
                     {fileError ? <div className={styles.inlineError} role="alert">{fileError}</div> : null}
                   </>

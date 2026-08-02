@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  accessFor,
   attachmentSignatureError,
   isChatMessage,
+  isOwnMessage,
   latestSequence,
   mergeMessages,
   parseStoredGuestThreads,
   reconnectDelay,
   safeDownloadName,
+  senderLabel,
   serializeGuestThreads,
   type ChatMessage,
   type ChatThread,
@@ -81,5 +84,29 @@ describe("guest chat state", () => {
     expect(safeDownloadName("../photo\u0000.png")).toBe(".._photo_.png");
     expect(safeDownloadName("../../photo.png")).toBe(".._.._photo.png");
     expect(safeDownloadName("..")).toBe("an30-image");
+  });
+});
+
+describe("shared chat channel helpers", () => {
+  it("grants customer access unconditionally but only trusts a guest with the thread's own token", () => {
+    expect(accessFor({ kind: "customer" }, thread)).toEqual({ kind: "customer" });
+    expect(accessFor({ kind: "guest" }, thread)).toEqual({ guestToken: thread.guestToken, kind: "guest" });
+    expect(accessFor({ kind: "guest" }, { ...thread, guestToken: undefined })).toBeNull();
+    expect(accessFor({ kind: "staff" }, thread)).toBeNull();
+    expect(accessFor({ kind: "loading" }, thread)).toBeNull();
+  });
+
+  it("only treats customer and guest senders as the viewer's own messages", () => {
+    expect(isOwnMessage({ ...message("019bf9ea-0d3e-7def-9c9a-000000000004", "4"), senderKind: "customer" })).toBe(true);
+    expect(isOwnMessage({ ...message("019bf9ea-0d3e-7def-9c9a-000000000005", "5"), senderKind: "guest" })).toBe(true);
+    expect(isOwnMessage({ ...message("019bf9ea-0d3e-7def-9c9a-000000000006", "6"), senderKind: "staff" })).toBe(false);
+    expect(isOwnMessage({ ...message("019bf9ea-0d3e-7def-9c9a-000000000007", "7"), senderKind: "system" })).toBe(false);
+  });
+
+  it("labels senders in Russian without ever naming a specific staff member", () => {
+    expect(senderLabel("staff")).toBe("АН-30");
+    expect(senderLabel("system")).toBe("Система");
+    expect(senderLabel("customer")).toBe("Вы");
+    expect(senderLabel("guest")).toBe("Вы");
   });
 });

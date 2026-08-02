@@ -1,0 +1,474 @@
+/* ============================================================
+   Floating "chat with the manager" widget.
+   All widget-specific styling lives here — everything reads the
+   `--store-*` custom properties defined on `.storefront` (see
+   storefront.module.css) so it follows the site's light/dark
+   theme automatically. Nothing here hardcodes a brand color.
+   ============================================================ */
+
+.launcher {
+  position: fixed;
+  right: var(--store-space-lg);
+  bottom: var(--store-space-lg);
+  z-index: 60;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--store-radius-full);
+  background: var(--store-brand);
+  color: #f8faff;
+  box-shadow: var(--store-shadow-lg);
+  cursor: pointer;
+  transition: transform var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
+}
+
+.launcher:hover {
+  background: var(--store-brand-strong);
+  box-shadow: var(--store-shadow-lg), 0 0 0 6px color-mix(in srgb, var(--store-brand) 16%, transparent);
+  transform: translateY(-2px);
+}
+
+.launcher:active {
+  transform: translateY(0);
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border: 2px solid var(--store-surface);
+  border-radius: var(--store-radius-full);
+  background: var(--store-accent);
+  color: var(--store-accent-text);
+  font-size: 0.72rem;
+  font-weight: var(--store-weight-black);
+  line-height: 1;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.panel {
+  position: fixed;
+  inset: auto var(--store-space-lg) var(--store-space-lg) auto;
+  z-index: 60;
+  width: min(392px, calc(100vw - 2 * var(--store-space-lg)));
+  height: min(640px, calc(100dvh - 2 * var(--store-space-lg)));
+  max-height: calc(100dvh - 2 * var(--store-space-lg));
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-lg);
+  background: var(--store-surface);
+  color: var(--store-text);
+  box-shadow: var(--store-shadow-lg);
+}
+
+.panel::backdrop {
+  background: rgb(6 14 30 / 20%);
+}
+
+.panel:not([open]) {
+  display: none;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--store-space-sm);
+  padding: var(--store-space-md) var(--store-space-md) var(--store-space-sm);
+  border-bottom: 1px solid var(--store-header-border);
+  background: var(--store-header-bg);
+  color: var(--store-header-text);
+}
+
+.headerText {
+  min-width: 0;
+}
+
+.headerText h2 {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: var(--store-weight-bold);
+  letter-spacing: var(--store-tracking-tight);
+}
+
+.headerStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--store-header-muted);
+  font-size: 0.76rem;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.statusDot[data-state="live"] { color: var(--store-success); }
+.statusDot[data-state="error"] { color: var(--store-danger); }
+.statusDot[data-state="busy"] { color: var(--store-accent); }
+.statusDot[data-state="muted"] { color: var(--store-header-muted); }
+
+.headerActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--store-space-2xs);
+}
+
+.headerButton {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--store-header-control-border);
+  border-radius: var(--store-radius-full);
+  background: var(--store-header-control-bg);
+  color: var(--store-header-text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--store-duration-fast) var(--store-ease);
+}
+
+.headerButton:hover {
+  background: var(--store-header-control-bg-hover);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.state {
+  display: grid;
+  justify-items: center;
+  gap: var(--store-space-sm);
+  padding: var(--store-space-xl) var(--store-space-md);
+  color: var(--store-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.state button,
+.state a {
+  min-height: 44px;
+  padding: 0 var(--store-space-md);
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  cursor: pointer;
+  font-weight: var(--store-weight-bold);
+  text-decoration: none;
+}
+
+.state button:hover,
+.state a:hover {
+  border-color: var(--store-brand);
+  color: var(--store-brand);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--store-space-sm);
+  margin: var(--store-space-sm) var(--store-space-sm) 0;
+  padding: 9px 11px;
+  border-left: 3px solid var(--store-danger);
+  border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0;
+  background: color-mix(in srgb, var(--store-danger) 8%, var(--store-surface));
+  color: var(--store-text);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.notice button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: var(--store-weight-bold);
+}
+
+.systemNotice {
+  align-self: center;
+  padding: 6px 12px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-surface-strong);
+  color: var(--store-muted);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--store-space-xs);
+  padding: var(--store-space-sm);
+  overflow-y: auto;
+  background: var(--store-bg);
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: var(--store-space-xl) var(--store-space-md);
+  color: var(--store-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.empty strong {
+  color: var(--store-text);
+}
+
+.message {
+  width: fit-content;
+  max-width: 84%;
+  display: grid;
+  align-self: flex-start;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  font-size: 0.86rem;
+}
+
+.message[data-own] {
+  align-self: flex-end;
+  border-color: color-mix(in srgb, var(--store-brand) 35%, var(--store-border));
+  background: color-mix(in srgb, var(--store-brand) 8%, var(--store-surface));
+}
+
+.message header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--store-space-sm);
+  color: var(--store-muted);
+  font-size: 0.68rem;
+}
+
+.message p {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.message small {
+  display: block;
+  color: var(--store-muted);
+  font-size: 0.65rem;
+  text-align: right;
+}
+
+.attachment {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.attachment strong {
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.attachment span {
+  color: var(--store-muted);
+  font-size: 0.68rem;
+}
+
+.composer {
+  flex: 0 0 auto;
+  padding: var(--store-space-sm);
+  border-top: 1px solid var(--store-border);
+  background: var(--store-surface);
+}
+
+.composerRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.iconButton {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-full);
+  background: var(--store-surface);
+  color: var(--store-muted);
+  cursor: pointer;
+  transition: color var(--store-duration-fast) var(--store-ease), border-color var(--store-duration-fast) var(--store-ease);
+}
+
+.iconButton:hover:not(:disabled) {
+  border-color: var(--store-brand);
+  color: var(--store-brand);
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 11px 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-bg);
+  color: var(--store-text);
+  line-height: 1.4;
+  resize: none;
+  overflow-y: auto;
+}
+
+.sendButton {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--store-radius-full);
+  background: var(--store-brand);
+  color: #f8faff;
+  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
+}
+
+.sendButton:hover:not(:disabled) {
+  background: var(--store-brand-strong);
+}
+
+.sendButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.sendButton[data-pending] svg {
+  animation: chatWidgetPulse 1.1s ease-in-out infinite;
+}
+
+.inlineError {
+  margin: var(--store-space-xs) 0 0;
+  color: var(--store-danger);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.hint {
+  margin: var(--store-space-xs) 0 0;
+  color: var(--store-muted);
+  font-size: 0.78rem;
+}
+
+@keyframes chatWidgetPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Narrow viewports: the panel becomes a full-screen sheet instead of a
+   small floating box, and the launcher clears the site's mobile tab bar
+   (storefront.module.css `.mobileNav`, 64px tall, shown under 767px). */
+@media (max-width: 767px) {
+  .launcher {
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--store-space-sm));
+  }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    inset: 0;
+    z-index: 70;
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .header {
+    padding-top: calc(var(--store-space-md) + env(safe-area-inset-top));
+  }
+
+  .composer {
+    padding-bottom: calc(var(--store-space-sm) + env(safe-area-inset-bottom));
+  }
+
+  .message {
+    max-width: 90%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher,
+  .headerButton,
+  .iconButton,
+  .sendButton {
+    transition: none;
+  }
+
+  .launcher:hover {
+    transform: none;
+  }
+
+  .sendButton[data-pending] svg {
+    animation: none;
+  }
+}

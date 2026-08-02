@@ -158,9 +158,12 @@ function StoreHeader({ initialTheme }: { initialTheme: Theme }) {
           </Link>
           <HeaderSearchForm className={styles.headerSearch} id="header-search-q" />
           <div className={styles.headerActions}>
-            <ThemeToggle initialTheme={initialTheme} />
+            <div className={styles.headerActionsSecondary}>
+              <ThemeToggle initialTheme={initialTheme} />
+              <Link className={styles.accountLink} href="/profile#wishlist">Закладки</Link>
+              <AccountNavigation className={styles.accountLink} />
+            </div>
             <CartButton />
-            <AccountNavigation className={styles.accountLink} />
           </div>
           <details className={styles.mobileMenu}>
             <summary>Меню</summary>
@@ -173,6 +176,7 @@ function StoreHeader({ initialTheme }: { initialTheme: Theme }) {
               {customerLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
               <p className={styles.mobileMenuGroupLabel}>Компания</p>
               {companyLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+              <Link href="/profile#wishlist">Закладки</Link>
               <a className={styles.mobileMenuPhone} href={STORE_PHONE_HREF}>{STORE_PHONE_DISPLAY}</a>
               <ThemeToggle initialTheme={initialTheme} />
               <AccountNavigation />

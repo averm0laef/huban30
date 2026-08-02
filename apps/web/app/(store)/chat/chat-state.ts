@@ -1,3 +1,9 @@
+import {
+  API_PREFIX,
+  StorefrontApiError,
+  apiErrorMessage,
+} from "../_lib/storefront-api";
+
 export const GUEST_CHAT_STORAGE_KEY = "an30_guest_chats_v1";
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 
@@ -186,4 +192,239 @@ export function safeDownloadName(value: string): string {
 
 function threadTimestamp(thread: ChatThread): number {
   return Date.parse(thread.lastMessageAt ?? thread.createdAt);
+}
+
+/* ============================================================
+   Shared chat client SDK
+   ------------------------------------------------------------
+   Pure state helpers live above this line. Everything below is
+   the network/session layer the storefront's two chat surfaces
+   (the full /chat page and the floating widget) both build on,
+   so the WebSocket protocol, REST calls and validation only
+   exist in one place.
+   ============================================================ */
+
+export type ChatAccess = { kind: "customer" } | { guestToken: string; kind: "guest" };
+export type ConnectionState = "connecting" | "error" | "idle" | "live" | "offline" | "reconnecting";
+
+export const STATUS_LABELS: Record<ChatThread["status"], string> = {
+  closed: "Закрыт",
+  open: "Открыт",
+  waiting_customer: "Ждём ваш ответ",
+  waiting_staff: "Ждёт сотрудника",
+};
+
+export const CONNECTION_LABELS: Record<ConnectionState, string> = {
+  connecting: "Подключение",
+  error: "Ошибка связи",
+  idle: "Не подключён",
+  live: "Онлайн",
+  offline: "Нет сети",
+  reconnecting: "Восстановление связи",
+};
+
+/** Resolves which credentials (if any) a viewer holds for a given thread. */
+export function accessFor(viewer: { kind: string }, thread: ChatThread): ChatAccess | null {
+  if (viewer.kind === "customer") return { kind: "customer" };
+  if (viewer.kind === "guest" && thread.guestToken) return { guestToken: thread.guestToken, kind: "guest" };
+  return null;
+}
+
+export function isOwnMessage(message: ChatMessage): boolean {
+  return message.senderKind === "customer" || message.senderKind === "guest";
+}
+
+export function senderLabel(kind: ChatMessage["senderKind"]): string {
+  return kind === "staff" ? "АН-30" : kind === "system" ? "Система" : "Вы";
+}
+
+export function formatDate(value: string | null): string {
+  if (!value) return "Нет сообщений";
+  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function cookieValue(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${encodeURIComponent(name)}=`;
+  for (const part of document.cookie.split(";")) {
+    const value = part.trim();
+    if (value.startsWith(prefix)) return decodeURIComponent(value.slice(prefix.length));
+  }
+  return null;
+}
+
+async function responsePayload(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (response.status === 204) return null;
+  if (contentType.includes("application/json")) {
+    try { return await response.json(); } catch { return null; }
+  }
+  try { return await response.text(); } catch { return null; }
+}
+
+function messagePath(threadId: string, access: ChatAccess): string {
+  return access.kind === "guest"
+    ? `/chat/guest/threads/${threadId}/messages`
+    : `/chat/threads/${threadId}/messages`;
+}
+
+function readPath(threadId: string, messageId: string, access: ChatAccess): string {
+  return access.kind === "guest"
+    ? `/chat/guest/threads/${threadId}/read/${messageId}`
+    : `/chat/threads/${threadId}/read/${messageId}`;
+}
+
+function attachmentPath(attachmentId: string, access: ChatAccess): string {
+  return access.kind === "guest"
+    ? `/chat/guest/attachments/${attachmentId}`
+    : `/chat/attachments/${attachmentId}`;
+}
+
+function uploadPath(threadId: string, access: ChatAccess): string {
+  return access.kind === "guest"
+    ? `/chat/guest/threads/${threadId}/attachments`
+    : `/chat/threads/${threadId}/attachments`;
+}
+
+/** Thin fetch wrapper shared by every authenticated/guest chat REST call. */
+export async function chatRequest<T>(
+  path: string,
+  access?: ChatAccess,
+  options: { body?: unknown; method?: string } = {},
+): Promise<T> {
+  const method = (options.method ?? "GET").toUpperCase();
+  const headers = new Headers({ Accept: "application/json" });
+  if (options.body !== undefined) headers.set("Content-Type", "application/json");
+  if (access?.kind === "guest") headers.set("X-Guest-Chat-Token", access.guestToken);
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrf = cookieValue("an30_csrf");
+    if (csrf) headers.set("X-CSRF-Token", csrf);
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${API_PREFIX}${path}`, {
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      cache: "no-store",
+      credentials: "include",
+      headers,
+      method,
+    });
+  } catch {
+    throw new StorefrontApiError("Нет соединения с сервером", 0, null);
+  }
+  const payload = await responsePayload(response);
+  if (!response.ok) throw new StorefrontApiError(apiErrorMessage(payload, response.status), response.status, payload);
+  return payload as T;
+}
+
+/** Pages through `/messages` until the cursor catches up, reporting progress as it goes. */
+export async function loadCompleteHistory(
+  thread: ChatThread,
+  access: ChatAccess,
+  isActive: () => boolean,
+  onPage: (messages: ChatMessage[]) => void,
+): Promise<{ cursor: string; messages: ChatMessage[] }> {
+  let cursor = "0";
+  let messages: ChatMessage[] = [];
+  for (let page = 0; page < 101; page += 1) {
+    const history = await chatRequest<{ items: ChatMessage[]; nextSequence: string }>(
+      `${messagePath(thread.id, access)}?after=${encodeURIComponent(cursor)}`,
+      access,
+    );
+    if (!isActive()) return { cursor, messages };
+    if (!Array.isArray(history.items)
+      || history.items.some((message) => !isChatMessage(message))
+      || typeof history.nextSequence !== "string"
+      || !SEQUENCE_PATTERN.test(history.nextSequence)) {
+      throw new Error("Сервер вернул повреждённую страницу истории");
+    }
+    if (page === 100 && history.items.length > 0) {
+      throw new Error("История превышает 10 000 сообщений. Обратитесь в магазин для получения архива");
+    }
+    messages = mergeMessages(messages, history.items);
+    onPage(messages);
+    if (history.items.length < 100 || history.nextSequence === cursor) {
+      return { cursor: history.nextSequence, messages };
+    }
+    cursor = history.nextSequence;
+  }
+  throw new Error("Не удалось определить конец истории сообщений");
+}
+
+/** One-shot REST send, used as the idempotent fallback whenever the socket isn't live. */
+export async function sendChatMessageRest(
+  thread: ChatThread,
+  access: ChatAccess,
+  body: string,
+  clientMessageId: string,
+): Promise<ChatMessage> {
+  const created = await chatRequest<ChatMessage>(messagePath(thread.id, access), access, {
+    body: { body, clientMessageId, replyToId: null },
+    method: "POST",
+  });
+  if (!isChatMessage(created)) throw new Error("Сервер вернул повреждённое сообщение");
+  return created;
+}
+
+export async function markChatMessageRead(thread: ChatThread, access: ChatAccess, messageId: string): Promise<void> {
+  await chatRequest(readPath(thread.id, messageId, access), access, { method: "POST" });
+}
+
+/** Validates the image signature, then uploads it as a new chat message. */
+export async function uploadChatAttachment(
+  thread: ChatThread,
+  access: ChatAccess,
+  file: File,
+  clientMessageId: string,
+): Promise<ChatMessage> {
+  const signature = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const validationError = attachmentSignatureError(file, signature);
+  if (validationError) throw new Error(validationError);
+  const form = new FormData();
+  form.set("file", file, file.name);
+  const headers = new Headers({ Accept: "application/json", "X-Client-Message-Id": clientMessageId });
+  if (access.kind === "guest") headers.set("X-Guest-Chat-Token", access.guestToken);
+  const csrf = cookieValue("an30_csrf");
+  if (csrf) headers.set("X-CSRF-Token", csrf);
+  let response: Response;
+  try {
+    response = await fetch(`${API_PREFIX}${uploadPath(thread.id, access)}`, {
+      body: form,
+      cache: "no-store",
+      credentials: "include",
+      headers,
+      method: "POST",
+    });
+  } catch {
+    throw new StorefrontApiError("Нет соединения с сервером", 0, null);
+  }
+  const payload = await responsePayload(response);
+  if (!response.ok) throw new StorefrontApiError(apiErrorMessage(payload, response.status), response.status, payload);
+  if (!isChatMessage(payload)) throw new Error("Сервер вернул повреждённое вложение");
+  return payload;
+}
+
+/** Downloads an attachment and cross-checks it against its already-verified metadata. */
+export async function downloadChatAttachmentBlob(
+  attachment: ChatAttachment,
+  thread: ChatThread,
+  access: ChatAccess,
+): Promise<Blob> {
+  const headers = new Headers();
+  if (access.kind === "guest") headers.set("X-Guest-Chat-Token", access.guestToken);
+  const response = await fetch(`${API_PREFIX}${attachmentPath(attachment.id, access)}`, {
+    cache: "no-store",
+    credentials: "include",
+    headers,
+  });
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0] ?? "";
+  if (!response.ok) {
+    const payload = await responsePayload(response);
+    throw new StorefrontApiError(apiErrorMessage(payload, response.status), response.status, payload);
+  }
+  const blob = await response.blob();
+  if (blob.size !== attachment.byteSize || contentType !== attachment.mimeType) {
+    throw new Error("Полученный файл не совпадает с проверенными метаданными");
+  }
+  return blob;
 }

@@ -293,6 +293,7 @@
 .headerSearch button:hover { color: var(--store-accent); }
 
 .headerActions { flex: 0 0 auto; margin-left: auto; display: flex; align-items: center; gap: var(--store-space-2xs); }
+.headerActionsSecondary { display: flex; align-items: center; gap: var(--store-space-2xs); }
 .headerActions :global(.storefront-theme-toggle),
 .headerActions .accountLink {
   min-height: 44px;
@@ -353,7 +354,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 var(--store-space-xs);
   border-radius: var(--store-radius-sm);
   color: var(--store-header-text);
@@ -383,7 +384,7 @@
   box-shadow: var(--store-shadow-lg);
 }
 .navDropdownPanel a {
-  min-height: 40px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   padding: 0 var(--store-space-sm);
@@ -396,7 +397,7 @@
 
 .pillGhost,
 .pillAccent {
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -419,7 +420,7 @@
 .headerUtilityInfo svg { flex: 0 0 auto; }
 .headerUtilityFact,
 .headerPhone,
-.headerMapLink { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.headerMapLink { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .headerPhone { color: var(--store-header-text); font-weight: var(--store-weight-bold); text-decoration: none; }
 .headerPhone:hover { color: var(--store-accent); }
 .headerMapLink { color: var(--store-header-muted); text-decoration: none; }
@@ -514,9 +515,12 @@
   position: absolute;
   inset: 0;
   z-index: 1;
+  /* Keeps a minimum ~70% opaque scrim everywhere (not just under the copy)
+     so hero text stays comfortably AA-readable no matter how light the
+     photo underneath happens to be, in both themes. */
   background:
-    linear-gradient(100deg, var(--store-header-bg-strong) 6%, color-mix(in srgb, var(--store-header-bg-strong) 58%, transparent) 44%, color-mix(in srgb, var(--store-header-bg) 18%, transparent) 82%),
-    linear-gradient(0deg, var(--store-header-bg-strong) 0%, transparent 42%);
+    linear-gradient(100deg, var(--store-header-bg-strong) 0%, color-mix(in srgb, var(--store-header-bg-strong) 85%, transparent) 42%, color-mix(in srgb, var(--store-header-bg-strong) 68%, transparent) 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--store-header-bg-strong) 55%, transparent) 0%, transparent 50%);
 }
 .heroContent { position: relative; z-index: 2; width: var(--store-container); margin: 0 auto; padding: clamp(48px, 9vw, 96px) 0; }
 .heroContent h1 {
@@ -827,13 +831,13 @@
 .footerBrand h2 { margin: 0; color: var(--store-header-text); font-size: 1.05rem; letter-spacing: var(--store-tracking-tight); text-transform: none; }
 .footerGrid p { margin: 6px 0; color: var(--store-header-muted); font-size: 0.9rem; line-height: 1.5; }
 .footerGrid nav,
-.footerGrid section { display: flex; flex-direction: column; align-items: flex-start; gap: 11px; }
-.footerGrid a { color: var(--store-header-muted); font-size: 0.9rem; text-decoration: none; transition: color var(--store-duration-fast) var(--store-ease); }
+.footerGrid section { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.footerGrid a { min-height: 44px; display: inline-flex; align-items: center; color: var(--store-header-muted); font-size: 0.9rem; text-decoration: none; transition: color var(--store-duration-fast) var(--store-ease); }
 .footerGrid a:hover { color: var(--store-accent); }
 .footerContactList { display: grid; gap: 9px; margin: var(--store-space-sm) 0 0; padding: 0; list-style: none; }
 .footerContactList li { display: flex; align-items: flex-start; gap: 8px; color: var(--store-header-muted); font-size: 0.9rem; line-height: 1.4; }
 .footerContactList svg { flex: 0 0 auto; margin-top: 2px; color: var(--store-accent); }
-.footerContactList a { color: var(--store-header-text); }
+.footerContactList a { min-height: 0; display: inline; color: var(--store-header-text); }
 .footerContactList a:hover { color: var(--store-accent); }
 .footerMessengers { display: flex; flex-wrap: wrap; gap: var(--store-space-xs); }
 .footerMessengerLink {
@@ -879,7 +883,8 @@
 
 @media (max-width: 980px) {
   .headerUtility,
-  .headerSearch { display: none; }
+  .headerSearch,
+  .headerActionsSecondary { display: none; }
   .mobileMenu { display: block; }
   .infoStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .howItWorks { grid-template-columns: 1fr; }
