@@ -137,7 +137,7 @@ export class ChatService {
   }
 
   async history(threadId: string, after: string | undefined, identity: ChatIdentity) {
-    await this.authorize(threadId, identity);
+    const thread = await this.authorize(threadId, identity);
     const cursor = this.parseCursor(after);
     const result = await this.database.query<MessageRow>(
       `${this.messageSelect()}
@@ -149,6 +149,7 @@ export class ChatService {
     return {
       items: result.rows.map((row) => this.messageView(row)),
       nextSequence: result.rows.at(-1)?.sequence_number ?? cursor,
+      thread: await this.threadAssignmentView(thread),
     };
   }
 
@@ -464,6 +465,32 @@ export class ChatService {
        SET delivered_at=COALESCE(app.chat_message_receipts.delivered_at,EXCLUDED.delivered_at)`,
       [ids, identity.auth.userId],
     );
+  }
+
+  /**
+   * The honest snapshot of "is a human actually on this thread" sent to the
+   * customer/guest client alongside history: never inferred, only what
+   * `assigned_staff_id` already says. Only looks up the assignee's name
+   * when someone is actually assigned, so the common unassigned case costs
+   * nothing extra.
+   */
+  private async threadAssignmentView(thread: ThreadRow): Promise<{
+    assignedStaffId: string | null;
+    assignedStaffName: string | null;
+    status: ThreadRow["status"];
+  }> {
+    if (!thread.assigned_staff_id) {
+      return { assignedStaffId: null, assignedStaffName: null, status: thread.status };
+    }
+    const staff = (await this.database.query<{ display_name: string | null }>(
+      "SELECT display_name FROM app.users WHERE id=$1",
+      [thread.assigned_staff_id],
+    )).rows[0];
+    return {
+      assignedStaffId: thread.assigned_staff_id,
+      assignedStaffName: staff?.display_name ?? null,
+      status: thread.status,
+    };
   }
 
   private messageSelect(): string {

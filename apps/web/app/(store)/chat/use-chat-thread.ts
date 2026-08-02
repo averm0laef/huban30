@@ -7,6 +7,7 @@ import {
   accessFor,
   downloadChatAttachmentBlob,
   isChatMessage,
+  isChatThreadAssignment,
   isOwnMessage,
   latestSequence,
   loadCompleteHistory,
@@ -30,6 +31,10 @@ export interface SendOutcome {
 }
 
 export interface UseChatThreadResult {
+  /** Live from the server (`ChatThreadAssignment`) — null until a staff member actually takes the thread. Never inferred. */
+  assignedStaffId: string | null;
+  /** The assignee's display name, only ever set alongside a real `assignedStaffId`. */
+  assignedStaffName: string | null;
   connection: ConnectionState;
   connectionError: string;
   downloadAttachment: (attachment: ChatAttachment) => Promise<void>;
@@ -47,6 +52,8 @@ export interface UseChatThreadResult {
   sendError: string;
   sendMessage: (body: string) => Promise<SendOutcome>;
   sendPending: boolean;
+  /** Server-confirmed thread status, seeded from the `thread` prop and kept live over the socket (e.g. staff closing the thread elsewhere). */
+  threadStatus: ChatThread["status"] | null;
   unreadCount: number;
   uploadAttachment: (file: File) => Promise<boolean>;
 }
@@ -76,6 +83,9 @@ export function useChatThread(
   const [connectionError, setConnectionError] = useState("");
   const [lastStaffReadMessageId, setLastStaffReadMessageId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [assignedStaffId, setAssignedStaffId] = useState<string | null>(null);
+  const [assignedStaffName, setAssignedStaffName] = useState<string | null>(null);
+  const [threadStatus, setThreadStatus] = useState<ChatThread["status"] | null>(null);
 
   const [sendAttemptId, setSendAttemptId] = useState<string | null>(null);
   const [sendPending, setSendPending] = useState(false);
@@ -121,6 +131,9 @@ export function useChatThread(
       setHistoryLoading(false);
       setLastStaffReadMessageId(null);
       setUnreadCount(0);
+      setAssignedStaffId(null);
+      setAssignedStaffName(null);
+      setThreadStatus(null);
       return;
     }
     const activeThread = thread;
@@ -139,6 +152,14 @@ export function useChatThread(
     setConnectionError("");
     setLastStaffReadMessageId(null);
     setConnection("connecting");
+    // Optimistic seed from the thread we already have — guest threads read
+    // from localStorage always carry a nulled assignedStaffId (see
+    // parseGuestThread), so this is only ever a safe "not connected"
+    // default. The subscribe response below reconciles it against the
+    // server moments later, and every reconnect does the same.
+    setAssignedStaffId(activeThread.assignedStaffId);
+    setAssignedStaffName(null);
+    setThreadStatus(activeThread.status);
     cursorRef.current = "0";
 
     function rejectAcks(message: string): void {
@@ -216,6 +237,21 @@ export function useChatThread(
           setConnection("live");
           setConnectionError("");
           markLatestRead(incoming, socket);
+          // Every (re)subscribe carries the current, real assignment — this
+          // is what corrects the "safe null" guess seeded above, and what
+          // self-heals the countdown after any dropped connection.
+          if (isChatThreadAssignment(record.thread)) {
+            setAssignedStaffId(record.thread.assignedStaffId);
+            setAssignedStaffName(record.thread.assignedStaffName);
+            setThreadStatus(record.thread.status);
+          }
+        } else if (record.type === "thread" && isChatThreadAssignment(record)) {
+          // A staff member assigned/unassigned themselves or changed status
+          // while this channel was already open — apply it live, never on
+          // a timer and never inferred from messages.
+          setAssignedStaffId(record.assignedStaffId);
+          setAssignedStaffName(record.assignedStaffName);
+          setThreadStatus(record.status);
         } else if (record.type === "message") {
           if (!isChatMessage(record.message)) {
             setConnectionError("Сервер вернул повреждённое сообщение");
@@ -390,6 +426,8 @@ export function useChatThread(
   }, [thread, viewerKind]);
 
   return {
+    assignedStaffId,
+    assignedStaffName,
     connection,
     connectionError,
     downloadAttachment,
@@ -407,6 +445,7 @@ export function useChatThread(
     sendError,
     sendMessage,
     sendPending,
+    threadStatus,
     unreadCount,
     uploadAttachment,
   };

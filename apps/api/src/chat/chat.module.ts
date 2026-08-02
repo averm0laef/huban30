@@ -8,7 +8,7 @@ import { ChatService } from "./chat.service.js";
 
 @Module({
   controllers: [CustomerChatController, GuestChatController],
-  exports: [ChatRealtimeService],
+  exports: [ChatEventBus, ChatRealtimeService],
   imports: [AuthModule],
   providers: [ChatEventBus, ChatRealtimeService, ChatService],
 })

@@ -215,7 +215,10 @@
 /* Row 1: brand, catalog entry point, search, account actions */
 
 .headerMain { background: var(--store-header-bg); color: var(--store-header-text); }
-.headerMainInner { min-height: 100px; display: flex; align-items: center; gap: var(--store-space-lg); }
+/* flex-wrap is a deliberate overflow backstop: brand/catalog/cart/menu never shrink
+   (flex: 0 0 auto), so if their combined width ever exceeds a narrow viewport they
+   wrap to a second line instead of forcing horizontal scroll on the page. */
+.headerMainInner { min-height: 100px; display: flex; flex-wrap: wrap; align-items: center; gap: var(--store-space-lg); row-gap: var(--store-space-xs); }
 
 .brand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: var(--store-header-text); text-decoration: none; }
 .brandMark {
@@ -274,7 +277,7 @@
   border-radius: var(--store-radius-full) 0 0 var(--store-radius-full);
   background: transparent;
   color: var(--store-header-text);
-  font-size: 0.92rem;
+  font-size: 1rem; /* >=16px: keeps iOS Safari from zooming on focus (this input stays visible down to the 980px tablet-landscape tier) */
 }
 .headerSearch input::placeholder { color: var(--store-header-muted); }
 .headerSearch button {
@@ -598,7 +601,11 @@
 .submitButton { cursor: pointer; }
 
 .catalogSummary { margin: 0 0 var(--store-space-md); color: var(--store-muted); }
-.productGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--store-space-md); }
+/* Fluid 4 -> 3 -> 2 -> 1 reflow driven by available width rather than fixed
+   breakpoints: auto-fit + minmax(min(100%,240px),1fr) packs as many ~240px+
+   cards per row as fit the container (up to 4 at the 1180px store-container
+   ceiling) and always lets the last row stretch instead of leaving gaps. */
+.productGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--store-space-md); }
 .productCard {
   min-width: 0;
   display: grid;
@@ -791,7 +798,7 @@
 .checkoutLines > div > div { min-width: 0; display: grid; gap: 5px; }
 .checkoutLines small { overflow-wrap: anywhere; color: var(--store-muted); font-size: 0.7rem; }
 .checkoutLines label { display: grid; gap: 5px; color: var(--store-muted); font-size: 0.72rem; }
-.checkoutLines input { width: 74px; min-height: 38px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); text-align: center; }
+.checkoutLines input { width: 74px; min-height: 44px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); text-align: center; }
 .checkoutLines button { grid-column: 1 / -1; justify-self: start; border: 0; background: none; color: var(--store-danger); cursor: pointer; }
 .checkoutLineTotal { grid-column: 1 / -1; justify-self: end; color: var(--store-text); font-variant-numeric: tabular-nums; font-weight: var(--store-weight-bold); }
 .checkoutSubtotal { display: flex; align-items: baseline; justify-content: space-between; gap: var(--store-space-sm); margin: var(--store-space-md) 0; }
@@ -870,7 +877,7 @@
 .storefront :global(.storefront-cart-dialog p) { color: var(--store-muted); line-height: 1.55; }
 .storefront :global(.storefront-cart-lines) { max-height: min(45dvh, 360px); margin: var(--store-space-md) 0; overflow-y: auto; border-top: 1px solid var(--store-border); }
 .storefront :global(.storefront-cart-lines > div) { display: grid; grid-template-columns: 1fr 72px auto; align-items: center; gap: var(--store-space-xs); padding: 10px 0; border-bottom: 1px solid var(--store-border); }
-.storefront :global(.storefront-cart-lines input) { width: 72px; min-height: 40px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); text-align: center; }
+.storefront :global(.storefront-cart-lines input) { width: 72px; min-height: 44px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); text-align: center; }
 .storefront :global(.storefront-cart-line-identity) { display: grid; gap: 2px; min-width: 0; }
 .storefront :global(.storefront-cart-line-identity a) { color: var(--store-text); font-weight: var(--store-weight-bold); text-decoration: none; overflow-wrap: anywhere; }
 .storefront :global(.storefront-cart-line-identity a:hover) { text-decoration: underline; }
@@ -888,9 +895,9 @@
   .mobileMenu { display: block; }
   .infoStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .howItWorks { grid-template-columns: 1fr; }
-  .productGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .catalogForm { grid-template-columns: 1fr 1fr; }
-  .catalogForm .field:first-child { grid-column: 1 / -1; }
+  .catalogForm .field:first-child,
+  .catalogForm .submitButton { grid-column: 1 / -1; }
   .footerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .authLayout,
   .contactLayout { grid-template-columns: 1fr; }
@@ -914,7 +921,7 @@
   .page { padding: 34px 0 56px; }
   .catalogForm { grid-template-columns: 1fr; padding: 14px; }
   .catalogForm .field:first-child { grid-column: auto; }
-  .productGrid { grid-template-columns: 1fr; }
+  .catalogForm .submitButton { width: 100%; }
   .productLayout { grid-template-columns: 1fr; }
   .footerGrid { grid-template-columns: 1fr; padding-bottom: 30px; }
   .profileHeading,
@@ -940,6 +947,22 @@
   .mobileNav a,
   .mobileNav button { min-width: 0; min-height: 64px; display: grid; place-items: center; padding: 6px 2px; border: 0; background: transparent; color: var(--store-text); font-size: 0.72rem; font-weight: var(--store-weight-bold); line-height: 1.15; text-align: center; text-decoration: none; }
   .mobileNav span { display: inline; margin-left: 2px; }
+}
+
+/* Small phones (~iPhone SE up to phablet width). Below ~500px viewport the
+   header row (logo + "Каталог" pill + cart pill + "Меню") no longer fits on
+   one line at full size, so it is compacted: paddings shrink and the text
+   labels collapse to icon/badge-only. The link text stays in the DOM (still
+   the link's accessible name for assistive tech) — only its rendered glyphs
+   are hidden via font-size:0, so nothing is removed from the a11y tree. */
+@media (max-width: 560px) {
+  .headerMainInner { gap: var(--store-space-xs); }
+  .catalogButton { gap: 0; padding: 0 var(--store-space-sm); font-size: 0; }
+  .headerActions :global(.storefront-cart-button) { gap: 0; padding: 0 var(--store-space-sm); font-size: 0; }
+  .mobileMenu summary { padding: 0 var(--store-space-xs); }
+  .infoStrip { grid-template-columns: 1fr; }
+  .heroActions { flex-direction: column; align-items: stretch; }
+  .heroActions > .pillGhost { justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {

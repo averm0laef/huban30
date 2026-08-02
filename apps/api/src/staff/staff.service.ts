@@ -29,6 +29,7 @@ import {
 } from "@an30/contracts";
 
 import type { AuthContext } from "../auth/auth-context.js";
+import { ChatEventBus } from "../chat/chat-event-bus.service.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
 
@@ -120,6 +121,7 @@ export function canReopenRequest(role: Role): boolean {
 export class StaffService {
   constructor(
     private readonly auditLog: AuditService,
+    private readonly chatEvents: ChatEventBus,
     private readonly database: DatabaseService,
   ) {}
 
@@ -542,7 +544,7 @@ export class StaffService {
   ) {
     this.uuid(threadId, "Некорректный идентификатор чата");
     const input = this.parse(StaffChatUpdateSchema, rawInput, "Некорректное изменение чата");
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       const current = (await client.query<{
         assigned_staff_id: string | null;
         status: ChatThreadStatus;
@@ -579,6 +581,12 @@ export class StaffService {
         [threadId, targetAssignment, targetStatus, input.version],
       )).rows[0];
       if (!updated) throw new ConflictException({ error: "chat_version_conflict" });
+      const assignee = updated.assigned_staff_id
+        ? (await client.query<{ display_name: string | null }>(
+          "SELECT display_name FROM app.users WHERE id=$1",
+          [updated.assigned_staff_id],
+        )).rows[0]
+        : undefined;
       await this.auditLog.record({
         action: "chat.thread_updated",
         actorRole: auth.role,
@@ -593,12 +601,26 @@ export class StaffService {
       }, client);
       return {
         assignedStaffId: updated.assigned_staff_id,
+        assignedStaffName: assignee?.display_name ?? null,
         closedAt: iso(updated.closed_at),
         id: threadId,
         status: updated.status,
         version: updated.version,
       };
     });
+    // Broadcast after commit (never before) so a client that immediately
+    // re-subscribes on receiving this always sees the durable state — same
+    // ordering ChatService.createMessage uses for its own publish.
+    await this.chatEvents.publish({
+      payload: {
+        assignedStaffId: result.assignedStaffId,
+        assignedStaffName: result.assignedStaffName,
+        status: result.status,
+        type: "thread",
+      },
+      threadId,
+    });
+    return result;
   }
 
   async catalog(rawQuery: unknown) {

@@ -112,6 +112,28 @@ export function isChatMessage(value: unknown): value is ChatMessage {
     && attachment.originalName.length <= 240);
 }
 
+/**
+ * The server's honest snapshot of "who — if anyone — is on this thread",
+ * carried on the WebSocket channel's `subscribed` payload (`thread`) and on
+ * live `thread` broadcasts (see use-chat-thread.ts). Never derived from
+ * messages or guessed client-side — only what the API actually reports.
+ */
+export interface ChatThreadAssignment {
+  assignedStaffId: string | null;
+  assignedStaffName: string | null;
+  status: ChatThread["status"];
+}
+
+export function isChatThreadAssignment(value: unknown): value is ChatThreadAssignment {
+  return isRecord(value)
+    && (value.assignedStaffId === null
+      || (typeof value.assignedStaffId === "string" && UUID_PATTERN.test(value.assignedStaffId)))
+    && (value.assignedStaffName === null
+      || (typeof value.assignedStaffName === "string"
+        && value.assignedStaffName.length > 0 && value.assignedStaffName.length <= 240))
+    && typeof value.status === "string" && THREAD_STATUSES.has(value.status);
+}
+
 export function parseStoredGuestThreads(raw: string | null): ChatThread[] {
   if (!raw) return [];
   try {
@@ -241,6 +263,92 @@ export function senderLabel(kind: ChatMessage["senderKind"]): string {
 export function formatDate(value: string | null): string {
   if (!value) return "Нет сообщений";
   return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+/* ============================================================
+   "Manager is joining" countdown
+   ------------------------------------------------------------
+   Pure, framework-free derivation shared by the widget and the
+   full /chat page so both surfaces render identical copy and
+   never drift. The one rule that matters: this never fabricates
+   a connection. "assigned" only ever comes from the server's
+   ChatThreadAssignment (real assigned_staff_id); every other
+   state is derived solely from message timestamps already in
+   the thread, so re-mounting the widget can't reset it.
+   ============================================================ */
+
+/** The owner's advertised expected response time — a target, not a promise. */
+export const MANAGER_RESPONSE_WINDOW_MS = 10 * 60 * 1000;
+
+export type ManagerJoinState =
+  /** No customer message is currently unanswered — nothing to wait for. */
+  | { kind: "none" }
+  /** The server reports a real assignee on the thread. */
+  | { kind: "assigned"; staffName: string | null }
+  /** The thread is closed; the countdown has nothing left to track. */
+  | { kind: "closed" }
+  /** Still inside the expected response window. */
+  | { kind: "waiting"; remainingMs: number; sinceIso: string }
+  /** The expected window passed and nobody is assigned yet. */
+  | { kind: "elapsed"; sinceIso: string };
+
+/**
+ * Timestamp (ISO string) of the customer's oldest message since staff last
+ * replied, or null if every message has already been answered (or none
+ * were ever sent). Messages must be in ascending sequence order, which is
+ * how `mergeMessages` always returns them.
+ *
+ * This is the countdown's start point. It is derived purely from message
+ * history — never from when the widget happened to mount — so closing and
+ * reopening it, or a page reload, can never restart the clock.
+ */
+export function unansweredSince(messages: ChatMessage[]): string | null {
+  let pendingSince: string | null = null;
+  for (const message of messages) {
+    if (message.senderKind === "staff") {
+      pendingSince = null;
+    } else if (isOwnMessage(message) && pendingSince === null) {
+      pendingSince = message.createdAt;
+    }
+  }
+  return pendingSince;
+}
+
+/** Derives what the countdown UI should show right now. `now` is injected (not `Date.now()`) so this stays a pure, testable function. */
+export function managerJoinState(input: {
+  assignedStaffId: string | null;
+  assignedStaffName: string | null;
+  messages: ChatMessage[];
+  now: number;
+  status: ChatThread["status"];
+}): ManagerJoinState {
+  if (input.status === "closed") return { kind: "closed" };
+  if (input.assignedStaffId) return { kind: "assigned", staffName: input.assignedStaffName };
+  const since = unansweredSince(input.messages);
+  if (!since) return { kind: "none" };
+  const elapsedMs = input.now - Date.parse(since);
+  if (elapsedMs >= MANAGER_RESPONSE_WINDOW_MS) return { kind: "elapsed", sinceIso: since };
+  return { kind: "waiting", remainingMs: MANAGER_RESPONSE_WINDOW_MS - elapsedMs, sinceIso: since };
+}
+
+/** Formats remaining milliseconds as `m:ss` (e.g. `9:58`, never negative). */
+export function formatCountdown(remainingMs: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/** The single source of truth for the countdown's copy — both chat surfaces import these so the wording can never drift between them. */
+export const MANAGER_WAITING_TEXT = "Менеджер отвечает обычно за 10 минут";
+export const MANAGER_ELAPSED_HEADLINE = "Менеджеры сейчас заняты";
+export const MANAGER_ELAPSED_BODY =
+  "Обычное время ответа — 10 минут — уже прошло. Ваше сообщение никуда не делось, и мы ответим прямо в этом чате. Если вопрос срочный, позвоните нам или напишите в мессенджер:";
+export const MANAGER_ASSIGNED_HEADLINE = "Менеджер подключился к чату";
+
+/** Null when the server hasn't reported a name — never guess or invent one. */
+export function managerAssignedNote(staffName: string | null): string | null {
+  return staffName ? `Вам отвечает ${staffName}.` : null;
 }
 
 function cookieValue(name: string): string | null {

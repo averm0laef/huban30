@@ -53,3 +53,75 @@ describe("ChatService read cursor", () => {
     expect(publish).toHaveBeenCalledWith(expect.objectContaining({ threadId: THREAD_ID }));
   });
 });
+
+describe("ChatService history thread snapshot", () => {
+  const auth: AuthContext = {
+    csrfTokenHash: Buffer.alloc(32),
+    email: "manager@example.test",
+    mfaSetupRequired: false,
+    mfaVerified: true,
+    role: "manager",
+    sessionId: "44444444-4444-4444-8444-444444444444",
+    userId: STAFF_ID,
+  };
+
+  it("reports no assignment (and skips the name lookup) when nobody has taken the thread", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{
+        assigned_staff_id: null,
+        created_at: new Date("2026-08-02T00:00:00Z"),
+        customer_user_id: null,
+        guest_token_hash: null,
+        id: THREAD_ID,
+        last_message_at: null,
+        order_id: null,
+        status: "waiting_staff",
+        subject: null,
+      }] })
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] });
+    const service = new ChatService(
+      { query } as unknown as DatabaseService,
+      {} as CryptoService,
+      { publish: vi.fn() } as unknown as ChatEventBus,
+      {} as StorageProvider,
+    );
+
+    const result = await service.history(THREAD_ID, undefined, { auth, kind: "authenticated" });
+
+    expect(result.thread).toEqual({ assignedStaffId: null, assignedStaffName: null, status: "waiting_staff" });
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("never invents an assignee name — it only reports what assigned_staff_id and the users table actually say", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{
+        assigned_staff_id: STAFF_ID,
+        created_at: new Date("2026-08-02T00:00:00Z"),
+        customer_user_id: null,
+        guest_token_hash: null,
+        id: THREAD_ID,
+        last_message_at: null,
+        order_id: null,
+        status: "waiting_staff",
+        subject: null,
+      }] })
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ display_name: "Ирина Соколова" }] });
+    const service = new ChatService(
+      { query } as unknown as DatabaseService,
+      {} as CryptoService,
+      { publish: vi.fn() } as unknown as ChatEventBus,
+      {} as StorageProvider,
+    );
+
+    const result = await service.history(THREAD_ID, undefined, { auth, kind: "authenticated" });
+
+    expect(result.thread).toEqual({
+      assignedStaffId: STAFF_ID,
+      assignedStaffName: "Ирина Соколова",
+      status: "waiting_staff",
+    });
+    expect(query.mock.calls[2]?.[0]).toContain("FROM app.users");
+    expect(query.mock.calls[2]?.[1]).toEqual([STAFF_ID]);
+  });
+});
