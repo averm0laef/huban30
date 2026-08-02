@@ -165,6 +165,89 @@ export const OrderStatusUpdateSchema = z.object({
 }).strict();
 export type OrderStatusUpdate = z.infer<typeof OrderStatusUpdateSchema>;
 
+export const STAFF_PAGE_LIMITS = [25, 50, 100] as const;
+export const StaffPageQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+}).strict();
+
+const StaffSearchSchema = z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE).optional();
+const SortDirectionSchema = z.enum(["asc", "desc"]).default("desc");
+
+export const StaffOrdersQuerySchema = StaffPageQuerySchema.extend({
+  direction: SortDirectionSchema,
+  q: StaffSearchSchema,
+  sort: z.enum(["createdAt", "publicNumber", "status", "totalAmountKopeks"]).default("createdAt"),
+  status: OrderStatusSchema.optional(),
+}).strict();
+export type StaffOrdersQuery = z.infer<typeof StaffOrdersQuerySchema>;
+
+export const ChatThreadStatusSchema = z.enum([
+  "open",
+  "waiting_customer",
+  "waiting_staff",
+  "closed",
+]);
+export type ChatThreadStatus = z.infer<typeof ChatThreadStatusSchema>;
+
+export const StaffChatsQuerySchema = StaffPageQuerySchema.extend({
+  assigned: z.enum(["any", "mine", "unassigned"]).default("any"),
+  direction: SortDirectionSchema,
+  q: StaffSearchSchema,
+  sort: z.enum(["createdAt", "lastMessageAt", "status"]).default("lastMessageAt"),
+  status: ChatThreadStatusSchema.optional(),
+}).strict();
+export type StaffChatsQuery = z.infer<typeof StaffChatsQuerySchema>;
+
+export const StaffChatUpdateSchema = z.object({
+  assignedStaffId: z.uuid().nullable().optional(),
+  reason: z.string().trim().min(3).max(500).regex(SAFE_SINGLE_LINE),
+  status: ChatThreadStatusSchema.optional(),
+  version: z.number().int().positive(),
+}).strict().refine(
+  (value) => value.assignedStaffId !== undefined || value.status !== undefined,
+  { message: "assignment or status is required" },
+);
+export type StaffChatUpdate = z.infer<typeof StaffChatUpdateSchema>;
+
+export const StaffCatalogQuerySchema = StaffPageQuerySchema.extend({
+  availability: z.enum(["all", "available", "out_of_stock", "low_stock"]).default("all"),
+  direction: SortDirectionSchema,
+  q: StaffSearchSchema,
+  sort: z.enum(["available", "name", "price", "sku", "updatedAt"]).default("updatedAt"),
+  state: z.enum(["all", "active", "inactive"]).default("all"),
+}).strict();
+export type StaffCatalogQuery = z.infer<typeof StaffCatalogQuerySchema>;
+
+export const StaffInvoicesQuerySchema = StaffPageQuerySchema.extend({
+  direction: SortDirectionSchema,
+  q: StaffSearchSchema,
+  sort: z.enum(["amountKopeks", "createdAt", "invoiceNumber", "status"]).default("createdAt"),
+  status: z.enum(["draft", "issued", "cancelled"]).optional(),
+}).strict();
+export type StaffInvoicesQuery = z.infer<typeof StaffInvoicesQuerySchema>;
+
+export const StaffInvoiceCreateSchema = z.object({ orderId: z.uuid() }).strict();
+export type StaffInvoiceCreate = z.infer<typeof StaffInvoiceCreateSchema>;
+
+export const StaffInvoiceUpdateSchema = z.object({
+  reason: z.string().trim().min(3).max(500).regex(SAFE_SINGLE_LINE),
+  status: z.enum(["issued", "cancelled"]),
+  version: z.number().int().positive(),
+}).strict();
+export type StaffInvoiceUpdate = z.infer<typeof StaffInvoiceUpdateSchema>;
+
+export const StaffTeamQuerySchema = StaffPageQuerySchema.extend({
+  q: StaffSearchSchema,
+  role: z.enum(["manager", "director", "admin"]).optional(),
+  status: z.enum(["invited", "active", "suspended", "terminated"]).optional(),
+}).strict();
+
+export const StaffAuditQuerySchema = StaffPageQuerySchema.extend({
+  action: z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE).optional(),
+  entityType: z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE).optional(),
+}).strict();
+
 export const CATALOG_IMPORT_ENTITY_TYPES = [
   "brand",
   "category",

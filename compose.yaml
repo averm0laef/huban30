@@ -63,7 +63,7 @@ services:
       DB_NAME: an30
       DB_PORT: 5432
       DB_USER: an30
-      DATABASE_ENVIRONMENT: production
+      DATABASE_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
       NODE_ENV: production
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       PROVISION_APP_ROLE: "true"

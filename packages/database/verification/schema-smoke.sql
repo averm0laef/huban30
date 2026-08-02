@@ -195,6 +195,27 @@ $$;
 
 DO $$
 DECLARE
+  version_columns integer;
+BEGIN
+  SELECT count(*) INTO version_columns
+  FROM information_schema.columns
+  WHERE table_schema = 'app'
+    AND table_name IN ('chat_threads', 'invoices')
+    AND column_name = 'version'
+    AND data_type = 'integer';
+
+  IF version_columns <> 2 THEN
+    RAISE EXCEPTION 'Staff workspace optimistic version columns are missing';
+  END IF;
+
+  IF to_regclass('app.invoice_number_seq') IS NULL THEN
+    RAISE EXCEPTION 'Invoice number sequence is missing';
+  END IF;
+END;
+$$;
+
+DO $$
+DECLARE
   current_environment text;
 BEGIN
   SELECT environment

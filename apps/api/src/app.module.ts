@@ -14,6 +14,7 @@ import { validateEnvironment } from "./config.js";
 import { HealthModule } from "./health/health.module.js";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module.js";
 import { SecurityModule } from "./security/security.module.js";
+import { StaffModule } from "./staff/staff.module.js";
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { SecurityModule } from "./security/security.module.js";
     CatalogModule,
     ChatModule,
     CheckoutModule,
+    StaffModule,
     HealthModule,
   ],
   providers: [

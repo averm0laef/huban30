@@ -20,6 +20,7 @@ async function main(): Promise<void> {
   const managerPassword = "Manager smoke password phrase 2026";
   const cookies = new Map<string, string>();
   const totp = new TotpService();
+  let workspaceThreadId: string | undefined;
 
   const request = async (
     path: string,
@@ -52,6 +53,16 @@ async function main(): Promise<void> {
     },
     method: "POST",
   }, expectedStatus);
+  const patch = (path: string, body: unknown, expectedStatus: number, csrf: string) => request(path, {
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", origin: environment.APP_ORIGIN, "x-csrf-token": csrf },
+    method: "PATCH",
+  }, expectedStatus);
+  const get = (path: string, expectedStatus: number) => request(path, { method: "GET" }, expectedStatus);
+  const replaceCookies = (source: Map<string, string>) => {
+    cookies.clear();
+    for (const [key, value] of source) cookies.set(key, value);
+  };
 
   let smokeError: unknown;
   try {
@@ -74,6 +85,21 @@ async function main(): Promise<void> {
     if (!Array.isArray(ownerConfirmed.recoveryCodes) || ownerConfirmed.recoveryCodes.length !== 10) {
       throw new Error("Owner recovery code contract is invalid");
     }
+    const ownerCookies = new Map(cookies);
+    const ownerUserId = String(ownerLogin.userId ?? "");
+    await get("/staff/summary", 200);
+    await get("/staff/team", 200);
+    await get("/staff/reports", 200);
+    await get("/staff/audit?limit=5", 200);
+    await get("/catalog/1c/settings", 200);
+
+    const guestThread = await post(
+      "/chat/guest/threads",
+      { subject: "Проверка рабочего места персонала" },
+      201,
+    );
+    workspaceThreadId = String(guestThread.id ?? "");
+    if (!workspaceThreadId) throw new Error("Workspace chat fixture was not created");
 
     const invitation = await post(
       "/auth/staff/invitations",
@@ -104,6 +130,59 @@ async function main(): Promise<void> {
       csrf,
     );
     csrf = String(managerConfirmed.csrfToken ?? "");
+    const managerCookies = new Map(cookies);
+    const managerUserId = String(managerLogin.userId ?? "");
+    if (!managerUserId) throw new Error("Manager identifier is missing");
+    await get("/staff/summary", 200);
+    await get("/staff/orders?limit=5", 200);
+    await get("/staff/chats?limit=5", 200);
+    await get("/staff/catalog?limit=5", 200);
+    await get("/staff/invoices?limit=5", 200);
+    await get("/catalog/imports?limit=5", 200);
+    await get("/staff/team?limit=5", 403);
+    await get("/staff/reports", 403);
+    await get("/staff/audit?limit=5", 403);
+    await get("/catalog/1c/settings", 403);
+
+    const assigned = await patch(`/staff/chats/${workspaceThreadId}`, {
+      assignedStaffId: managerUserId,
+      reason: "Менеджер взял обращение",
+      version: 1,
+    }, 200, csrf);
+    if (assigned.assignedStaffId !== managerUserId || assigned.version !== 2) {
+      throw new Error("Manager self-assignment did not increment the version");
+    }
+    await patch(`/staff/chats/${workspaceThreadId}`, {
+      assignedStaffId: ownerUserId,
+      reason: "Запрещённое назначение другому сотруднику",
+      version: 2,
+    }, 403, csrf);
+    await patch(`/staff/chats/${workspaceThreadId}`, {
+      assignedStaffId: managerUserId,
+      reason: "Устаревшее изменение",
+      version: 1,
+    }, 409, csrf);
+    const closed = await patch(`/staff/chats/${workspaceThreadId}`, {
+      reason: "Обращение закрыто после проверки",
+      status: "closed",
+      version: 2,
+    }, 200, csrf);
+    await patch(`/staff/chats/${workspaceThreadId}`, {
+      reason: "Менеджер не должен открывать закрытый чат",
+      status: "open",
+      version: Number(closed.version),
+    }, 403, csrf);
+
+    replaceCookies(ownerCookies);
+    const ownerCsrf = String(ownerConfirmed.csrfToken ?? "");
+    await patch(`/staff/chats/${workspaceThreadId}`, {
+      reason: "Администратор повторно открыл обращение",
+      status: "open",
+      version: Number(closed.version),
+    }, 200, ownerCsrf);
+
+    replaceCookies(managerCookies);
+    csrf = String(managerConfirmed.csrfToken ?? "");
     await post(
       "/auth/staff/invitations",
       { email: "forbidden-smoke@example.invalid", role: "manager" },
@@ -120,6 +199,13 @@ async function main(): Promise<void> {
   await client.connect();
   try {
     await client.query("BEGIN");
+    if (workspaceThreadId) {
+      await client.query(
+        "DELETE FROM app.outbox_events WHERE aggregate_type='chat_thread' AND aggregate_id=$1",
+        [workspaceThreadId],
+      );
+      await client.query("DELETE FROM app.chat_threads WHERE id=$1", [workspaceThreadId]);
+    }
     const accounts = await client.query<{ email: string; id: string }>(
       `
         SELECT id, email::text
@@ -173,7 +259,7 @@ async function main(): Promise<void> {
 
   if (smokeError) throw smokeError;
   if (cleanupError) throw cleanupError;
-  process.stdout.write(JSON.stringify({ event: "staff-auth.smoke.passed", tests: 10 }) + "\n");
+  process.stdout.write(JSON.stringify({ event: "staff-auth.smoke.passed", tests: 33 }) + "\n");
 }
 
 main().catch((error: unknown) => {

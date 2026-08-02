@@ -175,28 +175,35 @@ export class ChatService {
   async markRead(threadId: string, messageId: string, identity: ChatIdentity) {
     this.parseUuid(messageId, "Некорректный идентификатор сообщения");
     await this.authorize(threadId, identity);
-    const message = (await this.database.query<{ sender_user_id: string | null }>(
-      "SELECT sender_user_id FROM app.chat_messages WHERE id=$1 AND thread_id=$2 AND deleted_at IS NULL",
+    const message = (await this.database.query<{ sequence_number: string }>(
+      "SELECT sequence_number FROM app.chat_messages WHERE id=$1 AND thread_id=$2 AND deleted_at IS NULL",
       [messageId, threadId],
     )).rows[0];
     if (!message) throw new NotFoundException("Сообщение не найдено");
     if (identity.kind === "guest") {
       await this.database.query(
         `INSERT INTO app.chat_guest_message_receipts (message_id,delivered_at,read_at)
-         VALUES ($1,clock_timestamp(),clock_timestamp())
+         SELECT candidate.id,clock_timestamp(),clock_timestamp()
+         FROM app.chat_messages AS candidate
+         WHERE candidate.thread_id=$1 AND candidate.sequence_number<=$2::bigint
+           AND candidate.deleted_at IS NULL AND candidate.sender_kind<>'guest'
          ON CONFLICT (message_id) DO UPDATE
          SET delivered_at=COALESCE(app.chat_guest_message_receipts.delivered_at,EXCLUDED.delivered_at),
              read_at=COALESCE(app.chat_guest_message_receipts.read_at,EXCLUDED.read_at)`,
-        [messageId],
+        [threadId, message.sequence_number],
       );
-    } else if (message.sender_user_id !== identity.auth.userId) {
+    } else {
       await this.database.query(
         `INSERT INTO app.chat_message_receipts (message_id,user_id,delivered_at,read_at)
-         VALUES ($1,$2,clock_timestamp(),clock_timestamp())
+         SELECT candidate.id,$3,clock_timestamp(),clock_timestamp()
+         FROM app.chat_messages AS candidate
+         WHERE candidate.thread_id=$1 AND candidate.sequence_number<=$2::bigint
+           AND candidate.deleted_at IS NULL
+           AND candidate.sender_user_id IS DISTINCT FROM $3::uuid
          ON CONFLICT (message_id,user_id) DO UPDATE
          SET delivered_at=COALESCE(app.chat_message_receipts.delivered_at,EXCLUDED.delivered_at),
              read_at=COALESCE(app.chat_message_receipts.read_at,EXCLUDED.read_at)`,
-        [messageId, identity.auth.userId],
+        [threadId, message.sequence_number, identity.auth.userId],
       );
       await this.database.query(
         "UPDATE app.chat_participants SET last_read_at=clock_timestamp() WHERE thread_id=$1 AND user_id=$2",
@@ -413,6 +420,7 @@ export class ChatService {
         `UPDATE app.chat_threads SET
            last_message_at=clock_timestamp(),
            status=$2,
+           version=version+1,
            updated_at=clock_timestamp()
          WHERE id=$1 AND status<>'closed'`,
         [threadId, sender.kind === "staff" ? "waiting_customer" : "waiting_staff"],

@@ -11,6 +11,9 @@ import {
   PaymentStatusSchema,
   ROLE_PERMISSIONS,
   RoleSchema,
+  StaffCatalogQuerySchema,
+  StaffChatUpdateSchema,
+  StaffOrdersQuerySchema,
 } from "./index.js";
 
 describe("public contracts", () => {
@@ -119,5 +122,31 @@ describe("public contracts", () => {
       limit: 20,
       q: "фильтр масляный",
     });
+  });
+
+  it("normalizes bounded staff table queries", () => {
+    expect(StaffOrdersQuerySchema.parse({ limit: "50", offset: "25" })).toMatchObject({
+      direction: "desc",
+      limit: 50,
+      offset: 25,
+      sort: "createdAt",
+    });
+    expect(StaffCatalogQuerySchema.safeParse({ limit: "1000" }).success).toBe(false);
+    expect(StaffOrdersQuerySchema.safeParse({ q: "x" }).success).toBe(false);
+  });
+
+  it("requires optimistic version and a real chat change", () => {
+    expect(StaffChatUpdateSchema.safeParse({ reason: "Назначение менеджера", version: 1 }).success)
+      .toBe(false);
+    expect(StaffChatUpdateSchema.safeParse({
+      assignedStaffId: null,
+      reason: "Снятие назначения",
+      version: 2,
+    }).success).toBe(true);
+    expect(StaffChatUpdateSchema.safeParse({
+      reason: "Закрыт после ответа",
+      status: "closed",
+      version: 0,
+    }).success).toBe(false);
   });
 });
