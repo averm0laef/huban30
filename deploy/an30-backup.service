@@ -1,0 +1,29 @@
+[Unit]
+Description=AN-30 encrypted database and attachment backup
+Documentation=file:///opt/an30/app/docs/OPERATIONS.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/an30/app
+Environment=AN30_ENV_FILE=/etc/an30/staging.env
+Environment=AN30_SECRETS_DIR=/etc/an30/secrets
+Environment=AN30_BACKUP_DIR=/var/backups/an30
+Environment=AN30_APP_DIR=/opt/an30/app
+Environment=AN30_RETAIN_DAYS=14
+ExecStart=/opt/an30/app/scripts/backup.sh
+
+# A backup must never stall the host indefinitely.
+TimeoutStartSec=1800
+
+# The unit only needs the compose project, the secrets and the backup target.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/backups/an30 /etc/an30/secrets
+
+[Install]
+WantedBy=multi-user.target

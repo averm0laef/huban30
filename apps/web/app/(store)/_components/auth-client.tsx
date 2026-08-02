@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import { apiRequest, errorText } from "../_lib/storefront-api";
+import { apiRequest, errorText, StorefrontApiError } from "../_lib/storefront-api";
 import { consumeAuthToken } from "../_lib/auth-token";
 import styles from "./storefront.module.css";
+import authStyles from "../auth/auth-flow.module.css";
 
 export type AuthMode = "forgot" | "login" | "register" | "reset" | "staff-accept" | "verify";
 
@@ -28,20 +29,85 @@ const modeLabels: Array<{ label: string; mode: AuthMode }> = [
   { label: "Восстановление", mode: "forgot" },
 ];
 
-function Status({ error, success }: { error: string; success: string }) {
-  if (error) return <div className={styles.formError} role="alert"><strong>Не получилось</strong><p>{error}</p></div>;
-  if (success) return <div className={styles.formSuccess} role="status"><strong>Готово</strong><p>{success}</p></div>;
-  return null;
+const modeTitles: Record<AuthMode, string> = {
+  forgot: "Вернуть доступ",
+  login: "Войти в АН-30",
+  register: "Создать аккаунт",
+  reset: "Новый пароль",
+  "staff-accept": "Принять приглашение",
+  verify: "Подтвердить email",
+};
+
+const submitLabels: Record<AuthMode, { pending: string; ready: string }> = {
+  forgot: { pending: "Отправляем…", ready: "Отправить инструкцию" },
+  login: { pending: "Проверяем…", ready: "Войти" },
+  register: { pending: "Создаём…", ready: "Создать аккаунт" },
+  reset: { pending: "Сохраняем…", ready: "Сохранить новый пароль" },
+  "staff-accept": { pending: "Принимаем…", ready: "Принять приглашение" },
+  verify: { pending: "Подтверждаем…", ready: "Подтвердить email" },
+};
+
+type StatusKind = "error" | "success" | "warning";
+type StatusState = { kind: StatusKind; message: string; title: string } | null;
+
+function StatusBanner({ status }: { status: StatusState }) {
+  if (!status) return null;
+  if (status.kind === "warning") {
+    return (
+      <div className={authStyles.formWarning} role="alert">
+        <strong>{status.title}</strong>
+        <p>{status.message}</p>
+      </div>
+    );
+  }
+  const className = status.kind === "error" ? styles.formError : styles.formSuccess;
+  const role = status.kind === "error" ? "alert" : "status";
+  return (
+    <div className={className} role={role}>
+      <strong>{status.title}</strong>
+      <p>{status.message}</p>
+    </div>
+  );
+}
+
+/**
+ * The API deliberately returns one generic "Неверный email или пароль" for
+ * every login failure — wrong password, unverified email, a locked account
+ * or an unknown address all look the same on the wire so a caller cannot
+ * enumerate account state. We keep that contract intact and only add a
+ * clearer heading; the server's own wording is always shown as-is beneath it.
+ * Rate limiting (429) is a different, safely-disclosable signal — it says
+ * nothing about whether the account exists — so it gets its own distinct,
+ * non-error styling.
+ */
+function describeFailure(mode: AuthMode, error: unknown): { kind: "error" | "warning"; message: string; title: string } {
+  if (error instanceof StorefrontApiError) {
+    if (error.status === 429) {
+      return { kind: "warning", message: error.message, title: "Слишком много попыток" };
+    }
+    if (error.status === 0) {
+      return { kind: "error", message: error.message, title: "Нет соединения" };
+    }
+    if (mode === "login" && error.status === 401) {
+      return { kind: "error", message: error.message, title: "Не получилось войти" };
+    }
+  }
+  return { kind: "error", message: errorText(error), title: "Не получилось" };
 }
 
 export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthMode; initialSuccess: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(initialSuccess);
+  const [status, setStatus] = useState<StatusState>(
+    initialSuccess ? { kind: "success", message: initialSuccess, title: "Готово" } : null,
+  );
   const [developmentToken, setDevelopmentToken] = useState("");
   const [token, setToken] = useState("");
   const [tokenReady, setTokenReady] = useState(false);
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const passwordConfirmRef = useRef<HTMLInputElement>(null);
+  const mountedMode = useRef(initialMode);
 
   useEffect(() => {
     const consumed = consumeAuthToken(window.location.href);
@@ -50,10 +116,25 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
     setTokenReady(true);
   }, []);
 
-  function resetStatus() {
-    setError("");
-    setSuccess("");
+  // Switching tabs (вход / регистрация / восстановление) must not leave a
+  // stale error or success banner from the previous form on screen.
+  useEffect(() => {
+    if (mountedMode.current === initialMode) return;
+    mountedMode.current = initialMode;
+    setStatus(null);
     setDevelopmentToken("");
+    setPasswordMismatch(false);
+  }, [initialMode]);
+
+  function resetStatus() {
+    setStatus(null);
+    setDevelopmentToken("");
+  }
+
+  function checkPasswordMatch() {
+    if (!passwordRef.current || !passwordConfirmRef.current) return;
+    const confirmValue = passwordConfirmRef.current.value;
+    setPasswordMismatch(confirmValue.length > 0 && confirmValue !== passwordRef.current.value);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -71,6 +152,8 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
         if (result.role === "customer") {
           router.replace("/profile");
         } else {
+          // Staff always land on /admin next; that screen itself shows the
+          // TOTP setup/verification step before revealing any staff data.
           router.replace("/admin");
         }
         router.refresh();
@@ -83,9 +166,14 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
           method: "POST",
           body: { displayName: form.get("displayName"), email: form.get("email"), password },
         });
-        setSuccess(result.message ?? "Проверьте почту и подтвердите регистрацию");
+        setStatus({
+          kind: "success",
+          message: result.message ?? "Проверьте почту и подтвердите регистрацию",
+          title: "Письмо отправлено",
+        });
         setDevelopmentToken(result.developmentToken ?? "");
         element.reset();
+        setPasswordMismatch(false);
         return;
       }
       if (initialMode === "forgot") {
@@ -93,7 +181,11 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
           method: "POST",
           body: { email: form.get("email") },
         });
-        setSuccess(result.message ?? "Если аккаунт существует, инструкция отправлена на email");
+        setStatus({
+          kind: "success",
+          message: result.message ?? "Если аккаунт существует, инструкция отправлена на email",
+          title: "Письмо отправлено",
+        });
         setDevelopmentToken(result.developmentToken ?? "");
         element.reset();
         return;
@@ -103,7 +195,11 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
           method: "POST",
           body: { token },
         });
-        setSuccess(result.message ?? "Email подтверждён. Теперь можно войти");
+        setStatus({
+          kind: "success",
+          message: result.message ?? "Email подтверждён. Теперь можно войти",
+          title: "Email подтверждён",
+        });
         return;
       }
       if (initialMode === "staff-accept") {
@@ -124,10 +220,15 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
         method: "POST",
         body: { password, token },
       });
-      setSuccess(result.message ?? "Пароль изменён. Теперь можно войти");
+      setStatus({
+        kind: "success",
+        message: result.message ?? "Пароль изменён. Теперь можно войти",
+        title: "Пароль изменён",
+      });
       element.reset();
+      setPasswordMismatch(false);
     } catch (caught) {
-      setError(errorText(caught));
+      setStatus(describeFailure(initialMode, caught));
     } finally {
       setPending(false);
     }
@@ -135,17 +236,22 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
 
   const tokenRequired = initialMode === "verify" || initialMode === "reset" || initialMode === "staff-accept";
   const tokenMissing = tokenRequired && token.length < 32;
+  const showPasswordConfirm = initialMode === "register" || initialMode === "reset" || initialMode === "staff-accept";
+  const registerSucceeded = initialMode === "register" && status?.kind === "success";
+  const verifySucceeded = initialMode === "verify" && status?.kind === "success";
+  const resetSucceeded = initialMode === "reset" && status?.kind === "success";
 
   return (
     <div className={`${styles.page} ${styles.authLayout}`}>
       <section className={styles.authIntro}>
         <p className={styles.eyebrow}>Личный кабинет</p>
-        <h1>{initialMode === "register" ? "Создать аккаунт" : initialMode === "forgot" ? "Вернуть доступ" : initialMode === "reset" ? "Новый пароль" : initialMode === "verify" ? "Подтвердить email" : initialMode === "staff-accept" ? "Принять приглашение" : "Войти в АН-30"}</h1>
+        <h1>{modeTitles[initialMode]}</h1>
         <p>Заказы, сохранённые товары и адреса доступны только после серверной проверки сессии.</p>
         <ul className={styles.checkList}>
           <li>Пароль хранится в виде стойкого Argon2id-хеша.</li>
-          <li>Сессия находится в защищённой cookie.</li>
-          <li>Сотрудники входят через отдельный контур с TOTP.</li>
+          <li>Сессия находится в защищённой cookie, а не в localStorage.</li>
+          <li>Новый аккаунт нужно подтвердить по ссылке из письма — без этого войти нельзя.</li>
+          <li>Сотрудники после пароля проходят ещё один шаг — одноразовый код TOTP.</li>
         </ul>
       </section>
       <section className={styles.formPanel} aria-labelledby="auth-form-title">
@@ -155,15 +261,37 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
           ))}
         </nav>
         <h2 id="auth-form-title" className={styles.visuallyHidden}>Форма авторизации</h2>
-        <Status error={error} success={success} />
+        <StatusBanner status={status} />
         {developmentToken ? (
           <p className={styles.devNotice}>Локальный режим почты: <Link href={`/auth?mode=${initialMode === "register" ? "verify" : "reset"}#token=${encodeURIComponent(developmentToken)}`}>открыть тестовую ссылку</Link>.</p>
+        ) : null}
+        {registerSucceeded ? (
+          <p className={authStyles.fieldHint}>
+            Не пришло письмо за несколько минут? Проверьте папку «Спам» или заполните форму регистрации ещё раз — мы вышлем новую ссылку.
+          </p>
+        ) : null}
+        {(verifySucceeded || resetSucceeded) ? (
+          <div className={authStyles.successActions}>
+            <Link className={styles.primaryAction} href="/auth?mode=login">Войти</Link>
+          </div>
         ) : null}
         {tokenRequired && !tokenReady ? (
           <div className={styles.loadingState} role="status"><strong>Проверяем одноразовую ссылку</strong></div>
         ) : tokenMissing ? (
-          <div className={styles.formError} role="alert"><strong>Ссылка неполная</strong><p>В адресе нет действующего токена. Запросите новое письмо.</p></div>
-        ) : (
+          <div className={styles.formError} role="alert">
+            <strong>Ссылка неполная</strong>
+            <p>
+              В адресе нет действующего токена — возможно, ссылка была скопирована не полностью или уже устарела.{" "}
+              {initialMode === "verify" ? (
+                <>Зарегистрируйтесь ещё раз на <Link href="/auth?mode=register">странице регистрации</Link>, чтобы получить новое письмо.</>
+              ) : initialMode === "reset" ? (
+                <>Запросите новую ссылку через <Link href="/auth?mode=forgot">восстановление пароля</Link>.</>
+              ) : (
+                <>Приглашения выдаёт администратор — попросите его отправить новое приглашение.</>
+              )}
+            </p>
+          </div>
+        ) : (verifySucceeded || resetSucceeded) ? null : (
           <form className={styles.stackForm} onSubmit={submit}>
             {initialMode === "register" || initialMode === "staff-accept" ? (
               <label className={styles.field}>Имя
@@ -173,24 +301,62 @@ export function AuthClient({ initialMode, initialSuccess }: { initialMode: AuthM
             {initialMode === "login" || initialMode === "register" || initialMode === "forgot" ? (
               <label className={styles.field}>Email
                 <input name="email" type="email" required maxLength={254} autoComplete="email" inputMode="email" />
+                {initialMode === "register" ? (
+                  <small>После регистрации на этот адрес придёт письмо со ссылкой подтверждения.</small>
+                ) : null}
               </label>
             ) : null}
             {initialMode === "login" || initialMode === "register" || initialMode === "reset" || initialMode === "staff-accept" ? (
               <label className={styles.field}>{initialMode === "reset" ? "Новый пароль" : "Пароль"}
-                <input name="password" type="password" required minLength={initialMode === "login" ? 1 : 12} maxLength={128} autoComplete={initialMode === "login" ? "current-password" : "new-password"} />
-                {initialMode !== "login" ? <small>Не менее 12 символов. Не используйте email или простой словарный пароль.</small> : null}
+                <input
+                  ref={initialMode === "login" ? undefined : passwordRef}
+                  name="password"
+                  type="password"
+                  required
+                  minLength={initialMode === "login" ? 1 : 12}
+                  maxLength={128}
+                  autoComplete={initialMode === "login" ? "current-password" : "new-password"}
+                  onInput={showPasswordConfirm ? checkPasswordMatch : undefined}
+                  aria-describedby={initialMode === "login" ? undefined : "auth-password-hint"}
+                />
+                {initialMode !== "login" ? <small id="auth-password-hint">Не менее 12 символов. Не используйте email или простой словарный пароль.</small> : null}
               </label>
             ) : null}
-            {initialMode === "register" || initialMode === "reset" || initialMode === "staff-accept" ? (
+            {showPasswordConfirm ? (
               <label className={styles.field}>Повторите пароль
-                <input name="passwordConfirm" type="password" required minLength={12} maxLength={128} autoComplete="new-password" />
+                <input
+                  ref={passwordConfirmRef}
+                  name="passwordConfirm"
+                  type="password"
+                  required
+                  minLength={12}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  onInput={checkPasswordMatch}
+                  aria-invalid={passwordMismatch}
+                  aria-describedby={passwordMismatch ? "auth-password-mismatch" : undefined}
+                />
+                {passwordMismatch ? (
+                  <small id="auth-password-mismatch" className={authStyles.fieldError} role="alert">Пароли не совпадают</small>
+                ) : null}
               </label>
             ) : null}
-            <button className={styles.submitButton} type="submit" disabled={pending}>
-              {pending ? "Отправляем..." : initialMode === "login" ? "Войти" : initialMode === "register" ? "Создать аккаунт" : initialMode === "forgot" ? "Отправить инструкцию" : initialMode === "verify" ? "Подтвердить email" : initialMode === "staff-accept" ? "Принять приглашение" : "Сохранить новый пароль"}
+            <button className={styles.submitButton} type="submit" disabled={pending || (showPasswordConfirm && passwordMismatch)}>
+              {pending ? submitLabels[initialMode].pending : submitLabels[initialMode].ready}
             </button>
           </form>
         )}
+        {initialMode === "login" ? (
+          <details className={authStyles.helpDetails}>
+            <summary>Не получается войти?</summary>
+            <ul>
+              <li>Проверьте email и пароль без опечаток — форма не подсказывает, какое поле неверно.</li>
+              <li>Только что зарегистрировались? Сначала подтвердите email по ссылке из письма — иначе вход будет отклонён.</li>
+              <li>После 5 неверных попыток подряд вход блокируется на 15 минут — это защита от подбора пароля, а не сбой.</li>
+              <li>Забыли пароль — воспользуйтесь восстановлением по ссылке ниже.</li>
+            </ul>
+          </details>
+        ) : null}
         <div className={styles.formLinks}>
           {initialMode !== "login" ? <Link href="/auth?mode=login">Вернуться ко входу</Link> : <Link href="/auth?mode=forgot">Забыли пароль?</Link>}
           <Link href="/privacy">Как мы обрабатываем данные</Link>

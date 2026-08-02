@@ -33,6 +33,26 @@ describe("API environment", () => {
     expect(environment.COOKIE_SECURE).toBe(false);
   });
 
+  it("derives the admin token lookup flag from deployment tier, never from a raw switch", () => {
+    const production = validateEnvironment({ ...secrets, DEPLOYMENT_ENVIRONMENT: "production" });
+    expect(production.AUTH_ADMIN_TOKEN_LOOKUP).toBe(false);
+
+    const staging = validateEnvironment({ ...secrets, DEPLOYMENT_ENVIRONMENT: "staging" });
+    expect(staging.AUTH_ADMIN_TOKEN_LOOKUP).toBe(true);
+
+    const development = validateEnvironment({ ...secrets, DEPLOYMENT_ENVIRONMENT: "development" });
+    expect(development.AUTH_ADMIN_TOKEN_LOOKUP).toBe(true);
+
+    // There is deliberately no env var that can flip this back on in production:
+    // unknown keys are dropped by the schema, so this must still resolve to false.
+    const spoofed = validateEnvironment({
+      ...secrets,
+      AUTH_ADMIN_TOKEN_LOOKUP: "true",
+      DEPLOYMENT_ENVIRONMENT: "production",
+    });
+    expect(spoofed.AUTH_ADMIN_TOKEN_LOOKUP).toBe(false);
+  });
+
   it("blocks sandbox checkout in production but permits it in staging", () => {
     expect(() => validateEnvironment({
       ...secrets,

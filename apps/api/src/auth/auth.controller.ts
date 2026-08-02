@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res } from "@nestjs/common";
 import { ApiCookieAuth, ApiTags } from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
@@ -150,6 +150,17 @@ export class AuthController {
     );
     this.sessions.setCookie(reply, result.session);
     return result.body;
+  }
+
+  // Support tool for environments without working transactional email (e.g.
+  // staging with SMTP_ENABLED=false). See AuthService.adminPendingToken for
+  // the two independent guards: a non-production-only config derivation and
+  // this admin-only permission on a fully authenticated, TOTP-verified route.
+  @RequirePermissions("auth:tokens:read")
+  @Get("admin/pending-token")
+  async adminPendingToken(@Query() query: unknown, @Req() request: FastifyRequest) {
+    await this.rateLimit.consume("admin-token-lookup", request.authContext!.userId, 30, 3_600);
+    return this.auth.adminPendingToken(query, request.authContext!, requestMetadata(request));
   }
 
   @RequirePermissions("staff:invite")

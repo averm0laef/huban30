@@ -3,12 +3,18 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { PoolClient } from "pg";
 
-import { RoleSchema, type Role } from "@an30/contracts";
+import {
+  AdminPendingTokenQuerySchema,
+  RoleSchema,
+  type AdminPendingTokenPurpose,
+  type Role,
+} from "@an30/contracts";
 
 import { DatabaseService, type DatabaseExecutor } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
@@ -74,6 +80,8 @@ export function canRefreshPendingRegistration(status: string | undefined): boole
 
 @Injectable()
 export class AuthService {
+  private readonly adminTokenLookupEnabled: boolean;
+  private readonly appOrigin: string;
   private readonly debugTokens: boolean;
 
   constructor(
@@ -85,6 +93,8 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly totp: TotpService,
   ) {
+    this.adminTokenLookupEnabled = config.getOrThrow<boolean>("AUTH_ADMIN_TOKEN_LOOKUP");
+    this.appOrigin = config.getOrThrow<string>("APP_ORIGIN");
     this.debugTokens = config.getOrThrow<boolean>("AUTH_DEBUG_TOKENS");
   }
 
@@ -446,6 +456,188 @@ export class AuthService {
         userAgent: metadata.userAgent,
       }, client);
     });
+  }
+
+  /**
+   * Support tool for environments without working transactional email
+   * (e.g. staging with SMTP_ENABLED=false): lets an authenticated admin read
+   * back the one-time link that would otherwise have been emailed, so it can
+   * be relayed to the customer or new staff member out of band. Guarded by
+   * two independent layers: `AUTH_ADMIN_TOKEN_LOOKUP` (derived from
+   * DEPLOYMENT_ENVIRONMENT — see config.ts, always false in production) and
+   * the `auth:tokens:read` permission (admin-only, enforced by
+   * PermissionsGuard, and reachable only through a fully authenticated,
+   * TOTP-verified session because this route is not @AllowPendingMfa or
+   * @Public). Never invalidates or issues a token — it only reveals a token
+   * that registration/forgotPassword/inviteStaff already created.
+   */
+  async adminPendingToken(
+    rawQuery: unknown,
+    actor: AuthContext,
+    metadata: RequestMetadata,
+  ): Promise<Record<string, unknown>> {
+    if (!this.adminTokenLookupEnabled) {
+      throw new ForbiddenException("Недоступно в этом окружении");
+    }
+    const parsed = AdminPendingTokenQuerySchema.safeParse(rawQuery);
+    if (!parsed.success) throw new BadRequestException("Некорректный email");
+    const { email } = parsed.data;
+
+    const pending = await this.findPendingSecret(email);
+    if (!pending) throw new NotFoundException("Нет ожидающего письма для этого email");
+
+    await this.audit.record({
+      action: "auth.admin.pending_token_viewed",
+      actorRole: actor.role,
+      actorUserId: actor.userId,
+      entityId: pending.entityId,
+      entityType: pending.entityType,
+      ipAddress: metadata.ipAddress,
+      metadata: { purpose: pending.purpose, targetEmailDomain: email.split("@")[1] },
+      userAgent: metadata.userAgent,
+    });
+
+    return {
+      email,
+      expiresAt: pending.expiresAt.toISOString(),
+      link: pending.link,
+      purpose: pending.purpose,
+    };
+  }
+
+  private async findPendingSecret(email: string): Promise<{
+    entityId: string;
+    entityType: string;
+    expiresAt: Date;
+    link: string;
+    purpose: AdminPendingTokenPurpose;
+  } | null> {
+    const user = (await this.database.query<{ id: string; status: string }>(
+      "SELECT id, status::text FROM app.users WHERE email = $1 AND deleted_at IS NULL",
+      [email],
+    )).rows[0];
+
+    if (user) {
+      const secret = user.status === "pending_email"
+        ? await this.matchEmailVerification(user.id)
+        : await this.matchPasswordReset(user.id);
+      if (secret) return secret;
+    }
+
+    return this.matchStaffInvitation(email);
+  }
+
+  private async matchEmailVerification(userId: string): ReturnType<AuthService["findPendingSecret"]> {
+    const row = (await this.database.query<{ expires_at: Date; token_hash: Buffer }>(
+      `
+        SELECT token_hash, expires_at FROM app.email_verification_tokens
+        WHERE user_id = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
+        ORDER BY expires_at DESC LIMIT 1
+      `,
+      [userId],
+    )).rows[0];
+    if (!row) return null;
+    const token = await this.decryptMatchingOutboxToken(
+      userId, "auth.email.verify", "email-verification", row.token_hash,
+    );
+    if (!token) return null;
+    return {
+      entityId: userId,
+      entityType: "user",
+      expiresAt: row.expires_at,
+      link: this.buildPendingLink("verify", token),
+      purpose: "email_verification",
+    };
+  }
+
+  private async matchPasswordReset(userId: string): ReturnType<AuthService["findPendingSecret"]> {
+    const row = (await this.database.query<{ expires_at: Date; token_hash: Buffer }>(
+      `
+        SELECT token_hash, expires_at FROM app.password_reset_tokens
+        WHERE user_id = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
+        ORDER BY expires_at DESC LIMIT 1
+      `,
+      [userId],
+    )).rows[0];
+    if (!row) return null;
+    const token = await this.decryptMatchingOutboxToken(
+      userId, "auth.password.reset", "password-reset", row.token_hash,
+    );
+    if (!token) return null;
+    return {
+      entityId: userId,
+      entityType: "user",
+      expiresAt: row.expires_at,
+      link: this.buildPendingLink("reset", token),
+      purpose: "password_reset",
+    };
+  }
+
+  private async matchStaffInvitation(email: string): ReturnType<AuthService["findPendingSecret"]> {
+    const row = (await this.database.query<{ expires_at: Date; id: string; token_hash: Buffer }>(
+      `
+        SELECT id, token_hash, expires_at FROM app.staff_invitations
+        WHERE email = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > clock_timestamp()
+        ORDER BY expires_at DESC LIMIT 1
+      `,
+      [email],
+    )).rows[0];
+    if (!row) return null;
+    const token = await this.decryptMatchingOutboxToken(
+      row.id, "auth.staff.invitation", "staff-invitation", row.token_hash,
+    );
+    if (!token) return null;
+    return {
+      entityId: row.id,
+      entityType: "staff_invitation",
+      expiresAt: row.expires_at,
+      link: this.buildPendingLink("staff-accept", token),
+      purpose: "staff_invitation",
+    };
+  }
+
+  /**
+   * The outbox keeps every delivery attempt, so a re-registration or a
+   * repeated forgot-password call can leave more than one event behind for
+   * the same aggregate. Only the newest one can still match a currently
+   * valid (unused, unexpired) token row, so we decrypt candidates newest
+   * first and stop at the first HMAC match instead of trusting position 0.
+   */
+  private async decryptMatchingOutboxToken(
+    aggregateId: string,
+    topic: string,
+    hashPurpose: string,
+    tokenHash: Buffer,
+  ): Promise<string | null> {
+    const events = (await this.database.query<{ payload: unknown }>(
+      `
+        SELECT payload FROM app.outbox_events
+        WHERE aggregate_type = 'auth' AND aggregate_id = $1 AND topic = $2
+        ORDER BY created_at DESC LIMIT 5
+      `,
+      [aggregateId, topic],
+    )).rows;
+    for (const event of events) {
+      const payload = event.payload as { encryptedToken?: unknown } | null;
+      if (typeof payload?.encryptedToken !== "string") continue;
+      try {
+        const candidate = this.crypto.decrypt(
+          Buffer.from(payload.encryptedToken, "base64url"),
+          `${topic}:${aggregateId}`,
+        );
+        if (this.crypto.opaqueHashMatches(hashPurpose, candidate, tokenHash)) return candidate;
+      } catch {
+        // Not decryptable with this AAD (superseded payload) — keep scanning.
+      }
+    }
+    return null;
+  }
+
+  private buildPendingLink(mode: "reset" | "staff-accept" | "verify", token: string): string {
+    const url = new URL("/auth", this.appOrigin);
+    url.searchParams.set("mode", mode);
+    url.hash = new URLSearchParams({ token }).toString();
+    return url.toString();
   }
 
   async inviteStaff(

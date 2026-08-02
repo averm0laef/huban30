@@ -105,8 +105,21 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     `${environment.REDIS_HOST}:${environment.REDIS_PORT}`,
   ].join("");
 
+  // Support tool that lets an authenticated admin read back a pending
+  // verification/reset/staff-invitation link when transactional email is not
+  // configured (see AuthService.adminPendingToken). Unlike AUTH_DEBUG_TOKENS
+  // this has no raw env toggle of its own on purpose: it is derived entirely
+  // from DEPLOYMENT_ENVIRONMENT, which main.ts additionally cross-checks
+  // against the database's own deployment_settings row on every boot, so
+  // there is no configuration that can turn it on for a production
+  // deployment. It still requires the caller to hold the admin-only
+  // `auth:tokens:read` permission behind a fully authenticated, TOTP-verified
+  // session — this flag only narrows *when*, RBAC narrows *who*.
+  const authAdminTokenLookup = environment.DEPLOYMENT_ENVIRONMENT !== "production";
+
   return {
     ...environment,
+    AUTH_ADMIN_TOKEN_LOOKUP: authAdminTokenLookup,
     AUTH_DEBUG_TOKENS: environment.AUTH_DEBUG_TOKENS === "true",
     COOKIE_SECURE: environment.COOKIE_SECURE === "true",
     DATA_ENCRYPTION_KEY: dataEncryptionKey,

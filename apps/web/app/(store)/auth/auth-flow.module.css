@@ -1,0 +1,71 @@
+/* ============================================================
+   Auth flow extras — additive states for the /auth screen that
+   the shared storefront.module.css does not define (warning
+   banner, inline field errors, login troubleshooting details).
+   Reuses the design tokens from storefront.module.css's
+   `.storefront` root; keep them in sync when new states are added.
+   ============================================================ */
+
+.formWarning {
+  margin: 0 0 var(--store-space-lg);
+  padding: var(--store-space-sm) var(--store-space-md);
+  border-left: 4px solid var(--store-accent);
+  border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0;
+  background: color-mix(in srgb, var(--store-accent) 13%, var(--store-surface));
+  box-shadow: var(--store-shadow-xs);
+}
+.formWarning strong { display: block; font-weight: var(--store-weight-black); }
+.formWarning p { margin: 5px 0 0; color: var(--store-muted); line-height: 1.45; }
+
+.fieldHint {
+  margin: 0;
+  color: var(--store-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.fieldError {
+  color: var(--store-danger);
+  font-size: 0.82rem;
+  font-weight: var(--store-weight-medium);
+}
+
+.helpDetails {
+  margin-top: var(--store-space-md);
+  padding: var(--store-space-sm) var(--store-space-md);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface-strong);
+}
+.helpDetails summary {
+  cursor: pointer;
+  color: var(--store-text);
+  font-size: 0.9rem;
+  font-weight: var(--store-weight-bold);
+  list-style: none;
+}
+.helpDetails summary::-webkit-details-marker { display: none; }
+.helpDetails summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1.1em;
+  color: var(--store-brand);
+  font-weight: var(--store-weight-black);
+}
+.helpDetails[open] summary::before { content: "\2212"; }
+.helpDetails ul {
+  display: grid;
+  gap: 8px;
+  margin: var(--store-space-sm) 0 0;
+  padding: 0 0 0 1.1em;
+  color: var(--store-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.successActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin: 4px 0 var(--store-space-lg);
+}

@@ -10,6 +10,14 @@ const indexingAllowed = process.env.DEPLOYMENT_ENVIRONMENT === "production";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  images: {
+    // The only SVG served through next/image is the trusted local brand
+    // mark (apps/web/public/brand/logo.svg), never user- or CMS-supplied
+    // input, so allowing SVG optimisation here cannot become an XSS vector.
+    dangerouslyAllowSVG: true,
+    contentDispositionType: "attachment",
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
   output: "standalone",
   outputFileTracingRoot: workspaceRoot,
   poweredByHeader: false,

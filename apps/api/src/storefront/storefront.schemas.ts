@@ -27,7 +27,9 @@ export const ProductActionSchema = z.object({
 
 export const ContactRequestSchema = z.object({
   consent: z.literal(true, { error: "Требуется согласие на обработку данных" }),
-  email: z.email().trim().toLowerCase().max(254).nullable().optional(),
+  // Trim before the format check; see CheckoutContactSchema for why the order
+  // matters in Zod 4.
+  email: z.string().trim().toLowerCase().max(254).pipe(z.email()).nullable().optional(),
   idempotencyKey: z.uuid(),
   message: z.string().trim().min(10).max(4_000),
   name: SingleLineSchema,

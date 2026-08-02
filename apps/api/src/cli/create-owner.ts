@@ -8,7 +8,7 @@ import { PasswordService } from "../security/password.service.js";
 
 const argumentsSchema = z.object({
   displayName: z.string().trim().min(2).max(120),
-  email: z.email().transform((value) => value.trim().toLowerCase()),
+  email: z.string().trim().toLowerCase().pipe(z.email()),
   passwordFile: z.string().min(1),
 });
 

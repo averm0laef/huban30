@@ -27,6 +27,7 @@ export const PERMISSIONS = [
   "staff:manage",
   "settings:manage",
   "audit:read",
+  "auth:tokens:read",
 ] as const;
 export const PermissionSchema = z.enum(PERMISSIONS);
 export type Permission = z.infer<typeof PermissionSchema>;
@@ -70,6 +71,22 @@ export const ROLE_PERMISSIONS = {
   ],
   admin: PERMISSIONS,
 } as const satisfies Record<Role, readonly Permission[]>;
+
+// Support tool for environments where transactional email is not configured
+// (see AuthService.adminPendingToken): lets an authenticated admin retrieve
+// the link that would otherwise have been emailed for a given address.
+export const AdminPendingTokenQuerySchema = z.object({
+  email: z.string().trim().toLowerCase().max(254).pipe(z.email()),
+}).strict();
+export type AdminPendingTokenQuery = z.infer<typeof AdminPendingTokenQuerySchema>;
+
+export const ADMIN_PENDING_TOKEN_PURPOSES = [
+  "email_verification",
+  "password_reset",
+  "staff_invitation",
+] as const;
+export const AdminPendingTokenPurposeSchema = z.enum(ADMIN_PENDING_TOKEN_PURPOSES);
+export type AdminPendingTokenPurpose = z.infer<typeof AdminPendingTokenPurposeSchema>;
 
 export const ORDER_STATUSES = [
   "pending_payment",
@@ -115,7 +132,10 @@ export const CheckoutItemSchema = z.object({
 export type CheckoutItem = z.infer<typeof CheckoutItemSchema>;
 
 export const CheckoutContactSchema = z.object({
-  email: z.email().trim().toLowerCase().max(254),
+  // Normalise before validating: `.trim()` and `.toLowerCase()` are transforms
+  // that run after the check they follow, so `z.email().trim()` would reject a
+  // pasted or autofilled address with surrounding whitespace.
+  email: z.string().trim().toLowerCase().max(254).pipe(z.email()),
   name: z.string().trim().min(2).max(160).regex(SAFE_SINGLE_LINE),
   phone: CheckoutPhoneSchema,
 }).strict();

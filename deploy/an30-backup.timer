@@ -1,0 +1,14 @@
+[Unit]
+Description=AN-30 encrypted backup schedule
+Documentation=file:///opt/an30/app/docs/OPERATIONS.md
+
+[Timer]
+# Every 15 minutes, which is the recovery point objective for this shop.
+OnCalendar=*:0/15
+# A missed window (host was down) runs as soon as the host is back.
+Persistent=true
+AccuracySec=1min
+Unit=an30-backup.service
+
+[Install]
+WantedBy=timers.target

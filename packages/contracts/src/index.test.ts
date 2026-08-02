@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AdminPendingTokenQuerySchema,
   CatalogFeaturedQuerySchema,
   CatalogImageIdentifierSchema,
   CatalogProductIdentifierSchema,
@@ -58,10 +59,54 @@ describe("public contracts", () => {
     }).success).toBe(false);
   });
 
+  it("normalises a pasted or autofilled contact email before validating it", () => {
+    const request = {
+      contact: { email: "  Client@Example.COM  ", name: "Антон Ермолаев", phone: "+79141234567" },
+      delivery: { method: "pickup" },
+      idempotencyKey: "019bf9ea-0d3e-7def-9c9a-000000000001",
+      items: [{ productId: "019bf9ea-0d3e-7def-9c9a-000000000002", quantity: 1 }],
+      legalPolicyVersion: "checkout-terms-v1",
+      termsAccepted: true,
+    };
+
+    // Surrounding whitespace arrives from browser autofill and copy-paste, so
+    // it must be stripped rather than rejected as a malformed address.
+    expect(CheckoutRequestSchema.parse(request).contact.email).toBe("client@example.com");
+
+    // Normalising must not rescue an address that is genuinely invalid.
+    expect(CheckoutRequestSchema.safeParse({
+      ...request,
+      contact: { ...request.contact, email: "  client@example  " },
+    }).success).toBe(false);
+    expect(CheckoutRequestSchema.safeParse({
+      ...request,
+      contact: { ...request.contact, email: "   " },
+    }).success).toBe(false);
+    expect(CheckoutRequestSchema.safeParse({
+      ...request,
+      contact: { ...request.contact, email: `${"a".repeat(250)}@example.com` },
+    }).success).toBe(false);
+  });
+
   it("keeps privileged staff actions out of customer and manager roles", () => {
     expect(ROLE_PERMISSIONS.customer).not.toContain("orders:read:any");
     expect(ROLE_PERMISSIONS.manager).not.toContain("staff:invite");
     expect(ROLE_PERMISSIONS.admin).toContain("staff:invite");
+  });
+
+  it("keeps the pending-token support tool exclusive to admin", () => {
+    expect(ROLE_PERMISSIONS.customer).not.toContain("auth:tokens:read");
+    expect(ROLE_PERMISSIONS.manager).not.toContain("auth:tokens:read");
+    expect(ROLE_PERMISSIONS.director).not.toContain("auth:tokens:read");
+    expect(ROLE_PERMISSIONS.admin).toContain("auth:tokens:read");
+  });
+
+  it("normalizes the admin pending-token lookup email and rejects extra fields", () => {
+    expect(AdminPendingTokenQuerySchema.parse({ email: " Client@Example.com " }))
+      .toEqual({ email: "client@example.com" });
+    expect(AdminPendingTokenQuerySchema.safeParse({ email: "client@example.com", extra: 1 }).success)
+      .toBe(false);
+    expect(AdminPendingTokenQuerySchema.safeParse({ email: "not-an-email" }).success).toBe(false);
   });
 
   it("validates the versioned 1C envelope and integer kopeks", () => {
