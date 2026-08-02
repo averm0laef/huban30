@@ -16,8 +16,8 @@ BEGIN
   FROM information_schema.tables
   WHERE table_schema = 'app' AND table_type = 'BASE TABLE';
 
-  IF application_table_count < 48 THEN
-    RAISE EXCEPTION 'Expected at least 48 application tables, found %', application_table_count;
+  IF application_table_count < 50 THEN
+    RAISE EXCEPTION 'Expected at least 50 application tables, found %', application_table_count;
   END IF;
 
   SELECT count(*)
@@ -42,7 +42,13 @@ BEGIN
       WHERE index_record.indrelid = constraint_record.conrelid
         AND index_record.indisvalid
         AND index_record.indisready
-        AND index_record.indkey::smallint[] @> constraint_record.conkey
+        AND index_record.indnkeyatts >= cardinality(constraint_record.conkey)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM generate_subscripts(constraint_record.conkey,1) AS key_position(position)
+          WHERE index_record.indkey[key_position.position-1]
+            IS DISTINCT FROM constraint_record.conkey[key_position.position]
+        )
     );
 
   IF missing_foreign_key_index_count <> 0 THEN
@@ -91,6 +97,93 @@ BEGIN
     'refunded'
   ] THEN
     RAISE EXCEPTION 'Unexpected payment state contract: %', payment_states;
+  END IF;
+END;
+$$;
+
+DO $$
+DECLARE
+  invalid_money_bound_count integer;
+BEGIN
+  SELECT count(*)
+  INTO invalid_money_bound_count
+  FROM pg_attribute AS money_column
+  JOIN pg_class AS money_table ON money_table.oid=money_column.attrelid
+  JOIN pg_namespace AS money_namespace ON money_namespace.oid=money_table.relnamespace
+  WHERE money_namespace.nspname='app'
+    AND money_table.relkind IN ('r','p')
+    AND money_column.attnum>0
+    AND NOT money_column.attisdropped
+    AND money_column.attname LIKE '%\_kopeks' ESCAPE '\'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint AS money_constraint
+      WHERE money_constraint.conrelid=money_table.oid
+        AND money_constraint.contype='c'
+        AND money_constraint.convalidated
+        AND money_column.attnum=ANY(money_constraint.conkey)
+        AND pg_get_constraintdef(money_constraint.oid) LIKE '%9007199254740991%'
+    );
+
+  IF invalid_money_bound_count<>0 THEN
+    RAISE EXCEPTION '% money columns lack a validated JavaScript-safe upper bound',
+      invalid_money_bound_count;
+  END IF;
+END;
+$$;
+
+DO $$
+DECLARE
+  contact_request_id uuid;
+  retained_status text;
+  anonymized_count integer;
+  remaining_pii_count integer;
+BEGIN
+  INSERT INTO app.contact_requests (
+    idempotency_key,
+    request_hash,
+    source,
+    status,
+    customer_name,
+    customer_email,
+    message,
+    consent_at,
+    retention_until
+  ) VALUES (
+    gen_random_uuid(),
+    decode(repeat('ef',32),'hex'),
+    'contacts',
+    'in_progress',
+    'Schema Smoke Customer',
+    'schema-smoke@example.test',
+    'PII must be cleared',
+    clock_timestamp()-interval '2 days',
+    clock_timestamp()-interval '1 day'
+  ) RETURNING id INTO contact_request_id;
+
+  SELECT app.anonymize_expired_contact_requests(1) INTO anonymized_count;
+
+  SELECT status,
+         ((customer_name<>'' OR customer_email IS NOT NULL OR customer_phone IS NOT NULL OR message<>''))::integer
+  INTO retained_status,remaining_pii_count
+  FROM app.contact_requests
+  WHERE id=contact_request_id AND anonymized_at IS NOT NULL;
+
+  IF anonymized_count<>1 OR retained_status<>'in_progress' OR remaining_pii_count<>0 THEN
+    RAISE EXCEPTION 'Expired contact request was not safely anonymized';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM app.audit_log
+    WHERE action='contact_request.anonymized'
+      AND entity_type='contact_request'
+      AND entity_id=contact_request_id::text
+      AND before_state IS NULL
+      AND NOT metadata ? 'customerEmail'
+      AND NOT metadata ? 'customerPhone'
+  ) THEN
+    RAISE EXCEPTION 'Contact request anonymization audit event is missing or unsafe';
   END IF;
 END;
 $$;

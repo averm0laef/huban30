@@ -38,6 +38,7 @@ describe("API environment", () => {
       ...secrets,
       DEPLOYMENT_ENVIRONMENT: "production",
       ENABLE_PUBLIC_CHECKOUT: "true",
+      LEGAL_DOCUMENTS_APPROVED: "true",
       PAYMENTS_PROVIDER: "sandbox",
     })).toThrow(/Production public checkout cannot use the sandbox/);
 
@@ -45,6 +46,7 @@ describe("API environment", () => {
       ...secrets,
       DEPLOYMENT_ENVIRONMENT: "staging",
       ENABLE_PUBLIC_CHECKOUT: "true",
+      LEGAL_DOCUMENTS_APPROVED: "true",
       PAYMENTS_PROVIDER: "sandbox",
     });
     expect(staging.ENABLE_PUBLIC_CHECKOUT).toBe(true);

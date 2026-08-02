@@ -16,6 +16,7 @@ import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
 import { CryptoService } from "../security/crypto.service.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
+import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { SandboxPaymentProvider } from "./sandbox-payment.provider.js";
 
 interface CheckoutOwner {
@@ -23,12 +24,12 @@ interface CheckoutOwner {
 }
 
 interface ReservedLine {
+  allocations: Array<{ quantity: number; warehouseId: string }>;
   amountKopeks: number;
   name: string;
   productId: string;
   quantity: number;
   sku: string;
-  warehouseId: string;
 }
 
 interface RequestMetadata {
@@ -105,7 +106,12 @@ export class CheckoutService {
     const request = parsed.data;
     const scope = owner.userId ? `checkout:user:${owner.userId}` : "checkout:guest";
     const checksum = requestChecksum(request);
-    const guestAccessToken = owner.userId ? undefined : this.crypto.randomToken(32);
+    // A lost response must not lock a guest out of an idempotently-created
+    // order. Only the purpose-separated HMAC of this reproducible token is stored.
+    const guestAccessToken = owner.userId ? undefined : this.crypto.deriveOpaqueToken(
+      "guest-order-access",
+      `${scope}\0${request.idempotencyKey}`,
+    );
     const guestTokenHash = guestAccessToken
       ? this.crypto.opaqueHash("guest-order-access", guestAccessToken)
       : undefined;
@@ -136,7 +142,13 @@ export class CheckoutService {
         throw new ConflictException("Ключ идемпотентности уже использован с другими данными");
       }
       if (inserted.rowCount === 0 && idempotency.completed_at && idempotency.resource_id) {
-        return this.readCheckout(client, idempotency.resource_id, true);
+        return this.readCheckout(
+          client,
+          idempotency.resource_id,
+          true,
+          this.sandbox.confirmationToken(`payment:${scope}:${request.idempotencyKey}`),
+          guestAccessToken,
+        );
       }
 
       const lines = await this.reserveLines(client, request);
@@ -172,45 +184,48 @@ export class CheckoutService {
       if (!reservation) throw new ConflictException("Не удалось создать резерв");
 
       for (const line of lines) {
-        await client.query(
-          `INSERT INTO app.stock_reservation_items
-            (reservation_id,product_id,warehouse_id,quantity,unit_price_kopeks,currency)
-           VALUES ($1,$2,$3,$4,$5,'RUB')`,
-          [reservationId, line.productId, line.warehouseId, line.quantity, line.amountKopeks],
-        );
-        const balance = (await client.query<{
-          quantity_on_hand: number;
-          quantity_reserved: number;
-        }>(
-          `UPDATE app.inventory_balances
-           SET quantity_reserved=quantity_reserved+$3
-           WHERE product_id=$1 AND warehouse_id=$2
-             AND quantity_on_hand-quantity_reserved >= $3
-           RETURNING quantity_on_hand,quantity_reserved`,
-          [line.productId, line.warehouseId, line.quantity],
-        )).rows[0];
-        if (!balance) throw new ConflictException(`Недостаточно остатка товара ${line.productId}`);
-        await client.query(
-          `INSERT INTO app.inventory_events
-            (product_id,warehouse_id,event_type,delta_reserved,resulting_on_hand,
-             resulting_reserved,reference_type,reference_id,actor_user_id)
-           VALUES ($1,$2,'reservation_created',$3,$4,$5,'stock_reservation',$6,$7)`,
-          [line.productId, line.warehouseId, line.quantity, balance.quantity_on_hand,
-            balance.quantity_reserved, reservationId, owner.userId ?? null],
-        );
+        for (const allocation of line.allocations) {
+          await client.query(
+            `INSERT INTO app.stock_reservation_items
+              (reservation_id,product_id,warehouse_id,quantity,unit_price_kopeks,currency)
+             VALUES ($1,$2,$3,$4,$5,'RUB')`,
+            [reservationId, line.productId, allocation.warehouseId, allocation.quantity,
+              line.amountKopeks],
+          );
+          const balance = (await client.query<{
+            quantity_on_hand: number;
+            quantity_reserved: number;
+          }>(
+            `UPDATE app.inventory_balances
+             SET quantity_reserved=quantity_reserved+$3
+             WHERE product_id=$1 AND warehouse_id=$2
+               AND quantity_on_hand-quantity_reserved >= $3
+             RETURNING quantity_on_hand,quantity_reserved`,
+            [line.productId, allocation.warehouseId, allocation.quantity],
+          )).rows[0];
+          if (!balance) throw new ConflictException(`Недостаточно остатка товара ${line.productId}`);
+          await client.query(
+            `INSERT INTO app.inventory_events
+              (product_id,warehouse_id,event_type,delta_reserved,resulting_on_hand,
+               resulting_reserved,reference_type,reference_id,actor_user_id)
+             VALUES ($1,$2,'reservation_created',$3,$4,$5,'stock_reservation',$6,$7)`,
+            [line.productId, allocation.warehouseId, allocation.quantity, balance.quantity_on_hand,
+              balance.quantity_reserved, reservationId, owner.userId ?? null],
+          );
+        }
       }
 
       await client.query(
         `INSERT INTO app.orders
           (id,public_number,user_id,reservation_id,idempotency_key,status,customer_email,
            customer_phone,customer_name,contact_snapshot,delivery_snapshot,currency,
-           subtotal_kopeks,total_amount_kopeks,customer_note)
+           subtotal_kopeks,total_amount_kopeks,customer_note,terms_accepted_at,legal_policy_version)
          VALUES ($1,$2,$3,$4,$5,'pending_payment',$6,$7,$8,$9::jsonb,$10::jsonb,
-           'RUB',$11,$11,$12)`,
+           'RUB',$11,$11,$12,clock_timestamp(),$13)`,
         [orderId, publicOrderNumber(orderId), owner.userId ?? null, reservationId,
           `order:${scopedKey}`, request.contact.email, request.contact.phone, request.contact.name,
           JSON.stringify(request.contact), JSON.stringify(request.delivery), subtotalKopeks,
-          request.customerNote],
+          request.customerNote, request.legalPolicyVersion],
       );
       for (const line of lines) {
         await client.query(
@@ -285,10 +300,16 @@ export class CheckoutService {
         name: string;
         sku: string;
       }>(
-        `SELECT price.amount_kopeks::text,product.name,product.sku::text
+        `${VISIBLE_CATEGORIES_CTE}
+         SELECT price.amount_kopeks::text,product.name,product.sku::text
          FROM app.products AS product
          JOIN app.product_prices AS price ON price.product_id=product.id AND price.valid_to IS NULL
+           AND price.currency='RUB'
+         LEFT JOIN app.brands AS brand ON brand.id=product.brand_id
+         LEFT JOIN app.categories AS category ON category.id=product.category_id
          WHERE product.id=$1 AND product.is_active AND product.deleted_at IS NULL
+           AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+           AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
          FOR SHARE OF product,price`,
         [item.productId],
       )).rows[0];
@@ -297,32 +318,47 @@ export class CheckoutService {
       if (!Number.isSafeInteger(amountKopeks) || amountKopeks < 0) {
         throw new ConflictException(`Цена товара ${item.productId} повреждена`);
       }
-      const inventory = (await client.query<{ warehouse_id: string }>(
-        `SELECT balance.warehouse_id
+      const inventory = (await client.query<{ available_quantity: number; warehouse_id: string }>(
+        `SELECT balance.warehouse_id,
+                balance.quantity_on_hand-balance.quantity_reserved AS available_quantity
          FROM app.inventory_balances AS balance
          JOIN app.warehouses AS warehouse ON warehouse.id=balance.warehouse_id
          WHERE balance.product_id=$1
-           AND balance.quantity_on_hand-balance.quantity_reserved >= $2
+           AND balance.quantity_on_hand-balance.quantity_reserved > 0
            AND warehouse.is_active AND warehouse.deleted_at IS NULL
          ORDER BY balance.quantity_on_hand-balance.quantity_reserved DESC,balance.warehouse_id
          FOR UPDATE OF balance
-         LIMIT 1`,
-        [item.productId, item.quantity],
-      )).rows[0];
-      if (!inventory) throw new ConflictException(`Недостаточно остатка товара ${item.productId}`);
+        `,
+        [item.productId],
+      )).rows;
+      let remaining = item.quantity;
+      const allocations: ReservedLine["allocations"] = [];
+      for (const row of inventory) {
+        if (remaining === 0) break;
+        const quantity = Math.min(remaining, row.available_quantity);
+        if (quantity > 0) allocations.push({ quantity, warehouseId: row.warehouse_id });
+        remaining -= quantity;
+      }
+      if (remaining > 0) throw new ConflictException(`Недостаточно остатка товара ${item.productId}`);
       lines.push({
+        allocations,
         amountKopeks,
         name: product.name,
         productId: item.productId,
         quantity: item.quantity,
         sku: product.sku,
-        warehouseId: inventory.warehouse_id,
       });
     }
     return lines;
   }
 
-  private async readCheckout(client: PoolClient, orderId: string, idempotentReplay: boolean) {
+  private async readCheckout(
+    client: PoolClient,
+    orderId: string,
+    idempotentReplay: boolean,
+    confirmationToken?: string,
+    guestAccessToken?: string,
+  ) {
     const row = (await client.query<{
       amount_kopeks: string;
       expires_at: Date;
@@ -351,7 +387,7 @@ export class CheckoutService {
     )).rows[0];
     if (!row) throw new ConflictException("Идемпотентный заказ не найден");
     return {
-      guestAccessToken: null,
+      guestAccessToken: guestAccessToken ?? null,
       idempotentReplay,
       order: {
         id: row.order_id,
@@ -362,7 +398,7 @@ export class CheckoutService {
       },
       payment: {
         amountKopeks: Number(row.amount_kopeks),
-        confirmationToken: null,
+        confirmationToken: confirmationToken ?? null,
         confirmationUrl: `/api/v1/payments/sandbox/${row.external_payment_id}/complete`,
         externalPaymentId: row.external_payment_id,
         id: row.payment_id,

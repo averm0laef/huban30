@@ -15,6 +15,7 @@ import { HealthModule } from "./health/health.module.js";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module.js";
 import { SecurityModule } from "./security/security.module.js";
 import { StaffModule } from "./staff/staff.module.js";
+import { StorefrontModule } from "./storefront/storefront.module.js";
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { StaffModule } from "./staff/staff.module.js";
     ChatModule,
     CheckoutModule,
     StaffModule,
+    StorefrontModule,
     HealthModule,
   ],
   providers: [

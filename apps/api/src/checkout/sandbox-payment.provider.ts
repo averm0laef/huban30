@@ -21,9 +21,13 @@ export class SandboxPaymentProvider implements PaymentProvider {
     this.webhookSecret = config.get<string>("SANDBOX_PAYMENT_WEBHOOK_SECRET");
   }
 
+  confirmationToken(idempotencyKey: string): string {
+    return this.crypto.deriveOpaqueToken("sandbox-payment-confirmation", idempotencyKey);
+  }
+
   preparePayment(input: CreatePaymentInput): PreparedPayment {
     const externalPaymentId = `sandbox-payment-${randomUUID()}`;
-    const confirmationToken = this.crypto.randomToken(32);
+    const confirmationToken = this.confirmationToken(input.idempotencyKey);
     return {
       confirmationToken,
       confirmationUrl: `/api/v1/payments/sandbox/${externalPaymentId}/complete`,

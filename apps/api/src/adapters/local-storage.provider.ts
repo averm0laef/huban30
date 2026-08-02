@@ -7,7 +7,7 @@ import { ConfigService } from "@nestjs/config";
 
 import type { StorageProvider, StoredObject } from "./provider-contracts.js";
 
-const SAFE_STORAGE_KEY = /^chat\/[0-9]{4}-[0-9]{2}\/[0-9a-f-]{36}\.[a-z0-9]+$/u;
+const SAFE_STORAGE_KEY = /^(?:catalog|chat|content)\/[0-9]{4}-[0-9]{2}\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/u;
 
 @Injectable()
 export class LocalStorageProvider implements StorageProvider {

@@ -9,6 +9,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 
 import {
+  type ContactRequestStatus,
   ROLE_PERMISSIONS,
   StaffAuditQuerySchema,
   StaffCatalogQuerySchema,
@@ -18,6 +19,8 @@ import {
   StaffInvoicesQuerySchema,
   StaffInvoiceUpdateSchema,
   StaffOrdersQuerySchema,
+  StaffRequestsQuerySchema,
+  StaffRequestUpdateSchema,
   StaffTeamQuerySchema,
   type ChatThreadStatus,
   type OrderStatus,
@@ -48,6 +51,13 @@ const CHAT_TRANSITIONS: Readonly<Record<ChatThreadStatus, readonly ChatThreadSta
   waiting_staff: ["open", "waiting_customer", "closed"],
 };
 
+const REQUEST_TRANSITIONS: Readonly<Record<ContactRequestStatus, readonly ContactRequestStatus[]>> = {
+  closed: ["new"],
+  in_progress: ["new", "resolved", "closed"],
+  new: ["in_progress", "closed"],
+  resolved: ["in_progress", "closed"],
+};
+
 function searchPattern(value: string | undefined): string | null {
   if (!value) return null;
   return `%${value.replace(/[\\%_]/gu, (character) => `\\${character}`)}%`;
@@ -64,6 +74,23 @@ function paged<T>(items: T[], total: string | undefined, query: PageQuery) {
 
 function iso(value: Date | null): string | null {
   return value?.toISOString() ?? null;
+}
+
+function maskEmail(value: string | null): string | null {
+  if (!value) return null;
+  const separator = value.lastIndexOf("@");
+  if (separator < 1) return "***";
+  return `${value[0]}***${value.slice(separator)}`;
+}
+
+function maskPhone(value: string | null): string | null {
+  if (!value) return null;
+  return value.length <= 4 ? "***" : `${value.slice(0, 2)}***${value.slice(-4)}`;
+}
+
+function maskName(value: string): string {
+  const [first = ""] = Array.from(value);
+  return first ? `${first}***` : "***";
 }
 
 export function canReopenChat(role: Role): boolean {
@@ -85,6 +112,10 @@ export function canIssueInvoiceForOrder(status: OrderStatus | null): boolean {
   return status === null || !["pending_payment", "cancelled", "refunded"].includes(status);
 }
 
+export function canReopenRequest(role: Role): boolean {
+  return role === "director" || role === "admin";
+}
+
 @Injectable()
 export class StaffService {
   constructor(
@@ -103,6 +134,7 @@ export class StaffService {
       orders_ready: string;
       orders_waiting_payment: string;
       out_of_stock: string;
+      requests_new: string;
       cashflow_today_kopeks: string | null;
     }>(
       `SELECT
@@ -114,6 +146,8 @@ export class StaffService {
           WHERE deleted_at IS NULL AND status='waiting_staff') AS chats_waiting_staff,
         (SELECT count(*)::text FROM app.chat_threads
           WHERE deleted_at IS NULL AND status<>'closed' AND assigned_staff_id IS NULL) AS chats_unassigned,
+        (SELECT count(*)::text FROM app.contact_requests
+          WHERE status IN ('new','in_progress')) AS requests_new,
         (SELECT count(*)::text FROM (
           SELECT product.id
           FROM app.products AS product
@@ -161,10 +195,190 @@ export class StaffService {
         ready: Number(row?.orders_ready ?? 0),
         waitingPayment: Number(row?.orders_waiting_payment ?? 0),
       },
+      requests: {
+        open: Number(row?.requests_new ?? 0),
+      },
       cashflowTodayKopeks: row?.cashflow_today_kopeks === null
         ? null
         : Number(row?.cashflow_today_kopeks ?? 0),
     };
+  }
+
+  async requests(rawQuery: unknown, auth: AuthContext) {
+    const query = this.parse(StaffRequestsQuerySchema, rawQuery, "Некорректные параметры обращений");
+    const sort = {
+      createdAt: "contact_request.created_at",
+      source: "contact_request.source",
+      status: "contact_request.status",
+    }[query.sort];
+    const assignedStaffId = query.assigned === "mine" ? auth.userId : null;
+    const onlyUnassigned = query.assigned === "unassigned";
+    const pattern = searchPattern(query.q);
+    const filters = `($1::text IS NULL OR contact_request.status=$1)
+      AND ($2::text IS NULL OR contact_request.source=$2)
+      AND ($3::uuid IS NULL OR contact_request.assigned_staff_id=$3)
+      AND (NOT $4::boolean OR contact_request.assigned_staff_id IS NULL)
+      AND ($5::text IS NULL OR contact_request.customer_name ILIKE $5 ESCAPE '\\'
+        OR contact_request.customer_email::text ILIKE $5 ESCAPE '\\'
+        OR contact_request.customer_phone ILIKE $5 ESCAPE '\\'
+        OR contact_request.message ILIKE $5 ESCAPE '\\')`;
+    const [rows, count] = await Promise.all([
+      this.database.query<{
+        assigned_name: string | null;
+        assigned_staff_id: string | null;
+        created_at: Date;
+        customer_email: string | null;
+        customer_name: string;
+        customer_phone: string | null;
+        id: string;
+        message: string;
+        resolved_at: Date | null;
+        source: "contacts" | "expert_help" | "vin_request";
+        status: ContactRequestStatus;
+        updated_at: Date;
+        version: number;
+      }>(
+        `SELECT contact_request.id,contact_request.source,contact_request.status,
+                contact_request.customer_name,contact_request.customer_email::text,
+                contact_request.customer_phone,contact_request.message,
+                contact_request.assigned_staff_id,assigned.display_name AS assigned_name,
+                contact_request.version,contact_request.resolved_at,
+                contact_request.created_at,contact_request.updated_at
+         FROM app.contact_requests AS contact_request
+         LEFT JOIN app.users AS assigned ON assigned.id=contact_request.assigned_staff_id
+         WHERE ${filters}
+         ORDER BY ${sort} ${query.direction === "asc" ? "ASC" : "DESC"},contact_request.id
+         LIMIT $6 OFFSET $7`,
+        [query.status ?? null, query.source ?? null, assignedStaffId, onlyUnassigned, pattern,
+          query.limit, query.offset],
+      ),
+      this.database.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM app.contact_requests AS contact_request
+         WHERE ${filters}`,
+        [query.status ?? null, query.source ?? null, assignedStaffId, onlyUnassigned, pattern],
+      ),
+    ]);
+    return paged(rows.rows.map((row) => this.requestListView(row)), count.rows[0]?.count, query);
+  }
+
+  async request(requestId: string, auth: AuthContext, metadata: RequestMetadata) {
+    this.uuid(requestId, "Некорректный идентификатор обращения");
+    const row = (await this.database.query<{
+      assigned_name: string | null;
+      assigned_staff_id: string | null;
+      created_at: Date;
+      customer_email: string | null;
+      customer_name: string;
+      customer_phone: string | null;
+      id: string;
+      message: string;
+      resolved_at: Date | null;
+      source: "contacts" | "expert_help" | "vin_request";
+      status: ContactRequestStatus;
+      updated_at: Date;
+      version: number;
+    }>(
+      `SELECT contact_request.id,contact_request.source,contact_request.status,
+              contact_request.customer_name,contact_request.customer_email::text,
+              contact_request.customer_phone,contact_request.message,
+              contact_request.assigned_staff_id,assigned.display_name AS assigned_name,
+              contact_request.version,contact_request.resolved_at,
+              contact_request.created_at,contact_request.updated_at
+       FROM app.contact_requests AS contact_request
+       LEFT JOIN app.users AS assigned ON assigned.id=contact_request.assigned_staff_id
+       WHERE contact_request.id=$1`,
+      [requestId],
+    )).rows[0];
+    if (!row) throw new NotFoundException("Обращение не найдено");
+    await this.auditLog.record({
+      action: "contact.request.read",
+      actorRole: auth.role,
+      actorUserId: auth.userId,
+      entityId: requestId,
+      entityType: "contact_request",
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
+    });
+    return this.requestView(row);
+  }
+
+  async updateRequest(
+    requestId: string,
+    rawInput: unknown,
+    auth: AuthContext,
+    metadata: RequestMetadata,
+  ) {
+    this.uuid(requestId, "Некорректный идентификатор обращения");
+    const input = this.parse(StaffRequestUpdateSchema, rawInput, "Некорректное изменение обращения");
+    return this.database.transaction(async (client) => {
+      const current = (await client.query<{
+        assigned_staff_id: string | null;
+        status: ContactRequestStatus;
+        version: number;
+      }>(
+        `SELECT assigned_staff_id,status,version FROM app.contact_requests WHERE id=$1 FOR UPDATE`,
+        [requestId],
+      )).rows[0];
+      if (!current) throw new NotFoundException("Обращение не найдено");
+      if (current.version !== input.version) {
+        throw new ConflictException({ error: "request_version_conflict", currentVersion: current.version });
+      }
+      const targetAssignment = input.assignedStaffId === undefined
+        ? current.assigned_staff_id : input.assignedStaffId;
+      const targetStatus = input.status ?? current.status;
+      this.assertRequestAssignment(auth, current.assigned_staff_id, input.assignedStaffId);
+      this.assertRequestTransition(auth.role, current.status, targetStatus);
+      if (
+        auth.role === "manager"
+        && targetStatus !== current.status
+        && targetAssignment !== auth.userId
+      ) {
+        throw new ForbiddenException("Менеджер может менять состояние только назначенного на себя обращения");
+      }
+      if (targetAssignment) await this.assertActiveStaff(targetAssignment, client);
+      if (targetAssignment === current.assigned_staff_id && targetStatus === current.status) {
+        throw new ConflictException("В обращении нет изменений для сохранения");
+      }
+      const updated = (await client.query<{
+        assigned_staff_id: string | null;
+        resolved_at: Date | null;
+        status: ContactRequestStatus;
+        updated_at: Date;
+        version: number;
+      }>(
+        `UPDATE app.contact_requests SET assigned_staff_id=$2,status=$3,
+           resolved_at=CASE
+             WHEN $3='resolved' THEN COALESCE(resolved_at,clock_timestamp())
+             WHEN $3 IN ('new','in_progress') THEN NULL
+             ELSE resolved_at
+           END,
+           version=version+1
+         WHERE id=$1 AND version=$4
+         RETURNING assigned_staff_id,status,resolved_at,updated_at,version`,
+        [requestId, targetAssignment, targetStatus, input.version],
+      )).rows[0];
+      if (!updated) throw new ConflictException({ error: "request_version_conflict" });
+      await this.auditLog.record({
+        action: "contact.request.updated",
+        actorRole: auth.role,
+        actorUserId: auth.userId,
+        afterState: updated,
+        beforeState: current,
+        entityId: requestId,
+        entityType: "contact_request",
+        ipAddress: metadata.ipAddress,
+        metadata: { reason: input.reason },
+        userAgent: metadata.userAgent,
+      }, client);
+      return {
+        assignedStaffId: updated.assigned_staff_id,
+        id: requestId,
+        resolvedAt: iso(updated.resolved_at),
+        status: updated.status,
+        updatedAt: updated.updated_at.toISOString(),
+        version: updated.version,
+      };
+    });
   }
 
   async orders(rawQuery: unknown) {
@@ -787,6 +1001,80 @@ export class StaffService {
     if (requested === undefined || auth.role !== "manager") return;
     if (canManagerChangeAssignment(currentAssignment, requested, auth.userId)) return;
     throw new ForbiddenException("Менеджер может назначить чат только на себя или снять своё назначение");
+  }
+
+  private assertRequestAssignment(
+    auth: AuthContext,
+    currentAssignment: string | null,
+    requested: string | null | undefined,
+  ): void {
+    if (requested === undefined || auth.role !== "manager") return;
+    if (canManagerChangeAssignment(currentAssignment, requested, auth.userId)) return;
+    throw new ForbiddenException("Менеджер может назначить обращение только на себя или снять своё назначение");
+  }
+
+  private assertRequestTransition(
+    role: Role,
+    current: ContactRequestStatus,
+    requested: ContactRequestStatus,
+  ): void {
+    if (current === requested) return;
+    if ((current === "resolved" || current === "closed") && !canReopenRequest(role)) {
+      throw new ForbiddenException("Вернуть завершённое обращение в работу может директор или администратор");
+    }
+    if (!REQUEST_TRANSITIONS[current].includes(requested)) {
+      throw new ConflictException("Такое изменение состояния обращения запрещено");
+    }
+  }
+
+  private requestView(row: {
+    assigned_name: string | null;
+    assigned_staff_id: string | null;
+    created_at: Date;
+    customer_email: string | null;
+    customer_name: string;
+    customer_phone: string | null;
+    id: string;
+    message: string;
+    resolved_at: Date | null;
+    source: "contacts" | "expert_help" | "vin_request";
+    status: ContactRequestStatus;
+    updated_at: Date;
+    version: number;
+  }) {
+    return {
+      assignedName: row.assigned_name,
+      assignedStaffId: row.assigned_staff_id,
+      createdAt: row.created_at.toISOString(),
+      customerEmail: row.customer_email,
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone,
+      id: row.id,
+      message: row.message,
+      resolvedAt: iso(row.resolved_at),
+      source: row.source,
+      status: row.status,
+      updatedAt: row.updated_at.toISOString(),
+      version: row.version,
+    };
+  }
+
+  private requestListView(row: Parameters<StaffService["requestView"]>[0]) {
+    return {
+      assignedName: row.assigned_name,
+      assignedStaffId: row.assigned_staff_id,
+      createdAt: row.created_at.toISOString(),
+      customerEmailMasked: maskEmail(row.customer_email),
+      customerNameMasked: maskName(row.customer_name),
+      customerPhoneMasked: maskPhone(row.customer_phone),
+      id: row.id,
+      messageLength: Array.from(row.message).length,
+      resolvedAt: iso(row.resolved_at),
+      source: row.source,
+      status: row.status,
+      updatedAt: row.updated_at.toISOString(),
+      version: row.version,
+    };
   }
 
   private assertChatTransition(

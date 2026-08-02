@@ -88,7 +88,7 @@ export class SessionService {
     return { csrfToken, expiresAt, sessionId, token };
   }
 
-  async resolve(token: string): Promise<AuthContext | null> {
+  async resolve(token: string, touch = true): Promise<AuthContext | null> {
     const result = await this.database.query<SessionRow>(
       `
         SELECT
@@ -122,19 +122,17 @@ export class SessionService {
     if (row.role && row.staff_status !== "active") return null;
 
     const role: Role = row.role ? RoleSchema.parse(row.role) : "customer";
-    await this.database.query(
-      `
-        UPDATE app.auth_sessions
-        SET
-          last_seen_at = clock_timestamp(),
-          idle_expires_at = LEAST(
-            expires_at,
-            clock_timestamp() + make_interval(mins => $2)
-          )
-        WHERE id = $1
-      `,
-      [row.session_id, this.idleMinutes],
-    );
+    if (touch) {
+      await this.database.query(
+        `UPDATE app.auth_sessions
+         SET last_seen_at=clock_timestamp(),
+             idle_expires_at=LEAST(
+               expires_at,clock_timestamp()+make_interval(mins => $2)
+             )
+         WHERE id=$1`,
+        [row.session_id, this.idleMinutes],
+      );
+    }
 
     return {
       csrfTokenHash: row.csrf_token_hash,

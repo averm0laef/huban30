@@ -45,6 +45,10 @@ export class CryptoService {
     return actual.length === expected.length && timingSafeEqual(actual, expected);
   }
 
+  deriveOpaqueToken(purpose: string, value: string): string {
+    return this.opaqueHash(`derived-token:${purpose}`, value).toString("base64url");
+  }
+
   encrypt(value: string, purpose: string): Buffer {
     const nonce = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", this.encryptionKey, nonce);

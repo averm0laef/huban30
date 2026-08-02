@@ -11,6 +11,25 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: workspaceRoot,
   poweredByHeader: false,
   reactStrictMode: true,
+  async headers() {
+    return [
+      {
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+        source: "/auth",
+      },
+      {
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+        source: "/:privatePath(profile|checkout|chat|admin)/:path*",
+      },
+    ];
+  },
   async rewrites() {
     return [
       { destination: `${internalApiUrl}/api/v1/:path*`, source: "/api/v1/:path*" },

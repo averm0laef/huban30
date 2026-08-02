@@ -55,6 +55,23 @@ const COMMON_PASSWORDS = new Set([
   "пароль123456",
 ]);
 
+export function assertStrongPassword(password: string, email?: string): void {
+  const lower = password.toLocaleLowerCase("ru-RU");
+  const localPart = email?.split("@")[0]?.toLocaleLowerCase("ru-RU");
+  if (
+    password.length < 12
+    || password.length > 128
+    || COMMON_PASSWORDS.has(lower)
+    || (localPart && localPart.length >= 4 && lower.includes(localPart))
+  ) {
+    throw new BadRequestException("Используйте уникальную парольную фразу длиной от 12 символов");
+  }
+}
+
+export function canRefreshPendingRegistration(status: string | undefined): boolean {
+  return status === undefined || status === "pending_email";
+}
+
 @Injectable()
 export class AuthService {
   private readonly debugTokens: boolean;
@@ -72,16 +89,21 @@ export class AuthService {
   }
 
   async register(input: RegisterDto, metadata: RequestMetadata): Promise<Record<string, unknown>> {
-    this.assertPassword(input.password, input.email);
+    assertStrongPassword(input.password, input.email);
     const passwordHash = await this.passwords.hash(input.password);
     const rawToken = this.crypto.randomToken();
     const debugToken = await this.database.transaction(async (client) => {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('an30-account-email:' || $1::text, 0))",
+        [input.email],
+      );
       const existing = await client.query<{ id: string; status: string }>(
         "SELECT id, status::text FROM app.users WHERE email = $1 FOR UPDATE",
         [input.email],
       );
-      let userId = existing.rows[0]?.id;
-      if (existing.rows[0]?.status === "active") return null;
+      const existingAccount = existing.rows[0];
+      let userId = existingAccount?.id;
+      if (!canRefreshPendingRegistration(existingAccount?.status)) return null;
 
       if (userId) {
         await client.query(
@@ -157,14 +179,18 @@ export class AuthService {
         "UPDATE app.email_verification_tokens SET used_at = clock_timestamp() WHERE id = $1",
         [token.id],
       );
-      await client.query(
+      const activated = await client.query(
         `
           UPDATE app.users
           SET status = 'active', email_verified_at = COALESCE(email_verified_at, clock_timestamp())
-          WHERE id = $1 AND deleted_at IS NULL
+          WHERE id = $1 AND status='pending_email' AND deleted_at IS NULL
+          RETURNING id
         `,
         [token.user_id],
       );
+      if (activated.rowCount === 0) {
+        throw new BadRequestException("Ссылка подтверждения недействительна или истекла");
+      }
       await this.audit.record({
         action: "auth.email.verified",
         entityId: token.user_id,
@@ -208,8 +234,45 @@ export class AuthService {
       throw new UnauthorizedException("Неверный email или пароль");
     }
 
-    const role: Role = account.role ? RoleSchema.parse(account.role) : "customer";
-    return this.database.transaction(async (client) => {
+    const authenticated = await this.database.transaction(async (client) => {
+      const refreshedAccount = (await client.query<LoginAccountRow>(
+        `SELECT account.id,account.email::text,account.password_hash,account.status::text,
+                account.failed_login_count,account.locked_until,NULL::text AS role,
+                NULL::text AS staff_status,NULL::timestamptz AS totp_confirmed_at
+         FROM app.users AS account
+         WHERE account.id=$1 AND account.deleted_at IS NULL
+         FOR UPDATE OF account`,
+        [account.id],
+      )).rows[0];
+      if (refreshedAccount) {
+        const staff = (await client.query<{
+          role: string;
+          staff_status: string;
+          totp_confirmed_at: Date | null;
+        }>(
+          `SELECT role::text,status::text AS staff_status,totp_confirmed_at
+           FROM app.staff_members WHERE user_id=$1 FOR SHARE`,
+          [account.id],
+        )).rows[0];
+        if (staff) Object.assign(refreshedAccount, staff);
+      }
+      const refreshedLocked = refreshedAccount?.locked_until
+        ? refreshedAccount.locked_until.getTime() > Date.now()
+        : false;
+      const refreshedEligible = refreshedAccount?.status === "active"
+        && (!refreshedAccount.role || refreshedAccount.staff_status === "active");
+      if (
+        !refreshedAccount
+        || refreshedAccount.email !== input.email
+        || refreshedAccount.password_hash !== account.password_hash
+        || refreshedLocked
+        || !refreshedEligible
+      ) {
+        await this.recordFailedLoginWithExecutor(client, refreshedAccount, input.email, metadata);
+        return null;
+      }
+
+      const role: Role = refreshedAccount.role ? RoleSchema.parse(refreshedAccount.role) : "customer";
       await client.query(
         `
           UPDATE app.users
@@ -217,7 +280,7 @@ export class AuthService {
               last_login_at = clock_timestamp()
           WHERE id = $1
         `,
-        [account.id],
+        [refreshedAccount.id],
       );
       await client.query(
         `
@@ -227,7 +290,7 @@ export class AuthService {
         [input.email, metadata.ipAddress],
       );
       const session = await this.sessions.create(
-        account.id,
+        refreshedAccount.id,
         metadata.ipAddress,
         metadata.userAgent,
         false,
@@ -236,8 +299,8 @@ export class AuthService {
       await this.audit.record({
         action: "auth.login.succeeded",
         actorRole: role,
-        actorUserId: account.id,
-        entityId: account.id,
+        actorUserId: refreshedAccount.id,
+        entityId: refreshedAccount.id,
         entityType: "user",
         ipAddress: metadata.ipAddress,
         userAgent: metadata.userAgent,
@@ -247,12 +310,14 @@ export class AuthService {
           csrfToken: session.csrfToken,
           mfaRequired: role !== "customer",
           role,
-          totpSetupRequired: role !== "customer" && account.totp_confirmed_at === null,
-          userId: account.id,
+          totpSetupRequired: role !== "customer" && refreshedAccount.totp_confirmed_at === null,
+          userId: refreshedAccount.id,
         },
         session,
       };
     });
+    if (!authenticated) throw new UnauthorizedException("Неверный email или пароль");
+    return authenticated;
   }
 
   async forgotPassword(email: string, metadata: RequestMetadata): Promise<Record<string, unknown>> {
@@ -295,20 +360,36 @@ export class AuthService {
   }
 
   async resetPassword(input: ResetPasswordDto, metadata: RequestMetadata): Promise<Record<string, unknown>> {
-    this.assertPassword(input.password);
+    const tokenHash = this.crypto.opaqueHash("password-reset", input.token);
+    const candidate = (await this.database.query<{ email: string }>(
+      `SELECT account.email::text
+       FROM app.password_reset_tokens AS reset
+       JOIN app.users AS account ON account.id=reset.user_id
+       WHERE reset.token_hash=$1 AND reset.used_at IS NULL
+         AND reset.expires_at>clock_timestamp()
+         AND account.status='active' AND account.deleted_at IS NULL
+       LIMIT 1`,
+      [tokenHash],
+    )).rows[0];
+    if (!candidate) throw new BadRequestException("Ссылка восстановления недействительна или истекла");
+    assertStrongPassword(input.password, candidate.email);
     const passwordHash = await this.passwords.hash(input.password);
     await this.database.transaction(async (client) => {
-      const selected = await client.query<{ id: string; user_id: string }>(
+      const selected = await client.query<{ email: string; id: string; user_id: string }>(
         `
-          SELECT id, user_id
-          FROM app.password_reset_tokens
-          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
-          FOR UPDATE
+          SELECT reset.id, reset.user_id, account.email::text
+          FROM app.password_reset_tokens AS reset
+          JOIN app.users AS account ON account.id=reset.user_id
+          WHERE reset.token_hash = $1 AND reset.used_at IS NULL
+            AND reset.expires_at > clock_timestamp()
+            AND account.status='active' AND account.deleted_at IS NULL
+          FOR UPDATE OF reset,account
         `,
-        [this.crypto.opaqueHash("password-reset", input.token)],
+        [tokenHash],
       );
       const token = selected.rows[0];
       if (!token) throw new BadRequestException("Ссылка восстановления недействительна или истекла");
+      assertStrongPassword(input.password, token.email);
       await client.query(
         "UPDATE app.password_reset_tokens SET used_at = clock_timestamp() WHERE id = $1",
         [token.id],
@@ -374,6 +455,10 @@ export class AuthService {
   ): Promise<Record<string, unknown>> {
     const rawToken = this.crypto.randomToken();
     const invitationId = await this.database.transaction(async (client) => {
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('an30-account-email:' || $1::text, 0))",
+        [input.email],
+      );
       const existingUser = await client.query("SELECT 1 FROM app.users WHERE email = $1", [input.email]);
       if (existingUser.rowCount) throw new ConflictException("Пользователь с таким email уже существует");
       await client.query(
@@ -420,7 +505,7 @@ export class AuthService {
     input: AcceptStaffInvitationDto,
     metadata: RequestMetadata,
   ): Promise<Record<string, unknown>> {
-    this.assertPassword(input.password);
+    assertStrongPassword(input.password);
     const passwordHash = await this.passwords.hash(input.password);
     const userId = await this.database.transaction(async (client) => {
       const selected = await client.query<{
@@ -440,6 +525,11 @@ export class AuthService {
       );
       const invitation = selected.rows[0];
       if (!invitation) throw new BadRequestException("Приглашение недействительно или истекло");
+      assertStrongPassword(input.password, invitation.email);
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('an30-account-email:' || $1::text, 0))",
+        [invitation.email],
+      );
       const existing = await client.query("SELECT 1 FROM app.users WHERE email = $1", [invitation.email]);
       if (existing.rowCount) throw new ConflictException("Пользователь с таким email уже существует");
       const account = await client.query<{ id: string }>(
@@ -648,19 +738,6 @@ export class AuthService {
     });
   }
 
-  private assertPassword(password: string, email?: string): void {
-    const lower = password.toLocaleLowerCase("ru-RU");
-    const localPart = email?.split("@")[0]?.toLocaleLowerCase("ru-RU");
-    if (
-      password.length < 12
-      || password.length > 128
-      || COMMON_PASSWORDS.has(lower)
-      || (localPart && localPart.length >= 4 && lower.includes(localPart))
-    ) {
-      throw new BadRequestException("Используйте уникальную парольную фразу длиной от 12 символов");
-    }
-  }
-
   private normalizeDisplayName(value: string): string {
     const normalized = value.normalize("NFKC").trim().replace(/\s+/gu, " ");
     if (normalized.length < 2 || normalized.length > 120) {
@@ -675,30 +752,31 @@ export class AuthService {
     metadata: RequestMetadata,
   ): Promise<void> {
     await this.database.transaction(async (client) => {
-      if (account) {
-        await client.query(
-          `
-            UPDATE app.users
-            SET
-              failed_login_count = failed_login_count + 1,
-              last_failed_login_at = clock_timestamp(),
-              locked_until = CASE
-                WHEN failed_login_count + 1 >= 5 THEN clock_timestamp() + interval '15 minutes'
-                ELSE locked_until
-              END
-            WHERE id = $1
-          `,
-          [account.id],
-        );
-      }
-      await client.query(
-        `
-          INSERT INTO app.auth_attempts (email, ip_address, purpose, succeeded, failure_code)
-          VALUES ($1, $2, 'login', false, 'invalid_credentials')
-        `,
-        [email, metadata.ipAddress],
-      );
+      await this.recordFailedLoginWithExecutor(client, account, email, metadata);
     });
+  }
+
+  private async recordFailedLoginWithExecutor(
+    executor: DatabaseExecutor,
+    account: LoginAccountRow | undefined,
+    email: string,
+    metadata: RequestMetadata,
+  ): Promise<void> {
+    if (account) {
+      await executor.query(
+        `UPDATE app.users
+         SET failed_login_count=failed_login_count+1,last_failed_login_at=clock_timestamp(),
+             locked_until=CASE WHEN failed_login_count+1>=5
+               THEN clock_timestamp()+interval '15 minutes' ELSE locked_until END
+         WHERE id=$1`,
+        [account.id],
+      );
+    }
+    await executor.query(
+      `INSERT INTO app.auth_attempts (email,ip_address,purpose,succeeded,failure_code)
+       VALUES ($1,$2,'login',false,'invalid_credentials')`,
+      [email, metadata.ipAddress],
+    );
   }
 
   private async enqueueSecretEmail(

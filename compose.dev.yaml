@@ -34,12 +34,18 @@ services:
       DATA_ENCRYPTION_KEY: an30-local-data-encryption-key-public-only
       DEPLOYMENT_ENVIRONMENT: development
       ENABLE_PUBLIC_CHECKOUT: "true"
+      LEGAL_DOCUMENTS_APPROVED: "true"
       PAYMENTS_PROVIDER: sandbox
       POSTGRES_PASSWORD: an30-app-local-development-only
       REDIS_PASSWORD: an30-local-development-only
       SANDBOX_PAYMENT_WEBHOOK_SECRET: an30-local-sandbox-webhook-secret-public-only
       SESSION_SECRET: an30-local-session-hmac-secret-public-only
     secrets: !reset []
+
+  web:
+    environment:
+      ENABLE_PUBLIC_CHECKOUT: "true"
+      LEGAL_DOCUMENTS_APPROVED: "true"
 
   worker:
     environment:

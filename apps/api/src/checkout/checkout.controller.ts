@@ -13,6 +13,7 @@ import {
 import type { FastifyRequest } from "fastify";
 
 import { Public, RequirePermissions, SkipCsrf } from "../auth/auth.decorators.js";
+import { RateLimitService } from "../security/rate-limit.service.js";
 import { CheckoutService } from "./checkout.service.js";
 import { OrderService } from "./order.service.js";
 import { PaymentService } from "./payment.service.js";
@@ -48,8 +49,8 @@ export class OrdersController {
   constructor(private readonly orders: OrderService) {}
 
   @Get()
-  list(@Query("limit") limit: string | undefined, @Req() request: FastifyRequest) {
-    return this.orders.list(request.authContext!, limit);
+  list(@Query() query: unknown, @Req() request: FastifyRequest) {
+    return this.orders.list(request.authContext!, query);
   }
 
   @Get(":orderId")
@@ -81,13 +82,21 @@ export class OrdersController {
 @Public()
 @Controller("orders/guest")
 export class GuestOrdersController {
-  constructor(private readonly orders: OrderService) {}
+  constructor(
+    private readonly orders: OrderService,
+    private readonly rateLimit: RateLimitService,
+  ) {}
 
   @Get(":orderId")
-  read(
+  async read(
     @Param("orderId") orderId: string,
     @Headers("x-guest-order-token") token: string | undefined,
+    @Req() request: FastifyRequest,
   ) {
+    await Promise.all([
+      this.rateLimit.consume("guest-order-ip", request.ip, 30, 60),
+      this.rateLimit.consume("guest-order-token", token ?? "missing", 120, 60),
+    ]);
     return this.orders.readForGuest(orderId, token);
   }
 }

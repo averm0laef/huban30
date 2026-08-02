@@ -16,6 +16,7 @@ interface ClientState {
   auth: Awaited<ReturnType<SessionService["resolve"]>>;
   identity?: ChatIdentity;
   queue: Promise<void>;
+  sessionToken?: string;
   socket: WebSocket;
   subscribeTimer: NodeJS.Timeout;
   threadId?: string;
@@ -55,6 +56,13 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
         }
         client.alive = false;
         client.socket.ping();
+        if (client.sessionToken) {
+          void this.refreshSession(client, false).catch(() => {
+            if (client.socket.readyState === client.socket.OPEN) {
+              client.socket.close(1008, "session_expired");
+            }
+          });
+        }
       }
     }, 30_000);
     this.heartbeat.unref();
@@ -75,6 +83,7 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
       alive: true,
       auth,
       queue: Promise.resolve(),
+      sessionToken,
       socket,
       subscribeTimer: setTimeout(() => socket.close(1008, "subscribe_timeout"), 10_000),
     };
@@ -106,6 +115,7 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
     const parsed = ChatClientEventSchema.safeParse(parsedJson);
     if (!parsed.success) throw new HttpException("Некорректное событие чата", 400);
     const event = parsed.data;
+    await this.refreshSession(state, event.type !== "ping");
     const identityKey = state.auth?.userId ?? ipAddress;
     await this.rateLimit.consume("chat-ws", identityKey, 60, 60);
 
@@ -142,6 +152,18 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     await this.chat.markRead(state.threadId, event.messageId, state.identity);
+  }
+
+  private async refreshSession(state: ClientState, touch: boolean): Promise<void> {
+    if (!state.sessionToken) return;
+    const auth = await this.sessions.resolve(state.sessionToken, touch);
+    if (!auth || (auth.role !== "customer" && !auth.mfaVerified)) {
+      throw new HttpException("Сессия недействительна или истекла", 401);
+    }
+    state.auth = auth;
+    if (state.identity?.kind === "authenticated") {
+      state.identity = { auth, kind: "authenticated" };
+    }
   }
 
   private rawText(raw: RawData): string {

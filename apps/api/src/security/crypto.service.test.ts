@@ -28,4 +28,15 @@ describe("CryptoService", () => {
     expect(sessionHash.equals(csrfHash)).toBe(false);
     expect(service.opaqueHashMatches("session", "same-token", sessionHash)).toBe(true);
   });
+
+  it("derives stable purpose-separated bearer tokens for idempotent guest flows", () => {
+    const service = createService();
+    const source = "checkout:guest\0request-id";
+    const first = service.deriveOpaqueToken("guest-order-access", source);
+
+    expect(first).toHaveLength(43);
+    expect(service.deriveOpaqueToken("guest-order-access", source)).toBe(first);
+    expect(service.deriveOpaqueToken("chat-guest-access", source)).not.toBe(first);
+    expect(first).not.toContain("request-id");
+  });
 });

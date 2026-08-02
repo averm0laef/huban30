@@ -11,6 +11,7 @@ const config = {
   get: () => webhookSecret,
 } as unknown as ConfigService;
 const crypto = {
+  deriveOpaqueToken: (_purpose: string, value: string) => `derived-${value}`,
   opaqueHash: () => Buffer.alloc(32, 7),
   randomToken: () => "sandbox-confirmation-token-with-sufficient-entropy",
 } as unknown as CryptoService;
@@ -25,9 +26,15 @@ describe("sandbox payment provider", () => {
       orderId: "019bf9ea-0d3e-7def-9c9a-000000000001",
       scenario: "success",
     });
-    expect(payment.confirmationToken).toContain("confirmation-token");
+    expect(payment.confirmationToken).toBe("derived-checkout:test");
     expect(JSON.stringify(payment.metadata)).not.toContain(payment.confirmationToken);
     expect(payment.metadata.sandboxTokenHash).toBe(Buffer.alloc(32, 7).toString("base64url"));
+  });
+
+  it("reproduces the same confirmation token for an idempotent retry", () => {
+    const provider = new SandboxPaymentProvider(config, crypto);
+    expect(provider.confirmationToken("checkout:test")).toBe("derived-checkout:test");
+    expect(provider.confirmationToken("checkout:test")).toBe(provider.confirmationToken("checkout:test"));
   });
 
   it("verifies the canonical sandbox webhook signature", () => {

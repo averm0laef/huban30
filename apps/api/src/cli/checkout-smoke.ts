@@ -32,8 +32,10 @@ async function main(): Promise<void> {
   const customerCookies = new Map<string, string>();
   const adminUserId = randomUUID();
   const warehouseId = randomUUID();
+  const secondWarehouseId = randomUUID();
   const productIds = {
     competition: randomUUID(),
+    multiWarehouse: randomUUID(),
     regular: randomUUID(),
   };
   const database = new Client({ connectionString: environment.DATABASE_URL });
@@ -104,7 +106,9 @@ async function main(): Promise<void> {
     delivery: { method: "pickup" },
     idempotencyKey,
     items: [{ productId, quantity }],
+    legalPolicyVersion: "checkout-terms-v1",
     sandboxScenario: scenario,
+    termsAccepted: true,
   });
 
   let application: Awaited<ReturnType<typeof NestFactory.createApplicationContext>> | undefined;
@@ -127,6 +131,11 @@ async function main(): Promise<void> {
        VALUES ($1,$2,$3,'Checkout smoke warehouse')`,
       [warehouseId, `checkout-warehouse-${suffix}`, `CHK-${suffix}`],
     );
+    await database.query(
+      `INSERT INTO app.warehouses (id,external_id,code,name)
+       VALUES ($1,$2,$3,'Checkout smoke second warehouse')`,
+      [secondWarehouseId, `checkout-warehouse-2-${suffix}`, `CHK2-${suffix}`],
+    );
     for (const [kind, productId] of Object.entries(productIds)) {
       await database.query(
         `INSERT INTO app.products (id,external_id,sku,name,slug,is_active)
@@ -143,8 +152,16 @@ async function main(): Promise<void> {
         `INSERT INTO app.inventory_balances
           (product_id,warehouse_id,quantity_on_hand,quantity_reserved)
          VALUES ($1,$2,$3,0)`,
-        [productId, warehouseId, kind === "competition" ? 1 : 20],
+        [productId, warehouseId, kind === "competition" ? 1 : kind === "multiWarehouse" ? 5 : 20],
       );
+      if (kind === "multiWarehouse") {
+        await database.query(
+          `INSERT INTO app.inventory_balances
+            (product_id,warehouse_id,quantity_on_hand,quantity_reserved)
+           VALUES ($1,$2,5,0)`,
+          [productId, secondWarehouseId],
+        );
+      }
     }
     await database.query("COMMIT");
 
@@ -189,6 +206,11 @@ async function main(): Promise<void> {
       || String((replay.order as JsonObject).id) !== String((successCheckout.order as JsonObject).id)) {
       throw new Error("Checkout replay was not idempotent");
     }
+    if (replay.guestAccessToken !== successCheckout.guestAccessToken
+      || (replay.payment as JsonObject).confirmationToken
+        !== (successCheckout.payment as JsonObject).confirmationToken) {
+      throw new Error("Checkout replay did not reproduce its guest and payment credentials");
+    }
     await guestCheckout({ ...successRequest, items: [{ productId: productIds.regular, quantity: 3 }] }, 409);
     const successOrderId = String((successCheckout.order as JsonObject).id);
     await request(`/orders/guest/${successOrderId}`, {
@@ -199,6 +221,20 @@ async function main(): Promise<void> {
       headers: { "x-guest-order-token": String(successCheckout.guestAccessToken) },
       method: "GET",
     }, 200);
+
+    const multiWarehouse = await guestCheckout(
+      checkoutBody(productIds.multiWarehouse, "cancel", randomUUID(), 8),
+    );
+    const multiReservationId = String((multiWarehouse.reservation as JsonObject).id);
+    const allocations = await database.query<{ count: string; quantity: string }>(
+      `SELECT count(*)::text AS count,sum(quantity)::text AS quantity
+       FROM app.stock_reservation_items WHERE reservation_id=$1`,
+      [multiReservationId],
+    );
+    if (allocations.rows[0]?.count !== "2" || allocations.rows[0]?.quantity !== "8") {
+      throw new Error("Multi-warehouse reservation was not split deterministically");
+    }
+    await complete(multiWarehouse);
     await post("/payments/webhooks/sandbox", {
       amountKopeks: 20_000,
       externalEventId: `invalid-signature-${suffix}`,
@@ -383,8 +419,8 @@ async function main(): Promise<void> {
       [Object.values(productIds)],
     );
     await database.query(
-      "UPDATE app.warehouses SET is_active=false,deleted_at=clock_timestamp() WHERE id=$1",
-      [warehouseId],
+      "UPDATE app.warehouses SET is_active=false,deleted_at=clock_timestamp() WHERE id=ANY($1::uuid[])",
+      [[warehouseId, secondWarehouseId]],
     );
     await database.query("DELETE FROM app.staff_members WHERE user_id=$1", [adminUserId]);
     await database.query(

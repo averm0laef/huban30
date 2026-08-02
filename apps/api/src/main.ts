@@ -14,11 +14,14 @@ import { AppModule } from "./app.module.js";
 import { ChatRealtimeService } from "./chat/chat-realtime.service.js";
 import { DatabaseService } from "./infrastructure/database.service.js";
 import { StructuredLogger } from "./security/structured-logger.js";
+import { isPubliclyCacheableApiRequest } from "./security/http-cache-policy.js";
 
 async function bootstrap() {
   const adapter = new FastifyAdapter({
     bodyLimit: 10 * 1024 * 1024,
-    trustProxy: process.env.TRUST_PROXY === "true",
+    // Caddy or the internal Next.js server is exactly one trusted hop away.
+    // Trusting every hop would let a client spoof the left-most forwarded IP.
+    trustProxy: Number(process.env.TRUST_PROXY_HOPS ?? "0"),
   });
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
     logger: new StructuredLogger(),
@@ -42,6 +45,14 @@ async function bootstrap() {
   await app.register(helmet, {
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "same-origin" },
+  });
+  adapter.getInstance().addHook("onSend", (request, reply, payload, done) => {
+    if (!isPubliclyCacheableApiRequest(request.method, request.url)) {
+      reply.header("Cache-Control", "private, no-store");
+      reply.header("Pragma", "no-cache");
+      reply.header("Vary", "Cookie, Authorization, X-Guest-Order-Token, X-Guest-Chat-Token");
+    }
+    done(null, payload);
   });
 
   app.enableCors({

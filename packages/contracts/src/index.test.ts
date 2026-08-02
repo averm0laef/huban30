@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CatalogFeaturedQuerySchema,
+  CatalogImageIdentifierSchema,
+  CatalogProductIdentifierSchema,
+  CatalogProductsQuerySchema,
   CatalogSearchQuerySchema,
   ChatClientEventSchema,
   ChatMessageCreateSchema,
@@ -14,6 +18,8 @@ import {
   StaffCatalogQuerySchema,
   StaffChatUpdateSchema,
   StaffOrdersQuerySchema,
+  StaffRequestsQuerySchema,
+  StaffRequestUpdateSchema,
 } from "./index.js";
 
 describe("public contracts", () => {
@@ -36,7 +42,9 @@ describe("public contracts", () => {
       delivery: { method: "pickup" },
       idempotencyKey: "019bf9ea-0d3e-7def-9c9a-000000000001",
       items: [{ productId: "019bf9ea-0d3e-7def-9c9a-000000000002", quantity: 2 }],
+      legalPolicyVersion: "checkout-terms-v1",
       sandboxScenario: "success",
+      termsAccepted: true,
     };
 
     expect(CheckoutRequestSchema.parse(request).customerNote).toBeNull();
@@ -124,6 +132,48 @@ describe("public contracts", () => {
     });
   });
 
+  it("normalizes strict public catalog filters", () => {
+    expect(CatalogProductsQuerySchema.parse({
+      availability: "in_stock",
+      brand: ["toyota", "ngk"],
+      category: "filters",
+      limit: "48",
+      maxPriceKopeks: "900000",
+      minPriceKopeks: "10000",
+      offset: "24",
+      q: "  фильтр масляный  ",
+      sort: "price_asc",
+    })).toMatchObject({
+      availability: "in_stock",
+      brand: ["toyota", "ngk"],
+      category: "filters",
+      limit: 48,
+      maxPriceKopeks: 900000,
+      minPriceKopeks: 10000,
+      offset: 24,
+      q: "фильтр масляный",
+      sort: "price_asc",
+    });
+    expect(CatalogProductsQuerySchema.parse({ brand: "toyota" }).brand).toEqual(["toyota"]);
+    expect(CatalogProductsQuerySchema.safeParse({ extra: "unsafe" }).success).toBe(false);
+    expect(CatalogProductsQuerySchema.safeParse({ brand: ["toyota", "toyota"] }).success).toBe(false);
+    expect(CatalogProductsQuerySchema.safeParse({ minPriceKopeks: 200, maxPriceKopeks: 100 }).success)
+      .toBe(false);
+    expect(CatalogProductsQuerySchema.safeParse({ q: "x" }).success).toBe(false);
+    expect(CatalogProductsQuerySchema.safeParse({ limit: 49 }).success).toBe(false);
+    expect(CatalogProductsQuerySchema.safeParse({ offset: 4_801 }).success).toBe(false);
+  });
+
+  it("accepts bounded featured queries and UUID-or-slug product identifiers", () => {
+    expect(CatalogFeaturedQuerySchema.parse({ limit: "12" })).toEqual({ limit: 12 });
+    expect(CatalogFeaturedQuerySchema.safeParse({ limit: 25 }).success).toBe(false);
+    expect(CatalogProductIdentifierSchema.safeParse("oil-filter-1").success).toBe(true);
+    expect(CatalogProductIdentifierSchema.safeParse("019bf9ea-0d3e-7def-9c9a-000000000010").success)
+      .toBe(true);
+    expect(CatalogProductIdentifierSchema.safeParse("../private").success).toBe(false);
+    expect(CatalogImageIdentifierSchema.safeParse("oil-filter-1").success).toBe(false);
+  });
+
   it("normalizes bounded staff table queries", () => {
     expect(StaffOrdersQuerySchema.parse({ limit: "50", offset: "25" })).toMatchObject({
       direction: "desc",
@@ -148,5 +198,18 @@ describe("public contracts", () => {
       status: "closed",
       version: 0,
     }).success).toBe(false);
+  });
+
+  it("bounds staff request filters and requires an optimistic change", () => {
+    expect(StaffRequestsQuerySchema.parse({ assigned: "mine", source: "expert_help" }))
+      .toMatchObject({ assigned: "mine", source: "expert_help" });
+    expect(StaffRequestsQuerySchema.safeParse({ offset: 4_801 }).success).toBe(false);
+    expect(StaffRequestUpdateSchema.safeParse({ reason: "Взято в работу", version: 1 }).success)
+      .toBe(false);
+    expect(StaffRequestUpdateSchema.safeParse({
+      assignedStaffId: null,
+      reason: "Снято назначение",
+      version: 1,
+    }).success).toBe(true);
   });
 });

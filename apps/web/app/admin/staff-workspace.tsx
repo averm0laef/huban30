@@ -37,6 +37,7 @@ import { InvoicesView } from "./views/invoices";
 import { OrdersView } from "./views/orders";
 import { OverviewView } from "./views/overview";
 import { ReportsView } from "./views/reports";
+import { RequestsView } from "./views/requests";
 import { SettingsView } from "./views/settings";
 import { TeamView } from "./views/team";
 import styles from "./workspace.module.css";
@@ -44,6 +45,7 @@ import styles from "./workspace.module.css";
 export const STAFF_SECTIONS = [
   "overview",
   "orders",
+  "requests",
   "chats",
   "catalog",
   "imports",
@@ -65,6 +67,7 @@ interface NavigationItem {
 const NAVIGATION: NavigationItem[] = [
   { href: "/admin", label: "Сводка", permission: "orders:read:any", section: "overview" },
   { href: "/admin/orders", label: "Заказы", permission: "orders:read:any", section: "orders" },
+  { href: "/admin/requests", label: "Обращения", permission: "requests:read:any", section: "requests" },
   { href: "/admin/chats", label: "Чаты", permission: "chat:manage:any", section: "chats" },
   { href: "/admin/catalog", label: "Каталог", permission: "catalog:read", section: "catalog" },
   { href: "/admin/imports", label: "Импорт 1С", permission: "catalog:import", section: "imports" },
@@ -416,6 +419,7 @@ function renderSection(section: StaffSection, session: SessionView): ReactElemen
     case "orders": return <OrdersView />;
     case "overview": return <OverviewView session={session} />;
     case "reports": return <ReportsView />;
+    case "requests": return <RequestsView session={session} />;
     case "settings": return <SettingsView />;
     case "staff": return <TeamView session={session} />;
   }

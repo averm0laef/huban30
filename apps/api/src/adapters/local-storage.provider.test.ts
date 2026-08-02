@@ -21,5 +21,17 @@ describe("LocalStorageProvider", () => {
     expect(await readFile(path.join(root, stored.storageKey), "utf8")).toBe("safe");
     await expect(provider.read("../secret.txt")).rejects.toThrow(/Unsafe storage key/);
   });
-});
 
+  it("accepts only canonical catalog and content media namespaces", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "an30-storage-"));
+    roots.push(root);
+    const provider = new LocalStorageProvider(new ConfigService({ STORAGE_ROOT: root }));
+
+    await expect(provider.read("catalog/2026-08/019bf9ea-0d3e-7def-8c9a-000000000010.png"))
+      .rejects.toThrow(/ENOENT/u);
+    await expect(provider.read("content/2026-08/019bf9ea-0d3e-7def-8c9a-000000000011.webp"))
+      .rejects.toThrow(/ENOENT/u);
+    await expect(provider.read("private/2026-08/019bf9ea-0d3e-7def-8c9a-000000000012.png"))
+      .rejects.toThrow(/Unsafe storage key/u);
+  });
+});

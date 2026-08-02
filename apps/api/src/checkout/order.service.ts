@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import {
   BadRequestException,
@@ -10,6 +10,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { PoolClient } from "pg";
+import { z } from "zod";
 
 import {
   DeliveryPaymentRequestSchema,
@@ -41,6 +42,12 @@ interface RequestMetadata {
   userAgent?: string;
 }
 
+const OrderIdSchema = z.uuid();
+const OrderListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+}).strict();
+const GuestOrderTokenSchema = z.string().min(32).max(256).regex(/^[A-Za-z0-9_-]+$/u);
+
 @Injectable()
 export class OrderService {
   private readonly providerName: "disabled" | "sandbox";
@@ -55,8 +62,12 @@ export class OrderService {
     this.providerName = config.getOrThrow<"disabled" | "sandbox">("PAYMENTS_PROVIDER");
   }
 
-  async list(auth: AuthContext, rawLimit: unknown) {
-    const limit = Math.min(Math.max(Number(rawLimit) || 20, 1), 100);
+  async list(auth: AuthContext, rawQuery: unknown) {
+    const parsed = OrderListQuerySchema.safeParse(rawQuery);
+    if (!parsed.success) {
+      throw new BadRequestException({ error: "invalid_order_query", issues: parsed.error.issues });
+    }
+    const { limit } = parsed.data;
     const staff = STAFF_ROLES.has(auth.role);
     const result = await this.database.query<{
       created_at: Date;
@@ -88,7 +99,9 @@ export class OrderService {
   }
 
   async readForUser(orderId: string, auth: AuthContext) {
-    const order = await this.readOrder(orderId);
+    const parsedOrderId = OrderIdSchema.safeParse(orderId);
+    if (!parsedOrderId.success) throw new NotFoundException("Заказ не найден");
+    const order = await this.readOrder(parsedOrderId.data);
     if (!STAFF_ROLES.has(auth.role) && order.userId !== auth.userId) {
       throw new NotFoundException("Заказ не найден");
     }
@@ -96,16 +109,23 @@ export class OrderService {
   }
 
   async readForGuest(orderId: string, token: string | undefined) {
-    if (!token || token.length < 32 || token.length > 256) {
+    const parsedOrderId = OrderIdSchema.safeParse(orderId);
+    const parsedToken = GuestOrderTokenSchema.safeParse(token);
+    if (!parsedOrderId.success || !parsedToken.success) {
       throw new ForbiddenException("Недействительный гостевой токен заказа");
     }
-    const order = await this.readOrder(orderId);
-    if (!order.guestTokenHash) throw new NotFoundException("Заказ не найден");
-    const actual = this.crypto.opaqueHash("guest-order-access", token);
-    if (actual.length !== order.guestTokenHash.length
-      || !timingSafeEqual(actual, order.guestTokenHash)) {
+    const actual = this.crypto.opaqueHash("guest-order-access", parsedToken.data);
+    const owned = await this.database.query(
+      `SELECT 1 FROM app.orders AS checkout_order
+       JOIN app.stock_reservations AS reservation ON reservation.id=checkout_order.reservation_id
+       WHERE checkout_order.id=$1 AND checkout_order.user_id IS NULL
+         AND reservation.guest_token_hash=$2 LIMIT 1`,
+      [parsedOrderId.data, actual],
+    );
+    if (!owned.rowCount) {
       throw new NotFoundException("Заказ не найден");
     }
+    const order = await this.readOrder(parsedOrderId.data);
     return order.response;
   }
 
@@ -200,6 +220,11 @@ export class OrderService {
       if (["pending_payment", "cancelled", "refunded", "completed"].includes(order.status)) {
         throw new ConflictException("Для текущего состояния заказа нельзя создать платёж доставки");
       }
+      const currentTotal = Number(order.total_amount_kopeks);
+      if (!Number.isSafeInteger(currentTotal) || currentTotal < 0
+        || request.amountKopeks > Number.MAX_SAFE_INTEGER - currentTotal) {
+        throw new ConflictException("Сумма заказа превышает допустимый предел");
+      }
       const existing = (await client.query<{
         amount_kopeks: string;
         external_payment_id: string;
@@ -236,13 +261,17 @@ export class OrderService {
         orderId,
         scenario: request.sandboxScenario,
       });
-      await client.query(
+      const updated = await client.query(
         `UPDATE app.orders
          SET delivery_amount_kopeks=delivery_amount_kopeks+$2,
              total_amount_kopeks=total_amount_kopeks+$2,version=version+1
-         WHERE id=$1`,
-        [orderId, request.amountKopeks],
+         WHERE id=$1
+           AND delivery_amount_kopeks<=$3::bigint-$2
+           AND total_amount_kopeks<=$3::bigint-$2
+         RETURNING id`,
+        [orderId, request.amountKopeks, Number.MAX_SAFE_INTEGER],
       );
+      if (!updated.rowCount) throw new ConflictException("Сумма заказа превышает допустимый предел");
       await client.query(
         `INSERT INTO app.payments
           (id,order_id,kind,provider,external_payment_id,idempotency_key,status,

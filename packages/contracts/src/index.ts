@@ -13,6 +13,8 @@ export const PERMISSIONS = [
   "orders:read:self",
   "orders:read:any",
   "orders:update:any",
+  "requests:read:any",
+  "requests:update:any",
   "payments:refund",
   "chat:use:self",
   "chat:manage:any",
@@ -43,6 +45,8 @@ export const ROLE_PERMISSIONS = {
     "account:update:self",
     "orders:read:any",
     "orders:update:any",
+    "requests:read:any",
+    "requests:update:any",
     "payments:refund",
     "chat:manage:any",
     "catalog:read",
@@ -54,6 +58,8 @@ export const ROLE_PERMISSIONS = {
     "account:update:self",
     "orders:read:any",
     "orders:update:any",
+    "requests:read:any",
+    "requests:update:any",
     "payments:refund",
     "chat:manage:any",
     "catalog:read",
@@ -98,6 +104,8 @@ export const CheckoutSandboxScenarioSchema = z.enum(CHECKOUT_SANDBOX_SCENARIOS);
 export type CheckoutSandboxScenario = z.infer<typeof CheckoutSandboxScenarioSchema>;
 
 const CheckoutIdempotencyKeySchema = z.uuid();
+export const CHECKOUT_LEGAL_POLICY_VERSION = "checkout-terms-v1" as const;
+export const CONTACT_CONSENT_POLICY_VERSION = "contact-consent-v1" as const;
 const CheckoutPhoneSchema = z.string().trim().min(7).max(32).regex(/^\+[1-9]\d{6,14}$/u);
 
 export const CheckoutItemSchema = z.object({
@@ -128,7 +136,9 @@ export const CheckoutRequestSchema = z.object({
   delivery: CheckoutDeliverySchema,
   idempotencyKey: CheckoutIdempotencyKeySchema,
   items: z.array(CheckoutItemSchema).min(1).max(100),
+  legalPolicyVersion: z.literal(CHECKOUT_LEGAL_POLICY_VERSION),
   sandboxScenario: CheckoutSandboxScenarioSchema.optional(),
+  termsAccepted: z.literal(true, { error: "terms acceptance is required" }),
 }).strict().superRefine((value, context) => {
   const seen = new Set<string>();
   for (const [index, item] of value.items.entries()) {
@@ -168,7 +178,7 @@ export type OrderStatusUpdate = z.infer<typeof OrderStatusUpdateSchema>;
 export const STAFF_PAGE_LIMITS = [25, 50, 100] as const;
 export const StaffPageQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
-  offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  offset: z.coerce.number().int().min(0).max(4_800).default(0),
 }).strict();
 
 const StaffSearchSchema = z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE).optional();
@@ -198,6 +208,30 @@ export const StaffChatsQuerySchema = StaffPageQuerySchema.extend({
   status: ChatThreadStatusSchema.optional(),
 }).strict();
 export type StaffChatsQuery = z.infer<typeof StaffChatsQuerySchema>;
+
+export const ContactRequestStatusSchema = z.enum(["new", "in_progress", "resolved", "closed"]);
+export type ContactRequestStatus = z.infer<typeof ContactRequestStatusSchema>;
+
+export const StaffRequestsQuerySchema = StaffPageQuerySchema.extend({
+  assigned: z.enum(["any", "mine", "unassigned"]).default("any"),
+  direction: SortDirectionSchema,
+  q: StaffSearchSchema,
+  sort: z.enum(["createdAt", "source", "status"]).default("createdAt"),
+  source: z.enum(["contacts", "expert_help", "vin_request"]).optional(),
+  status: ContactRequestStatusSchema.optional(),
+}).strict();
+export type StaffRequestsQuery = z.infer<typeof StaffRequestsQuerySchema>;
+
+export const StaffRequestUpdateSchema = z.object({
+  assignedStaffId: z.uuid().nullable().optional(),
+  reason: z.string().trim().min(3).max(500).regex(SAFE_SINGLE_LINE),
+  status: ContactRequestStatusSchema.optional(),
+  version: z.number().int().positive(),
+}).strict().refine(
+  (value) => value.assignedStaffId !== undefined || value.status !== undefined,
+  { message: "assignment or status is required" },
+);
+export type StaffRequestUpdate = z.infer<typeof StaffRequestUpdateSchema>;
 
 export const StaffChatUpdateSchema = z.object({
   assignedStaffId: z.uuid().nullable().optional(),
@@ -412,6 +446,95 @@ export const CatalogSearchQuerySchema = z.object({
   q: z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE),
 }).strict();
 export type CatalogSearchQuery = z.infer<typeof CatalogSearchQuerySchema>;
+
+const CatalogPublicSlugSchema = z.string().trim().min(1).max(180)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+const CatalogOptionalMoneyQuerySchema = z.preprocess(
+  (value) => value === "" ? undefined : value,
+  z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+);
+const CatalogBrandFilterSchema = z.union([
+  CatalogPublicSlugSchema,
+  z.array(CatalogPublicSlugSchema).min(1).max(20),
+]).optional().transform((value) => value === undefined ? [] : Array.isArray(value) ? value : [value])
+  .refine((value) => new Set(value).size === value.length, "brand filters must be unique");
+
+export const CatalogProductsQuerySchema = z.object({
+  availability: z.enum(["all", "in_stock", "out_of_stock"]).default("all"),
+  brand: CatalogBrandFilterSchema,
+  category: CatalogPublicSlugSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(48).default(24),
+  maxPriceKopeks: CatalogOptionalMoneyQuerySchema,
+  minPriceKopeks: CatalogOptionalMoneyQuerySchema,
+  offset: z.coerce.number().int().min(0).max(4_800).default(0),
+  q: z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE).optional(),
+  sort: z.enum(["relevance", "newest", "name", "price_asc", "price_desc"])
+    .default("relevance"),
+}).strict().refine(
+  (value) => value.minPriceKopeks === undefined
+    || value.maxPriceKopeks === undefined
+    || value.minPriceKopeks <= value.maxPriceKopeks,
+  { message: "minimum price must not exceed maximum price", path: ["minPriceKopeks"] },
+);
+export type CatalogProductsQuery = z.infer<typeof CatalogProductsQuerySchema>;
+
+export const CatalogFeaturedQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(24).default(8),
+}).strict();
+export type CatalogFeaturedQuery = z.infer<typeof CatalogFeaturedQuerySchema>;
+
+export const CatalogProductIdentifierSchema = z.union([z.uuid(), CatalogPublicSlugSchema]);
+export type CatalogProductIdentifier = z.infer<typeof CatalogProductIdentifierSchema>;
+
+export const CatalogImageIdentifierSchema = z.uuid();
+export type CatalogImageIdentifier = z.infer<typeof CatalogImageIdentifierSchema>;
+
+export const CatalogImageViewSchema = z.object({
+  altText: z.string().min(1).max(500),
+  byteSize: z.number().int().positive().max(10 * 1024 * 1024),
+  id: z.uuid(),
+  isPrimary: z.boolean(),
+  mimeType: z.enum(["image/avif", "image/jpeg", "image/png", "image/webp"]),
+  sortOrder: z.number().int(),
+  url: z.string().regex(/^\/api\/v1\/catalog\/media\/[0-9a-f-]+$/u),
+}).strict();
+export type CatalogImageView = z.infer<typeof CatalogImageViewSchema>;
+
+const CatalogEntityViewSchema = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).max(500),
+  slug: CatalogPublicSlugSchema,
+}).strict();
+
+export const CatalogProductSummarySchema = z.object({
+  availableQuantity: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  brand: CatalogEntityViewSchema.nullable(),
+  category: CatalogEntityViewSchema.nullable(),
+  createdAt: z.iso.datetime(),
+  id: z.uuid(),
+  name: z.string().min(1).max(500),
+  priceKopeks: MoneySchema.nullable(),
+  primaryImage: CatalogImageViewSchema.nullable(),
+  sku: z.string().min(1).max(200),
+  slug: CatalogPublicSlugSchema,
+  updatedAt: z.iso.datetime(),
+}).strict();
+export type CatalogProductSummary = z.infer<typeof CatalogProductSummarySchema>;
+
+export const CatalogProductsResponseSchema = z.object({
+  items: z.array(CatalogProductSummarySchema).max(48),
+  limit: z.number().int().min(1).max(48),
+  offset: z.number().int().nonnegative().max(4_800),
+  total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+}).strict();
+export type CatalogProductsResponse = z.infer<typeof CatalogProductsResponseSchema>;
+
+export const CatalogProductDetailSchema = CatalogProductSummarySchema.extend({
+  attributes: z.record(z.string(), z.unknown()),
+  description: z.string().max(100_000).nullable(),
+  images: z.array(CatalogImageViewSchema).max(100),
+}).strict();
+export type CatalogProductDetail = z.infer<typeof CatalogProductDetailSchema>;
 
 export const HealthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),

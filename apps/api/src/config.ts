@@ -9,6 +9,7 @@ const RawEnvironmentSchema = z.object({
   DATA_ENCRYPTION_KEY_FILE: z.string().min(1).optional(),
   DEPLOYMENT_ENVIRONMENT: z.enum(["development", "staging", "production"]).default("development"),
   ENABLE_PUBLIC_CHECKOUT: z.enum(["true", "false"]).default("false"),
+  LEGAL_DOCUMENTS_APPROVED: z.enum(["true", "false"]).default("false"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
   APP_ORIGIN: z.string().url().default("http://localhost:3000"),
@@ -79,6 +80,9 @@ export function validateEnvironment(raw: Record<string, unknown>) {
   ) {
     throw new Error("Production public checkout cannot use the sandbox payment provider");
   }
+  if (environment.ENABLE_PUBLIC_CHECKOUT === "true" && environment.LEGAL_DOCUMENTS_APPROVED !== "true") {
+    throw new Error("Public checkout requires approved legal documents");
+  }
   if (!environment.STORAGE_ROOT.startsWith("/")) {
     throw new Error("Storage root must be an absolute path");
   }
@@ -108,6 +112,7 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     DATA_ENCRYPTION_KEY: dataEncryptionKey,
     DATABASE_URL: databaseUrl,
     ENABLE_PUBLIC_CHECKOUT: environment.ENABLE_PUBLIC_CHECKOUT === "true",
+    LEGAL_DOCUMENTS_APPROVED: environment.LEGAL_DOCUMENTS_APPROVED === "true",
     REDIS_URL: redisUrl,
     SANDBOX_PAYMENT_WEBHOOK_SECRET: sandboxPaymentWebhookSecret,
     SESSION_SECRET: sessionSecret,

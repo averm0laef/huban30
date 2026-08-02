@@ -100,6 +100,7 @@ services:
       DB_USER: an30_app
       NODE_ENV: production
       ENABLE_PUBLIC_CHECKOUT: ${ENABLE_PUBLIC_CHECKOUT:-false}
+      LEGAL_DOCUMENTS_APPROVED: ${LEGAL_DOCUMENTS_APPROVED:-false}
       PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-disabled}
       PORT: 4000
       POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
@@ -110,7 +111,7 @@ services:
       SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: /run/secrets/sandbox_payment_webhook_secret
       SESSION_SECRET_FILE: /run/secrets/session_secret
       STORAGE_ROOT: /data/uploads
-      TRUST_PROXY: "true"
+      TRUST_PROXY_HOPS: "1"
     secrets:
       - app_database_password
       - redis_password
@@ -217,7 +218,9 @@ services:
     restart: unless-stopped
     environment:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost}
+      ENABLE_PUBLIC_CHECKOUT: ${ENABLE_PUBLIC_CHECKOUT:-false}
       INTERNAL_API_URL: http://api:4000
+      LEGAL_DOCUMENTS_APPROVED: ${LEGAL_DOCUMENTS_APPROVED:-false}
       NODE_ENV: production
     depends_on:
       api:

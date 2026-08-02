@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canIssueInvoiceForOrder,
   canManagerChangeAssignment,
+  canReopenRequest,
   canReopenChat,
 } from "./staff.service.js";
 
@@ -12,6 +13,13 @@ describe("staff workspace policy", () => {
     expect(canReopenChat("customer")).toBe(false);
     expect(canReopenChat("director")).toBe(true);
     expect(canReopenChat("admin")).toBe(true);
+  });
+
+  it("allows only director and admin to reopen finished contact requests", () => {
+    expect(canReopenRequest("manager")).toBe(false);
+    expect(canReopenRequest("customer")).toBe(false);
+    expect(canReopenRequest("director")).toBe(true);
+    expect(canReopenRequest("admin")).toBe(true);
   });
 
   it("prevents a manager from taking another employee's chat", () => {

@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentStatus, Role } from "@an30/contracts";
+import type { ContactRequestStatus, OrderStatus, PaymentStatus, Role } from "@an30/contracts";
 
 export interface SessionView {
   email: string;
@@ -92,6 +92,40 @@ export interface ChatMessage {
   senderKind: "customer" | "guest" | "staff" | "system";
   senderUserId: string | null;
   sequence: string;
+}
+
+export type ContactRequestSource = "contacts" | "expert_help" | "vin_request";
+
+export interface ContactRequestRow {
+  assignedName: string | null;
+  assignedStaffId: string | null;
+  createdAt: string;
+  customerEmailMasked: string | null;
+  customerNameMasked: string;
+  customerPhoneMasked: string | null;
+  id: string;
+  messageLength: number;
+  resolvedAt: string | null;
+  source: ContactRequestSource;
+  status: ContactRequestStatus;
+  updatedAt: string;
+  version: number;
+}
+
+export interface ContactRequestDetail {
+  assignedName: string | null;
+  assignedStaffId: string | null;
+  createdAt: string;
+  customerEmail: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  id: string;
+  message: string;
+  resolvedAt: string | null;
+  source: ContactRequestSource;
+  status: ContactRequestStatus;
+  updatedAt: string;
+  version: number;
 }
 
 export interface CatalogRow {

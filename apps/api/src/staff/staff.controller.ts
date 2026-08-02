@@ -34,6 +34,33 @@ export class StaffController {
     return this.staff.chats(query, request.authContext!);
   }
 
+  @RequirePermissions("requests:read:any")
+  @Get("requests")
+  requests(@Query() query: unknown, @Req() request: FastifyRequest) {
+    return this.staff.requests(query, request.authContext!);
+  }
+
+  @RequirePermissions("requests:read:any")
+  @Get("requests/:requestId")
+  request(@Param("requestId") requestId: string, @Req() request: FastifyRequest) {
+    return this.staff.request(requestId, request.authContext!, metadata(request));
+  }
+
+  @RequirePermissions("requests:update:any")
+  @Patch("requests/:requestId")
+  updateRequest(
+    @Param("requestId") requestId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.staff.updateRequest(
+      requestId,
+      body,
+      request.authContext!,
+      metadata(request),
+    );
+  }
+
   @RequirePermissions("chat:manage:any")
   @Patch("chats/:threadId")
   updateChat(

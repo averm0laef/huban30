@@ -54,6 +54,29 @@ const expiryTimer = setInterval(() => void releaseExpiredReservations(), 30_000)
 expiryTimer.unref();
 void releaseExpiredReservations();
 
+let contactRetentionRunning = false;
+async function anonymizeExpiredContactRequests() {
+  if (contactRetentionRunning) return;
+  contactRetentionRunning = true;
+  try {
+    const result = await database.query<{ anonymized_count: number }>(
+      "SELECT app.anonymize_expired_contact_requests(500) AS anonymized_count",
+    );
+    const anonymizedCount = result.rows[0]?.anonymized_count ?? 0;
+    if (anonymizedCount > 0) {
+      logger.info({ anonymizedCount }, "Expired contact requests anonymized");
+    }
+  } catch (error) {
+    logger.error({ error }, "Contact request retention sweep failed");
+  } finally {
+    contactRetentionRunning = false;
+  }
+}
+
+const contactRetentionTimer = setInterval(() => void anonymizeExpiredContactRequests(), 60 * 60 * 1_000);
+contactRetentionTimer.unref();
+void anonymizeExpiredContactRequests();
+
 const outboxTimer = setInterval(() => void outbox.poll(), 5_000);
 outboxTimer.unref();
 void outbox.poll();
@@ -102,6 +125,7 @@ async function shutdown(signal: string) {
   logger.info({ signal }, "Worker shutdown started");
   healthServer.close();
   clearInterval(expiryTimer);
+  clearInterval(contactRetentionTimer);
   clearInterval(outboxTimer);
   await worker.close();
   await database.end();

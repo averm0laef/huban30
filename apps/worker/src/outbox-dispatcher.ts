@@ -25,6 +25,56 @@ const ChatPayloadSchema = z.object({
   threadId: z.uuid(),
 }).strict();
 
+const ContactPayloadSchema = z.object({
+  requestId: z.uuid(),
+  source: z.enum(["contacts", "expert_help", "vin_request"]),
+}).strict();
+
+export function buildStaffAlert(
+  topic: string,
+  payload: unknown,
+  publicBaseUrl: string,
+): string {
+  if (topic === "chat.staff.notify") {
+    const chat = ChatPayloadSchema.parse(payload);
+    const label = chat.senderKind === "guest" ? "Гость" : "Клиент";
+    return `${label} написал в чат АН-30. ${new URL(`/admin/chats/${chat.threadId}`, publicBaseUrl)}`;
+  }
+  if (topic === "contact.staff.notify") {
+    const contact = ContactPayloadSchema.parse(payload);
+    const labels = {
+      contacts: "Новое обращение",
+      expert_help: "Запрос эксперту",
+      vin_request: "Запрос подбора",
+    } as const;
+    const url = new URL("/admin/requests", publicBaseUrl);
+    url.searchParams.set("request", contact.requestId);
+    return `${labels[contact.source]} в АН-30. ${url}`;
+  }
+  throw new Error("unsupported_staff_alert_topic");
+}
+
+export function buildAuthEmailTemplate(
+  topic: string,
+  token: string,
+  publicBaseUrl: string,
+): { subject: string; text: string } {
+  const routes: Record<string, { mode: string; subject: string }> = {
+    "auth.email.verify": { mode: "verify", subject: "Подтверждение email АН-30" },
+    "auth.password.reset": { mode: "reset", subject: "Восстановление пароля АН-30" },
+    "auth.staff.invitation": { mode: "staff-accept", subject: "Приглашение в команду АН-30" },
+  };
+  const template = routes[topic];
+  if (!template) throw new Error("unsupported_auth_topic");
+  const url = new URL("/auth", publicBaseUrl);
+  url.searchParams.set("mode", template.mode);
+  url.hash = new URLSearchParams({ token }).toString();
+  return {
+    subject: template.subject,
+    text: `Откройте одноразовую ссылку: ${url.toString()}\n\nЕсли вы не запрашивали это действие, проигнорируйте письмо.`,
+  };
+}
+
 export class OutboxDispatcher {
   private running = false;
   private readonly providers: NotificationProviders;
@@ -108,11 +158,9 @@ export class OutboxDispatcher {
       await this.providers.sendEmail(payload.recipient, template.subject, template.text);
       return;
     }
-    if (event.topic === "chat.staff.notify") {
-      const payload = ChatPayloadSchema.parse(event.payload);
-      const label = payload.senderKind === "guest" ? "Гость" : "Клиент";
+    if (event.topic === "chat.staff.notify" || event.topic === "contact.staff.notify") {
       await this.providers.sendStaffAlert(
-        `${label} написал в чат АН-30. ${this.config.notifications.publicBaseUrl}/admin/chats/${payload.threadId}`,
+        buildStaffAlert(event.topic, event.payload, this.config.notifications.publicBaseUrl),
         event.id,
       );
       return;
@@ -121,19 +169,7 @@ export class OutboxDispatcher {
   }
 
   private authTemplate(topic: string, token: string): { subject: string; text: string } {
-    const routes: Record<string, { route: string; subject: string }> = {
-      "auth.email.verify": { route: "/auth/verify", subject: "Подтверждение email АН-30" },
-      "auth.password.reset": { route: "/auth/reset", subject: "Восстановление пароля АН-30" },
-      "auth.staff.invitation": { route: "/staff/invitation", subject: "Приглашение в команду АН-30" },
-    };
-    const template = routes[topic];
-    if (!template) throw new Error("unsupported_auth_topic");
-    const url = new URL(template.route, this.config.notifications.publicBaseUrl);
-    url.searchParams.set("token", token);
-    return {
-      subject: template.subject,
-      text: `Откройте одноразовую ссылку: ${url.toString()}\n\nЕсли вы не запрашивали это действие, проигнорируйте письмо.`,
-    };
+    return buildAuthEmailTemplate(topic, token, this.config.notifications.publicBaseUrl);
   }
 
   private async recoverStale(client: PoolClient): Promise<void> {
