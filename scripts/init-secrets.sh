@@ -22,4 +22,14 @@ generate_secret session_secret.txt
 generate_secret data_encryption_key.txt
 generate_secret sandbox_payment_webhook_secret.txt
 
+# Optional integration credentials are intentionally empty until the owner
+# enables the matching adapter and supplies the real value.
+for optional_secret in smtp_password.txt telegram_bot_token.txt vk_access_token.txt; do
+  target="$secrets_dir/$optional_secret"
+  if [ ! -e "$target" ]; then
+    : > "$target"
+    chmod 600 "$target"
+  fi
+done
+
 echo "Secrets created in $secrets_dir with mode 600. Values were not printed."

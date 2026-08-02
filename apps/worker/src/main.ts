@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import { WorkerJobSchema } from "@an30/contracts";
 
 import { readWorkerConfig } from "./config.js";
+import { OutboxDispatcher } from "./outbox-dispatcher.js";
 
 const config = readWorkerConfig(process.env);
 const logger = pino({ name: "an30-worker", level: process.env.LOG_LEVEL ?? "info" });
@@ -27,6 +28,7 @@ const worker = new Worker(
   },
   { connection: redis, concurrency: 4 },
 );
+const outbox = new OutboxDispatcher(database, config, logger);
 
 worker.on("completed", (job) => logger.info({ jobId: job.id, jobName: job.name }, "Job completed"));
 worker.on("failed", (job, error) => logger.error({ error, jobId: job?.id, jobName: job?.name }, "Job failed"));
@@ -51,6 +53,10 @@ async function releaseExpiredReservations() {
 const expiryTimer = setInterval(() => void releaseExpiredReservations(), 30_000);
 expiryTimer.unref();
 void releaseExpiredReservations();
+
+const outboxTimer = setInterval(() => void outbox.poll(), 5_000);
+outboxTimer.unref();
+void outbox.poll();
 
 const healthServer = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -96,6 +102,7 @@ async function shutdown(signal: string) {
   logger.info({ signal }, "Worker shutdown started");
   healthServer.close();
   clearInterval(expiryTimer);
+  clearInterval(outboxTimer);
   await worker.close();
   await database.end();
   await redis.quit();

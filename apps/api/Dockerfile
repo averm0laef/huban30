@@ -6,18 +6,20 @@ COPY apps/api/package.json ./apps/api/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
-  pnpm --filter @an30/api... install --frozen-lockfile
+  pnpm --filter @an30/api... install --frozen-lockfile --trust-lockfile
 COPY tsconfig.base.json ./tsconfig.base.json
 COPY apps/api ./apps/api
 COPY packages/contracts ./packages/contracts
 RUN pnpm --filter @an30/contracts build && pnpm --filter @an30/api build
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
-  pnpm --filter @an30/api --prod deploy /opt/an30/api
+  pnpm --filter @an30/api --prod deploy --trust-lockfile /opt/an30/api
 
 FROM node:24.12.0-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-RUN addgroup -S an30 && adduser -S -G an30 an30
+RUN addgroup -S -g 10001 an30 && \
+  adduser -S -D -H -u 10001 -G an30 an30 && \
+  install -d -o an30 -g an30 -m 0700 /data/uploads
 COPY --from=build --chown=an30:an30 /opt/an30/api ./
 RUN rm -f pnpm-lock.yaml && \
   find node_modules -type d -path '*/fastify/docs' -prune -exec rm -rf '{}' +

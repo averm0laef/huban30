@@ -5,12 +5,12 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/database/package.json ./packages/database/package.json
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
-  pnpm --filter @an30/database install --frozen-lockfile
+  pnpm --filter @an30/database install --frozen-lockfile --trust-lockfile
 COPY tsconfig.base.json ./tsconfig.base.json
 COPY packages/database ./packages/database
 RUN pnpm --filter @an30/database build
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
-  pnpm --filter @an30/database --prod deploy /opt/an30/database
+  pnpm --filter @an30/database --prod deploy --trust-lockfile /opt/an30/database
 
 FROM node:24.12.0-alpine AS runtime
 ENV NODE_ENV=production

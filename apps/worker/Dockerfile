@@ -6,13 +6,13 @@ COPY apps/worker/package.json ./apps/worker/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
-  pnpm --filter @an30/worker... install --frozen-lockfile
+  pnpm --filter @an30/worker... install --frozen-lockfile --trust-lockfile
 COPY tsconfig.base.json ./tsconfig.base.json
 COPY apps/worker ./apps/worker
 COPY packages/contracts ./packages/contracts
 RUN pnpm --filter @an30/contracts build && pnpm --filter @an30/worker build
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
-  pnpm --filter @an30/worker --prod deploy /opt/an30/worker
+  pnpm --filter @an30/worker --prod deploy --trust-lockfile /opt/an30/worker
 
 FROM node:24.12.0-alpine AS runtime
 ENV NODE_ENV=production

@@ -286,6 +286,50 @@ export const OneCImportEnvelopeSchema = z.object({
 }).strict();
 export type OneCImportEnvelope = z.infer<typeof OneCImportEnvelopeSchema>;
 
+const CHAT_TEXT = /^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]*$/u;
+
+export const ChatThreadCreateSchema = z.object({
+  orderId: z.uuid().nullable().default(null),
+  subject: z.string().trim().min(2).max(240).regex(CHAT_TEXT),
+}).strict();
+export type ChatThreadCreate = z.infer<typeof ChatThreadCreateSchema>;
+
+export const ChatMessageCreateSchema = z.object({
+  body: z.string().trim().min(1).max(4_000).regex(CHAT_TEXT),
+  clientMessageId: z.uuid(),
+  replyToId: z.uuid().nullable().default(null),
+}).strict();
+export type ChatMessageCreate = z.infer<typeof ChatMessageCreateSchema>;
+
+const ChatCursorSchema = z.string().regex(/^(0|[1-9]\d{0,18})$/u).default("0");
+
+export const ChatClientEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    afterSequence: ChatCursorSchema,
+    guestToken: z.string().min(32).max(256).optional(),
+    threadId: z.uuid(),
+    type: z.literal("subscribe"),
+  }).strict(),
+  z.object({
+    body: z.string().trim().min(1).max(4_000).regex(CHAT_TEXT),
+    clientMessageId: z.uuid(),
+    replyToId: z.uuid().nullable().default(null),
+    type: z.literal("message.send"),
+  }).strict(),
+  z.object({
+    messageId: z.uuid(),
+    type: z.literal("receipt.read"),
+  }).strict(),
+  z.object({ type: z.literal("ping") }).strict(),
+]);
+export type ChatClientEvent = z.infer<typeof ChatClientEventSchema>;
+
+export const CatalogSearchQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  q: z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE),
+}).strict();
+export type CatalogSearchQuery = z.infer<typeof CatalogSearchQuerySchema>;
+
 export const HealthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),
   service: z.string().min(1),

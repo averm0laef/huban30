@@ -22,6 +22,8 @@ describe("database migrations", () => {
       "0008_one_c_import_pipeline",
       "0009_one_c_request_batch_index",
       "0010_checkout_reservations",
+      "0011_chat_realtime",
+      "0012_chat_message_edit_guard",
     ]);
     expect(migrations.every(({ checksum }) => /^[a-f0-9]{64}$/.test(checksum))).toBe(true);
     expect(migrations[0]?.sql).toContain("CREATE SCHEMA app");

@@ -26,6 +26,7 @@ const RawEnvironmentSchema = z.object({
   REDIS_PASSWORD: z.string().min(1).optional(),
   REDIS_PASSWORD_FILE: z.string().min(1).optional(),
   RESERVATION_TTL_MINUTES: z.coerce.number().int().min(5).max(120).default(20),
+  STORAGE_ROOT: z.string().min(1).default("/data/uploads"),
   SANDBOX_PAYMENT_WEBHOOK_SECRET: z.string().min(32).optional(),
   SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: z.string().min(1).optional(),
   SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(1_440).default(30),
@@ -77,6 +78,9 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     && environment.PAYMENTS_PROVIDER === "sandbox"
   ) {
     throw new Error("Production public checkout cannot use the sandbox payment provider");
+  }
+  if (!environment.STORAGE_ROOT.startsWith("/")) {
+    throw new Error("Storage root must be an absolute path");
   }
   if (
     environment.AUTH_DEBUG_TOKENS === "true"

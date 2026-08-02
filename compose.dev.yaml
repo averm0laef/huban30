@@ -43,8 +43,12 @@ services:
 
   worker:
     environment:
+      DATA_ENCRYPTION_KEY: an30-local-data-encryption-key-public-only
       POSTGRES_PASSWORD: an30-app-local-development-only
       REDIS_PASSWORD: an30-local-development-only
+      SMTP_PASSWORD_FILE: !reset null
+      TELEGRAM_BOT_TOKEN_FILE: !reset null
+      VK_ACCESS_TOKEN_FILE: !reset null
     secrets: !reset []
 
   seed:

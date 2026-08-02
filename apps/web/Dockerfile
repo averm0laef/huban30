@@ -8,7 +8,7 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
-  pnpm --filter @an30/web... install --frozen-lockfile
+  pnpm --filter @an30/web... install --frozen-lockfile --trust-lockfile
 COPY tsconfig.base.json ./tsconfig.base.json
 COPY apps/web ./apps/web
 COPY packages/contracts ./packages/contracts

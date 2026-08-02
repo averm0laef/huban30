@@ -4,9 +4,11 @@ import { APP_GUARD } from "@nestjs/core";
 
 import { AuthGuard } from "./auth/auth.guard.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { AdaptersModule } from "./adapters/adapters.module.js";
 import { CsrfGuard } from "./auth/csrf.guard.js";
 import { PermissionsGuard } from "./auth/permissions.guard.js";
 import { CatalogModule } from "./catalog/catalog.module.js";
+import { ChatModule } from "./chat/chat.module.js";
 import { CheckoutModule } from "./checkout/checkout.module.js";
 import { validateEnvironment } from "./config.js";
 import { HealthModule } from "./health/health.module.js";
@@ -21,9 +23,11 @@ import { SecurityModule } from "./security/security.module.js";
       validate: validateEnvironment,
     }),
     InfrastructureModule,
+    AdaptersModule,
     SecurityModule,
     AuthModule,
     CatalogModule,
+    ChatModule,
     CheckoutModule,
     HealthModule,
   ],

@@ -5,7 +5,7 @@
 ## Общий статус
 
 - Цель: автономный production-продукт без runtime-зависимости от Supabase и Lovable.
-- Текущий этап: AN30-009.
+- Текущий этап: AN30-010.
 - Production: не готов.
 - Публичный checkout: должен оставаться закрыт до подключения боевого эквайринга.
 - Удаление старого Supabase: запрещено без отдельного подтверждения владельца.
@@ -22,7 +22,7 @@
 | AN30-006 | Готово | Авторизация, TOTP, защищённые сессии и серверная RBAC |
 | AN30-007 | Готово | Надёжный staging-импорт и обмен с 1С |
 | AN30-008 | Готово | Заказы, резервы и sandbox-платежи |
-| AN30-009 | Ожидает | Чат и отключаемые внешние адаптеры |
+| AN30-009 | Готово | Durable чат, защищённые вложения, поиск и отключаемые адаптеры |
 | AN30-010 | Ожидает | Рабочие интерфейсы персонала |
 | AN30-011 | Ожидает | Обновлённый клиентский интерфейс |
 | AN30-012 | Ожидает | SSR, SEO, юридические страницы и производительность |
@@ -148,3 +148,21 @@
 - Удалённые тестовые данные: временные `an30-an30008-postgres`, `an30_an30008_pgdata` и `an30-an30008-net` удалены без возможности восстановления; они содержали только чистую тестовую production-схему. Активные checkout-smoke пользователи, товары, склады и резервы удалены/soft-delete; неизменяемые локальные заказы, платежи, возвраты, audit и inventory history сохранены. Локальные rate-limit ключи очищались перед воспроизводимыми smoke. Рабочие volumes и старый Supabase не удалялись.
 - Риски: боевой эквайринг, ключи, webhook-формат, параметры чеков и юридические реквизиты ещё не выбраны; поэтому production checkout остаётся технически закрыт. Checkout UI появится в AN30-011, staff queue/payment controls — в AN30-010. Реальные банковские timeout/reconciliation и receipt contract должны быть contract-tested после выбора провайдера.
 - Следующий шаг: AN30-009, перенести WebSocket-чат, защищённые вложения и отключаемые notification/social/AI/storage адаптеры без обязательных облачных сервисов.
+
+## AN30-009: автономный чат и адаптеры
+
+- Дата начала: 2026-08-01 03:58:00 +09.
+- Дата завершения: 2026-08-02 12:06:54 +09.
+- Статус: готово.
+- Изменённые файлы: migrations `0011_chat_realtime` и `0012_chat_message_edit_guard`; общие chat/search контракты; новые `chat`, `adapters` и catalog search модули API; outbox dispatcher и SMTP/Telegram/VK providers worker; local storage volume/init; 15-step CLI smoke; `.env.example`, Compose, security/migration tests, `docs/CHAT_AND_ADAPTERS.md`, решения и журналы.
+- Решения: PostgreSQL является источником истории и монотонного cursor, Redis только fan-out; `clientMessageId` задаёт idempotency; guest token хранится как HMAC и передаётся только header/первым WS frame. Поиск не меняет ranking при подключении AI. Storage/notifications/social auth/AI имеют provider boundaries и disabled fallback; внешние уведомления идут только через outbox.
+- Realtime: `/ws` требует точный `Origin`, session/TOTP либо guest token, frame не более 16 KiB, subscribe timeout 10 секунд, heartbeat 30 секунд и rate limit 60 событий/мин. Reconnect получает сообщения строго после `afterSequence`; Redis Pub/Sub позволяет масштабировать API горизонтально без потери durable history.
+- Вложения: только JPEG/PNG/WebP до 5 MiB; declared MIME сверяется с magic bytes. Файл получает opaque key, права `0600`, хранится вне web-root и скачивается с `attachment`, `nosniff`, `no-store` только после проверки thread ownership. Пользовательское имя принадлежит сообщению, а не дедуплицированному storage object, поэтому не раскрывается другому чату. PDF/SVG/HTML закрыты до отдельного AV/sanitizer pipeline.
+- Адаптеры: local `StorageProvider` работает автономно; SMTP требует TLS; Telegram Bot API и VK Messages включаются отдельно; VK retry использует стабильный `random_id`. Outbox использует `FOR UPDATE SKIP LOCKED`, recovery stale lock и exponential backoff. Отсутствующий обязательный секрет делает enabled provider ошибкой запуска; выключенные integrations не ломают магазин.
+- Команды проверок: `pnpm verify:full`; production/dev Compose config; Docker build/up API/worker/database; `schema-smoke.sql`; 15-step `chat-smoke`; worker outbox poll; API/worker readiness; runtime scan `supabase|lovable`; проверка Nodemailer runtime version; `pnpm audit --prod --audit-level=high`.
+- Результат: 12 миграций, 50 таблиц + 2 представления, 74 FK и 188 индексов; `schema_smoke=ok`. Chat smoke подтвердил guest IDOR denial, exact retry, changed-payload `409`, WS persist/ack, cursor reconnect, cross-origin denial, closed-thread `409`, signature check, forged MIME denial и attachment IDOR denial. Worker перевёл все три chat notification outbox events в `delivered` при выключенных необязательных каналах. Весь Compose-стек healthy.
+- Качество: lint нового стека без ошибок; 34 unit-теста нового стека, legacy smoke и Playwright прошли; все production-сборки прошли. Найденный full-gate high advisory Nodemailer 7 устранён обновлением до исправленной `9.0.1`; финальный production audit содержит 0 critical/high и 3 moderate только в legacy. Финальные API/worker runtime-образы не содержат Supabase/Lovable строк, ключей или URL. Docker доверяет только frozen lock-файлу, уже проверенному до сборки, и больше не выполняет сотни повторных registry-запросов.
+- Исправленные при smoke ошибки: volume вложений изначально принадлежал root — добавлен одноразовый `storage-init` и фиксированный непривилегированный API UID 10001; первая выбранная версия SMTP-библиотеки имела high advisory — обновлена до patched release; повторная загрузка содержимого ранее soft-deleted файла теперь восстанавливает storage object с новым ключом, а metadata исходного имени изолированы на уровне сообщения; cleanup не удаляет storage object, если на него ссылается другой активный чат; smoke всегда soft-delete тестовые threads/messages и удаляет только принадлежащие им физические файлы/outbox.
+- Удалённые тестовые данные: 5 гостевых smoke-чатов и 8 сообщений soft-delete, 3 необязательных notification events и один тестовый PNG удалены; восстановление физического PNG не требуется. Append-only receipt/attachment links сохранены как история. Рабочие данные, volumes и старый Supabase не удалялись.
+- Риски: реальные SMTP/Telegram/VK endpoints и credentials не предоставлены, поэтому внешняя доставка ещё не проверена; auth email в production будет retry/fail до подключения SMTP. Social auth и AI остаются безопасно отключёнными. Новый web ещё не использует chat API — клиентские и staff workflows входят в AN30-010/011.
+- Следующий шаг: AN30-010, построить единое нативное рабочее место персонала поверх заказов, чатов, 1С, каталога, отчётов, настроек и аудита.

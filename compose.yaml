@@ -86,6 +86,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    image: an30-api:local
     restart: unless-stopped
     environment:
       APP_ORIGIN: ${APP_BASE_URL:-http://localhost}
@@ -108,6 +109,7 @@ services:
       RESERVATION_TTL_MINUTES: ${RESERVATION_TTL_MINUTES:-20}
       SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: /run/secrets/sandbox_payment_webhook_secret
       SESSION_SECRET_FILE: /run/secrets/session_secret
+      STORAGE_ROOT: /data/uploads
       TRUST_PROXY: "true"
     secrets:
       - app_database_password
@@ -120,6 +122,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+    volumes:
+      - uploads_data:/data/uploads
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
@@ -135,6 +141,21 @@ services:
           memory: 256M
     networks: [backend]
 
+  storage-init:
+    image: an30-api:local
+    restart: "no"
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["install -d -o 10001 -g 10001 -m 0700 /data/uploads && chown -R 10001:10001 /data/uploads"]
+    volumes:
+      - uploads_data:/data/uploads
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 64M
+    networks: [backend]
+
   worker:
     build:
       context: .
@@ -145,16 +166,34 @@ services:
       DB_NAME: an30
       DB_PORT: 5432
       DB_USER: an30_app
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       NODE_ENV: production
       POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
       REDIS_HOST: redis
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
       REDIS_PORT: 6379
+      PUBLIC_BASE_URL: ${APP_BASE_URL:-http://localhost}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      VK_ENABLED: ${VK_ENABLED:-false}
+      VK_ACCESS_TOKEN_FILE: /run/secrets/vk_access_token
+      VK_PEER_ID: ${VK_PEER_ID:-}
       WORKER_HEALTH_PORT: 4001
     secrets:
       - app_database_password
       - redis_password
       - data_encryption_key
+      - smtp_password
+      - telegram_bot_token
+      - vk_access_token
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -242,12 +281,19 @@ secrets:
     file: ${AN30_SECRETS_DIR:-./secrets}/data_encryption_key.txt
   sandbox_payment_webhook_secret:
     file: ${AN30_SECRETS_DIR:-./secrets}/sandbox_payment_webhook_secret.txt
+  smtp_password:
+    file: ${AN30_SECRETS_DIR:-./secrets}/smtp_password.txt
+  telegram_bot_token:
+    file: ${AN30_SECRETS_DIR:-./secrets}/telegram_bot_token.txt
+  vk_access_token:
+    file: ${AN30_SECRETS_DIR:-./secrets}/vk_access_token.txt
 
 volumes:
   caddy_config:
   caddy_data:
   postgres_data:
   redis_data:
+  uploads_data:
 
 networks:
   backend:

@@ -255,6 +255,67 @@ BEGIN
 END;
 $$;
 
+DO $$
+DECLARE
+  thread_id uuid;
+  message_id uuid;
+  message_sequence bigint;
+  storage_id uuid;
+  attachment_id uuid;
+BEGIN
+  INSERT INTO app.chat_threads (guest_token_hash,subject)
+  VALUES (decode(repeat('ab',32),'hex'),'Schema smoke chat')
+  RETURNING id INTO thread_id;
+
+  INSERT INTO app.chat_messages
+    (thread_id,sender_kind,message_type,body,client_message_id)
+  VALUES (thread_id,'guest','text','immutable message',gen_random_uuid()::text)
+  RETURNING id,sequence_number INTO message_id,message_sequence;
+
+  IF message_sequence IS NULL THEN
+    RAISE EXCEPTION 'Chat reconnect sequence was not generated';
+  END IF;
+
+  BEGIN
+    UPDATE app.chat_messages SET body='changed' WHERE id=message_id;
+    RAISE EXCEPTION 'Immutable chat payload unexpectedly changed';
+  EXCEPTION
+    WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
+  BEGIN
+    UPDATE app.chat_messages SET edited_at=clock_timestamp() WHERE id=message_id;
+    RAISE EXCEPTION 'Immutable chat edit marker unexpectedly changed';
+  EXCEPTION
+    WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO app.chat_guest_message_receipts (message_id,read_at)
+    VALUES (message_id,clock_timestamp());
+    RAISE EXCEPTION 'Guest read receipt unexpectedly omitted delivery';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+
+  INSERT INTO app.storage_objects
+    (storage_key,original_name,mime_type,byte_size,sha256,status)
+  VALUES ('chat/2026-08/00000000-0000-0000-0000-000000000001.png','pixel.png','image/png',1,
+          decode(repeat('cd',32),'hex'),'available')
+  RETURNING id INTO storage_id;
+
+  INSERT INTO app.chat_attachments (message_id,storage_object_id,scan_status)
+  VALUES (message_id,storage_id,'clean') RETURNING id INTO attachment_id;
+
+  BEGIN
+    DELETE FROM app.chat_attachments WHERE id=attachment_id;
+    RAISE EXCEPTION 'Immutable chat attachment link unexpectedly deleted';
+  EXCEPTION
+    WHEN SQLSTATE '55000' THEN NULL;
+  END;
+END;
+$$;
+
 SELECT
   'schema_smoke=ok' AS result,
   (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'app') AS app_tables,

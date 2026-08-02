@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CatalogSearchQuerySchema,
+  ChatClientEventSchema,
+  ChatMessageCreateSchema,
   CheckoutRequestSchema,
   MoneySchema,
   OneCImportEnvelopeSchema,
@@ -98,5 +101,23 @@ describe("public contracts", () => {
       externalBatchId: "unsafe\nrequest",
       rows: [],
     }).success).toBe(false);
+  });
+
+  it("validates bounded chat events and deterministic search input", () => {
+    const message = {
+      body: "Здравствуйте!\nНужна помощь с заказом.",
+      clientMessageId: "019bf9ea-0d3e-7def-9c9a-000000000010",
+    };
+    expect(ChatMessageCreateSchema.parse(message).replyToId).toBeNull();
+    expect(ChatMessageCreateSchema.safeParse({ ...message, body: "unsafe\u0000text" }).success).toBe(false);
+    expect(ChatClientEventSchema.safeParse({
+      afterSequence: "42",
+      threadId: "019bf9ea-0d3e-7def-9c9a-000000000011",
+      type: "subscribe",
+    }).success).toBe(true);
+    expect(CatalogSearchQuerySchema.parse({ q: "  фильтр масляный  " })).toMatchObject({
+      limit: 20,
+      q: "фильтр масляный",
+    });
   });
 });
