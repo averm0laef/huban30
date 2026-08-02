@@ -242,6 +242,7 @@ services:
     restart: unless-stopped
     environment:
       ACME_EMAIL: ${ACME_EMAIL:-admin@an30.ru}
+      CANONICAL_ORIGIN: ${APP_BASE_URL:-https://an30.ru}
       SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
       WWW_SITE_ADDRESS: ${WWW_SITE_ADDRESS:-http://www.localhost}
     ports:

@@ -42,5 +42,5 @@
 }
 
 {$WWW_SITE_ADDRESS} {
-	redir https://an30.ru{uri} permanent
+	redir {$CANONICAL_ORIGIN:https://an30.ru}{uri} permanent
 }

@@ -4,6 +4,9 @@ import type { NextConfig } from "next";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "../..");
 const internalApiUrl = process.env.INTERNAL_API_URL ?? "http://127.0.0.1:4000";
+// Only the production deployment may be indexed; staging answers noindex for
+// every path so a closed environment cannot leak into search results.
+const indexingAllowed = process.env.DEPLOYMENT_ENVIRONMENT === "production";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
@@ -13,6 +16,12 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   async headers() {
     return [
+      ...(indexingAllowed
+        ? []
+        : [{
+            headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+            source: "/:path*",
+          }]),
       {
         headers: [
           { key: "Cache-Control", value: "private, no-store" },
