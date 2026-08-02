@@ -44,3 +44,19 @@
 {$WWW_SITE_ADDRESS} {
 	redir {$CANONICAL_ORIGIN:https://an30.ru}{uri} permanent
 }
+
+# Container-local liveness endpoint.
+#
+# The public site redirects HTTP to HTTPS, so probing it by loopback address
+# fails TLS: the request carries no matching server name. This listener is
+# bound inside the container, is never published, and answers regardless of
+# which host name the deployment serves.
+http://localhost:8080 {
+	handle /proxy-health {
+		respond "ok" 200
+	}
+
+	handle {
+		respond 404
+	}
+}

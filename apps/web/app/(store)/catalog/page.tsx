@@ -3,13 +3,16 @@ import Link from "next/link";
 
 import { AddToCartButton } from "../_components/cart-actions";
 import styles from "../_components/storefront.module.css";
+import { JsonLd } from "../_components/json-ld";
 import { formatRubles, searchCatalog, StorefrontApiError } from "../_lib/catalog-api";
 import type { CatalogItem } from "../_lib/catalog-api";
+import { breadcrumbJsonLd, pageMetadata } from "../_lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  description: "Каталог автозапчастей АН-30: поиск по названию и артикулу, актуальные цены и остатки из 1С.",
+  path: "/catalog",
   title: "Каталог автозапчастей",
-  description: "Поиск автозапчастей АН-30 по названию и артикулу.",
-};
+});
 
 type Availability = "all" | "in_stock" | "out_of_stock";
 type Sort = "name" | "price_asc" | "price_desc" | "relevance";
@@ -43,6 +46,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
 
   return (
     <div className={styles.page}>
+      <JsonLd value={breadcrumbJsonLd([{ name: "Главная", path: "/" }, { name: "Каталог", path: "/catalog" }])} />
       <header className={styles.pageTitle}>
         <h1>Каталог</h1>
         <p>Введите не менее двух символов. Поиск работает по названию и артикулу из 1С.</p>

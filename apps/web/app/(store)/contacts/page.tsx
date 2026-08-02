@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
 
 import { ContactRequestForm } from "../_components/contact-request-form";
+import { JsonLd } from "../_components/json-ld";
 import styles from "../_components/storefront.module.css";
+import { organizationJsonLd, pageMetadata } from "../_lib/seo";
 
-export const metadata: Metadata = {
-  title: "Контакты",
+export const metadata: Metadata = pageMetadata({
   description: "Адрес, телефон и защищённая форма обращения магазина автозапчастей АН-30 в Чернышевске.",
-};
+  path: "/contacts",
+  title: "Контакты",
+});
 
 export default function ContactsPage() {
   const dataCollectionEnabled = process.env.LEGAL_DOCUMENTS_APPROVED === "true";
   return (
     <div className={styles.page}>
+      <JsonLd value={organizationJsonLd()} />
       <header className={styles.pageTitle}><h1>Связаться с АН-30</h1><p>Ответим по наличию, заказу или работе магазина. Для подбора сложной детали лучше использовать форму специалиста.</p></header>
       <div className={styles.contactLayout}>
         <section className={styles.contactDetails} aria-labelledby="contact-details-title">
