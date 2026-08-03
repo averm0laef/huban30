@@ -226,7 +226,7 @@ const featureItems: FeatureItem[] = [
   { Icon: HeadsetIcon, title: "Помощь эксперта", text: "Поможем подобрать деталь" },
 ];
 
-/** Dark 2x3 feature panel — deliberately dark in both themes, real service facts only. */
+/** Ink-blue 2x3 feature panel, real service facts only — no invented stats. */
 export function FeaturePanel() {
   return (
     <section className={styles.featurePanel} aria-labelledby="feature-panel-title">

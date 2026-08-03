@@ -1,26 +1,31 @@
 /* ============================================================
    АН-30 storefront design system
-   Tokens live on `.storefront`; the dark selectors below must
-   stay in sync with it. Everything else in this file consumes
-   the tokens — avoid hardcoded color/shadow/spacing values.
+   One light theme only — there is no dark variant. Tokens live on
+   `.storefront`; everything else in this file consumes them —
+   avoid hardcoded color/shadow/spacing values.
+
+   Direction: rounded, calm and dense, closer to a parts-catalog
+   reference (rossko.ru) than to the sharper-cornered previous pass —
+   but in the shop's own ink-blue/white palette with the yellow used
+   only for small emphasis, never as a second structural color.
    ============================================================ */
 
 .storefront {
-  /* Brand & surface colors (light) */
-  --store-bg: #f6f8fb;
-  --store-surface: #fcfdfe;
-  --store-surface-strong: #e9eef7;
-  --store-text: #15213a;
-  --store-muted: #5d687d;
-  --store-brand: #173ea5;
+  /* Brand & surface colors */
+  --store-bg: #eef2f9;
+  --store-surface: #ffffff;
+  --store-surface-strong: #e4eaf5;
+  --store-text: #142038;
+  --store-muted: #5b6679;
+  --store-brand: #1743ad;
   --store-brand-strong: #0d2d83;
-  --store-accent: #f4c400;
-  --store-accent-text: #182238;
-  --store-border: #d8deea;
+  --store-accent: #f5c400;
+  --store-accent-text: #1a2338;
+  --store-border: #d7deec;
   --store-danger: #b42318;
   --store-success: #18794e;
 
-  /* Header "signage" band — stays ink-blue in both themes on purpose */
+  /* Header "signage" band — the structural blue anchor */
   --store-header-bg: #0f2d66;
   --store-header-bg-strong: #0a2150;
   --store-header-text: #f5f8ff;
@@ -30,16 +35,17 @@
   --store-header-control-bg-hover: rgb(245 248 255 / 20%);
   --store-header-control-border: rgb(245 248 255 / 30%);
 
-  /* Elevation (light) */
-  --store-shadow-xs: 0 1px 2px rgb(16 30 60 / 7%);
-  --store-shadow-sm: 0 1px 2px rgb(16 30 60 / 6%), 0 6px 16px -6px rgb(16 30 60 / 16%);
-  --store-shadow-md: 0 4px 10px -2px rgb(16 30 60 / 14%), 0 18px 36px -10px rgb(16 30 60 / 18%);
-  --store-shadow-lg: 0 14px 28px -8px rgb(16 30 60 / 22%), 0 32px 64px -18px rgb(16 30 60 / 28%);
+  /* Elevation — soft, low-contrast; calm rather than punchy */
+  --store-shadow-xs: 0 1px 2px rgb(16 30 60 / 6%);
+  --store-shadow-sm: 0 1px 2px rgb(16 30 60 / 5%), 0 8px 20px -10px rgb(16 30 60 / 16%);
+  --store-shadow-md: 0 6px 16px -6px rgb(16 30 60 / 12%), 0 20px 40px -14px rgb(16 30 60 / 16%);
+  --store-shadow-lg: 0 16px 32px -12px rgb(16 30 60 / 18%), 0 36px 72px -22px rgb(16 30 60 / 22%);
 
-  /* Radii */
-  --store-radius-sm: 8px;
-  --store-radius: 12px;
-  --store-radius-lg: 16px;
+  /* Radii — generous and rounded throughout; the single biggest lever
+     for the "rounded" direction the owner keeps pointing at. */
+  --store-radius-sm: 12px;
+  --store-radius: 18px;
+  --store-radius-lg: 26px;
   --store-radius-full: 999px;
 
   /* Spacing scale */
@@ -53,8 +59,10 @@
   --store-space-2xl: 48px;
   --store-space-3xl: 64px;
 
-  /* Typography */
-  --store-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Typography — Golos Text (self-hosted variable font, full Cyrillic
+     coverage) with a system fallback stack that also covers Cyrillic,
+     so text never breaks before the webfont loads or if it fails. */
+  --store-font-sans: "Golos Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --store-font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", monospace;
   --store-weight-medium: 650;
   --store-weight-bold: 750;
@@ -63,7 +71,7 @@
   --store-tracking-tighter: -0.045em;
   --store-tracking-wide: 0.09em;
 
-  /* Motion — subtle and purposeful (MOTION_INTENSITY 3) */
+  /* Motion — short and purposeful, never decorative (MOTION_INTENSITY 3) */
   --store-ease: cubic-bezier(0.22, 0.7, 0.24, 1);
   --store-duration-fast: 140ms;
   --store-duration-base: 200ms;
@@ -81,70 +89,6 @@
   font-family: var(--store-font-sans);
 }
 
-.storefront[data-theme="dark"] {
-  --store-bg: #101522;
-  --store-surface: #171e2d;
-  --store-surface-strong: #202a3d;
-  --store-text: #f4f6fb;
-  --store-muted: #aeb8cb;
-  --store-brand: #86a6ff;
-  --store-brand-strong: #abc0ff;
-  --store-accent: #e8bb00;
-  --store-accent-text: #111827;
-  --store-border: #303b50;
-  --store-danger: #ff8a80;
-  --store-success: #67d4a0;
-
-  --store-header-bg: #0a1830;
-  --store-header-bg-strong: #060f20;
-  --store-header-text: #f2f5ff;
-  --store-header-muted: rgb(242 245 255 / 70%);
-  --store-header-border: rgb(242 245 255 / 12%);
-  --store-header-control-bg: rgb(242 245 255 / 8%);
-  --store-header-control-bg-hover: rgb(242 245 255 / 16%);
-  --store-header-control-border: rgb(242 245 255 / 24%);
-
-  --store-shadow-xs: 0 1px 2px rgb(0 0 0 / 34%);
-  --store-shadow-sm: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 18px -6px rgb(0 0 0 / 48%);
-  --store-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 42%), 0 20px 40px -10px rgb(0 0 0 / 52%);
-  --store-shadow-lg: 0 16px 32px -8px rgb(0 0 0 / 55%), 0 36px 72px -18px rgb(0 0 0 / 62%);
-
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  .storefront[data-theme="system"] {
-    --store-bg: #101522;
-    --store-surface: #171e2d;
-    --store-surface-strong: #202a3d;
-    --store-text: #f4f6fb;
-    --store-muted: #aeb8cb;
-    --store-brand: #86a6ff;
-    --store-brand-strong: #abc0ff;
-    --store-accent: #e8bb00;
-    --store-accent-text: #111827;
-    --store-border: #303b50;
-    --store-danger: #ff8a80;
-    --store-success: #67d4a0;
-
-    --store-header-bg: #0a1830;
-    --store-header-bg-strong: #060f20;
-    --store-header-text: #f2f5ff;
-    --store-header-muted: rgb(242 245 255 / 70%);
-    --store-header-border: rgb(242 245 255 / 12%);
-    --store-header-control-bg: rgb(242 245 255 / 8%);
-    --store-header-control-bg-hover: rgb(242 245 255 / 16%);
-    --store-header-control-border: rgb(242 245 255 / 24%);
-
-    --store-shadow-xs: 0 1px 2px rgb(0 0 0 / 34%);
-    --store-shadow-sm: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 18px -6px rgb(0 0 0 / 48%);
-    --store-shadow-md: 0 4px 12px -2px rgb(0 0 0 / 42%), 0 20px 40px -10px rgb(0 0 0 / 52%);
-    --store-shadow-lg: 0 16px 32px -8px rgb(0 0 0 / 55%), 0 36px 72px -18px rgb(0 0 0 / 62%);
-
-    color-scheme: dark;
-  }
-}
-
 .storefront *,
 .storefront *::before,
 .storefront *::after {
@@ -159,13 +103,26 @@
   font: inherit;
 }
 
+/* Focus ring starts at 0 offset/transparent and eases outward on focus,
+   instead of popping in — a small, purposeful motion rather than a
+   decorative one, and still fully visible per WCAG 2.2. */
+.storefront a,
+.storefront button,
+.storefront input,
+.storefront select,
+.storefront textarea,
+.storefront summary {
+  outline: 3px solid transparent;
+  outline-offset: 0;
+  transition: outline-color var(--store-duration-fast) var(--store-ease), outline-offset var(--store-duration-fast) var(--store-ease);
+}
 .storefront a:focus-visible,
 .storefront button:focus-visible,
 .storefront input:focus-visible,
 .storefront select:focus-visible,
 .storefront textarea:focus-visible,
 .storefront summary:focus-visible {
-  outline: 3px solid var(--store-accent);
+  outline-color: var(--store-accent);
   outline-offset: 3px;
   border-radius: 2px;
 }
@@ -303,22 +260,6 @@
 .headerCartWrap:hover { background: var(--store-surface-strong); color: var(--store-brand); }
 .headerIconLink:hover svg,
 .headerCartWrap:hover > svg { color: var(--store-brand); }
-.headerTopActions :global(.storefront-theme-toggle) {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--store-space-xs);
-  border: 0;
-  border-radius: var(--store-radius-sm);
-  background: transparent;
-  color: var(--store-muted);
-  font-size: 0.78rem;
-  font-weight: var(--store-weight-medium);
-  cursor: pointer;
-  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
-}
-.headerTopActions :global(.storefront-theme-toggle):hover { background: var(--store-surface-strong); color: var(--store-brand); }
-
 .headerTopActions :global(.storefront-cart-button) {
   min-height: 44px;
   display: inline-flex;
@@ -353,11 +294,14 @@
 .headerBand { background: var(--store-header-bg); color: var(--store-header-text); }
 .headerBandInner { min-height: 48px; display: flex; align-items: center; gap: var(--store-space-sm); padding: 12px 0; padding-top: max(12px, env(safe-area-inset-top)); }
 
-.headerSearch {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 720px;
-  margin: 0 auto;
+/* Mobile-only logo on the blue band — row A's own lockup is hidden below
+   768px, so without this the brand mark disappears on a phone entirely. */
+.headerBandBrand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: var(--store-header-text); text-decoration: none; }
+.headerBandBrandMark { height: 26px; width: auto; display: block; }
+
+.searchBox { position: relative; flex: 1 1 auto; min-width: 0; max-width: 720px; margin: 0 auto; }
+
+.searchForm {
   height: 52px;
   display: flex;
   align-items: center;
@@ -367,9 +311,9 @@
   box-shadow: var(--store-shadow-sm);
   transition: box-shadow var(--store-duration-fast) var(--store-ease);
 }
-.headerSearch:focus-within { box-shadow: var(--store-shadow-md), 0 0 0 3px color-mix(in srgb, var(--store-accent) 55%, transparent); }
-.headerSearch svg { flex: 0 0 auto; margin-left: var(--store-space-lg); color: var(--store-muted); }
-.headerSearch input {
+.searchForm:focus-within { box-shadow: var(--store-shadow-md), 0 0 0 3px color-mix(in srgb, var(--store-accent) 55%, transparent); }
+.searchForm svg { flex: 0 0 auto; margin-left: var(--store-space-lg); color: var(--store-muted); }
+.searchForm input {
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -379,8 +323,10 @@
   color: var(--store-text);
   font-size: 1rem; /* >=16px: keeps iOS Safari from zooming on focus */
 }
-.headerSearch input::placeholder { color: var(--store-muted); }
-.headerSearch button {
+.searchForm input::placeholder { color: var(--store-muted); }
+/* Native `type=search` clear button, drawn to scale with a rounded field. */
+.searchForm input::-webkit-search-cancel-button { margin-right: 2px; }
+.searchForm button {
   flex: 0 0 auto;
   height: 40px;
   margin-right: 6px;
@@ -392,12 +338,58 @@
   font-size: 0.86rem;
   font-weight: var(--store-weight-bold);
   cursor: pointer;
-  transition: filter var(--store-duration-fast) var(--store-ease);
+  transition: filter var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
 }
-.headerSearch button:hover { filter: brightness(1.06); }
+.searchForm button:hover { filter: brightness(1.06); }
+.searchForm button:active { transform: scale(0.97); }
 
-.mobileMenu { position: relative; flex: 0 0 auto; }
-.mobileMenu summary {
+/* Search suggestions — real catalog results only, debounced from
+   search-box.tsx. Loading/empty/error states are plain text, never a
+   fabricated result row. */
+.searchSuggestions {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  padding: var(--store-space-xs);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+  box-shadow: var(--store-shadow-lg);
+  animation: store-suggestions-in var(--store-duration-base) var(--store-ease);
+}
+@keyframes store-suggestions-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.searchSuggestionStatus { margin: 0; padding: var(--store-space-sm); color: var(--store-muted); font-size: 0.9rem; }
+.searchSuggestion {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: var(--store-space-sm);
+  padding: 8px var(--store-space-sm);
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  text-decoration: none;
+  transition: background var(--store-duration-fast) var(--store-ease);
+}
+.searchSuggestion:hover,
+.searchSuggestion[data-active] { background: var(--store-surface-strong); }
+.searchSuggestionName { grid-column: 1 / 2; font-weight: var(--store-weight-bold); font-size: 0.92rem; line-height: 1.3; }
+.searchSuggestionMeta { grid-column: 1 / 2; color: var(--store-muted); font-size: 0.78rem; font-family: var(--store-font-mono); }
+.searchSuggestionPrice { grid-column: 2 / 3; grid-row: 1 / span 2; align-self: center; font-variant-numeric: tabular-nums; font-weight: var(--store-weight-black); white-space: nowrap; }
+.searchSuggestionAll { display: block; margin-top: 2px; padding: 10px var(--store-space-sm); border-top: 1px solid var(--store-border); border-radius: var(--store-radius-sm); color: var(--store-brand); font-size: 0.86rem; font-weight: var(--store-weight-bold); text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
+.searchSuggestionAll:hover { background: var(--store-surface-strong); }
+
+/* Burger trigger — visible only below 768px (see the 768px block further
+   down), where the header band is the entire header. */
+.burgerButton {
+  flex: 0 0 auto;
   width: 44px;
   height: 44px;
   display: grid;
@@ -407,33 +399,87 @@
   background: var(--store-header-control-bg);
   color: var(--store-header-text);
   cursor: pointer;
-  list-style: none;
   transition: background var(--store-duration-fast) var(--store-ease);
 }
-.mobileMenu summary:hover { background: var(--store-header-control-bg-hover); }
-.mobileMenu summary::-webkit-details-marker { display: none; }
-.mobileMenu nav { position: absolute; top: 100%; right: 0; z-index: 25; display: grid; gap: 2px; width: min(320px, 84vw); margin-top: 10px; padding: var(--store-space-xs); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-lg); max-height: calc(100dvh - 96px); overflow-y: auto; }
-.mobileMenuGroupLabel { margin: 8px 0 0; padding: 6px var(--store-space-sm) 0; color: var(--store-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
-.mobileMenu a,
-.mobileMenu nav :global(.storefront-theme-toggle) {
-  min-height: 44px;
-  width: 100%;
+.burgerButton:hover { background: var(--store-header-control-bg-hover); }
+
+/* Slide-in drawer. The panel stays mounted at all times (see
+   mobile-drawer.tsx) so both open and close get a real CSS transition —
+   there is no mount-timing trick and no popping in/out. */
+.drawerLayer { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+.drawerLayer[data-open] { pointer-events: auto; }
+
+.drawerBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgb(8 15 30 / 55%);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--store-duration-base) var(--store-ease);
+}
+.drawerLayer[data-open] .drawerBackdrop { opacity: 1; }
+
+.drawerPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 86vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--store-surface);
+  box-shadow: var(--store-shadow-lg);
+  transform: translateX(100%);
+  transition: transform var(--store-duration-slow) var(--store-ease);
+}
+.drawerLayer[data-open] .drawerPanel { transform: translateX(0); }
+
+.drawerHead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--store-space-sm);
+  padding: max(var(--store-space-sm), env(safe-area-inset-top)) var(--store-space-sm) var(--store-space-sm) var(--store-space-md);
+  border-bottom: 1px solid var(--store-border);
+}
+.drawerBrand { display: flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
+.drawerBrandMark { height: 30px; width: auto; display: block; }
+.drawerClose {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.drawerClose:hover { background: var(--store-surface-strong); color: var(--store-brand); }
+
+.drawerBody { flex: 1 1 auto; overflow-y: auto; padding: var(--store-space-sm) var(--store-space-sm) calc(var(--store-space-lg) + env(safe-area-inset-bottom)); }
+.drawerNav { display: grid; gap: 2px; }
+.drawerNavGroup { display: grid; gap: 2px; }
+.drawerNavGroupLabel { margin: var(--store-space-sm) 0 0; padding: 6px var(--store-space-sm) 0; color: var(--store-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.drawerNav a {
+  min-height: 48px;
   display: flex;
   align-items: center;
   padding: 0 var(--store-space-sm);
-  border: 0;
   border-radius: var(--store-radius-sm);
-  background: transparent;
   color: var(--store-text);
-  font-size: 0.94rem;
+  font-size: 0.96rem;
   font-weight: var(--store-weight-medium);
-  text-align: left;
   text-decoration: none;
-  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease);
 }
-.mobileMenu a:hover,
-.mobileMenu nav :global(.storefront-theme-toggle):hover { background: var(--store-surface-strong); }
-.mobileMenuPhone { color: var(--store-brand) !important; font-weight: var(--store-weight-bold) !important; }
+.drawerNav a:hover { background: var(--store-surface-strong); }
+.drawerNavPhone { margin-top: var(--store-space-sm); border-top: 1px solid var(--store-border); color: var(--store-brand) !important; font-weight: var(--store-weight-bold) !important; }
 
 /* ---------------- Layout ---------------- */
 
@@ -556,8 +602,8 @@
 .sectionHead h2 { margin: 0; color: var(--store-text); font-size: clamp(1.6rem, 3.4vw, 2.35rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); line-height: 1.12; }
 .sectionHead p { margin: 10px 0 0; color: var(--store-muted); font-size: 1rem; line-height: 1.55; }
 
-/* Dark feature panel — deliberately dark in both themes, like the header
-   band, so it reads as a distinct "signage" surface either way. */
+/* Ink-blue feature panel, like the header band, so it reads as a distinct
+   "signage" surface against the rest of the (light) page. */
 .featurePanel { background: var(--store-header-bg-strong); color: var(--store-header-text); }
 .featurePanelInner { width: var(--store-container); margin: 0 auto; padding: clamp(28px, 5vw, 48px) 0; }
 .featurePanelHead { margin: 0 0 var(--store-space-lg); color: var(--store-header-muted); font-size: 0.76rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
@@ -718,7 +764,7 @@
 .formPanel > h2 { margin: 0; font-size: clamp(1.45rem, 3vw, 2rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .formPanel > p { color: var(--store-muted); line-height: 1.55; }
 .segmentedNav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 0 0 var(--store-space-xl); padding: 3px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); }
-.segmentedNav a { min-height: 40px; display: grid; place-items: center; padding: 4px 8px; border-radius: 6px; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-bold); text-align: center; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.segmentedNav a { min-height: 40px; display: grid; place-items: center; padding: 4px 8px; border-radius: 8px; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-bold); text-align: center; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
 .segmentedNav a:hover { color: var(--store-text); }
 .segmentedNav a[aria-current="page"] { background: var(--store-surface-strong); color: var(--store-text); box-shadow: var(--store-shadow-xs); }
 .stackForm { display: grid; gap: var(--store-space-md); }
@@ -746,7 +792,7 @@
 .profileHeading p:last-child,
 .orderHeading p:last-child { margin: 10px 0 0; color: var(--store-muted); }
 .profileNav { position: sticky; top: 150px; z-index: 2; display: flex; gap: 6px; margin: var(--store-space-xl) 0 40px; padding: 7px; overflow-x: auto; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); box-shadow: var(--store-shadow-xs); }
-.profileNav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 13px; border-radius: 6px; color: var(--store-text); font-size: 0.88rem; font-weight: var(--store-weight-bold); white-space: nowrap; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
+.profileNav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 13px; border-radius: 8px; color: var(--store-text); font-size: 0.88rem; font-weight: var(--store-weight-bold); white-space: nowrap; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .profileNav a:hover { background: var(--store-surface-strong); }
 .profileSection,
 .detailSection { padding: 0 0 42px; margin: 0 0 42px; border-bottom: 1px solid var(--store-border); scroll-margin-top: 160px; }
@@ -911,13 +957,15 @@
    ordinary tablet/desktop-only easing that isn't reachability-critical. */
 @media (min-width: 768px) {
   .headerTop { display: block; }
-  .mobileMenu { display: none; }
+  .headerBandBrand,
+  .burgerButton,
+  .drawerLayer { display: none; }
 }
 
 /* Row A's content budget (brand + catalog link + location + expert pill +
-   phone + theme toggle + cart + account) only fits the full-text layout
-   once the container is roughly 1150px+ wide, so location drops first —
-   it is the least essential item — well before that, at 1199px. */
+   phone + cart + account) only fits the full-text layout once the
+   container is roughly 1150px+ wide, so location drops first — it is the
+   least essential item — well before that, at 1199px. */
 @media (max-width: 1199px) {
   .headerLocation { display: none; }
 }
@@ -949,6 +997,11 @@
 }
 
 @media (max-width: 767px) {
+  /* Logo + search + burger all share row B here — keep the fixed-width
+     items compact so the search field never gets pinched at 320px. */
+  .headerBandInner { gap: var(--store-space-2xs); }
+  .headerBandBrandMark { height: 22px; }
+  .searchForm svg { margin-left: var(--store-space-sm); }
   .promo { width: 100%; padding: 0 16px; }
   .categorySection,
   .featurePanelInner,

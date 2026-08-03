@@ -2,8 +2,9 @@
    Floating "chat with the manager" widget.
    All widget-specific styling lives here — everything reads the
    `--store-*` custom properties defined on `.storefront` (see
-   storefront.module.css) so it follows the site's light/dark
-   theme automatically. Nothing here hardcodes a brand color.
+   storefront.module.css), so it stays in sync with the rest of
+   the (single, light) theme automatically. Nothing here hardcodes
+   a brand color.
    ============================================================ */
 
 .launcher {
