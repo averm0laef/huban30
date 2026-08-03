@@ -37,14 +37,14 @@ services:
       GEMINI_API_KEY_FILE: !reset null
       LEGAL_DOCUMENTS_APPROVED: "true"
       PAYMENTS_PROVIDER: sandbox
+      POSTGRES_PASSWORD: an30-app-local-development-only
+      REDIS_PASSWORD: an30-local-development-only
       # This override mounts no secrets, and config.ts resolves every *_FILE
       # path before it checks whether the integration is enabled. Left
       # inherited from compose.yaml these would make the API crash on ENOENT
       # at startup even though ROSSKO_ENABLED defaults to false.
       ROSSKO_KEY1_FILE: !reset null
       ROSSKO_KEY2_FILE: !reset null
-      POSTGRES_PASSWORD: an30-app-local-development-only
-      REDIS_PASSWORD: an30-local-development-only
       SANDBOX_PAYMENT_WEBHOOK_SECRET: an30-local-sandbox-webhook-secret-public-only
       SESSION_SECRET: an30-local-session-hmac-secret-public-only
     secrets: !reset []
