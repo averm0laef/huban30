@@ -54,12 +54,12 @@ const SUCCESS_XML = `<?xml version="1.0" encoding="utf-8"?>
             <partnumber>W914/2</partnumber>
             <name>Масляный фильтр</name>
             <stocks>
-              <Stock>
+              <stock>
                 <id>s1</id>
                 <price>456.70</price>
                 <count>12</count>
                 <delivery_time>2</delivery_time>
-              </Stock>
+              </stock>
             </stocks>
             <crosses></crosses>
           </Part>
@@ -104,7 +104,8 @@ describe("RosskoSupplierProvider", () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0]!;
-    expect(url).toBe("https://api.rossko.ru/service/v2.1/");
+    // The operation name belongs in the path; the bare directory answers 404.
+    expect(url).toBe("https://api.rossko.ru/service/v2.1/GetSearch");
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>).SOAPAction).toBe("https://api.rossko.ru/GetSearch");
     expect(String(init.body)).toContain("<KEY1>test-key-1</KEY1>");

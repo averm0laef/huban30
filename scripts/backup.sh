@@ -33,6 +33,15 @@ passphrase_file="$secrets_dir/backup_passphrase.txt"
 log() { printf '{"level":"info","service":"backup","event":"%s","message":"%s"}\n' "$1" "$2"; }
 fail() { printf '{"level":"error","service":"backup","event":"%s","message":"%s"}\n' "$1" "$2" >&2; exit 1; }
 
+# GnuPG insists on a writable home directory. The systemd unit runs with
+# ProtectHome and ProtectSystem, which makes /root read-only, so the default
+# /root/.gnupg cannot be created and gpg aborts. A private throwaway home keeps
+# the script working under the hardened unit and by hand alike.
+GNUPGHOME=$(mktemp -d)
+export GNUPGHOME
+chmod 700 "$GNUPGHOME"
+trap 'rm -rf "$GNUPGHOME"' EXIT INT TERM
+
 [ -r "$env_file" ] || fail "config.missing" "Env file $env_file is not readable"
 [ -d "$app_dir" ] || fail "config.missing" "Application directory $app_dir does not exist"
 

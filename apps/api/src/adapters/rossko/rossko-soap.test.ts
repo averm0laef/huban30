@@ -127,18 +127,18 @@ describe("parseSearchResponseXml", () => {
             <partnumber>W914/2</partnumber>
             <name>Масляный фильтр</name>
             <stocks>
-              <Stock>
+              <stock>
                 <id>stock-1</id>
                 <price>456.70</price>
                 <count>12</count>
                 <delivery_time>2</delivery_time>
-              </Stock>
-              <Stock>
+              </stock>
+              <stock>
                 <id>stock-2</id>
                 <price>399.00</price>
                 <count>0</count>
                 <delivery_time></delivery_time>
-              </Stock>
+              </stock>
             </stocks>
             <crosses>
               <Part>
@@ -147,12 +147,12 @@ describe("parseSearchResponseXml", () => {
                 <partnumber>OC90</partnumber>
                 <name>Масляный фильтр аналог</name>
                 <stocks>
-                  <Stock>
+                  <stock>
                     <id>stock-3</id>
                     <price>410.00</price>
                     <count>5</count>
                     <delivery_time>3</delivery_time>
-                  </Stock>
+                  </stock>
                 </stocks>
                 <crosses></crosses>
               </Part>
@@ -212,18 +212,18 @@ describe("parseSearchResponseXml", () => {
             <partnumber>BADPRICE</partnumber>
             <name>Деталь</name>
             <stocks>
-              <Stock>
+              <stock>
                 <id>stock-bad</id>
                 <price>not-a-price</price>
                 <count>4</count>
                 <delivery_time>1</delivery_time>
-              </Stock>
-              <Stock>
+              </stock>
+              <stock>
                 <id>stock-good</id>
                 <price>10.00</price>
                 <count>2</count>
                 <delivery_time>1</delivery_time>
-              </Stock>
+              </stock>
             </stocks>
             <crosses></crosses>
           </Part>
@@ -292,5 +292,56 @@ describe("parseSearchResponseXml", () => {
         </PartsList>${ENVELOPE_CLOSE}`;
     const result = parseSearchResponseXml(xml);
     expect(result.parts[0]).toMatchObject({ brand: "M&M", name: `"Название"`, partNumber: "A<B" });
+  });
+});
+
+describe("parseSearchResponseXml against the real response shape", () => {
+  // Captured from a live GetSearch call. A successful response carries no
+  // <message> element — only failures do. Requiring one made every real
+  // successful search look like a malformed reply.
+  const liveSuccess = `<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="https://api.rossko.ru/">
+<SOAP-ENV:Body><ns1:GetSearchResponse><ns1:SearchResult>
+<ns1:success>true</ns1:success>
+<ns1:text>W914/2</ns1:text>
+<ns1:PartsList><ns1:Part>
+<ns1:guid>NSII0008022482</ns1:guid>
+<ns1:brand>UNIGOM</ns1:brand>
+<ns1:partnumber>W9142</ns1:partnumber>
+<ns1:name>Шланг радиатора</ns1:name>
+<ns1:crosses><ns1:Part>
+<ns1:guid>NSII0001500755</ns1:guid>
+<ns1:brand>Malo</ns1:brand>
+<ns1:partnumber>17670A</ns1:partnumber>
+<ns1:name>Шланг радиатора</ns1:name>
+<ns1:stocks><ns1:stock>
+<ns1:id>HST1542906108</ns1:id><ns1:price>250</ns1:price><ns1:count>12</ns1:count>
+</ns1:stock></ns1:stocks>
+</ns1:Part></ns1:crosses>
+</ns1:Part></ns1:PartsList>
+</ns1:SearchResult></ns1:GetSearchResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+
+  it("parses a successful response that omits the message element", () => {
+    const result = parseSearchResponseXml(liveSuccess);
+
+    expect(result.success).toBe(true);
+    expect(result.parts).toHaveLength(1);
+    expect(result.parts[0]?.brand).toBe("UNIGOM");
+    expect(result.parts[0]?.partNumber).toBe("W9142");
+  });
+
+  it("keeps the analogue and its stock from the nested crosses list", () => {
+    const cross = parseSearchResponseXml(liveSuccess).parts[0]?.crosses?.[0];
+
+    expect(cross?.brand).toBe("Malo");
+    expect(cross?.stocks?.[0]?.priceKopeks).toBe(25_000);
+  });
+
+  it("still reports a failure that does carry a message", () => {
+    const failure = `<?xml version="1.0"?><SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="https://api.rossko.ru/"><SOAP-ENV:Body><ns1:GetSearchResponse><ns1:SearchResult><ns1:success>false</ns1:success><ns1:message>Указанный тип доставки не найден</ns1:message></ns1:SearchResult></ns1:GetSearchResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+    const result = parseSearchResponseXml(failure);
+
+    expect(result.success).toBe(false);
+    expect(result.message).toBe("Указанный тип доставки не найден");
   });
 });

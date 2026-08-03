@@ -23,6 +23,13 @@ passphrase_file="$secrets_dir/backup_passphrase.txt"
 log() { printf '{"level":"info","service":"restore","event":"%s","message":"%s"}\n' "$1" "$2"; }
 fail() { printf '{"level":"error","service":"restore","event":"%s","message":"%s"}\n' "$1" "$2" >&2; exit 1; }
 
+# See scripts/backup.sh: gpg needs a writable home, which a hardened systemd
+# unit or a locked-down shell may not provide at the default location.
+GNUPGHOME=$(mktemp -d)
+export GNUPGHOME
+chmod 700 "$GNUPGHOME"
+trap 'rm -rf "$GNUPGHOME"' EXIT INT TERM
+
 mode=${1:-}
 archive=${2:-}
 [ -n "$mode" ] && [ -n "$archive" ] || fail "usage" "Usage: restore.sh --verify|--into-production <archive>"

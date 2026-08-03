@@ -2,10 +2,14 @@ import { createHash } from "node:crypto";
 
 import type { SupplierPart, SupplierSearchResult, SupplierStock } from "../provider-contracts.js";
 
-// Rossko GetSearch, verified live against https://api.rossko.ru/service/v2.1/:
+// Rossko GetSearch, verified live:
 //   targetNamespace = https://api.rossko.ru/, SOAPAction = "https://api.rossko.ru/GetSearch".
 // The v1 endpoint on chita.rossko.ru is closed; do not fall back to it.
-export const ROSSKO_ENDPOINT = "https://api.rossko.ru/service/v2.1/";
+//
+// The operation name is part of the path — the WSDL publishes
+// soap:address location="https://api.rossko.ru/service/v2.1/GetSearch".
+// Posting to the bare service/v2.1/ directory answers HTTP 404.
+export const ROSSKO_ENDPOINT = "https://api.rossko.ru/service/v2.1/GetSearch";
 export const ROSSKO_NAMESPACE = "https://api.rossko.ru/";
 export const ROSSKO_SOAP_ACTION = "https://api.rossko.ru/GetSearch";
 
@@ -284,7 +288,10 @@ function findResultNode(root: XmlNode): XmlNode | undefined {
     if (!node) break;
     visited += 1;
     if (visited > MAX_XML_NODE_VISITS) return undefined;
-    if (findChild(node, "success") && findChild(node, "message")) return node;
+    // `message` is only present when the call failed — a successful GetSearch
+    // answers success/text/PartsList with no message at all. Requiring both
+    // made the parser recognise error responses and nothing else.
+    if (findChild(node, "success")) return node;
     for (const child of node.children) stack.push(child);
   }
   return undefined;
@@ -322,7 +329,10 @@ function parseStock(node: XmlNode): SupplierStock | null {
 function parsePart(node: XmlNode, depth: number): SupplierPart {
   const stocksNode = findChild(node, "stocks");
   const stocks = stocksNode
-    ? findChildren(stocksNode, "Stock")
+    // The element is lowercase `stock`; `Stock` is only the WSDL type name.
+    // Matching the type name silently produced price-less results for every
+    // supplier part. `Part` really is capitalised, so it stays as it is.
+    ? findChildren(stocksNode, "stock")
       .slice(0, MAX_STOCKS_PER_PART)
       .map(parseStock)
       .filter((stock): stock is SupplierStock => stock !== null)
