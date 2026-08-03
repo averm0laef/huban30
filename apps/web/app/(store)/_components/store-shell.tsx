@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -12,6 +11,7 @@ import {
   STORE_STREET,
 } from "../../site-config";
 import type { MessengerLink } from "../../site-config";
+import { BrandLockup } from "./brand-mark";
 import { CartButton, CartPanel, MobileCartButton } from "./cart-actions";
 import { CartProvider } from "./cart-provider";
 import { AccountNavigation, SessionNavigationProvider } from "./session-navigation";
@@ -39,7 +39,7 @@ const companyLinks = [
 
 function SearchIcon() {
   return (
-    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="7" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
@@ -57,32 +57,13 @@ function GridIcon() {
   );
 }
 
-function ChevronDownIcon() {
-  return (
-    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
 function HeadsetIcon() {
   return (
-    <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 13v-1a8 8 0 0 1 16 0v1" />
       <rect x="3" y="13" width="4" height="6" rx="1.5" />
       <rect x="17" y="13" width="4" height="6" rx="1.5" />
       <path d="M19 19v1a3 3 0 0 1-3 3h-2" />
-    </svg>
-  );
-}
-
-function FileTextIcon() {
-  return (
-    <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
-      <path d="M14 3v5h5" />
-      <path d="M9 13h6" />
-      <path d="M9 17h6" />
     </svg>
   );
 }
@@ -113,6 +94,52 @@ function PinIcon() {
   );
 }
 
+function CartIcon() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 4h2l2.4 12.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 8H6" />
+      <circle cx="9.5" cy="20.5" r="1.4" />
+      <circle cx="17.5" cy="20.5" r="1.4" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.5 20c1.4-3.8 4.4-5.8 7.5-5.8s6.1 2 7.5 5.8" />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M6 10v9h12v-9" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 5h16v11H8l-4 4V5Z" />
+    </svg>
+  );
+}
+
 function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
   if (id === "telegram") {
     return (
@@ -135,78 +162,85 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
 function HeaderSearchForm({ className, id }: { className?: string; id: string }) {
   return (
     <form className={className} action="/catalog" method="get" role="search">
-      <label className={styles.visuallyHidden} htmlFor={id}>Поиск по названию или артикулу</label>
-      <input id={id} name="q" type="search" minLength={2} maxLength={120} placeholder="Поиск по названию или артикулу" />
-      <button type="submit" aria-label="Найти в каталоге"><SearchIcon /></button>
+      <label className={styles.visuallyHidden} htmlFor={id}>Поиск по VIN, названию или артикулу</label>
+      <SearchIcon />
+      <input id={id} name="q" type="search" minLength={2} maxLength={120} placeholder="VIN, название или артикул" />
+      <button type="submit" aria-label="Найти в каталоге">Найти</button>
     </form>
   );
 }
 
+/** Secondary nav shared by the mobile burger (row B, &lt;768px) — everything
+ * the desktop utility row (row A, ≥768px) doesn't have room to repeat. */
+function SecondaryNav({ initialTheme }: { initialTheme: Theme }) {
+  return (
+    <nav aria-label="Дополнительное меню">
+      <Link href="/">Главная</Link>
+      <Link href="/catalog">Весь каталог</Link>
+      <Link href="/expert-help">Подбор с экспертом</Link>
+      <p className={styles.mobileMenuGroupLabel}>Клиентам</p>
+      {customerLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+      <p className={styles.mobileMenuGroupLabel}>Компания</p>
+      {companyLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+      <Link href="/profile#wishlist">Закладки</Link>
+      <a className={styles.mobileMenuPhone} href={STORE_PHONE_HREF}>{STORE_PHONE_DISPLAY}</a>
+      <ThemeToggle initialTheme={initialTheme} />
+    </nav>
+  );
+}
+
+/**
+ * Two-row sticky header.
+ *
+ * Row A (`.headerTop`) is the light utility row: brand lockup, store
+ * location, the "Подбор с экспертом" pill, phone/cart/account. It only
+ * renders ≥768px — that boundary is deliberately the same one the bottom
+ * tab bar (`MobileNavigation`) uses to appear, so cart/account access never
+ * has a dead zone between the two (that gap used to sit at 768–980px).
+ *
+ * Row B (`.headerBand`) is the brand-blue search band. It is the only row
+ * on narrow screens — "the whole header" there — and stays sticky at every
+ * width because the surrounding `.header` wrapper is what is pinned.
+ */
 function StoreHeader({ initialTheme }: { initialTheme: Theme }) {
   return (
     <header className={styles.header}>
-      <div className={styles.headerMain}>
-        <div className={`${styles.sectionInner} ${styles.headerMainInner}`}>
+      <div className={styles.headerTop}>
+        <div className={`${styles.sectionInner} ${styles.headerTopInner}`}>
           <Link className={styles.brand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
-            <span className={styles.brandMark}>
-              <Image src="/brand/logo.svg" alt="" width={84} height={84} />
+            <BrandLockup className={styles.brandLockup} />
+          </Link>
+          <Link className={styles.headerTopCatalog} href="/catalog">Каталог</Link>
+          <span className={styles.headerLocation}>
+            <PinIcon /> <span>{STORE_LOCALITY}, {STORE_STREET}</span>
+          </span>
+          <Link className={styles.pillGhost} href="/expert-help">
+            <HeadsetIcon /> <span>Подбор с экспертом</span>
+          </Link>
+          <div className={styles.headerTopActions}>
+            <a className={styles.headerIconLink} href={STORE_PHONE_HREF}>
+              <PhoneIcon /> <span>{STORE_PHONE_DISPLAY}</span>
+            </a>
+            <ThemeToggle initialTheme={initialTheme} />
+            <span className={styles.headerCartWrap}>
+              <CartIcon />
+              <CartButton />
             </span>
-          </Link>
-          <Link className={styles.catalogButton} href="/catalog">
-            <GridIcon />
-            Каталог
-          </Link>
-          <HeaderSearchForm className={styles.headerSearch} id="header-search-q" />
-          <div className={styles.headerActions}>
-            <div className={styles.headerActionsSecondary}>
-              <ThemeToggle initialTheme={initialTheme} />
-              <Link className={styles.accountLink} href="/profile#wishlist">Закладки</Link>
-              <AccountNavigation className={styles.accountLink} />
-            </div>
-            <CartButton />
-          </div>
-          <details className={styles.mobileMenu}>
-            <summary>Меню</summary>
-            <nav aria-label="Мобильное меню">
-              <HeaderSearchForm className={styles.mobileSearch} id="mobile-search-q" />
-              <Link href="/">Главная</Link>
-              <Link href="/catalog">Каталог</Link>
-              <Link href="/expert-help">Помощь эксперта</Link>
-              <p className={styles.mobileMenuGroupLabel}>Клиентам</p>
-              {customerLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
-              <p className={styles.mobileMenuGroupLabel}>Компания</p>
-              {companyLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
-              <Link href="/profile#wishlist">Закладки</Link>
-              <a className={styles.mobileMenuPhone} href={STORE_PHONE_HREF}>{STORE_PHONE_DISPLAY}</a>
-              <ThemeToggle initialTheme={initialTheme} />
+            <span className={styles.headerIconLink}>
+              <UserIcon />
               <AccountNavigation />
-            </nav>
-          </details>
+            </span>
+          </div>
         </div>
       </div>
-      <div className={styles.headerUtility}>
-        <div className={`${styles.sectionInner} ${styles.headerUtilityInner}`}>
-          <nav className={styles.headerUtilityNav} aria-label="Клиентам и о компании">
-            <details className={styles.navDropdown} name="header-nav-menu">
-              <summary>Клиентам <ChevronDownIcon /></summary>
-              <div className={styles.navDropdownPanel}>
-                {customerLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
-              </div>
-            </details>
-            <details className={styles.navDropdown} name="header-nav-menu">
-              <summary>Компания <ChevronDownIcon /></summary>
-              <div className={styles.navDropdownPanel}>
-                {companyLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
-              </div>
-            </details>
-            <Link className={styles.pillGhost} href="/expert-help"><HeadsetIcon /> Помощь эксперта</Link>
-            <Link className={styles.pillAccent} href="/contacts"><FileTextIcon /> Оставить заявку</Link>
-          </nav>
-          <div className={styles.headerUtilityInfo}>
-            <span className={styles.headerUtilityFact}><ClockIcon /> {STORE_HOURS}</span>
-            <a className={styles.headerPhone} href={STORE_PHONE_HREF}><PhoneIcon /> {STORE_PHONE_DISPLAY}</a>
-            <Link className={styles.headerMapLink} href="/map"><PinIcon /> Адрес магазина</Link>
-          </div>
+
+      <div className={styles.headerBand}>
+        <div className={`${styles.sectionInner} ${styles.headerBandInner}`}>
+          <HeaderSearchForm className={styles.headerSearch} id="header-search-q" />
+          <details className={styles.mobileMenu}>
+            <summary aria-label="Меню"><MenuIcon /></summary>
+            <SecondaryNav initialTheme={initialTheme} />
+          </details>
         </div>
       </div>
     </header>
@@ -219,9 +253,7 @@ function StoreFooter() {
       <div className={styles.footerGrid}>
         <section aria-labelledby="footer-store">
           <div className={styles.footerBrand}>
-            <span className={styles.brandMark}>
-              <Image src="/brand/logo.svg" alt="" width={60} height={60} />
-            </span>
+            <span className={styles.footerWordmark} aria-hidden="true">АН-30</span>
             <h2 id="footer-store">{SITE_LEGAL_NAME}</h2>
           </div>
           <p>Автозапчасти для легковых и грузовых автомобилей в {STORE_LOCALITY}. Цены и остатки — из 1С, самовывоз из магазина.</p>
@@ -267,11 +299,11 @@ function StoreFooter() {
 function MobileNavigation() {
   return (
     <nav className={styles.mobileNav} aria-label="Быстрая навигация">
-      <Link href="/">Главная</Link>
-      <Link href="/catalog">Каталог</Link>
-      <MobileCartButton />
-      <Link href="/chat">Чат</Link>
-      <AccountNavigation />
+      <Link className={styles.mobileNavItem} href="/"><HomeIcon /><span>Главная</span></Link>
+      <Link className={styles.mobileNavItem} href="/catalog"><GridIcon /><span>Каталог</span></Link>
+      <div className={styles.mobileNavItem}><CartIcon /><MobileCartButton /></div>
+      <Link className={styles.mobileNavItem} href="/chat"><ChatIcon /><span>Чат</span></Link>
+      <div className={styles.mobileNavItem}><UserIcon /><AccountNavigation /></div>
     </nav>
   );
 }

@@ -34,7 +34,8 @@ generate_secret sandbox_payment_webhook_secret.txt
 
 # Optional integration credentials are intentionally empty until the owner
 # enables the matching adapter and supplies the real value.
-for optional_secret in smtp_password.txt telegram_bot_token.txt vk_access_token.txt; do
+for optional_secret in smtp_password.txt telegram_bot_token.txt vk_access_token.txt \
+  rossko_key1.txt rossko_key2.txt gemini_api_key.txt; do
   target="$secrets_dir/$optional_secret"
   if [ ! -e "$target" ]; then
     : > "$target"

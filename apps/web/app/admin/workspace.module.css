@@ -328,6 +328,10 @@
   align-items: center;
 }
 
+.sectionTabs {
+  margin-bottom: 16px;
+}
+
 .headerActions,
 .rowActions,
 .threadActions {

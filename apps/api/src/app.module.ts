@@ -16,6 +16,7 @@ import { InfrastructureModule } from "./infrastructure/infrastructure.module.js"
 import { SecurityModule } from "./security/security.module.js";
 import { StaffModule } from "./staff/staff.module.js";
 import { StorefrontModule } from "./storefront/storefront.module.js";
+import { SuppliersModule } from "./suppliers/suppliers.module.js";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { StorefrontModule } from "./storefront/storefront.module.js";
     CheckoutModule,
     StaffModule,
     StorefrontModule,
+    SuppliersModule,
     HealthModule,
   ],
   providers: [

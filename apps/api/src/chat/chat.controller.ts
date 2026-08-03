@@ -13,6 +13,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { Public } from "../auth/auth.decorators.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
+import { ChatAssistantService } from "./chat-assistant.service.js";
 import { ChatService } from "./chat.service.js";
 
 function sendAttachment(
@@ -33,6 +34,7 @@ function sendAttachment(
 @Controller("chat")
 export class CustomerChatController {
   constructor(
+    private readonly assistant: ChatAssistantService,
     private readonly chat: ChatService,
     private readonly rateLimit: RateLimitService,
   ) {}
@@ -64,7 +66,26 @@ export class CustomerChatController {
     @Req() request: FastifyRequest,
   ) {
     await this.rateLimit.consume("chat-rest-message", request.authContext!.userId, 60, 60);
-    return this.chat.createMessage(threadId, body, { auth: request.authContext!, kind: "authenticated" });
+    const message = await this.chat.createMessage(
+      threadId,
+      body,
+      { auth: request.authContext!, kind: "authenticated" },
+    );
+    // Fire-and-forget: ChatAssistantService.respond never rejects (see its
+    // own doc comment), and the automated reply — if any — arrives to
+    // subscribed clients via the realtime event bus, not this response, so
+    // the customer's own message is never delayed by the AI call. Only ever
+    // triggered for an actual customer message, never a staff reply sent
+    // through this same endpoint (senderKind resolves to "staff" for those).
+    if (message.senderKind === "customer") {
+      void this.assistant.respond({
+        identity: request.authContext!.userId,
+        question: message.body ?? "",
+        replyToId: message.id,
+        threadId,
+      });
+    }
+    return message;
   }
 
   @Post("threads/:threadId/read/:messageId")
@@ -116,6 +137,7 @@ export class CustomerChatController {
 @Controller("chat/guest")
 export class GuestChatController {
   constructor(
+    private readonly assistant: ChatAssistantService,
     private readonly chat: ChatService,
     private readonly rateLimit: RateLimitService,
   ) {}
@@ -147,7 +169,22 @@ export class GuestChatController {
     @Req() request: FastifyRequest,
   ) {
     await this.rateLimit.consume("guest-chat-rest-message", request.ip, 60, 60);
-    return this.chat.createMessage(threadId, body, { guestToken: guestToken ?? "", kind: "guest" });
+    const message = await this.chat.createMessage(
+      threadId,
+      body,
+      { guestToken: guestToken ?? "", kind: "guest" },
+    );
+    // See the customer controller's `message()` for why this is
+    // fire-and-forget and never throws.
+    if (message.senderKind === "guest") {
+      void this.assistant.respond({
+        identity: request.ip,
+        question: message.body ?? "",
+        replyToId: message.id,
+        threadId,
+      });
+    }
+    return message;
   }
 
   @Post("threads/:threadId/read/:messageId")

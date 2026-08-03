@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export * from "./assistant.js";
+export * from "./suppliers.js";
+
 const SAFE_SINGLE_LINE = /^[^\u0000-\u001F\u007F]+$/u;
 
 export const ROLES = ["customer", "manager", "director", "admin"] as const;

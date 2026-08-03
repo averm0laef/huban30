@@ -1,4 +1,4 @@
-import type { ContactRequestStatus, OrderStatus, PaymentStatus, Role } from "@an30/contracts";
+import type { ContactRequestStatus, OrderStatus, PaymentStatus, Role, SupplierWaitlistStatus } from "@an30/contracts";
 
 export interface SessionView {
   email: string;
@@ -124,6 +124,31 @@ export interface ContactRequestDetail {
   resolvedAt: string | null;
   source: ContactRequestSource;
   status: ContactRequestStatus;
+  updatedAt: string;
+  version: number;
+}
+
+// Rossko supplier waiting list ("в ожидание"). Deliberately its own shape —
+// a supplier part is never a catalog product, so this never shares fields
+// with CatalogRow/OrderRow, and priceKopeks here is always a supplier quote,
+// never the shop's own 1C price.
+export interface SupplierWaitlistRow {
+  assignedName: string | null;
+  assignedStaffId: string | null;
+  createdAt: string;
+  customerEmail: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  deliveryTime: string | null;
+  id: string;
+  partBrand: string;
+  partName: string;
+  partNumber: string;
+  priceKopeks: number;
+  quantity: number;
+  resolvedAt: string | null;
+  status: SupplierWaitlistStatus;
+  supplier: string;
   updatedAt: string;
   version: number;
 }

@@ -2,10 +2,74 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ComponentType } from "react";
 
-import { STORE_HOURS, STORE_LOCALITY, STORE_PHONE, STORE_PHONE_DISPLAY } from "../../site-config";
+import { STORE_HOURS, STORE_LOCALITY, STORE_PHONE, STORE_PHONE_DISPLAY, STORE_STREET } from "../../site-config";
+import { PromoCarousel } from "./promo-carousel";
+import type { PromoSlide } from "./promo-carousel";
 import styles from "./storefront.module.css";
 
 const STORE_PHONE_HREF = `tel:${STORE_PHONE}`;
+
+function EngineIcon() {
+  return (
+    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="10" width="12" height="7" rx="1" />
+      <path d="M15 12h3v3h-3" />
+      <path d="M20 12.5v2" />
+      <path d="M5 10V7h5v3" />
+      <path d="M9 7V5" />
+      <path d="M6 17v2" />
+      <path d="M12 17v2" />
+    </svg>
+  );
+}
+
+function BrakeIcon() {
+  return (
+    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3.5v3M20.5 12h-3M12 20.5v-3M3.5 12h3" />
+    </svg>
+  );
+}
+
+function SuspensionIcon() {
+  return (
+    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3v4" />
+      <path d="M8 7c0 1.2 2.4 1.2 2.4 2.4S8 10.8 8 12s2.4 1.2 2.4 2.4S8 15.6 8 16.8" />
+      <path d="M8 16.8V21" />
+      <circle cx="17" cy="19" r="2.6" />
+    </svg>
+  );
+}
+
+function ElectricIcon() {
+  return (
+    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+    </svg>
+  );
+}
+
+function BodyIcon() {
+  return (
+    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 16v-3.2c0-.5.2-.9.6-1.2L7 9l1.8-3A2 2 0 0 1 10.6 5h2.8a2 2 0 0 1 1.8 1.1L17 9l3.4 2.6c.4.3.6.7.6 1.2V16" />
+      <path d="M3 16h18v2a1 1 0 0 1-1 1h-1.6a2 2 0 0 1-3.8 0H7.4a2 2 0 0 1-3.8 0H2a1 1 0 0 1-1-1v-2Z" />
+      <path d="M7 9h10" />
+    </svg>
+  );
+}
+
+function OilIcon() {
+  return (
+    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 2h6v3.4l2.4 3.2c.4.5.6 1.1.6 1.7V20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10.3c0-.6.2-1.2.6-1.7L9 5.4V2Z" />
+      <path d="M7 14h10" />
+    </svg>
+  );
+}
 
 function ShieldCheckIcon() {
   return (
@@ -16,12 +80,23 @@ function ShieldCheckIcon() {
   );
 }
 
-function PackageIcon() {
+function StoreIcon() {
   return (
     <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 8 12 3 3 8l9 5 9-5Z" />
-      <path d="M3 8v8l9 5 9-5V8" />
-      <path d="M12 13v8" />
+      <path d="M3 9.5 4.5 4h15L21 9.5" />
+      <path d="M4 9.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5Z" />
+      <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}
+
+function TruckIcon() {
+  return (
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 7h11v10H2z" />
+      <path d="M13 10h4l4 3.2V17h-8" />
+      <circle cx="6" cy="18.5" r="1.6" />
+      <circle cx="16.5" cy="18.5" r="1.6" />
     </svg>
   );
 }
@@ -31,6 +106,16 @@ function ClockIcon() {
     <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
       <polyline points="12 7 12 12 15.5 14" />
+    </svg>
+  );
+}
+
+function VinIcon() {
+  return (
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <path d="M8 9v4M11 9v4M14 9l-1.5 4" />
     </svg>
   );
 }
@@ -46,55 +131,120 @@ function HeadsetIcon() {
   );
 }
 
-/** Full-bleed photo hero: the only above-the-fold priority image on the page. */
-export function HomeHero() {
+const promoSlides: PromoSlide[] = [
+  {
+    href: "/catalog",
+    src: "/banners/hero-banner.jpg",
+    title: "Нужная запчасть без лишней переписки",
+    text: "Ищите по названию, артикулу или VIN — цену и остаток проверяет сервер перед оформлением.",
+    cta: "Открыть каталог",
+  },
+  {
+    href: "/expert-help",
+    src: "/banners/banner-expert.jpg",
+    title: "Не уверены в артикуле?",
+    text: "Сотрудник магазина поможет подобрать деталь по VIN или марке автомобиля.",
+    cta: "Подбор с экспертом",
+  },
+  {
+    href: "/delivery",
+    src: "/banners/banner-delivery.jpg",
+    title: "Самовывоз сегодня, доставка по договорённости",
+    text: `${STORE_LOCALITY}, ${STORE_STREET} · ${STORE_HOURS}`,
+    cta: "Условия доставки",
+  },
+  {
+    href: "/catalog",
+    src: "/banners/banner-quality.jpg",
+    title: "Проверяем совместимость перед продажей",
+    text: "Мы не отправляем деталь, пока не убедимся, что она подходит вашему автомобилю.",
+    cta: "Смотреть каталог",
+  },
+];
+
+export function HomePromo() {
+  return <PromoCarousel slides={promoSlides} />;
+}
+
+interface CategoryTile {
+  key: string;
+  label: string;
+  query: string;
+  Icon: ComponentType;
+}
+
+const categoryTiles: CategoryTile[] = [
+  { key: "engine", label: "Двигатель", query: "двигатель", Icon: EngineIcon },
+  { key: "brakes", label: "Тормозная система", query: "тормоз", Icon: BrakeIcon },
+  { key: "suspension", label: "Подвеска", query: "подвеска", Icon: SuspensionIcon },
+  { key: "electric", label: "Электрика", query: "электрика", Icon: ElectricIcon },
+  { key: "body", label: "Кузов и оптика", query: "кузов", Icon: BodyIcon },
+  { key: "fluids", label: "Масла и расходники", query: "масло", Icon: OilIcon },
+];
+
+/**
+ * The site's main navigation pattern: category tiles rather than a header
+ * mega-menu. There is no per-category taxonomy exposed to the storefront
+ * (the catalog API only takes a free-text query), so each tile is an
+ * honest shortcut into `/catalog?q=...` by a generic, universal auto-parts
+ * term — not a claim about what is currently in stock.
+ */
+export function CategoryGrid() {
   return (
-    <section className={styles.hero} aria-labelledby="home-hero-title">
-      <div className={styles.heroMedia}>
-        <Image src="/banners/hero-banner.jpg" alt="" fill sizes="100vw" priority />
+    <section className={styles.categorySection} aria-labelledby="category-grid-title">
+      <div className={styles.sectionHead}>
+        <h2 id="category-grid-title">Популярные товары для любых авто</h2>
+        <p>Выберите раздел — мы поищем в каталоге по названию. Ассортимент наполняется из 1С постепенно.</p>
       </div>
-      <div className={styles.heroScrim} aria-hidden="true" />
-      <div className={styles.heroContent}>
-        <h1 id="home-hero-title">
-          Нужная запчасть <span className={styles.heroAccent}>без лишней переписки</span>
-        </h1>
-        <p>Ищите по названию или артикулу. Цена и остаток поступают из 1С и проверяются сервером перед оформлением.</p>
-        <div className={styles.heroActions}>
-          <Link className={styles.heroCta} href="/catalog">Открыть каталог</Link>
-          <Link className={styles.pillGhost} href="/contacts">Связаться с магазином</Link>
-        </div>
+      <div className={styles.categoryGrid}>
+        {categoryTiles.map(({ key, label, query, Icon }) => (
+          <Link className={styles.categoryTile} href={`/catalog?q=${encodeURIComponent(query)}`} key={key}>
+            <span className={styles.categoryTileMedia}><Icon /></span>
+            <span className={styles.categoryTileLabel}>{label}</span>
+          </Link>
+        ))}
+      </div>
+      <div className={styles.categoryMore}>
+        <Link className={styles.secondaryAction} href="/catalog">Открыть весь каталог</Link>
       </div>
     </section>
   );
 }
 
-interface InfoTile {
-  icon: ComponentType;
+interface FeatureItem {
+  Icon: ComponentType;
   title: string;
-  subtitle: string;
+  text: string;
 }
 
-const infoTiles: InfoTile[] = [
-  { icon: ShieldCheckIcon, title: "Гарантия качества", subtitle: "Проверяем совместимость перед продажей" },
-  { icon: PackageIcon, title: "Доставка", subtitle: "Самовывоз из магазина, по согласованию" },
-  { icon: ClockIcon, title: "Ежедневно", subtitle: STORE_HOURS.replace("Ежедневно ", "") },
-  { icon: HeadsetIcon, title: "Помощь эксперта", subtitle: "Поможем подобрать деталь" },
+const featureItems: FeatureItem[] = [
+  { Icon: VinIcon, title: "Поиск по VIN и артикулу", text: "Быстрый подбор без лишних переписок" },
+  { Icon: ShieldCheckIcon, title: "Гарантия качества", text: "Проверяем совместимость перед продажей" },
+  { Icon: StoreIcon, title: "Самовывоз", text: `${STORE_LOCALITY}, ${STORE_STREET}` },
+  { Icon: TruckIcon, title: "Доставка по согласованию", text: "Условия уточняет менеджер" },
+  { Icon: ClockIcon, title: "Ежедневно", text: STORE_HOURS.replace("Ежедневно ", "") },
+  { Icon: HeadsetIcon, title: "Помощь эксперта", text: "Поможем подобрать деталь" },
 ];
 
-/** Compact facts strip: real service conditions, no invented statistics. */
-export function InfoStrip() {
+/** Dark 2x3 feature panel — deliberately dark in both themes, real service facts only. */
+export function FeaturePanel() {
   return (
-    <div className={styles.infoStrip} aria-label="Условия покупки">
-      {infoTiles.map((tile) => (
-        <div className={styles.infoTile} key={tile.title}>
-          <span className={styles.infoTileIcon}><tile.icon /></span>
-          <span>
-            <p className={styles.infoTileTitle}>{tile.title}</p>
-            <p className={styles.infoTileSubtitle}>{tile.subtitle}</p>
-          </span>
+    <section className={styles.featurePanel} aria-labelledby="feature-panel-title">
+      <div className={styles.featurePanelInner}>
+        <p className={styles.featurePanelHead} id="feature-panel-title">Условия покупки</p>
+        <div className={styles.featureGrid}>
+          {featureItems.map((item) => (
+            <div className={styles.featureCard} key={item.title}>
+              <span className={styles.featureCardIcon}><item.Icon /></span>
+              <span>
+                <p className={styles.featureCardTitle}>{item.title}</p>
+                <p className={styles.featureCardText}>{item.text}</p>
+              </span>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -123,29 +273,17 @@ export function CatalogTeaser() {
   );
 }
 
-/** Real, non-carouselled explanation of how an order actually gets fulfilled. */
-export function HowItWorks() {
+/** Light help block with a full-width primary CTA, per the reference pattern. */
+export function ChooseHelpBlock() {
   return (
-    <section className={styles.howItWorks} aria-labelledby="how-it-works-title">
-      <div className={styles.howItWorksMedia}>
-        <Image
-          src="/banners/banner-catalog.jpg"
-          alt="Стеллажи с автозапчастями на складе"
-          fill
-          sizes="(max-width: 980px) 100vw, 530px"
-        />
+    <section className={styles.helpBlock} aria-labelledby="help-block-title">
+      <div className={styles.helpBlockMedia}>
+        <Image alt="" fill sizes="(max-width: 767px) 100vw, 500px" src="/banners/banner-catalog.jpg" />
       </div>
-      <div>
-        <div className={styles.sectionHead}>
-          <h2 id="how-it-works-title">Как купить</h2>
-          <p>Онлайн-каталог наполняется постепенно. Актуальные цены и остатки всегда можно уточнить в магазине или по телефону.</p>
-        </div>
-        <ol className={styles.numberedList}>
-          <li><strong>Найдите деталь</strong><span>По названию или артикулу в каталоге — или позвоните в магазин.</span></li>
-          <li><strong>Дождитесь проверки</strong><span>Сервер и сотрудник магазина подтвердят цену, количество и совместимость с автомобилем.</span></li>
-          <li><strong>Заберите заказ</strong><span>Самовывоз в {STORE_LOCALITY}; доставку можно согласовать с менеджером отдельно.</span></li>
-        </ol>
-        <Link className={`${styles.secondaryAction} ${styles.howItWorksMore}`} href="/how-to-order">Подробнее об оформлении</Link>
+      <div className={styles.helpBlockBody}>
+        <h2 id="help-block-title">Не знаете, какую запчасть выбрать?</h2>
+        <p>Сотрудник магазина уточнит совместимость с вашим автомобилем по названию, артикулу или VIN — по телефону, в чате или очно в {STORE_LOCALITY}.</p>
+        <Link className={`${styles.primaryAction} ${styles.fullWidthAction}`} href="/expert-help">Спросить эксперта</Link>
       </div>
     </section>
   );

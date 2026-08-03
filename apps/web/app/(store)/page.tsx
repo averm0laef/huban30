@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { CatalogTeaser, HomeHero, HowItWorks, InfoStrip } from "./_components/home-sections";
+import { CatalogTeaser, CategoryGrid, ChooseHelpBlock, FeaturePanel, HomePromo } from "./_components/home-sections";
 import { JsonLd } from "./_components/json-ld";
 import styles from "./_components/storefront.module.css";
 import { organizationJsonLd, pageMetadata } from "./_lib/seo";
@@ -15,10 +15,12 @@ export default function StorefrontPage() {
   return (
     <div className={styles.home}>
       <JsonLd value={organizationJsonLd()} />
-      <HomeHero />
-      <InfoStrip />
+      <h1 className={styles.visuallyHidden}>Автозапчасти в Чернышевске — АН-30</h1>
+      <HomePromo />
+      <CategoryGrid />
+      <FeaturePanel />
       <CatalogTeaser />
-      <HowItWorks />
+      <ChooseHelpBlock />
     </div>
   );
 }

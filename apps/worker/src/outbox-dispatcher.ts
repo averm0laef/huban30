@@ -21,7 +21,12 @@ const AuthPayloadSchema = z.object({
 
 const ChatPayloadSchema = z.object({
   messageId: z.uuid(),
-  senderKind: z.enum(["customer", "guest"]),
+  // "system" is the AI chat assistant escalating to a human (see
+  // ChatService.insertAssistantReply in apps/api) — every other
+  // system-sender message never reaches this outbox topic (needsHuman=false
+  // never inserts one), so a "system" event here always means the assistant
+  // itself asked for help.
+  senderKind: z.enum(["customer", "guest", "system"]),
   threadId: z.uuid(),
 }).strict();
 
@@ -37,8 +42,12 @@ export function buildStaffAlert(
 ): string {
   if (topic === "chat.staff.notify") {
     const chat = ChatPayloadSchema.parse(payload);
+    const url = new URL(`/admin/chats/${chat.threadId}`, publicBaseUrl);
+    if (chat.senderKind === "system") {
+      return `Автоматический ассистент АН-30 не смог закрыть вопрос и просит менеджера подключиться к чату. ${url}`;
+    }
     const label = chat.senderKind === "guest" ? "Гость" : "Клиент";
-    return `${label} написал в чат АН-30. ${new URL(`/admin/chats/${chat.threadId}`, publicBaseUrl)}`;
+    return `${label} написал в чат АН-30. ${url}`;
   }
   if (topic === "contact.staff.notify") {
     const contact = ContactPayloadSchema.parse(payload);

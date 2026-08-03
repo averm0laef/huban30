@@ -16,6 +16,11 @@ import { OneCIntegrationService } from "./one-c-integration.service.js";
     CatalogSearchController,
     OneCMachineController,
   ],
+  // CatalogSearchService is exported so the chat assistant (see
+  // chat/chat-assistant.service.ts) can reuse the exact same deterministic
+  // catalog search the storefront uses, rather than querying the catalog a
+  // second, different way.
+  exports: [CatalogSearchService],
   providers: [
     CatalogApplyService,
     CatalogImportService,

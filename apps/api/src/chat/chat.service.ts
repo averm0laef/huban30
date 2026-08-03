@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 
 import {
@@ -369,6 +369,77 @@ export class ChatService {
       throw new ForbiddenException("Недостаточно прав");
     }
     return thread;
+  }
+
+  /**
+   * Lightweight snapshot used by ChatAssistantService to decide whether to
+   * post an automated reply at all: skipped entirely for a closed thread or
+   * one a human has already taken (see ChatAssistantService.respond).
+   */
+  async threadAssignment(
+    threadId: string,
+  ): Promise<{ assignedStaffId: string | null; status: ThreadRow["status"] } | null> {
+    const thread = (await this.database.query<Pick<ThreadRow, "assigned_staff_id" | "status">>(
+      "SELECT assigned_staff_id, status FROM app.chat_threads WHERE id=$1 AND deleted_at IS NULL",
+      [threadId],
+    )).rows[0];
+    if (!thread) return null;
+    return { assignedStaffId: thread.assigned_staff_id, status: thread.status };
+  }
+
+  /**
+   * Stores one automated assistant reply as a real chat message, attributed
+   * as `sender_kind='system'` (never 'staff') so it is never mistaken for a
+   * human manager. Only ChatAssistantService calls this, after it has
+   * already decided — using only data it fetched itself, never the model's
+   * own text — what the message body and `needsHuman` should be.
+   *
+   * Deliberately does not reuse the generic `insertMessage` below: that
+   * helper's ON CONFLICT/client-message-id dedup logic exists for
+   * client-retried sends, which does not apply here (the id is always a
+   * fresh server-generated UUID), and its outbox-notify rule ("notify staff
+   * on every non-staff message") is wrong for the assistant's own messages —
+   * staff should only be paged when the assistant itself asks for a human.
+   */
+  async insertAssistantReply(
+    threadId: string,
+    body: string,
+    replyToId: string | null,
+    needsHuman: boolean,
+  ): Promise<ChatMessageView> {
+    const clientMessageId = randomUUID();
+    const row = await this.database.transaction(async (client) => {
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO app.chat_messages
+           (thread_id,sender_user_id,sender_kind,message_type,body,client_message_id,reply_to_id)
+         VALUES ($1,NULL,'system','text',$2,$3,$4)
+         RETURNING id`,
+        [threadId, body, clientMessageId, replyToId],
+      );
+      const messageId = inserted.rows[0]!.id;
+      await client.query(
+        `UPDATE app.chat_threads SET
+           last_message_at=clock_timestamp(),
+           status=$2,
+           version=version+1,
+           updated_at=clock_timestamp()
+         WHERE id=$1 AND status<>'closed'`,
+        [threadId, needsHuman ? "waiting_staff" : "waiting_customer"],
+      );
+      if (needsHuman) {
+        await client.query(
+          `INSERT INTO app.outbox_events (topic,aggregate_type,aggregate_id,payload)
+           VALUES ('chat.staff.notify','chat_thread',$1,$2::jsonb)`,
+          [threadId, JSON.stringify({ messageId, senderKind: "system", threadId })],
+        );
+      }
+      return (await client.query<MessageRow>(
+        `${this.messageSelect()} WHERE message.id=$1`, [messageId],
+      )).rows[0]!;
+    });
+    const view = this.messageView(row);
+    await this.events.publish({ payload: { message: view, type: "message" }, threadId });
+    return view;
   }
 
   private async insertMessage(

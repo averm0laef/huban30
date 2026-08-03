@@ -27,6 +27,16 @@ describe("staff outbox alerts", () => {
       "https://an30.ru",
     )).toThrow();
   });
+
+  it("labels an AI-assistant hand-off distinctly from a customer/guest message", () => {
+    const alert = buildStaffAlert(
+      "chat.staff.notify",
+      { messageId: THREAD_ID, senderKind: "system", threadId: THREAD_ID },
+      "https://an30.ru",
+    );
+    expect(alert).toContain("Автоматический ассистент");
+    expect(alert).toContain(`/admin/chats/${THREAD_ID}`);
+  });
 });
 
 describe("auth email links", () => {

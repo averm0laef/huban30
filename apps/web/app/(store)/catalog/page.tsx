@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import { AddToCartButton } from "../_components/cart-actions";
@@ -105,11 +106,17 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
               const available = item.availableQuantity > 0;
               return (
                 <article className={styles.productCard} key={item.id}>
-                  <div className={styles.productVisual} role="img" aria-label={`У товара «${item.name}» пока нет фотографии`}>
-                    Нет фото
-                  </div>
+                  {item.primaryImage ? (
+                    <div className={styles.productVisual}>
+                      <Image alt={item.primaryImage.altText} fill sizes="(max-width: 767px) 50vw, 240px" src={item.primaryImage.url} />
+                    </div>
+                  ) : (
+                    <div className={styles.productVisual} role="img" aria-label={`У товара «${item.name}» пока нет фотографии`}>
+                      Нет фото
+                    </div>
+                  )}
                   <div className={styles.productBody}>
-                    <p className={styles.productMeta}>Артикул: {item.sku}</p>
+                    <p className={styles.productMeta}>{item.brand ? `${item.brand.name} · ` : ""}Артикул: {item.sku}</p>
                     <h2 className={styles.productName}><Link href={`/catalog/product/${encodeURIComponent(item.slug)}`}>{item.name}</Link></h2>
                     <p className={styles.productPrice}>{item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}</p>
                     <p className={`${styles.stock} ${available ? "" : styles.stockOut}`}>{available ? `В наличии: ${item.availableQuantity}` : "Нет в наличии"}</p>

@@ -72,4 +72,59 @@ describe("API environment", () => {
     expect(staging.ENABLE_PUBLIC_CHECKOUT).toBe(true);
     expect(staging.PAYMENTS_PROVIDER).toBe("sandbox");
   });
+
+  it("leaves the Rossko supplier integration off by default without requiring credentials", () => {
+    const environment = validateEnvironment({ ...secrets });
+    expect(environment.ROSSKO_ENABLED).toBe(false);
+    expect(environment.ROSSKO_DELIVERY_ID).toBe("000000001");
+    expect(environment.ROSSKO_KEY1).toBeUndefined();
+    expect(environment.ROSSKO_KEY2).toBeUndefined();
+  });
+
+  it("fails closed when Rossko is enabled without both API keys", () => {
+    expect(() => validateEnvironment({ ...secrets, ROSSKO_ENABLED: "true" }))
+      .toThrow(/Rossko API credentials are not configured/);
+    expect(() => validateEnvironment({ ...secrets, ROSSKO_ENABLED: "true", ROSSKO_KEY1: "key-one" }))
+      .toThrow(/Rossko API credentials are not configured/);
+  });
+
+  it("enables Rossko once both API keys are present", () => {
+    const environment = validateEnvironment({
+      ...secrets,
+      ROSSKO_ENABLED: "true",
+      ROSSKO_KEY1: "key-one",
+      ROSSKO_KEY2: "key-two",
+    });
+    expect(environment.ROSSKO_ENABLED).toBe(true);
+    expect(environment.ROSSKO_KEY1).toBe("key-one");
+    expect(environment.ROSSKO_KEY2).toBe("key-two");
+  });
+
+  it("rejects a delivery id that is not the pinned nine-digit format", () => {
+    expect(() => validateEnvironment({ ...secrets, ROSSKO_DELIVERY_ID: "1" })).toThrow();
+  });
+
+  it("leaves the Gemini chat assistant off by default without requiring a key", () => {
+    const environment = validateEnvironment({ ...secrets });
+    expect(environment.AI_ENABLED).toBe(false);
+    expect(environment.AI_MODEL).toBe("gemini-2.5-flash");
+    expect(environment.GEMINI_API_KEY).toBeUndefined();
+  });
+
+  it("fails closed when the AI assistant is enabled without a Gemini API key", () => {
+    expect(() => validateEnvironment({ ...secrets, AI_ENABLED: "true" }))
+      .toThrow(/Gemini API key is not configured/);
+  });
+
+  it("enables the AI assistant once a Gemini API key is present", () => {
+    const environment = validateEnvironment({
+      ...secrets,
+      AI_ENABLED: "true",
+      AI_MODEL: "gemini-2.5-pro",
+      GEMINI_API_KEY: "test-gemini-key",
+    });
+    expect(environment.AI_ENABLED).toBe(true);
+    expect(environment.AI_MODEL).toBe("gemini-2.5-pro");
+    expect(environment.GEMINI_API_KEY).toBe("test-gemini-key");
+  });
 });

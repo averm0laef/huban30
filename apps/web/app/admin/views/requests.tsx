@@ -7,6 +7,8 @@ import {
   Input,
   Select,
   Spinner,
+  Tab,
+  TabList,
 } from "@fluentui/react-components";
 import {
   ArrowClockwise20Regular,
@@ -16,7 +18,7 @@ import {
   Search20Regular,
 } from "@fluentui/react-icons";
 
-import type { ContactRequestStatus } from "@an30/contracts";
+import type { ContactRequestStatus, SupplierWaitlistStatus } from "@an30/contracts";
 
 import { api, queryString } from "../api";
 import type {
@@ -25,9 +27,11 @@ import type {
   ContactRequestSource,
   Page,
   SessionView,
+  SupplierWaitlistRow,
 } from "../types";
 import {
   formatDate,
+  formatMoney,
   Pagination,
   RequestError,
   SectionHeader,
@@ -48,9 +52,18 @@ const SOURCE_LABELS: Record<ContactRequestSource, string> = {
   vin_request: "Запрос по VIN",
 };
 
+const WAITLIST_STATUS_LABELS: Record<SupplierWaitlistStatus, string> = {
+  cancelled: "Отменено",
+  fulfilled: "Выполнено",
+  in_progress: "В работе",
+  new: "Новое",
+};
+
 type AssignmentFilter = "any" | "mine" | "unassigned";
+type RequestsTab = "contacts" | "waitlist";
 
 export function RequestsView({ session }: { session: SessionView }) {
+  const [activeTab, setActiveTab] = useState<RequestsTab>("contacts");
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -182,11 +195,26 @@ export function RequestsView({ session }: { session: SessionView }) {
   return (
     <>
       <SectionHeader
-        actions={<Button disabled={busy} icon={<ArrowClockwise20Regular />} onClick={reloadAll}>Обновить очередь</Button>}
-        description="Заявки из контактов, помощи эксперта и поиска по VIN собраны в одной очереди."
+        actions={activeTab === "contacts" ? (
+          <Button disabled={busy} icon={<ArrowClockwise20Regular />} onClick={reloadAll}>Обновить очередь</Button>
+        ) : undefined}
+        description={activeTab === "contacts"
+          ? "Заявки из контактов, помощи эксперта и поиска по VIN собраны в одной очереди."
+          : "Заявки клиентов на детали под заказ у поставщика Rossko. 1С-остатки и поставщик никогда не смешиваются в одно число."}
         eyebrow="Клиенты"
-        title="Обращения"
+        title={activeTab === "contacts" ? "Обращения" : "Ожидание"}
       />
+      <TabList
+        className={styles.sectionTabs}
+        onTabSelect={(_event, data) => setActiveTab(data.value as RequestsTab)}
+        selectedValue={activeTab}
+      >
+        <Tab value="contacts">Обращения</Tab>
+        <Tab value="waitlist">Ожидание (Rossko)</Tab>
+      </TabList>
+      {activeTab === "waitlist" ? <SupplierWaitlistPanel session={session} /> : null}
+      {activeTab !== "contacts" ? null : (
+      <>
       <div className={styles.toolbar}>
         <Input
           aria-label="Поиск обращений"
@@ -374,6 +402,8 @@ export function RequestsView({ session }: { session: SessionView }) {
           ) : null}
         </section>
       </div>
+      </>
+      )}
     </>
   );
 }
@@ -459,6 +489,344 @@ function StatusActions({
       onClick={() => void onUpdate({ status: "new" }, "Обращение открыто повторно руководителем")}
     >
       Открыть снова
+    </Button>
+  );
+}
+
+// Rossko waiting-list queue ("под заказ"). Kept as its own panel next to the
+// contact-request queue in the same view, but backed by a structurally
+// separate endpoint/table — a waiting-list entry is never a contact request
+// and its priceKopeks is always a supplier quote, never the shop's own 1С
+// price or stock.
+function SupplierWaitlistPanel({ session }: { session: SessionView }) {
+  const [offset, setOffset] = useState(0);
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [status, setStatus] = useState<"" | SupplierWaitlistStatus>("");
+  const [assigned, setAssigned] = useState<AssignmentFilter>("any");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<SupplierWaitlistRow | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<unknown>(null);
+  const [mutationError, setMutationError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const detailRequest = useRef(0);
+  const mutationInFlight = useRef(false);
+  const limit = 25;
+
+  const openRequest = useCallback(async (requestId: string): Promise<void> => {
+    const requestNumber = detailRequest.current + 1;
+    detailRequest.current = requestNumber;
+    setSelectedId(requestId);
+    setDetail(null);
+    setDetailError(null);
+    setMutationError(null);
+    setDetailLoading(true);
+    try {
+      const loaded = await api<SupplierWaitlistRow>(`/staff/supplier-waitlist/${requestId}`);
+      if (detailRequest.current === requestNumber) setDetail(loaded);
+    } catch (error) {
+      if (detailRequest.current === requestNumber) setDetailError(error);
+    } finally {
+      if (detailRequest.current === requestNumber) setDetailLoading(false);
+    }
+  }, []);
+
+  const resource = useResource(
+    () => api<Page<SupplierWaitlistRow>>(`/staff/supplier-waitlist${queryString({
+      assigned,
+      limit,
+      offset,
+      q: appliedSearch || undefined,
+      status: status || undefined,
+    })}`),
+    [assigned, offset, appliedSearch, status],
+  );
+
+  function closeDetail(): void {
+    detailRequest.current += 1;
+    setSelectedId(null);
+    setDetail(null);
+    setDetailError(null);
+    setMutationError(null);
+  }
+
+  async function updateRequest(
+    update: { assignedStaffId?: string | null; status?: SupplierWaitlistStatus },
+    reason: string,
+  ): Promise<void> {
+    if (!detail || mutationInFlight.current) return;
+    const updatedId = detail.id;
+    mutationInFlight.current = true;
+    setBusy(true);
+    setMutationError(null);
+    try {
+      await api(`/staff/supplier-waitlist/${updatedId}`, {
+        body: JSON.stringify({ ...update, reason, version: detail.version }),
+        method: "PATCH",
+      });
+      resource.reload();
+      if (selectedId === updatedId) await openRequest(updatedId);
+    } catch (error) {
+      setMutationError(error);
+    } finally {
+      mutationInFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  const elevated = session.role === "director" || session.role === "admin";
+  const canChangeStatus = Boolean(detail && (
+    elevated
+    || (detail.assignedStaffId === session.userId && ["new", "in_progress"].includes(detail.status))
+  ));
+
+  return (
+    <>
+      <div className={styles.toolbar}>
+        <Input
+          aria-label="Поиск заявок на ожидание"
+          contentBefore={<Search20Regular />}
+          onChange={(_event, data) => setSearch(data.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && search.trim().length !== 1) {
+              setOffset(0);
+              setAppliedSearch(search.trim());
+            }
+          }}
+          placeholder="Имя, телефон, email, артикул или бренд"
+          value={search}
+        />
+        <Button
+          disabled={search.trim().length === 1}
+          onClick={() => { setOffset(0); setAppliedSearch(search.trim()); }}
+        >
+          Найти
+        </Button>
+        <Select
+          aria-label="Статус заявки на ожидание"
+          onChange={(event) => { setOffset(0); setStatus(event.target.value as "" | SupplierWaitlistStatus); }}
+          value={status}
+        >
+          <option value="">Все статусы</option>
+          {Object.entries(WAITLIST_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </Select>
+        <Select
+          aria-label="Ответственный за заявку"
+          onChange={(event) => { setOffset(0); setAssigned(event.target.value as AssignmentFilter); }}
+          value={assigned}
+        >
+          <option value="any">Все ответственные</option>
+          <option value="mine">Назначены мне</option>
+          <option value="unassigned">Без ответственного</option>
+        </Select>
+        {search.trim().length === 1 ? <span className={styles.unsavedState}>Введите минимум 2 символа</span>
+          : search.trim() !== appliedSearch ? <span className={styles.unsavedState}>Фильтр не применён</span> : null}
+      </div>
+      {resource.error ? <RequestError error={resource.error} onRetry={resource.reload} /> : null}
+      <div className={styles.requestWorkspace}>
+        <section className={styles.threadQueue} aria-label="Очередь заявок на ожидание">
+          {resource.loading ? <div className={styles.loadingPanel}><Spinner label="Загрузка заявок" /></div> : null}
+          {!resource.loading && !resource.error && (resource.data?.items.length ?? 0) === 0 ? (
+            <div className={styles.tableState}>
+              <strong>Заявок на ожидание не найдено</strong>
+              <span>Измените фильтры или дождитесь новой заявки с поиска у поставщика.</span>
+            </div>
+          ) : null}
+          {resource.data?.items.map((request) => (
+            <button
+              aria-pressed={request.id === selectedId}
+              className={styles.threadCard}
+              data-active={request.id === selectedId || undefined}
+              disabled={busy}
+              key={request.id}
+              onClick={() => void openRequest(request.id)}
+              type="button"
+            >
+              <span className={styles.threadTopline}>
+                <strong>{request.partBrand} {request.partNumber}</strong>
+                <Badge appearance="tint">{WAITLIST_STATUS_LABELS[request.status]}</Badge>
+              </span>
+              <span>{request.customerName} · {formatMoney(request.priceKopeks)} × {request.quantity}</span>
+              <small>{request.deliveryTime ? `Под заказ, ${request.deliveryTime} дн.` : "Под заказ у поставщика"}</small>
+              <span className={styles.threadMeta}>
+                <span>{request.assignedName ?? "Без ответственного"}</span>
+                <time dateTime={request.createdAt}>{formatDate(request.createdAt)}</time>
+              </span>
+            </button>
+          ))}
+          {resource.data ? <Pagination limit={limit} offset={offset} onChange={setOffset} total={resource.data.total} /> : null}
+        </section>
+        <section
+          aria-busy={busy}
+          aria-label="Карточка заявки на ожидание"
+          aria-live="polite"
+          className={styles.requestDetail}
+        >
+          {!selectedId ? (
+            <div className={styles.tableState}>
+              <strong>Выберите заявку</strong>
+              <span>Деталь, контакты и доступные действия откроются здесь.</span>
+            </div>
+          ) : detailLoading ? (
+            <div className={styles.loadingPanel}><Spinner label="Загрузка заявки" /></div>
+          ) : detailError ? (
+            <div className={styles.requestErrorState}>
+              <RequestError error={detailError} onRetry={() => void openRequest(selectedId)} />
+              <Button onClick={closeDetail}>Закрыть карточку</Button>
+            </div>
+          ) : detail ? (
+            <>
+              <header className={styles.conversationHeader}>
+                <div>
+                  <strong>{detail.partBrand} {detail.partNumber}</strong>
+                  <span>{detail.partName}, создано {formatDate(detail.createdAt)}</span>
+                </div>
+                <Button disabled={busy} onClick={closeDetail}>Закрыть карточку</Button>
+              </header>
+              <div className={styles.threadActions}>
+                {detail.assignedStaffId === session.userId ? (
+                  <Button
+                    disabled={busy}
+                    onClick={() => void updateRequest(
+                      { assignedStaffId: null },
+                      "Сотрудник снял с себя заявку",
+                    )}
+                  >
+                    Снять назначение
+                  </Button>
+                ) : detail.assignedStaffId === null || elevated ? (
+                  <>
+                    <Button
+                      disabled={busy}
+                      icon={<PersonAvailable20Regular />}
+                      onClick={() => void updateRequest(
+                        { assignedStaffId: session.userId },
+                        "Сотрудник взял заявку в работу",
+                      )}
+                    >
+                      Взять себе
+                    </Button>
+                    {elevated && detail.assignedStaffId !== null ? (
+                      <Button
+                        disabled={busy}
+                        onClick={() => void updateRequest(
+                          { assignedStaffId: null },
+                          "Руководитель снял назначение с заявки",
+                        )}
+                      >
+                        Снять текущее назначение
+                      </Button>
+                    ) : null}
+                  </>
+                ) : (
+                  <span className={styles.muted}>Назначено: {detail.assignedName ?? "другой сотрудник"}</span>
+                )}
+                {canChangeStatus ? (
+                  <WaitlistStatusActions
+                    busy={busy}
+                    elevated={elevated}
+                    onUpdate={updateRequest}
+                    status={detail.status}
+                  />
+                ) : detail.status === "new" || detail.status === "in_progress" ? (
+                  <span className={styles.muted}>Чтобы изменить статус, возьмите заявку себе.</span>
+                ) : <span className={styles.muted}>Вернуть завершённую заявку может руководитель.</span>}
+              </div>
+              {mutationError ? (
+                <RequestError
+                  error={mutationError}
+                  onRetry={() => {
+                    resource.reload();
+                    void openRequest(detail.id);
+                  }}
+                />
+              ) : null}
+              <div className={styles.requestBody}>
+                <dl className={styles.detailList}>
+                  <div><dt>Статус</dt><dd><Badge appearance="tint">{WAITLIST_STATUS_LABELS[detail.status]}</Badge></dd></div>
+                  <div><dt>Ответственный</dt><dd>{detail.assignedName ?? "Не назначен"}</dd></div>
+                  <div><dt>Поставщик</dt><dd>{detail.supplier}</dd></div>
+                  <div><dt>Деталь</dt><dd>{detail.partBrand} {detail.partNumber} — {detail.partName}</dd></div>
+                  <div><dt>Цена и количество</dt><dd>{formatMoney(detail.priceKopeks)} × {detail.quantity}</dd></div>
+                  <div><dt>Срок поставки</dt><dd>{detail.deliveryTime ? `${detail.deliveryTime} дн. (под заказ)` : "Под заказ у поставщика"}</dd></div>
+                  <div><dt>Клиент</dt><dd>{detail.customerName}</dd></div>
+                  <div><dt>Email</dt><dd>{detail.customerEmail ? <a href={`mailto:${detail.customerEmail}`}>{detail.customerEmail}</a> : "Не указан"}</dd></div>
+                  <div><dt>Телефон</dt><dd>{detail.customerPhone ? <a href={`tel:${detail.customerPhone.replace(/[^+\d]/gu, "")}`}>{detail.customerPhone}</a> : "Не указан"}</dd></div>
+                  <div><dt>Обновлено</dt><dd>{formatDate(detail.updatedAt)}</dd></div>
+                  {detail.resolvedAt ? <div><dt>Выполнено</dt><dd>{formatDate(detail.resolvedAt)}</dd></div> : null}
+                </dl>
+              </div>
+            </>
+          ) : null}
+        </section>
+      </div>
+    </>
+  );
+}
+
+function WaitlistStatusActions({
+  busy,
+  elevated,
+  onUpdate,
+  status,
+}: {
+  busy: boolean;
+  elevated: boolean;
+  onUpdate: (
+    update: { status: SupplierWaitlistStatus },
+    reason: string,
+  ) => Promise<void>;
+  status: SupplierWaitlistStatus;
+}) {
+  if (status === "new") {
+    return (
+      <>
+        <Button
+          appearance="primary"
+          disabled={busy}
+          onClick={() => void onUpdate({ status: "in_progress" }, "Заявка принята в работу")}
+        >
+          Начать работу
+        </Button>
+        <Button
+          disabled={busy}
+          icon={<DismissCircle20Regular />}
+          onClick={() => void onUpdate({ status: "cancelled" }, "Заявка отменена сотрудником")}
+        >
+          Отменить
+        </Button>
+      </>
+    );
+  }
+  if (status === "in_progress") {
+    return (
+      <>
+        <Button
+          appearance="primary"
+          disabled={busy}
+          icon={<CheckmarkCircle20Regular />}
+          onClick={() => void onUpdate({ status: "fulfilled" }, "Заявка выполнена сотрудником")}
+        >
+          Отметить выполненной
+        </Button>
+        <Button
+          disabled={busy}
+          icon={<DismissCircle20Regular />}
+          onClick={() => void onUpdate({ status: "cancelled" }, "Заявка отменена сотрудником")}
+        >
+          Отменить
+        </Button>
+      </>
+    );
+  }
+  if (!elevated) return null;
+  return (
+    <Button
+      disabled={busy}
+      onClick={() => void onUpdate({ status: "in_progress" }, "Заявка возвращена в работу руководителем")}
+    >
+      Вернуть в работу
     </Button>
   );
 }

@@ -3,6 +3,14 @@ import { readFileSync } from "node:fs";
 import { z } from "zod";
 
 const RawEnvironmentSchema = z.object({
+  // Gemini-backed chat assistant (AN30-011). Disabled by default: ADR-004
+  // requires the shop and chat to work fully with every external
+  // integration off, and ADR-016 requires catalog search ranking to stay
+  // deterministic whether or not this is on.
+  AI_ENABLED: z.enum(["true", "false"]).default("false"),
+  AI_MODEL: z.string().min(1).max(100).default("gemini-2.5-flash"),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_API_KEY_FILE: z.string().min(1).optional(),
   AUTH_DEBUG_TOKENS: z.enum(["true", "false"]).default("false"),
   COOKIE_SECURE: z.enum(["true", "false"]).default("true"),
   DATA_ENCRYPTION_KEY: z.string().min(32).optional(),
@@ -27,6 +35,17 @@ const RawEnvironmentSchema = z.object({
   REDIS_PASSWORD: z.string().min(1).optional(),
   REDIS_PASSWORD_FILE: z.string().min(1).optional(),
   RESERVATION_TTL_MINUTES: z.coerce.number().int().min(5).max(120).default(20),
+  // Rossko supplier integration (AN30-013). Disabled by default: ADR-004
+  // requires the shop to work fully with every external integration off.
+  ROSSKO_ENABLED: z.enum(["true", "false"]).default("false"),
+  ROSSKO_KEY1: z.string().min(1).optional(),
+  ROSSKO_KEY1_FILE: z.string().min(1).optional(),
+  ROSSKO_KEY2: z.string().min(1).optional(),
+  ROSSKO_KEY2_FILE: z.string().min(1).optional(),
+  // Verified live delivery ids: 000000001 Самовывоз, 000000002 Курьерская
+  // доставка, 000000012 Отправка через Автобус. GetSearch rejects any other
+  // value with success=false, so the format is pinned rather than left free text.
+  ROSSKO_DELIVERY_ID: z.string().regex(/^\d{9}$/u).default("000000001"),
   STORAGE_ROOT: z.string().min(1).default("/data/uploads"),
   SANDBOX_PAYMENT_WEBHOOK_SECRET: z.string().min(32).optional(),
   SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: z.string().min(1).optional(),
@@ -53,6 +72,9 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     ?? readSecret(environment.DATA_ENCRYPTION_KEY_FILE);
   const sandboxPaymentWebhookSecret = environment.SANDBOX_PAYMENT_WEBHOOK_SECRET
     ?? readSecret(environment.SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE);
+  const rosskoKey1 = environment.ROSSKO_KEY1 ?? readSecret(environment.ROSSKO_KEY1_FILE);
+  const rosskoKey2 = environment.ROSSKO_KEY2 ?? readSecret(environment.ROSSKO_KEY2_FILE);
+  const geminiApiKey = environment.GEMINI_API_KEY ?? readSecret(environment.GEMINI_API_KEY_FILE);
 
   if (environment.NODE_ENV === "production" && !environment.DATABASE_URL && !databasePassword) {
     throw new Error("Production database credentials are not configured");
@@ -69,6 +91,12 @@ export function validateEnvironment(raw: Record<string, unknown>) {
   if (environment.PAYMENTS_PROVIDER === "sandbox"
     && (!sandboxPaymentWebhookSecret || sandboxPaymentWebhookSecret.length < 32)) {
     throw new Error("Sandbox payment webhook secret must contain at least 32 characters");
+  }
+  if (environment.ROSSKO_ENABLED === "true" && (!rosskoKey1 || !rosskoKey2)) {
+    throw new Error("Rossko API credentials are not configured");
+  }
+  if (environment.AI_ENABLED === "true" && !geminiApiKey) {
+    throw new Error("Gemini API key is not configured");
   }
   if (environment.ENABLE_PUBLIC_CHECKOUT === "true" && environment.PAYMENTS_PROVIDER === "disabled") {
     throw new Error("Public checkout requires a configured payment provider");
@@ -119,14 +147,19 @@ export function validateEnvironment(raw: Record<string, unknown>) {
 
   return {
     ...environment,
+    AI_ENABLED: environment.AI_ENABLED === "true",
     AUTH_ADMIN_TOKEN_LOOKUP: authAdminTokenLookup,
     AUTH_DEBUG_TOKENS: environment.AUTH_DEBUG_TOKENS === "true",
     COOKIE_SECURE: environment.COOKIE_SECURE === "true",
     DATA_ENCRYPTION_KEY: dataEncryptionKey,
+    GEMINI_API_KEY: geminiApiKey,
     DATABASE_URL: databaseUrl,
     ENABLE_PUBLIC_CHECKOUT: environment.ENABLE_PUBLIC_CHECKOUT === "true",
     LEGAL_DOCUMENTS_APPROVED: environment.LEGAL_DOCUMENTS_APPROVED === "true",
     REDIS_URL: redisUrl,
+    ROSSKO_ENABLED: environment.ROSSKO_ENABLED === "true",
+    ROSSKO_KEY1: rosskoKey1,
+    ROSSKO_KEY2: rosskoKey2,
     SANDBOX_PAYMENT_WEBHOOK_SECRET: sandboxPaymentWebhookSecret,
     SESSION_SECRET: sessionSecret,
   };

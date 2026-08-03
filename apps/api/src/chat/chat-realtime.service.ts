@@ -7,6 +7,7 @@ import { ChatClientEventSchema } from "@an30/contracts";
 
 import { SESSION_COOKIE_NAME, SessionService } from "../auth/session.service.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
+import { ChatAssistantService } from "./chat-assistant.service.js";
 import { ChatEventBus } from "./chat-event-bus.service.js";
 import { ChatService } from "./chat.service.js";
 import type { ChatIdentity } from "./chat.types.js";
@@ -31,6 +32,7 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     config: ConfigService,
+    private readonly assistant: ChatAssistantService,
     private readonly chat: ChatService,
     private readonly events: ChatEventBus,
     private readonly rateLimit: RateLimitService,
@@ -138,17 +140,35 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
     }
     if (!state.identity || !state.threadId) throw new HttpException("Сначала подпишитесь на чат", 409);
     if (event.type === "message.send") {
-      const message = await this.chat.createMessage(state.threadId, {
+      // Captured into locals (rather than re-read from `state` after the
+      // `await` below) so TypeScript keeps narrowing them past the
+      // just-completed undefined check, and so a concurrent subscribe on
+      // the same socket cannot change which thread/identity this reply
+      // targets partway through.
+      const identity = state.identity;
+      const threadId = state.threadId;
+      const message = await this.chat.createMessage(threadId, {
         body: event.body,
         clientMessageId: event.clientMessageId,
         replyToId: event.replyToId,
-      }, state.identity);
+      }, identity);
       state.socket.send(JSON.stringify({
         clientMessageId: message.clientMessageId,
         messageId: message.id,
         sequence: message.sequence,
         type: "message.ack",
       }));
+      // Fire-and-forget, same as the REST endpoints: ChatAssistantService
+      // never rejects, and any automated reply is delivered to subscribers
+      // (including this socket) through the event bus above, not this ack.
+      if (message.senderKind === "customer" || message.senderKind === "guest") {
+        void this.assistant.respond({
+          identity: identity.kind === "authenticated" ? identity.auth.userId : ipAddress,
+          question: message.body ?? "",
+          replyToId: message.id,
+          threadId,
+        });
+      }
       return;
     }
     await this.chat.markRead(state.threadId, event.messageId, state.identity);
