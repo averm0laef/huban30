@@ -1,0 +1,266 @@
+/* ============================================================
+   Inline image-attachment preview (thumbnail + lightbox), shared by the
+   full /chat page and the floating widget. Reads the `--store-*` tokens
+   from storefront.module.css's `.storefront` root, same as every other
+   storefront surface — no hardcoded colors, one light theme only.
+   ============================================================ */
+
+.tile {
+  display: grid;
+  gap: 6px;
+  width: min(220px, 60vw);
+}
+
+.thumbButton {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--store-duration-fast) var(--store-ease);
+}
+
+.thumbButton:hover {
+  border-color: var(--store-brand);
+}
+
+.thumbImage {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.thumbLoading,
+.thumbError {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.thumbError { color: var(--store-danger); }
+
+.thumbError button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: var(--store-weight-bold);
+  transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+
+.thumbError button:hover {
+  border-color: var(--store-brand);
+  color: var(--store-brand);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--store-border);
+  border-top-color: var(--store-brand);
+  border-radius: 50%;
+  animation: attachmentSpin 0.8s linear infinite;
+}
+
+@keyframes attachmentSpin {
+  to { transform: rotate(360deg); }
+}
+
+.tileMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tileName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--store-text);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.downloadLink {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--store-brand);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: var(--store-weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.downloadLink:hover { color: var(--store-brand-strong); }
+
+/* ---------------- Lightbox ----------------
+   Same behavioral pattern as mobile-drawer.tsx's drawer: Escape closes,
+   focus is trapped inside the panel while open, background scroll is
+   locked via document.documentElement, and closing returns focus to the
+   thumbnail that opened it. z-index sits above both the widget panel (60)
+   and the nav drawer (70) so it always wins if either happens to be open
+   underneath it. */
+
+.lightboxLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: var(--store-space-lg);
+}
+
+.lightboxBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgb(8 15 30 / 78%);
+  cursor: pointer;
+  animation: attachmentFadeIn var(--store-duration-base) var(--store-ease);
+}
+
+.lightboxPanel {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 100%);
+  max-height: min(860px, 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--store-radius-lg);
+  background: var(--store-surface);
+  box-shadow: var(--store-shadow-lg);
+  animation: attachmentPopIn var(--store-duration-base) var(--store-ease);
+}
+
+@keyframes attachmentFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes attachmentPopIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.lightboxHead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: var(--store-space-sm);
+  border-bottom: 1px solid var(--store-border);
+  background: var(--store-surface);
+}
+
+.lightboxAction {
+  min-height: 44px;
+  padding: 0 var(--store-space-md);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: var(--store-weight-bold);
+  transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+
+.lightboxAction:hover {
+  border-color: var(--store-brand);
+  color: var(--store-brand);
+}
+
+.lightboxClose {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+
+.lightboxClose:hover {
+  background: var(--store-surface-strong);
+  color: var(--store-brand);
+}
+
+.lightboxBody {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--store-space-md);
+  background: var(--store-surface-strong);
+  overflow: auto;
+}
+
+.lightboxImage {
+  max-width: 100%;
+  max-height: min(70vh, 760px);
+  display: block;
+  border-radius: var(--store-radius-sm);
+  object-fit: contain;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .lightboxLayer { padding: 0; }
+  .lightboxPanel {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+  .lightboxHead { padding-top: calc(var(--store-space-sm) + env(safe-area-inset-top)); }
+  .lightboxBody { padding: var(--store-space-sm); }
+  .lightboxImage { max-height: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+  .lightboxBackdrop,
+  .lightboxPanel { animation: none; }
+  .thumbButton { transition: none; }
+}

@@ -187,7 +187,11 @@
 .headerTopInner { min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: var(--store-space-lg); row-gap: var(--store-space-xs); padding: 10px 0; }
 
 .brand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
-.brandLockup { height: 38px; width: auto; display: block; }
+/* 48px (up from 38px) — the owner's "логотип больше сделай" ask. This is
+   taller than row A's own 44px touch-target floor, so it is what now sets
+   `.headerTopInner`'s height; see the sticky-offset comment further down
+   for the header-height budget this pushes through the rest of the page. */
+.brandLockup { height: 48px; width: auto; display: block; }
 
 .headerTopCatalog {
   flex: 0 0 auto;
@@ -297,7 +301,7 @@
 /* Mobile-only logo on the blue band — row A's own lockup is hidden below
    768px, so without this the brand mark disappears on a phone entirely. */
 .headerBandBrand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: var(--store-header-text); text-decoration: none; }
-.headerBandBrandMark { height: 26px; width: auto; display: block; }
+.headerBandBrandMark { height: 27px; width: auto; display: block; }
 
 .searchBox { position: relative; flex: 1 1 auto; min-width: 0; max-width: 720px; margin: 0 auto; }
 
@@ -446,7 +450,7 @@
   border-bottom: 1px solid var(--store-border);
 }
 .drawerBrand { display: flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
-.drawerBrandMark { height: 30px; width: auto; display: block; }
+.drawerBrandMark { height: 34px; width: auto; display: block; }
 .drawerClose {
   flex: 0 0 auto;
   width: 44px;
@@ -754,7 +758,15 @@
 .fieldNote { margin: 0; align-self: center; font-size: 0.88rem; }
 
 .authLayout { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(390px, 0.65fr); align-items: start; gap: clamp(36px, 8vw, 108px); padding-top: clamp(48px, 8vw, 88px); }
-.authIntro { position: sticky; top: 178px; }
+/* Sticky offsets below (.authIntro, .profileNav, .checkoutAside) plus
+   .profileSection/.detailSection's scroll-margin-top are all budgeted
+   against the sticky header's real rendered height (desktop: ~65px row A +
+   ~76px row B = ~141px) plus their own page-specific breathing room. The
+   brand-lockup bump above (38px -> 48px) now exceeds row A's own 44px
+   touch-target floor, growing row A by 4px — so every one of these was
+   bumped by the same +4px to keep the original gap. Re-check this block
+   again if the header's height budget changes further. */
+.authIntro { position: sticky; top: 182px; }
 .authIntro h1 { margin: 0; max-width: 680px; font-size: clamp(2.4rem, 5vw, 4.5rem); font-weight: var(--store-weight-black); line-height: 0.98; letter-spacing: var(--store-tracking-tighter); }
 .authIntro > p:not(.eyebrow) { max-width: 610px; margin: 22px 0 0; color: var(--store-muted); font-size: 1.08rem; line-height: 1.6; }
 .checkList { display: grid; gap: var(--store-space-sm); margin: 30px 0 0; padding: 0; list-style: none; }
@@ -791,11 +803,11 @@
 .orderHeading h1 { margin: 0; font-size: clamp(2.2rem, 5vw, 4rem); font-weight: var(--store-weight-black); line-height: 1; letter-spacing: var(--store-tracking-tighter); }
 .profileHeading p:last-child,
 .orderHeading p:last-child { margin: 10px 0 0; color: var(--store-muted); }
-.profileNav { position: sticky; top: 150px; z-index: 2; display: flex; gap: 6px; margin: var(--store-space-xl) 0 40px; padding: 7px; overflow-x: auto; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); box-shadow: var(--store-shadow-xs); }
+.profileNav { position: sticky; top: 154px; z-index: 2; display: flex; gap: 6px; margin: var(--store-space-xl) 0 40px; padding: 7px; overflow-x: auto; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); box-shadow: var(--store-shadow-xs); }
 .profileNav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 13px; border-radius: 8px; color: var(--store-text); font-size: 0.88rem; font-weight: var(--store-weight-bold); white-space: nowrap; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .profileNav a:hover { background: var(--store-surface-strong); }
 .profileSection,
-.detailSection { padding: 0 0 42px; margin: 0 0 42px; border-bottom: 1px solid var(--store-border); scroll-margin-top: 160px; }
+.detailSection { padding: 0 0 42px; margin: 0 0 42px; border-bottom: 1px solid var(--store-border); scroll-margin-top: 164px; }
 .sectionHeading { min-height: 54px; display: flex; justify-content: space-between; align-items: end; gap: var(--store-space-lg); margin-bottom: var(--store-space-lg); }
 .sectionHeading h2,
 .detailSection h2 { margin: 0; font-size: clamp(1.55rem, 3vw, 2.25rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
@@ -853,7 +865,7 @@
 .checkoutForm { display: grid; gap: var(--store-space-xl); }
 .checkoutForm fieldset { display: grid; gap: 17px; margin: 0; padding: 0 0 var(--store-space-xl); border: 0; border-bottom: 1px solid var(--store-border); }
 .checkoutForm legend { margin-bottom: var(--store-space-lg); padding: 0; font-size: 1.3rem; font-weight: var(--store-weight-black); }
-.checkoutAside { position: sticky; top: 160px; padding: var(--store-space-lg); border: 1px solid var(--store-border); border-top: 5px solid var(--store-accent); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-md); }
+.checkoutAside { position: sticky; top: 164px; padding: var(--store-space-lg); border: 1px solid var(--store-border); border-top: 5px solid var(--store-accent); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-md); }
 .checkoutAside h2 { margin: 0 0 var(--store-space-md); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .checkoutAside p { color: var(--store-muted); line-height: 1.55; }
 .checkoutLines { border-top: 1px solid var(--store-border); }
@@ -896,7 +908,7 @@
 .footer { margin-top: auto; background: var(--store-header-bg-strong); color: var(--store-header-text); }
 .footerGrid { width: var(--store-container); margin: 0 auto; padding: var(--store-space-2xl) 0 var(--store-space-xl); display: grid; grid-template-columns: 1.35fr 1fr 1fr 0.85fr; gap: var(--store-space-xl); }
 .footerBrand { display: flex; align-items: center; gap: var(--store-space-sm); margin-bottom: var(--store-space-md); }
-.footerWordmark { color: var(--store-header-text); font-size: 1.4rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
+.footerWordmark { color: var(--store-header-text); font-size: 1.65rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .footerGrid h2 { margin: 0 0 var(--store-space-sm); color: var(--store-header-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
 .footerBrand h2 { margin: 0; color: var(--store-header-text); font-size: 1.05rem; letter-spacing: var(--store-tracking-tight); text-transform: none; }
 .footerGrid p { margin: 6px 0; color: var(--store-header-muted); font-size: 0.9rem; line-height: 1.5; }
@@ -1000,7 +1012,7 @@
   /* Logo + search + burger all share row B here — keep the fixed-width
      items compact so the search field never gets pinched at 320px. */
   .headerBandInner { gap: var(--store-space-2xs); }
-  .headerBandBrandMark { height: 22px; }
+  .headerBandBrandMark { height: 26px; }
   .searchForm svg { margin-left: var(--store-space-sm); }
   .promo { width: 100%; padding: 0 16px; }
   .categorySection,

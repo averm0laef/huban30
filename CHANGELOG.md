@@ -58,6 +58,11 @@
 - AN30-011: главная страница, контентные страницы и навигация переведены с legacy-витрины на автономный Next.js без изменения существующих URL.
 - AN30-011: публичный каталог отдаёт только явно одобренные характеристики товара; сырые атрибуты выгрузки 1С остаются внутренними.
 
+### Removed
+
+- Удалена legacy-витрина Vite/React/Supabase: `src/`, `supabase/` (миграции и Edge Functions), корневые `index.html`, `vite.config.ts`, `tailwind.config.ts`, `postcss.config.js`, `components.json`, `tsconfig.app.json`, `tsconfig.json` и корневой `public/` — автономный Next.js-стек полностью заменяет их и не имеет ни одной ссылки на эти пути.
+- Из корневого `package.json` удалены изолированные legacy-зависимости (React 18, React Router, все `@radix-ui/*`, `@supabase/supabase-js`, `@tanstack/react-query`, Vite, Tailwind CSS и связанные shadcn-пакеты) и скрипты `dev:legacy`, `build:legacy`, `build:dev`, `lint:legacy`, `typecheck:legacy`, `test:legacy`, `test:coverage`, `preview`.
+
 ### Security
 
 - AN30-001: жёстко заданные данные первого администратора и fallback-секрет создания администратора удалены из исходников до первой фиксации Git.

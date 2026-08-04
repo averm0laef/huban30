@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { errorText, readSession, type SessionView } from "../_lib/storefront-api";
+import { ChatAttachmentImage } from "./attachment-preview";
 import {
   CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
@@ -20,6 +21,7 @@ import {
   formatDate,
   isChatThread,
   isOwnMessage,
+  isPreviewableImage,
   parseStoredGuestThreads,
   senderLabel,
   serializeGuestThreads,
@@ -325,9 +327,19 @@ export function ChatClient() {
                       <header><strong>{senderLabel(message.senderKind)}</strong><time dateTime={message.createdAt}>{formatDate(message.createdAt)}</time></header>
                       {message.body && message.messageType !== "attachment" ? <p>{message.body}</p> : null}
                       {message.attachments.map((attachment) => (
-                        <button className={styles.attachment} key={attachment.id} onClick={() => void downloadAttachment(attachment)} type="button">
-                          <strong>{attachment.originalName}</strong><span>{Math.max(1, Math.ceil(attachment.byteSize / 1024))} КБ, скачать</span>
-                        </button>
+                        isPreviewableImage(attachment) && selectedThread && viewerKind ? (
+                          <ChatAttachmentImage
+                            attachment={attachment}
+                            key={attachment.id}
+                            onDownload={() => void downloadAttachment(attachment)}
+                            thread={selectedThread}
+                            viewerKind={viewerKind}
+                          />
+                        ) : (
+                          <button className={styles.attachment} key={attachment.id} onClick={() => void downloadAttachment(attachment)} type="button">
+                            <strong>{attachment.originalName}</strong><span>{Math.max(1, Math.ceil(attachment.byteSize / 1024))} КБ, скачать</span>
+                          </button>
+                        )
                       ))}
                       {isOwnMessage(message) && lastStaffReadMessageId === message.id ? <small>Прочитано магазином</small> : null}
                     </article>

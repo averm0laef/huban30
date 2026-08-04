@@ -207,6 +207,11 @@ export function attachmentSignatureError(file: { size: number; type: string }, b
   return detected === file.type ? null : "Тип файла не совпадает с содержимым изображения";
 }
 
+/** True for the same JPEG/PNG/WebP set the server accepts — the only attachments a thumbnail/lightbox may ever try to decode inline. */
+export function isPreviewableImage(attachment: ChatAttachment): boolean {
+  return ATTACHMENT_MIME_TYPES.has(attachment.mimeType);
+}
+
 export function safeDownloadName(value: string): string {
   const name = value.replace(/[\\/\u0000-\u001F\u007F]/gu, "_").trim().slice(0, 180);
   return !name || name === "." || name === ".." ? "an30-image" : name;

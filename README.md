@@ -1,6 +1,6 @@
 # АН-30
 
-Автономная версия интернет-магазина автозапчастей АН-30. Проект поэтапно переносится с legacy Supabase/Vite на самохостящийся стек Next.js, NestJS, PostgreSQL и Redis.
+Автономная версия интернет-магазина автозапчастей АН-30. Проект перенесён с legacy Supabase/Vite на самохостящийся стек Next.js, NestJS, PostgreSQL и Redis.
 
 ## Требования
 
@@ -26,9 +26,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d --build
 
 Подробности и production-вариант с Compose secrets описаны в `docs/LOCAL_DEVELOPMENT.md`.
 
-Legacy-витрина временно запускается отдельной командой `pnpm dev:legacy` и требует
-локальные Supabase-переменные. Она будет удалена после последовательного переноса
-функций; `.env` запрещено добавлять в Git.
+`.env` запрещено добавлять в Git.
 
 ## Проверки
 
@@ -53,4 +51,4 @@ pnpm audit:prod
 - Ротация секретов: `docs/SECRET_ROTATION.md`
 - Схема и миграции PostgreSQL: `docs/DATABASE.md`
 
-Старый Supabase-проект не удаляется и не отключается без отдельного подтверждения владельца.
+Старый hosted Supabase-проект не удаляется и не отключается без отдельного подтверждения владельца; локальная legacy-витрина (Vite/Supabase) удалена из репозитория.
