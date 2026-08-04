@@ -145,20 +145,37 @@
 .skipLink:focus { transform: translateY(0); }
 
 /* ---------------- Header ----------------
-   Two rows, both inside one sticky wrapper:
-   - .headerTop  ("row A"): light utility row — brand lockup, location,
-     the expert pill, phone/cart/account. ≥768px only. That boundary is
-     shared with the bottom tab bar's disappearance (see `.mobileNav` in
-     the 767px block below) on purpose: one of the two always covers
-     cart/account, with no dead width band between them.
-   - .headerBand ("row B"): solid-blue search band. The only row under
-     768px — "the whole header" there — carrying the pill search field
-     and, on narrow screens only, the secondary-links menu button. */
+   A single ink-blue panel, inset from the viewport edges with rounded
+   bottom corners so the page background shows down both sides — the
+   rossko.ru reference's "по бокам дизайн" detail. `.headerInset` carries
+   the background/radius/shadow; the sticky `.header` wrapper around it
+   stays transparent, so the gutter shows the ordinary page background
+   (not a hard-coded colour) at every scroll position.
+
+   Two rows share that one panel:
+   - `.headerTopRow` ("row 1", thin): store location, a couple of
+     secondary links and, on the right, the help phone number followed by
+     the messenger icons. ≥768px only — that boundary is shared with the
+     bottom tab bar's appearance (see `.mobileNav` in the 767px block
+     below), so cart/account access never has a dead zone between the two.
+   - `.headerMainRow` ("row 2", tall): brand lockup, the wide rounded
+     search field, and — ≥768px — the cart/account actions, each an icon
+     with a small caption beneath it (`.headerActions`). Below 768px the
+     burger trigger renders instead and row 1 disappears, so this row is
+     the entire header — the pattern the owner already confirmed works on
+     a phone, kept unchanged on purpose. */
 
 .header {
   position: sticky;
   top: 0;
   z-index: 20;
+}
+
+.headerInset {
+  margin-inline: 10px;
+  border-radius: 0 0 var(--store-radius-lg) var(--store-radius-lg);
+  background: var(--store-header-bg);
+  color: var(--store-header-text);
   box-shadow: var(--store-shadow-sm);
 }
 
@@ -168,142 +185,125 @@
     to { box-shadow: var(--store-shadow-md); }
   }
 
-  .header {
+  .headerInset {
     animation: store-header-lift linear both;
     animation-timeline: scroll(root);
     animation-range: 0 220px;
   }
 }
 
-.sectionInner { width: var(--store-container); margin: 0 auto; }
+.headerRowInner { display: flex; align-items: center; box-sizing: border-box; width: min(100%, var(--store-container)); margin: 0 auto; padding-inline: clamp(14px, 3vw, 28px); gap: var(--store-space-md); }
 
-/* Row A — light utility row (brand, location, expert pill, phone/cart/account) */
+/* Row 1 — thin utility row: location, secondary links, phone + messengers.
+   Hidden below 768px; see the file-header comment above for why. */
+.headerTopRow { display: none; border-bottom: 1px solid var(--store-header-border); }
+.headerTopRow .headerRowInner { min-height: 48px; padding-block: 4px; gap: var(--store-space-lg); }
 
-.headerTop { display: none; background: var(--store-surface); color: var(--store-text); border-bottom: 1px solid var(--store-border); }
-/* flex-wrap is a deliberate overflow backstop, same as elsewhere in this
-   file: the 1199/959 breakpoints below are sized so row A never needs to
-   wrap, but if real (untested) label lengths run long, wrapping to a
-   second line is the fallback — never horizontal overflow. */
-.headerTopInner { min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: var(--store-space-lg); row-gap: var(--store-space-xs); padding: 10px 0; }
+.headerTopLocation { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.84rem; line-height: 1.3; }
+.headerTopLocation svg { flex: 0 0 auto; }
+.headerTopLocation span { overflow-wrap: anywhere; }
 
-.brand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
-/* 48px (up from 38px) — the owner's "логотип больше сделай" ask. This is
-   taller than row A's own 44px touch-target floor, so it is what now sets
-   `.headerTopInner`'s height; see the sticky-offset comment further down
-   for the header-height budget this pushes through the rest of the page. */
-.brandLockup { height: 48px; width: auto; display: block; }
-
-.headerTopCatalog {
-  flex: 0 0 auto;
-  min-height: 44px;
+.headerTopLinks { display: flex; align-items: center; gap: var(--store-space-md); }
+.headerTopLinks a {
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--store-space-2xs);
-  color: var(--store-text);
-  font-size: 0.9rem;
-  font-weight: var(--store-weight-bold);
+  min-height: 44px;
+  color: var(--store-header-muted);
+  font-size: 0.84rem;
+  font-weight: var(--store-weight-medium);
   text-decoration: none;
+  white-space: nowrap;
   transition: color var(--store-duration-fast) var(--store-ease);
 }
-.headerTopCatalog:hover { color: var(--store-brand); }
+.headerTopLinks a:hover { color: var(--store-header-text); }
 
-.headerLocation {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--store-muted);
-  font-size: 0.86rem;
-  line-height: 1.3;
-}
-.headerLocation svg { flex: 0 0 auto; }
-.headerLocation span { overflow-wrap: anywhere; }
-
-.pillGhost {
-  flex: 0 0 auto;
-  min-height: 44px;
+/* Pinned right regardless of which siblings survive the breakpoints below —
+   the phone number and messengers are the one part of row 1 the reference
+   requires at every width row 1 itself is shown. */
+.headerTopRight { display: flex; align-items: center; gap: var(--store-space-md); margin-left: auto; }
+.headerTopPhone {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 0 var(--store-space-md);
-  border: 1px solid var(--store-border);
-  border-radius: var(--store-radius-full);
-  background: var(--store-surface);
-  color: var(--store-text);
-  font-size: 0.86rem;
+  min-height: 44px;
+  color: var(--store-header-text);
+  font-size: 0.88rem;
   font-weight: var(--store-weight-bold);
   text-decoration: none;
   white-space: nowrap;
-  transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
+  transition: color var(--store-duration-fast) var(--store-ease);
 }
-.pillGhost:hover { border-color: var(--store-brand); color: var(--store-brand); transform: translateY(-1px); }
-.pillGhost:active { transform: translateY(0); }
+.headerTopPhone svg { color: var(--store-accent); }
+.headerTopPhone:hover { color: var(--store-accent); }
 
-.headerTopActions { flex: 0 0 auto; margin-left: auto; display: flex; align-items: center; gap: 2px; }
-
-.headerIconLink,
-.headerCartWrap {
-  min-height: 44px;
+.headerMessengers { display: flex; align-items: center; gap: 2px; }
+.headerMessengerLink {
+  min-width: 40px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 var(--store-space-xs);
+  justify-content: center;
   border-radius: var(--store-radius-sm);
-  color: var(--store-text);
-  font-size: 0.86rem;
-  font-weight: var(--store-weight-bold);
-  text-decoration: none;
-  cursor: pointer;
+  color: var(--store-header-muted);
   transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
 }
-.headerIconLink svg,
-.headerCartWrap > svg { flex: 0 0 auto; color: var(--store-muted); transition: color var(--store-duration-fast) var(--store-ease); }
-.headerIconLink a { color: inherit; text-decoration: none; }
-.headerIconLink:hover,
-.headerCartWrap:hover { background: var(--store-surface-strong); color: var(--store-brand); }
-.headerIconLink:hover svg,
-.headerCartWrap:hover > svg { color: var(--store-brand); }
-.headerTopActions :global(.storefront-cart-button) {
+.headerMessengerLink:hover { background: var(--store-header-control-bg-hover); color: var(--store-accent); }
+
+/* Row 2 — brand, search, cart/account (desktop) or brand, search, burger (mobile) */
+
+.headerMainRow .headerRowInner { min-height: 56px; padding-block: 10px; padding-top: max(10px, env(safe-area-inset-top)); gap: var(--store-space-sm); }
+
+.brand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
+/* Logo height climbs with the row: 34px on the phone-width single-row
+   header up to 48px on desktop — the owner's earlier "логотип больше
+   сделай" ask — see the 768px/1280px steps further down. */
+.brandLockup { height: 34px; width: auto; display: block; }
+
+/* Cart/account: icon-above-caption, each a single 44px focusable target
+   (the icon renders *inside* the button/link — see cart-actions.tsx and
+   session-navigation.tsx — not beside it, so the caption isn't the only
+   part that is actually clickable). Desktop/tablet only: on a phone the
+   bottom tab bar (`.mobileNav`) already covers cart and account. */
+.headerActions { flex: 0 0 auto; display: none; align-items: center; gap: 2px; margin-left: var(--store-space-xs); }
+.headerActions :global(a),
+.headerActions :global(.storefront-cart-button) {
+  min-width: 44px;
   min-height: 44px;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--store-space-2xs);
-  padding: 0 var(--store-space-sm);
+  justify-content: center;
+  gap: 3px;
+  padding: 4px var(--store-space-xs);
   border: 0;
   border-radius: var(--store-radius-sm);
   background: transparent;
-  color: var(--store-text);
-  font-size: 0.86rem;
-  font-weight: var(--store-weight-bold);
+  color: var(--store-header-text);
+  text-decoration: none;
   cursor: pointer;
-  transition: color var(--store-duration-fast) var(--store-ease);
+  transition: background var(--store-duration-fast) var(--store-ease);
 }
-.headerTopActions :global(.storefront-cart-button):hover { color: var(--store-brand); }
-.headerTopActions :global(.storefront-cart-button):active { transform: scale(0.97); }
-.headerTopActions :global(.storefront-cart-button) span {
-  min-width: 20px;
-  padding: 2px 6px;
+.headerActions :global(a):hover,
+.headerActions :global(.storefront-cart-button):hover { background: var(--store-header-control-bg-hover); }
+.headerActions :global(a) svg,
+.headerActions :global(.storefront-cart-button) svg { flex: 0 0 auto; color: var(--store-header-muted); }
+.headerActions :global(.storefront-cart-button-label),
+.headerActions :global(.storefront-account-label) { font-size: 0.72rem; font-weight: var(--store-weight-bold); white-space: nowrap; }
+.headerActions :global(.storefront-cart-count) {
+  display: inline-block;
+  min-width: 17px;
+  margin-left: 4px;
+  padding: 1px 5px;
   border-radius: var(--store-radius-full);
   background: var(--store-accent);
   color: var(--store-accent-text);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: var(--store-weight-black);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
-/* Row B — solid-colour search band, sticky at every width */
-
-.headerBand { background: var(--store-header-bg); color: var(--store-header-text); }
-.headerBandInner { min-height: 48px; display: flex; align-items: center; gap: var(--store-space-sm); padding: 12px 0; padding-top: max(12px, env(safe-area-inset-top)); }
-
-/* Mobile-only logo on the blue band — row A's own lockup is hidden below
-   768px, so without this the brand mark disappears on a phone entirely. */
-.headerBandBrand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: var(--store-header-text); text-decoration: none; }
-.headerBandBrandMark { height: 27px; width: auto; display: block; }
-
-.searchBox { position: relative; flex: 1 1 auto; min-width: 0; max-width: 720px; margin: 0 auto; }
+.searchBox { position: relative; flex: 1 1 auto; min-width: 0; max-width: 860px; }
 
 .searchForm {
   height: 52px;
@@ -534,11 +534,12 @@
 
 /* ---------------- Home ---------------- */
 
-.home { display: flex; flex-direction: column; gap: clamp(40px, 6vw, 72px); padding: var(--store-space-lg) 0 clamp(56px, 8vw, 96px); }
+.home { display: flex; flex-direction: column; gap: clamp(40px, 6vw, 96px); padding: var(--store-space-lg) 0 clamp(56px, 8vw, 112px); }
 
 /* Promo carousel: dot-indicated, swipe/scroll-snap, no autoplay (so it
    never fights prefers-reduced-motion or WCAG 2.2.2). */
 .promo { width: var(--store-container); margin: 0 auto; }
+.promoViewport { position: relative; }
 .promoTrack {
   display: flex;
   gap: var(--store-space-md);
@@ -546,8 +547,42 @@
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   border-radius: var(--store-radius-lg);
+  touch-action: pan-y;
 }
 .promoTrack::-webkit-scrollbar { display: none; }
+
+/* Prev/next: inside the banner, centred against its left/right edges,
+   invisible until the visitor's pointer is over the banner or focus lands
+   somewhere inside it — kept out of the way otherwise, per the reference. */
+/* `button.promoControl` (element + class) matches the specificity of the
+   global focus-ring rule (`.storefront button`, also element + class) in
+   storefront.module.css above, and — because this rule comes later in the
+   file — wins the tie. That matters here: `transition` is a shorthand, so
+   whichever rule wins supplies the *entire* property, and the list below
+   folds the global rule's own outline-color/outline-offset entries back in
+   so the focus ring keeps its easing instead of silently losing it. */
+button.promoControl {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--store-radius-full);
+  background: color-mix(in srgb, var(--store-header-bg-strong) 78%, transparent);
+  color: var(--store-header-text);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--store-duration-base) var(--store-ease), background var(--store-duration-fast) var(--store-ease), outline-color var(--store-duration-fast) var(--store-ease), outline-offset var(--store-duration-fast) var(--store-ease);
+}
+.promoViewport:hover .promoControl,
+.promoViewport:focus-within .promoControl { opacity: 1; }
+.promoControl:hover { background: color-mix(in srgb, var(--store-header-bg-strong) 94%, transparent); }
+.promoControl:focus-visible { opacity: 1; }
+.promoControlPrev { left: var(--store-space-md); }
+.promoControlNext { right: var(--store-space-md); }
 .promoSlide {
   position: relative;
   flex: 0 0 100%;
@@ -576,29 +611,30 @@
 .promoDot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--store-border); transition: background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease); }
 .promoDot[data-active="true"]::before { background: var(--store-brand); transform: scale(1.35); }
 
-/* Category tiles — the site's main navigation pattern. Light rounded
-   cards, an icon standing in for a product photo (no per-category photos
-   exist), label underneath. 3 across on phones per the reference; the
-   narrowest phones drop to 2 in the 374px tier below. */
+/* Category tiles — the site's main navigation pattern. Light-grey rounded
+   cards, a real product-group photo on top (public/categories/*.webp),
+   label centred beneath. 3 across on phones and tablets per the
+   reference, 4 on desktop (≥1024px, see the breakpoint block below); the
+   narrowest phones drop to 2 in the 374px tier further down. */
 .categorySection { width: var(--store-container); margin: 0 auto; }
-.categoryGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--store-space-md); }
+.categoryGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--store-space-md); }
 .categoryTile {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--store-space-sm);
   padding: var(--store-space-lg) var(--store-space-sm);
-  border: 1px solid var(--store-border);
+  border: 1px solid transparent;
   border-radius: var(--store-radius-lg);
-  background: var(--store-surface);
+  background: var(--store-surface-strong);
   color: var(--store-text);
   text-align: center;
   text-decoration: none;
-  box-shadow: var(--store-shadow-xs);
-  transition: border-color var(--store-duration-base) var(--store-ease), box-shadow var(--store-duration-base) var(--store-ease), transform var(--store-duration-base) var(--store-ease);
+  transition: background var(--store-duration-base) var(--store-ease), box-shadow var(--store-duration-base) var(--store-ease), transform var(--store-duration-base) var(--store-ease);
 }
-.categoryTile:hover { border-color: color-mix(in srgb, var(--store-brand) 35%, var(--store-border)); box-shadow: var(--store-shadow-md); transform: translateY(-2px); }
-.categoryTileMedia { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: color-mix(in srgb, var(--store-brand) 10%, transparent); color: var(--store-brand); }
+.categoryTile:hover { background: var(--store-surface); box-shadow: var(--store-shadow-md); transform: translateY(-3px); }
+.categoryTileMedia { display: grid; place-items: center; width: 100%; max-width: 108px; aspect-ratio: 1 / 1; }
+.categoryTileMedia img { width: 100%; height: 100%; object-fit: contain; }
 .categoryTileLabel { font-size: 0.86rem; font-weight: var(--store-weight-bold); line-height: 1.3; }
 .categoryMore { display: flex; justify-content: center; margin-top: var(--store-space-md); }
 
@@ -963,36 +999,52 @@
 .storefront :global(.storefront-cart-actions a) { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--store-space-md); border-radius: var(--store-radius-sm); background: var(--store-brand); color: #f8faff; font-weight: var(--store-weight-bold); text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .storefront :global(.storefront-cart-actions a):hover { background: var(--store-brand-strong); }
 
-/* Header row A + the bottom tab bar trade off at the exact same 768px
-   boundary on purpose (see the comment above `.headerTop`) so cart and
-   account access has no gap between the two. Everything else below is
-   ordinary tablet/desktop-only easing that isn't reachability-critical. */
+/* Row 1 + the bottom tab bar trade off at the exact same 768px boundary on
+   purpose (see the file-header comment above `.headerTopRow`), so cart and
+   account access never has a dead zone between the two. The inset gutter
+   and the logo also step up here and again at 1024/1280 — generous on a
+   wide screen, modest enough on a phone not to crowd the search field. */
 @media (min-width: 768px) {
-  .headerTop { display: block; }
-  .headerBandBrand,
+  .headerTopRow { display: block; }
+  .headerActions { display: flex; }
   .burgerButton,
   .drawerLayer { display: none; }
+  .headerInset { margin-inline: 16px; }
+  .brandLockup { height: 40px; }
 }
 
-/* Row A's content budget (brand + catalog link + location + expert pill +
-   phone + cart + account) only fits the full-text layout once the
-   container is roughly 1150px+ wide, so location drops first — it is the
-   least essential item — well before that, at 1199px. */
-@media (max-width: 1199px) {
-  .headerLocation { display: none; }
+@media (min-width: 1024px) {
+  .headerInset { margin-inline: 22px; }
+  .brandLockup { height: 44px; }
+  /* 4 across for the category tiles and a 3x2 (3 columns, 2 rows) grid for
+     the honest-facts panel — both were fixed at their phone/tablet column
+     counts before, which is the "stretched mobile layout" the desktop
+     pass needs to undo. */
+  .categoryGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .featureGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-/* Below this, even the icon+label controls (location already gone) need
-   to shed their text to stay on one line down to the 768px floor. */
-@media (max-width: 959px) {
-  /* Collapse the pill/phone/account labels to icon-only: font-size:0 on the
-     container (rather than hiding a span) also catches AccountNavigation's
-     own text node, which this file doesn't control the markup of. The
-     accessible name is untouched — this only changes rendered glyph size. */
-  .pillGhost,
-  .headerIconLink { gap: 0; padding: 0 var(--store-space-2xs); font-size: 0; }
-  .pillGhost svg,
-  .headerIconLink svg { font-size: initial; }
+@media (min-width: 1280px) {
+  .headerInset { margin-inline: 28px; }
+  .brandLockup { height: 48px; }
+}
+
+/* Row 1's content budget (location + secondary links + phone + messengers)
+   only fits the full-text layout once the container is roughly 1180px+
+   wide, so the secondary links — the least essential item — drop first. */
+@media (max-width: 1179px) {
+  .headerTopLinks { display: none; }
+}
+
+/* Below this the location text is next to go, and the cart/account
+   captions shed their text for icon-only — the badge count stays legible
+   on its own. The accessible name is untouched in both cases, only the
+   rendered glyphs shrink to zero. */
+@media (max-width: 899px) {
+  .headerTopLocation { display: none; }
+  .headerActions :global(.storefront-cart-button-label),
+  .headerActions :global(.storefront-account-label) { font-size: 0; }
+  .headerActions :global(.storefront-cart-count) { font-size: 0.66rem; }
 }
 
 @media (max-width: 980px) {
@@ -1009,10 +1061,10 @@
 }
 
 @media (max-width: 767px) {
-  /* Logo + search + burger all share row B here — keep the fixed-width
-     items compact so the search field never gets pinched at 320px. */
-  .headerBandInner { gap: var(--store-space-2xs); }
-  .headerBandBrandMark { height: 26px; }
+  /* Logo + search + burger share row 2 alone here (row 1 is hidden) — keep
+     the fixed-width items compact so the search field never gets pinched
+     at 320px. */
+  .headerMainRow .headerRowInner { gap: var(--store-space-2xs); }
   .searchForm svg { margin-left: var(--store-space-sm); }
   .promo { width: 100%; padding: 0 16px; }
   .categorySection,
@@ -1021,7 +1073,7 @@
   .helpBlock { padding-inline: 0; }
   .categoryGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--store-space-sm); }
   .categoryTile { padding: var(--store-space-md) var(--store-space-2xs); }
-  .categoryTileMedia { width: 48px; height: 48px; }
+  .categoryTileMedia { max-width: 64px; }
   .categoryTileLabel { font-size: 0.76rem; }
   .featureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .helpBlock { grid-template-columns: 1fr; }
@@ -1105,6 +1157,7 @@
    they reflow to 2-across there instead of shrinking past legibility. */
 @media (max-width: 374px) {
   .categoryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .brandLockup { height: 28px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

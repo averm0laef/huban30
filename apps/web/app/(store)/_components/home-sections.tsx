@@ -9,68 +9,6 @@ import styles from "./storefront.module.css";
 
 const STORE_PHONE_HREF = `tel:${STORE_PHONE}`;
 
-function EngineIcon() {
-  return (
-    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="10" width="12" height="7" rx="1" />
-      <path d="M15 12h3v3h-3" />
-      <path d="M20 12.5v2" />
-      <path d="M5 10V7h5v3" />
-      <path d="M9 7V5" />
-      <path d="M6 17v2" />
-      <path d="M12 17v2" />
-    </svg>
-  );
-}
-
-function BrakeIcon() {
-  return (
-    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="8.5" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 3.5v3M20.5 12h-3M12 20.5v-3M3.5 12h3" />
-    </svg>
-  );
-}
-
-function SuspensionIcon() {
-  return (
-    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 3v4" />
-      <path d="M8 7c0 1.2 2.4 1.2 2.4 2.4S8 10.8 8 12s2.4 1.2 2.4 2.4S8 15.6 8 16.8" />
-      <path d="M8 16.8V21" />
-      <circle cx="17" cy="19" r="2.6" />
-    </svg>
-  );
-}
-
-function ElectricIcon() {
-  return (
-    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
-    </svg>
-  );
-}
-
-function BodyIcon() {
-  return (
-    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 16v-3.2c0-.5.2-.9.6-1.2L7 9l1.8-3A2 2 0 0 1 10.6 5h2.8a2 2 0 0 1 1.8 1.1L17 9l3.4 2.6c.4.3.6.7.6 1.2V16" />
-      <path d="M3 16h18v2a1 1 0 0 1-1 1h-1.6a2 2 0 0 1-3.8 0H7.4a2 2 0 0 1-3.8 0H2a1 1 0 0 1-1-1v-2Z" />
-      <path d="M7 9h10" />
-    </svg>
-  );
-}
-
-function OilIcon() {
-  return (
-    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 2h6v3.4l2.4 3.2c.4.5.6 1.1.6 1.7V20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10.3c0-.6.2-1.2.6-1.7L9 5.4V2Z" />
-      <path d="M7 14h10" />
-    </svg>
-  );
-}
-
 function ShieldCheckIcon() {
   return (
     <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -170,16 +108,27 @@ interface CategoryTile {
   key: string;
   label: string;
   query: string;
-  Icon: ComponentType;
 }
 
+/**
+ * Twelve real product-group photos (320x320 WebP, transparent background)
+ * live in `public/categories/`, one per tile below — replacing the earlier
+ * CSS-drawn placeholder glyphs now that photography exists for these
+ * groups. `key` doubles as the image filename.
+ */
 const categoryTiles: CategoryTile[] = [
-  { key: "engine", label: "Двигатель", query: "двигатель", Icon: EngineIcon },
-  { key: "brakes", label: "Тормозная система", query: "тормоз", Icon: BrakeIcon },
-  { key: "suspension", label: "Подвеска", query: "подвеска", Icon: SuspensionIcon },
-  { key: "electric", label: "Электрика", query: "электрика", Icon: ElectricIcon },
-  { key: "body", label: "Кузов и оптика", query: "кузов", Icon: BodyIcon },
-  { key: "fluids", label: "Масла и расходники", query: "масло", Icon: OilIcon },
+  { key: "motornye-masla", label: "Моторные масла", query: "моторное масло" },
+  { key: "filtry", label: "Фильтры", query: "фильтр" },
+  { key: "tormoznaya-sistema", label: "Тормозная система", query: "тормоз" },
+  { key: "akkumulyatory", label: "Аккумуляторы", query: "аккумулятор" },
+  { key: "transmissionnye-masla", label: "Трансмиссионные масла", query: "трансмиссионное масло" },
+  { key: "antifriz", label: "Антифриз", query: "антифриз" },
+  { key: "avtolampy", label: "Автолампы", query: "лампа" },
+  { key: "shchetki", label: "Щётки стеклоочистителя", query: "щетки" },
+  { key: "gidravlicheskaya-zhidkost", label: "Гидравлическая жидкость", query: "гидравлическая жидкость" },
+  { key: "avtohimiya", label: "Автохимия", query: "автохимия" },
+  { key: "instrumenty", label: "Инструменты", query: "инструмент" },
+  { key: "tehosmotr", label: "Товары для техосмотра", query: "техосмотр" },
 ];
 
 /**
@@ -197,9 +146,11 @@ export function CategoryGrid() {
         <p>Выберите раздел — мы поищем в каталоге по названию. Ассортимент наполняется из 1С постепенно.</p>
       </div>
       <div className={styles.categoryGrid}>
-        {categoryTiles.map(({ key, label, query, Icon }) => (
+        {categoryTiles.map(({ key, label, query }) => (
           <Link className={styles.categoryTile} href={`/catalog?q=${encodeURIComponent(query)}`} key={key}>
-            <span className={styles.categoryTileMedia}><Icon /></span>
+            <span className={styles.categoryTileMedia}>
+              <Image alt="" height={320} src={`/categories/${key}.webp`} width={320} />
+            </span>
             <span className={styles.categoryTileLabel}>{label}</span>
           </Link>
         ))}

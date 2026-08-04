@@ -39,8 +39,18 @@ export function SessionNavigationProvider({ children, initialSessionPresent }: {
   return <SessionNavigationContext.Provider value={destination}>{children}</SessionNavigationContext.Provider>;
 }
 
-export function AccountNavigation({ className }: { className?: string }) {
+/**
+ * `icon` renders inside the `<Link>` itself (not beside it) so the header's
+ * icon-above-caption action link is a single focusable/clickable region —
+ * see the matching comment on `CartButton` in `cart-actions.tsx`.
+ */
+export function AccountNavigation({ className, icon }: { className?: string; icon?: ReactNode }) {
   const destination = useContext(SessionNavigationContext);
   if (!destination) throw new Error("AccountNavigation must be used inside SessionNavigationProvider");
-  return <Link className={className} href={destination.href}>{destination.label}</Link>;
+  return (
+    <Link className={className} href={destination.href}>
+      {icon}
+      <span className="storefront-account-label">{destination.label}</span>
+    </Link>
+  );
 }

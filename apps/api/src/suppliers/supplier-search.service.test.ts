@@ -61,6 +61,39 @@ describe("SupplierSearchService", () => {
       query: "W914/2",
       source: "rossko",
       success: false,
+      totalFound: 0,
+      truncated: false,
     });
+  });
+
+  it("caps a large result set and reports the true total", async () => {
+    // A broad Russian query returns dozens of parts, each with up to fifty
+    // analogues. Serialising that whole tree is what made the endpoint slow,
+    // so the response is capped while the real count stays visible.
+    const part = (index: number) => ({
+      brand: `B${index}`,
+      crosses: Array.from({ length: 30 }, (_, c) => ({
+        brand: `C${c}`, crosses: [], guid: `cg${index}-${c}`,
+        name: `cross ${c}`, partNumber: `CP${c}`, stocks: [],
+      })),
+      guid: `g${index}`,
+      name: `part ${index}`,
+      partNumber: `P${index}`,
+      stocks: [],
+    });
+    const service = new SupplierSearchService(makeSupplier({
+      message: "",
+      parts: Array.from({ length: 54 }, (_, i) => part(i)),
+      success: true,
+    }));
+
+    const result = await service.search({ q: "тормозные колодки" });
+
+    expect(result.parts).toHaveLength(24);
+    expect(result.totalFound).toBe(54);
+    expect(result.truncated).toBe(true);
+    expect(result.parts[0]?.crosses).toHaveLength(8);
+    // Analogues stay one level deep so the payload cannot fan out.
+    expect(result.parts[0]?.crosses[0]?.crosses).toEqual([]);
   });
 });

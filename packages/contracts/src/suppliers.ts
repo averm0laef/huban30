@@ -67,6 +67,10 @@ export const SupplierSearchResponseSchema = z.object({
   query: z.string().max(120),
   source: SupplierSourceSchema,
   success: z.boolean(),
+  /** How many parts the supplier actually matched, before the response cap. */
+  totalFound: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  /** True when `parts` is a capped view of a larger result set. */
+  truncated: z.boolean(),
 }).strict();
 export type SupplierSearchResponse = z.infer<typeof SupplierSearchResponseSchema>;
 

@@ -180,66 +180,82 @@ function DrawerNav() {
 }
 
 /**
- * Two-row sticky header.
+ * A single ink-blue panel (`.headerInset`), inset from the viewport edges
+ * with rounded bottom corners — the rossko.ru reference's "по бокам
+ * дизайн" — holding two rows:
  *
- * Row A (`.headerTop`) is the light utility row: brand lockup, store
- * location, the "Подбор с экспертом" pill, phone/cart/account. It only
- * renders ≥768px — that boundary is deliberately the same one the bottom
- * tab bar (`MobileNavigation`) uses to appear, so cart/account access never
- * has a dead zone between the two (that gap used to sit at 768–980px).
+ * Row 1 (`.headerTopRow`) is the thin utility row: store location, a
+ * couple of secondary links, and — on the right — the help phone number
+ * followed by the messenger icons (per the reference, these live here, not
+ * only in the footer). ≥768px only, the same boundary the bottom tab bar
+ * (`MobileNavigation`) uses to appear, so cart/account access never has a
+ * dead zone between the two.
  *
- * Row B (`.headerBand`) is the brand-blue search band. It is the only row
- * on narrow screens — "the whole header" there — and stays sticky at every
- * width because the surrounding `.header` wrapper is what is pinned. Below
- * 768px it also carries a solid-white `BrandLockup` (row A's own lockup is
- * hidden there), so the logo never disappears on a phone the way it used to.
+ * Row 2 (`.headerMainRow`) is the tall row: brand lockup, the wide rounded
+ * search field, and — ≥768px — the cart/account actions (each an icon with
+ * a small caption beneath it). Below 768px the burger trigger renders
+ * instead and row 1 disappears, so row 2 is the entire header there — the
+ * one part of the previous mobile layout the owner already confirmed
+ * works, kept unchanged. There is no separate "Каталог" button in either
+ * row: the reference reaches the catalog from the search field and the
+ * category tiles, not a dedicated nav item.
  */
 function StoreHeader() {
   return (
     <header className={styles.header}>
-      <div className={styles.headerTop}>
-        <div className={`${styles.sectionInner} ${styles.headerTopInner}`}>
-          <Link className={styles.brand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
-            <BrandLockup className={styles.brandLockup} />
-          </Link>
-          <Link className={styles.headerTopCatalog} href="/catalog">Каталог</Link>
-          <span className={styles.headerLocation}>
-            <PinIcon /> <span>{STORE_LOCALITY}, {STORE_STREET}</span>
-          </span>
-          <Link className={styles.pillGhost} href="/expert-help">
-            <HeadsetIcon /> <span>Подбор с экспертом</span>
-          </Link>
-          <div className={styles.headerTopActions}>
-            <a className={styles.headerIconLink} href={STORE_PHONE_HREF}>
-              <PhoneIcon /> <span>{STORE_PHONE_DISPLAY}</span>
-            </a>
-            <span className={styles.headerCartWrap}>
-              <CartIcon />
-              <CartButton />
+      <div className={styles.headerInset}>
+        <div className={styles.headerTopRow}>
+          <div className={styles.headerRowInner}>
+            <span className={styles.headerTopLocation}>
+              <PinIcon /> <span>{STORE_LOCALITY}, {STORE_STREET}</span>
             </span>
-            <span className={styles.headerIconLink}>
-              <UserIcon />
-              <AccountNavigation />
-            </span>
+            <nav className={styles.headerTopLinks} aria-label="Дополнительные ссылки">
+              <Link href="/about">О компании</Link>
+              <Link href="/contacts">Контакты</Link>
+            </nav>
+            <div className={styles.headerTopRight}>
+              <a className={styles.headerTopPhone} href={STORE_PHONE_HREF}>
+                <PhoneIcon /> <span>{STORE_PHONE_DISPLAY}</span>
+              </a>
+              <div className={styles.headerMessengers}>
+                {MESSENGERS.map((messenger) => (
+                  <a
+                    key={messenger.id}
+                    className={styles.headerMessengerLink}
+                    href={messenger.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={messenger.label}
+                    title={messenger.label}
+                  >
+                    <MessengerIcon id={messenger.id} />
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className={styles.headerBand}>
-        <div className={`${styles.sectionInner} ${styles.headerBandInner}`}>
-          <Link className={styles.headerBandBrand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
-            <BrandLockup className={styles.headerBandBrandMark} tone="current" />
-          </Link>
-          <HeaderSearchForm id="header-search-q" />
-          <MobileDrawer
-            brand={(
-              <Link className={styles.drawerBrand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
-                <BrandLockup className={styles.drawerBrandMark} />
-              </Link>
-            )}
-          >
-            <DrawerNav />
-          </MobileDrawer>
+        <div className={styles.headerMainRow}>
+          <div className={styles.headerRowInner}>
+            <Link className={styles.brand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
+              <BrandLockup className={styles.brandLockup} tone="current" />
+            </Link>
+            <HeaderSearchForm id="header-search-q" />
+            <div className={styles.headerActions}>
+              <CartButton icon={<CartIcon />} />
+              <AccountNavigation icon={<UserIcon />} />
+            </div>
+            <MobileDrawer
+              brand={(
+                <Link className={styles.drawerBrand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
+                  <BrandLockup className={styles.drawerBrandMark} />
+                </Link>
+              )}
+            >
+              <DrawerNav />
+            </MobileDrawer>
+          </div>
         </div>
       </div>
     </header>

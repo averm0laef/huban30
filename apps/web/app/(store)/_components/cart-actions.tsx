@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { formatRubles } from "../_lib/catalog-format";
 import { summariseCart, useCartProducts } from "../_lib/cart-products";
@@ -44,12 +45,19 @@ export function CartLineIdentity({ line, position }: { line: CartLineView; posit
   );
 }
 
-export function CartButton() {
+/**
+ * `icon` is rendered *inside* the button (not as a sibling) so the whole
+ * icon+label stack is one focusable/clickable region — required for the
+ * header's icon-above-caption action buttons to hit the 44px target rule
+ * with the icon included, not just the text underneath it.
+ */
+export function CartButton({ icon }: { icon?: ReactNode } = {}) {
   const { itemCount, openCart } = useCart();
 
   return (
     <button type="button" className="storefront-cart-button" onClick={openCart} aria-haspopup="dialog">
-      Корзина <span aria-label={`${itemCount} товаров`}>{itemCount}</span>
+      {icon}
+      <span className="storefront-cart-button-label">Корзина <span aria-label={`${itemCount} товаров`} className="storefront-cart-count">{itemCount}</span></span>
     </button>
   );
 }

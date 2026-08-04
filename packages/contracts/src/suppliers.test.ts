@@ -31,6 +31,8 @@ describe("supplier search contracts", () => {
       query: "W914/2",
       source: "rossko",
       success: true,
+      totalFound: 1,
+      truncated: false,
     });
     // The literal "under_order" tag (never "в наличии") is what keeps a
     // supplier result from ever being confused with 1C shelf stock — there is
@@ -62,6 +64,8 @@ describe("supplier search contracts", () => {
       query: "NOSTOCK",
       source: "rossko",
       success: true,
+      totalFound: 1,
+      truncated: false,
     });
     expect(parsed.parts[0]?.stocks).toEqual([]);
     expect(parsed.parts[0]?.crosses).toHaveLength(1);
@@ -82,6 +86,8 @@ describe("supplier search contracts", () => {
       query: "x",
       source: "rossko",
       success: true,
+      totalFound: 1,
+      truncated: false,
     }).success).toBe(false);
   });
 });
