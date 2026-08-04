@@ -1170,6 +1170,6 @@ button.promoControl {
     transition-duration: 0.01ms !important;
   }
 
-  .header { animation: none !important; }
+  .headerInset { animation: none !important; }
   .promoTrack { scroll-behavior: auto; }
 }

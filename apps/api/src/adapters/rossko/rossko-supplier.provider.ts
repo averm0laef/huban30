@@ -16,7 +16,11 @@ import {
 // A live GetSearch call was measured at 4-5 seconds and ~140 KB for a common
 // part number, so results are cached briefly and never fetched on the render
 // path — the controller always resolves through this cache-first provider.
-const CACHE_TTL_SECONDS = 180;
+// A live GetSearch costs 3–19 s depending on how broad the query is, so a
+// three-minute window expired faster than it paid for itself and repeat
+// searches kept falling through to the supplier. Fifteen minutes is still
+// well inside how often "под заказ" availability moves.
+const CACHE_TTL_SECONDS = 900;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 // Protects the supplier itself: independent of the per-IP limit enforced at
