@@ -5,9 +5,10 @@ import { JsonLd } from "../_components/json-ld";
 import { getCategoryTree, searchCatalog, StorefrontApiError } from "../_lib/catalog-api";
 import type { CatalogItem } from "../_lib/catalog-api";
 import { breadcrumbJsonLd, pageMetadata } from "../_lib/seo";
-import { CategoryChipGrid } from "./category-chip-grid";
+import { CatalogFilterRail } from "./catalog-filter-rail";
 import { CatalogSearchPanel } from "./catalog-search-panel";
 import type { CatalogAvailability, CatalogEmptyState, CatalogSort } from "./catalog-search-panel";
+import { SupplierResults } from "./supplier-results";
 
 export const metadata: Metadata = pageMetadata({
   description: "Каталог автозапчастей АН-30: разделы каталога, поиск по названию и артикулу, актуальные цены и остатки из 1С.",
@@ -35,7 +36,8 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
 
   let items: CatalogItem[] = [];
   let errorMessage: string | null = null;
-  if (query.length >= 2) {
+  const isSearch = query.length >= 2;
+  if (isSearch) {
     try {
       const response = await searchCatalog(query, 48, availability, sort);
       items = response.items;
@@ -60,20 +62,23 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
       <JsonLd value={breadcrumbJsonLd([{ name: "Главная", path: "/" }, { name: "Каталог", path: "/catalog" }])} />
       <header className={styles.pageTitle}>
         <h1>Каталог</h1>
-        <p>Выберите раздел ниже или введите не менее двух символов названия либо артикула из 1С.</p>
+        <p>Выберите раздел ниже или введите не менее двух символов названия либо артикула из 1С. Если детали нет на складе, поищем под заказ у поставщика.</p>
       </header>
 
-      <CategoryChipGrid basePath="/catalog" nodes={tree} />
-
-      <CatalogSearchPanel
-        action="/catalog"
-        availability={availability}
-        emptyState={emptyState}
-        errorMessage={errorMessage}
-        items={items}
-        query={query}
-        sort={sort}
-      />
+      <div className={styles.catalogLayout}>
+        <CatalogFilterRail availability={availability} basePath="/catalog" nodes={tree} />
+        <div className={styles.catalogMain}>
+          <CatalogSearchPanel
+            action="/catalog"
+            emptyState={emptyState}
+            errorMessage={errorMessage}
+            items={items}
+            query={query}
+            sort={sort}
+          />
+          {isSearch ? <SupplierResults ownEmpty={!errorMessage && items.length === 0} query={query} /> : null}
+        </div>
+      </div>
     </div>
   );
 }

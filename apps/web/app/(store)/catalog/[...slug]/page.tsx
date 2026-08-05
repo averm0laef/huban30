@@ -9,9 +9,10 @@ import { getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/c
 import type { CatalogItem } from "../../_lib/catalog-api";
 import { buildCategoryBreadcrumb, categoryPath, resolveCategoryPath } from "../../_lib/catalog-tree";
 import { breadcrumbJsonLd, pageMetadata } from "../../_lib/seo";
-import { CategoryChipGrid } from "../category-chip-grid";
+import { CatalogFilterRail } from "../catalog-filter-rail";
 import { CatalogSearchPanel } from "../catalog-search-panel";
 import type { CatalogAvailability, CatalogEmptyState, CatalogSort } from "../catalog-search-panel";
+import { SupplierResults } from "../supplier-results";
 
 interface CategoryPageProps {
   params: Promise<{ slug: string[] }>;
@@ -61,6 +62,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
 
   let items: CatalogItem[] = [];
   let errorMessage: string | null = null;
+  const isSearch = query.length >= 2;
   // A one-character query never matches the contract's two-character minimum
   // (see `searchCatalog`), so it gets the same short-query hint as `/catalog`
   // instead of a real request. An empty query is normal here — this page
@@ -103,17 +105,20 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         {node.description ? <p>{node.description}</p> : null}
       </header>
 
-      <CategoryChipGrid basePath={path} nodes={node.children} />
-
-      <CatalogSearchPanel
-        action={path}
-        availability={availability}
-        emptyState={emptyState}
-        errorMessage={errorMessage}
-        items={items}
-        query={query}
-        sort={sort}
-      />
+      <div className={styles.catalogLayout}>
+        <CatalogFilterRail availability={availability} basePath={path} nodes={node.children} />
+        <div className={styles.catalogMain}>
+          <CatalogSearchPanel
+            action={path}
+            emptyState={emptyState}
+            errorMessage={errorMessage}
+            items={items}
+            query={query}
+            sort={sort}
+          />
+          {isSearch ? <SupplierResults ownEmpty={!errorMessage && items.length === 0} query={query} /> : null}
+        </div>
+      </div>
     </div>
   );
 }

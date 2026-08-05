@@ -17,7 +17,6 @@ export interface CatalogEmptyState {
 export interface CatalogSearchPanelProps {
   /** Form target: `/catalog` site-wide, or the current category's own path. */
   action: string;
-  availability: CatalogAvailability;
   /** Set by the caller whenever `items` is empty, with level-appropriate copy. */
   emptyState: CatalogEmptyState | null;
   errorMessage: string | null;
@@ -25,6 +24,14 @@ export interface CatalogSearchPanelProps {
   query: string;
   sort: CatalogSort;
 }
+
+/**
+ * Id shared with `CatalogFilterRail`'s availability `<select>`, which lives
+ * outside this component's own `<form>` (in the rail, a DOM sibling) and
+ * links back to it purely via the HTML `form` attribute — see the comment
+ * on `CatalogFilterRail` for why.
+ */
+export const CATALOG_SEARCH_FORM_ID = "catalog-search-form";
 
 /**
  * The search form + product grid shared by `/catalog` (site-wide) and every
@@ -35,28 +42,68 @@ export interface CatalogSearchPanelProps {
  * Honest by construction: it only ever renders `items` the server actually
  * returned, and the caller must supply `emptyState` copy whenever there are
  * none — there is no generic "browse the catalog" grid to fall back to.
+ *
+ * When `query` is a real search (≥2 characters) the results are wrapped in
+ * their own "В наличии" heading — the shop's own 1C stock, deliberately
+ * labelled and visually separate from the supplier block the page renders
+ * below it (`SupplierResults`). A plain category browse (no query, or the
+ * 1-character hint) renders unlabelled, exactly as before.
  */
 export function CatalogSearchPanel({
-  action, availability, emptyState, errorMessage, items, query, sort,
+  action, emptyState, errorMessage, items, query, sort,
 }: CatalogSearchPanelProps) {
+  const isSearch = query.trim().length >= 2;
+
+  const body = errorMessage ? (
+    <section className={styles.errorState} role="alert">
+      <h2>Каталог не отвечает</h2>
+      <p>{errorMessage}</p>
+    </section>
+  ) : emptyState ? (
+    <section className={styles.emptyState}>
+      <h2>{emptyState.heading}</h2>
+      <p>{emptyState.body}</p>
+    </section>
+  ) : (
+    <>
+      <p className={styles.catalogSummary} aria-live="polite">Найдено: {items.length}</p>
+      <section className={styles.productGrid} aria-label="Результаты поиска">
+        {items.map((item) => {
+          const available = item.availableQuantity > 0;
+          return (
+            <article className={styles.productCard} key={item.id}>
+              <div className={styles.productVisual}>
+                <Image
+                  alt={item.primaryImage ? item.primaryImage.altText : `Нет фото товара «${item.name}»`}
+                  fill
+                  sizes="(max-width: 767px) 50vw, 240px"
+                  src={item.primaryImage ? item.primaryImage.url : "/catalog/no-photo.webp"}
+                />
+              </div>
+              <div className={styles.productBody}>
+                <p className={styles.productMeta}>{item.brand ? `${item.brand.name} · ` : ""}Артикул: {item.sku}</p>
+                <h2 className={styles.productName}><Link href={`/catalog/product/${encodeURIComponent(item.slug)}`}>{item.name}</Link></h2>
+                <p className={styles.productPrice}>{item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}</p>
+                <p className={`${styles.stock} ${available ? "" : styles.stockOut}`}>{available ? `В наличии: ${item.availableQuantity}` : "Нет в наличии"}</p>
+                <AddToCartButton disabled={!available || item.priceKopeks === null} productId={item.id} />
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    </>
+  );
+
   return (
     <>
-      <form className={styles.catalogForm} action={action} method="get" role="search">
+      <form action={action} className={styles.catalogForm} id={CATALOG_SEARCH_FORM_ID} method="get" role="search">
         <div className={styles.field}>
           <label htmlFor="catalog-query">Название или артикул</label>
-          <input id="catalog-query" name="q" type="search" minLength={2} maxLength={120} defaultValue={query} placeholder="Например, фильтр или артикул" />
-        </div>
-        <div className={styles.field}>
-          <label htmlFor="catalog-availability">Наличие</label>
-          <select id="catalog-availability" name="availability" defaultValue={availability}>
-            <option value="all">Все товары</option>
-            <option value="in_stock">В наличии</option>
-            <option value="out_of_stock">Нет в наличии</option>
-          </select>
+          <input defaultValue={query} id="catalog-query" maxLength={120} minLength={2} name="q" placeholder="Например, фильтр или артикул" type="search" />
         </div>
         <div className={styles.field}>
           <label htmlFor="catalog-sort">Сортировка</label>
-          <select id="catalog-sort" name="sort" defaultValue={sort}>
+          <select defaultValue={sort} id="catalog-sort" name="sort">
             <option value="relevance">По совпадению</option>
             <option value="name">По названию</option>
             <option value="price_asc">Сначала дешевле</option>
@@ -66,46 +113,12 @@ export function CatalogSearchPanel({
         <button className={styles.submitButton} type="submit">Найти</button>
       </form>
 
-      {errorMessage ? (
-        <section className={styles.errorState} role="alert">
-          <h2>Каталог не отвечает</h2>
-          <p>{errorMessage}</p>
+      {isSearch ? (
+        <section aria-labelledby="own-results-heading" className={styles.ownResultsSection}>
+          <h2 className={styles.resultsSourceHeading} id="own-results-heading">В наличии</h2>
+          {body}
         </section>
-      ) : emptyState ? (
-        <section className={styles.emptyState}>
-          <h2>{emptyState.heading}</h2>
-          <p>{emptyState.body}</p>
-        </section>
-      ) : (
-        <>
-          <p className={styles.catalogSummary} aria-live="polite">Найдено: {items.length}</p>
-          <section className={styles.productGrid} aria-label="Результаты поиска">
-            {items.map((item) => {
-              const available = item.availableQuantity > 0;
-              return (
-                <article className={styles.productCard} key={item.id}>
-                  {item.primaryImage ? (
-                    <div className={styles.productVisual}>
-                      <Image alt={item.primaryImage.altText} fill sizes="(max-width: 767px) 50vw, 240px" src={item.primaryImage.url} />
-                    </div>
-                  ) : (
-                    <div className={styles.productVisual} role="img" aria-label={`У товара «${item.name}» пока нет фотографии`}>
-                      Нет фото
-                    </div>
-                  )}
-                  <div className={styles.productBody}>
-                    <p className={styles.productMeta}>{item.brand ? `${item.brand.name} · ` : ""}Артикул: {item.sku}</p>
-                    <h2 className={styles.productName}><Link href={`/catalog/product/${encodeURIComponent(item.slug)}`}>{item.name}</Link></h2>
-                    <p className={styles.productPrice}>{item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}</p>
-                    <p className={`${styles.stock} ${available ? "" : styles.stockOut}`}>{available ? `В наличии: ${item.availableQuantity}` : "Нет в наличии"}</p>
-                    <AddToCartButton disabled={!available || item.priceKopeks === null} productId={item.id} />
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        </>
-      )}
+      ) : body}
     </>
   );
 }

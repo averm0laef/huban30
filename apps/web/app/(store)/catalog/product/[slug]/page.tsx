@@ -78,15 +78,14 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <span aria-current="page">{product.name}</span>
       </nav>
       <article className={styles.productLayout}>
-        {product.primaryImage ? (
-          <div className={styles.productVisualLarge}>
-            <Image alt={product.primaryImage.altText} fill sizes="(max-width: 767px) 100vw, 560px" src={product.primaryImage.url} />
-          </div>
-        ) : (
-          <div className={styles.productVisualLarge} role="img" aria-label={`У товара «${product.name}» пока нет фотографии`}>
-            Нет фото
-          </div>
-        )}
+        <div className={styles.productVisualLarge}>
+          <Image
+            alt={product.primaryImage ? product.primaryImage.altText : `Нет фото товара «${product.name}»`}
+            fill
+            sizes="(max-width: 767px) 100vw, 560px"
+            src={product.primaryImage ? product.primaryImage.url : "/catalog/no-photo.webp"}
+          />
+        </div>
         <div className={styles.productInfo}>
           <p className={styles.productBrandArticle}>
             {product.brand ? <><strong>{product.brand.name}</strong> · </> : null}Артикул {product.sku}

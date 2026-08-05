@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import type { FastifyRequest } from "fastify";
 import type { RawData, WebSocket } from "ws";
 
-import { ChatClientEventSchema } from "@an30/contracts";
+import { ChatClientEventSchema, ROLE_PERMISSIONS, type Permission } from "@an30/contracts";
 
 import { SESSION_COOKIE_NAME, SessionService } from "../auth/session.service.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
@@ -16,6 +16,12 @@ interface ClientState {
   alive: boolean;
   auth: Awaited<ReturnType<SessionService["resolve"]>>;
   identity?: ChatIdentity;
+  /**
+   * Staff-only: true once this socket asked for the queue-wide "something
+   * changed" nudge (see `subscribe.queue`). Independent of `threadId` — a
+   * socket can watch the queue without ever opening one conversation.
+   */
+  queueSubscribed: boolean;
   queue: Promise<void>;
   sessionToken?: string;
   socket: WebSocket;
@@ -44,9 +50,23 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     this.unsubscribe = this.events.subscribe((event) => {
       const serialized = JSON.stringify(event.payload);
+      // Lazily built only if some connected client actually needs it — most
+      // fan-out fires while nobody is queue-subscribed.
+      let queueNudge: string | undefined;
       for (const client of this.clients) {
-        if (client.threadId === event.threadId && client.socket.readyState === client.socket.OPEN) {
+        if (client.socket.readyState !== client.socket.OPEN) continue;
+        if (client.threadId === event.threadId) {
+          // Full detail for whoever has this exact conversation open —
+          // unchanged from before this fix.
           client.socket.send(serialized);
+        } else if (client.queueSubscribed) {
+          // Everyone else watching the staff queue only ever learns that
+          // *something* changed on `threadId`, never the message body or
+          // thread state itself — the client re-fetches via the normal
+          // authorized REST query, so no new data is exposed over this
+          // channel.
+          queueNudge ??= JSON.stringify({ threadId: event.threadId, type: "queue.event" });
+          client.socket.send(queueNudge);
         }
       }
     });
@@ -85,6 +105,7 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
       alive: true,
       auth,
       queue: Promise.resolve(),
+      queueSubscribed: false,
       sessionToken,
       socket,
       subscribeTimer: setTimeout(() => socket.close(1008, "subscribe_timeout"), 10_000),
@@ -136,6 +157,20 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
       state.threadId = event.threadId;
       clearTimeout(state.subscribeTimer);
       state.socket.send(JSON.stringify({ ...history, threadId: event.threadId, type: "subscribed" }));
+      return;
+    }
+    if (event.type === "subscribe.queue") {
+      // Staff-only nudge channel for the /admin/chats queue list — never
+      // available to a guest (no `state.auth` at all) or to a customer
+      // (role has no `chat:manage:any`), same permission the REST queue
+      // endpoint itself enforces (see StaffController.chats).
+      const granted: readonly Permission[] = state.auth ? ROLE_PERMISSIONS[state.auth.role] : [];
+      if (!state.auth || !granted.includes("chat:manage:any")) {
+        throw new HttpException("Недостаточно прав для очереди чатов", 403);
+      }
+      state.queueSubscribed = true;
+      clearTimeout(state.subscribeTimer);
+      state.socket.send(JSON.stringify({ type: "queue.subscribed" }));
       return;
     }
     if (!state.identity || !state.threadId) throw new HttpException("Сначала подпишитесь на чат", 409);

@@ -120,3 +120,91 @@ describe("StaffService.updateChat realtime broadcast", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 });
+
+// Regression guard for the "chat messages never reach the staff workspace"
+// bug: a fresh, unassigned guest thread (no status/assignment/search filter
+// applied) must come back from the default queue view. This asserts on the
+// actual SQL/params sent to Postgres — not just on a canned mock response —
+// because a mock that simply echoes back "the thread is visible" regardless
+// of the filters the service builds would pass even if a real WHERE clause
+// silently excluded it, which is exactly the class of bug a fixture can
+// paper over. The row fixture mirrors a thread reproduced live against
+// staging (see chat.service.ts createForGuest + insertMessage): guest-only
+// (customer_user_id/customer_email null), unassigned, status flipped to
+// 'waiting_staff' by the guest's first message.
+describe("StaffService.chats visibility of a brand-new guest thread", () => {
+  const auth: AuthContext = {
+    csrfTokenHash: Buffer.alloc(32),
+    email: "director@example.test",
+    mfaSetupRequired: false,
+    mfaVerified: true,
+    role: "director",
+    sessionId: "55555555-5555-4555-8555-555555555555",
+    userId: STAFF_ID,
+  };
+  const freshGuestThreadRow = {
+    assigned_name: null,
+    assigned_staff_id: null,
+    created_at: new Date("2026-08-05T08:30:01.670Z"),
+    customer_email: null,
+    customer_name: null,
+    id: THREAD_ID,
+    last_message_at: new Date("2026-08-05T08:30:17.433Z"),
+    last_message_body: "Здравствуйте, у меня вопрос по заказу",
+    order_id: null,
+    order_number: null,
+    status: "waiting_staff",
+    subject: "Диагностика бага AN30-QA",
+    unread_count: "1",
+    version: 2,
+  };
+
+  it("applies no status/assignment filter for the default 'any' queue view, and surfaces the guest thread", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [freshGuestThreadRow] })
+      .mockResolvedValueOnce({ rows: [{ count: "1" }] });
+    const database = { query } as unknown as DatabaseService;
+    const service = new StaffService(
+      {} as AuditService,
+      {} as ChatEventBus,
+      database,
+    );
+
+    const result = await service.chats({}, auth);
+
+    const [rowsSql, rowsParams] = query.mock.calls[0] as [string, unknown[]];
+    expect(rowsSql).toContain("thread.deleted_at IS NULL");
+    // StaffChatsQuerySchema defaults to assigned:"any" and no status — the
+    // query must therefore pass through every non-deleted thread, unassigned
+    // or not, exactly like a fresh guest thread with nobody on it yet.
+    expect(rowsParams[0]).toBeNull(); // status filter
+    expect(rowsParams[1]).toBeNull(); // assignedStaffId filter
+    expect(rowsParams[2]).toBe(false); // "only unassigned" restriction
+    expect(result.items).toEqual([expect.objectContaining({
+      assignedStaffId: null,
+      customerName: "Гость",
+      id: THREAD_ID,
+      status: "waiting_staff",
+      unreadCount: 1,
+    })]);
+  });
+
+  it("also surfaces it when a manager explicitly asks for unassigned threads", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [freshGuestThreadRow] })
+      .mockResolvedValueOnce({ rows: [{ count: "1" }] });
+    const database = { query } as unknown as DatabaseService;
+    const service = new StaffService(
+      {} as AuditService,
+      {} as ChatEventBus,
+      database,
+    );
+
+    const result = await service.chats({ assigned: "unassigned" }, auth);
+
+    const [, rowsParams] = query.mock.calls[0] as [string, unknown[]];
+    expect(rowsParams[2]).toBe(true); // "only unassigned" now active
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe(THREAD_ID);
+  });
+});

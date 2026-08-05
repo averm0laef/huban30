@@ -461,6 +461,13 @@ export const ChatClientEventSchema = z.discriminatedUnion("type", [
     type: z.literal("receipt.read"),
   }).strict(),
   z.object({ type: z.literal("ping") }).strict(),
+  // Staff-only: subscribes the socket to a lightweight "something changed"
+  // nudge for every thread (not just one), so the staff queue list can
+  // refetch itself live instead of only on the staff member's own actions.
+  // Requires `chat:manage:any` (see ChatRealtimeService.consume); never
+  // delivers message bodies or thread details over this channel — the
+  // client always re-fetches via the authorized REST query.
+  z.object({ type: z.literal("subscribe.queue") }).strict(),
 ]);
 export type ChatClientEvent = z.infer<typeof ChatClientEventSchema>;
 

@@ -86,6 +86,60 @@ export function ChatsView({ session }: { session: SessionView }) {
   const selected = resource.data?.items.find((item) => item.id === selectedId) ?? null;
   const reloadQueue = resource.reload;
 
+  // Keeps the queue list (left column) live for this whole view — independent
+  // of whichever single thread is open on the right. Without this, a second
+  // message/thread arriving anywhere but the currently-selected conversation
+  // was only ever noticed on the next manual "Обновить очередь" click or page
+  // load, which is what made new customer chats look like they "never
+  // arrived" and made two staff members' queues drift out of sync. The
+  // socket only ever receives a `{ type: "queue.event" }` nudge — never
+  // message bodies — so the authorized `/staff/chats` query stays the single
+  // source of truth for what's actually shown.
+  useEffect(() => {
+    let active = true;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function scheduleReload(): void {
+      // Coalesce bursts (e.g. several messages landing at once) into one
+      // refetch instead of one per event.
+      if (reloadTimer) return;
+      reloadTimer = setTimeout(() => { reloadTimer = null; reloadQueue(); }, 300);
+    }
+
+    function connect(): void {
+      if (!active) return;
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+      socket.addEventListener("open", () => {
+        reconnectAttempt = 0;
+        socket?.send(JSON.stringify({ type: "subscribe.queue" }));
+      });
+      socket.addEventListener("message", (event) => {
+        let payload: unknown;
+        try { payload = JSON.parse(String(event.data)); } catch { return; }
+        if (!payload || typeof payload !== "object" || !("type" in payload)) return;
+        const record = payload as Record<string, unknown>;
+        if (record.type === "queue.event") scheduleReload();
+      });
+      socket.addEventListener("close", () => {
+        if (!active) return;
+        reconnectAttempt += 1;
+        reconnectTimer = setTimeout(connect, Math.min(8_000, 500 * (2 ** reconnectAttempt)));
+      });
+    }
+
+    connect();
+    return () => {
+      active = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (reloadTimer) clearTimeout(reloadTimer);
+      socket?.close(1000, "view_unmounted");
+    };
+  }, [reloadQueue]);
+
   useEffect(() => {
     if (!selectedId) { setMessages([]); setConnection("offline"); return; }
     let active = true;
