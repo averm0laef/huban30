@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
-import { CatalogProductsResponseSchema } from "@an30/contracts";
+import { CatalogCategoryTreeResponseSchema, CatalogProductsResponseSchema } from "@an30/contracts";
+import type { CatalogCategoryNode } from "@an30/contracts";
 
 import { storeContentPages } from "./(store)/_lib/legacy-pages";
 import { absoluteUrl, indexingAllowed } from "./site-config";
@@ -50,6 +51,35 @@ async function catalogProducts(): Promise<ProductEntry[]> {
   return entries;
 }
 
+function flattenCategorySlugPaths(nodes: CatalogCategoryNode[], prefix: string[]): string[][] {
+  return nodes.flatMap((node) => {
+    const slugs = [...prefix, node.slug];
+    return [slugs, ...flattenCategorySlugPaths(node.children, slugs)];
+  });
+}
+
+/**
+ * Every visible category level, root through leaf — same degrade-to-empty
+ * rule as `catalogProducts()` above: the sitemap must never fail to build
+ * just because the category endpoint had a bad moment, or because the
+ * catalog has not been imported from 1C yet.
+ */
+async function catalogCategoryPaths(): Promise<string[][]> {
+  let payload: unknown;
+  try {
+    const response = await fetch(`${internalApiOrigin()}/api/v1/catalog/categories/tree`, {
+      cache: "no-store", headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return [];
+    payload = await response.json();
+  } catch {
+    return [];
+  }
+  const parsed = CatalogCategoryTreeResponseSchema.safeParse(payload);
+  if (!parsed.success) return [];
+  return flattenCategorySlugPaths(parsed.data.items, []);
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (!indexingAllowed()) return [];
 
@@ -68,6 +98,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: absoluteUrl(`/${slug}`),
   }));
 
+  const categoryEntries: MetadataRoute.Sitemap = (await catalogCategoryPaths()).map((slugs) => ({
+    changeFrequency: "weekly",
+    lastModified: now,
+    priority: 0.75,
+    url: absoluteUrl(`/catalog/${slugs.join("/")}`),
+  }));
+
   const productEntries: MetadataRoute.Sitemap = (await catalogProducts()).map((product) => ({
     changeFrequency: "weekly",
     lastModified: new Date(product.updatedAt),
@@ -75,5 +112,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: absoluteUrl(`/catalog/product/${product.slug}`),
   }));
 
-  return [...staticEntries, ...contentEntries, ...productEntries];
+  return [...staticEntries, ...contentEntries, ...categoryEntries, ...productEntries];
 }

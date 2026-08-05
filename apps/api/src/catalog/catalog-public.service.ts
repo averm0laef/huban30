@@ -24,7 +24,9 @@ import {
   withPublicCatalogQuery,
   withPublicMediaRead,
 } from "../security/public-media.js";
-import { VISIBLE_CATEGORIES_CTE } from "./catalog-visibility.sql.js";
+import { buildCategoryTree } from "./catalog-category-tree.js";
+import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
+import { VISIBLE_CATEGORIES_CTE, visibleCategoriesWithSubtreeCte } from "./catalog-visibility.sql.js";
 
 const PUBLIC_IMAGE_MIME_TYPES = ["image/avif", "image/jpeg", "image/png", "image/webp"] as const;
 const MAX_PUBLIC_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -38,6 +40,10 @@ interface CategoryRow {
   product_count: string;
   slug: string;
   sort_order: number;
+}
+
+interface CategoryTreeQueryRow extends CategoryRow {
+  is_active: boolean;
 }
 
 interface BrandRow {
@@ -111,7 +117,7 @@ const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
     OR (length($1)>=3 AND product.name ILIKE '%' || $2 || '%' ESCAPE '\\')
     OR to_tsvector('simple',coalesce(product.search_text,product.name))
       @@ websearch_to_tsquery('simple',$1))
-  AND ($3::text IS NULL OR category.slug::text=$3)
+  AND ($3::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
   AND (cardinality($4::text[])=0 OR brand.slug::text=ANY($4::text[]))
   AND ($5::bigint IS NULL OR price.amount_kopeks >= $5)
   AND ($6::bigint IS NULL OR price.amount_kopeks <= $6)
@@ -139,6 +145,7 @@ function escapeLike(value: string | undefined): string | null {
 @Injectable()
 export class CatalogPublicService {
   constructor(
+    private readonly categoryTreeCache: CatalogCategoryTreeCache,
     private readonly database: DatabaseService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
@@ -171,6 +178,45 @@ export class CatalogPublicService {
         sortOrder: row.sort_order,
       })),
     };
+  }
+
+  /**
+   * The full public category tree, nested with roll-up product counts —
+   * `/catalog` browses its top level, `/catalog/[...slug]` walks down it.
+   * Categories only change on a 1C batch apply/rollback (see
+   * CatalogApplyService), so the assembled tree is cached until then instead
+   * of being rebuilt on every request.
+   */
+  async categoryTree() {
+    const cached = this.categoryTreeCache.read();
+    if (cached) return { items: cached };
+    const result = await this.database.query<CategoryTreeQueryRow>(
+      `SELECT category.id,category.parent_id,category.name,category.slug::text,
+              category.description,category.sort_order,category.is_active,
+              COALESCE(products.product_count,0)::text AS product_count
+       FROM app.categories AS category
+       LEFT JOIN LATERAL (
+         SELECT count(*)::bigint AS product_count
+         FROM app.products AS product
+         LEFT JOIN app.brands AS brand ON brand.id=product.brand_id
+         WHERE product.category_id=category.id AND product.is_active AND product.deleted_at IS NULL
+           AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+       ) AS products ON true
+       WHERE category.deleted_at IS NULL
+       ORDER BY category.sort_order,lower(category.name),category.id`,
+    );
+    const items = buildCategoryTree(result.rows.map((row) => ({
+      description: row.description,
+      id: row.id,
+      isActive: row.is_active,
+      name: row.name,
+      parentId: row.parent_id,
+      productCount: safeInteger(row.product_count, "category product count"),
+      slug: row.slug,
+      sortOrder: row.sort_order,
+    })));
+    this.categoryTreeCache.write(items);
+    return { items };
   }
 
   async brands() {
@@ -218,7 +264,7 @@ export class CatalogPublicService {
     return withPublicCatalogQuery(() => this.database.transaction(async (client) => {
       await client.query("SET LOCAL statement_timeout='2500ms'");
       const items = await client.query<ProductRow & { total_count: string }>(
-        `${VISIBLE_CATEGORIES_CTE}
+        `${visibleCategoriesWithSubtreeCte("$3")}
          ${PRODUCT_SELECT},count(*) OVER()::text AS total_count,
                 primary_image.id AS primary_image_id,
                 primary_image.alt_text AS primary_image_alt_text,
@@ -242,7 +288,7 @@ export class CatalogPublicService {
       );
       const fallbackCount = items.rows.length === 0 && query.offset > 0
         ? await client.query<{ count: string }>(
-        `${VISIBLE_CATEGORIES_CTE}
+        `${visibleCategoriesWithSubtreeCte("$3")}
          SELECT count(*)::text AS count ${PUBLIC_PRODUCT_FROM}
          WHERE ${PUBLIC_PRODUCT_FILTERS}`,
         values,

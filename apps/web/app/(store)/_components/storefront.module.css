@@ -676,6 +676,30 @@ button.promoControl {
 .pageTitle h1 { font-size: clamp(2.1rem, 5vw, 3.8rem); }
 .pageTitle p { max-width: 720px; margin: 14px 0 0; color: var(--store-muted); line-height: 1.6; }
 
+/* Category tree browsing — the chip grid of child categories shown at every
+   level of /catalog and /catalog/[...slug] (no per-category photography
+   exists for arbitrary 1C categories, unlike the home page's photo tiles, so
+   these are plain text chips with a roll-up product count). */
+.categoryChipSection { margin-bottom: var(--store-space-xl); }
+.categoryChipGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--store-space-sm); }
+.categoryChip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--store-space-sm);
+  min-height: 52px;
+  padding: 12px var(--store-space-md);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  font-weight: var(--store-weight-bold);
+  text-decoration: none;
+  transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
+}
+.categoryChip:hover { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); box-shadow: var(--store-shadow-xs); transform: translateY(-2px); }
+.categoryChipCount { flex: 0 0 auto; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-medium); font-variant-numeric: tabular-nums; }
+
 .catalogForm { display: grid; grid-template-columns: minmax(220px, 1fr) 180px 180px auto; align-items: end; gap: var(--store-space-sm); margin-bottom: var(--store-space-xl); padding: var(--store-space-md); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-xs); }
 .field { display: grid; gap: 7px; }
 .field label { font-size: 0.82rem; font-weight: var(--store-weight-bold); }
@@ -1064,7 +1088,16 @@ button.promoControl {
   /* Logo + search + burger share row 2 alone here (row 1 is hidden) — keep
      the fixed-width items compact so the search field never gets pinched
      at 320px. */
-  .headerMainRow .headerRowInner { gap: var(--store-space-2xs); }
+  /* Owner comparison against rossko.ru: the blue band read as too short and
+     the field sat flush against its top edge. Taller top padding both grows
+     the band and pushes the (vertically centred) row — search field
+     included — down inside it, without touching row height on ≥768px. */
+  .headerMainRow .headerRowInner {
+    gap: var(--store-space-2xs);
+    min-height: 64px;
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-bottom: 14px;
+  }
   .searchForm svg { margin-left: var(--store-space-sm); }
   .promo { width: 100%; padding: 0 16px; }
   .categorySection,

@@ -6,6 +6,7 @@ import type { OneCCatalogRow } from "@an30/contracts";
 import type { AuthContext } from "../auth/auth-context.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
+import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 
 interface RequestMetadata {
   ipAddress: string;
@@ -59,6 +60,7 @@ function assertExpected(
 export class CatalogApplyService {
   constructor(
     private readonly audit: AuditService,
+    private readonly categoryTreeCache: CatalogCategoryTreeCache,
     private readonly database: DatabaseService,
   ) {}
 
@@ -67,7 +69,10 @@ export class CatalogApplyService {
     actor: AuthContext,
     metadata: RequestMetadata,
   ): Promise<Record<string, unknown>> {
-    return this.database.transaction(async (client) => {
+    // A category may have been inserted, reparented or (de)activated by this
+    // batch — the cached tree is stale the instant the transaction commits,
+    // applied or idempotently replayed, so both paths invalidate it below.
+    const result = await this.database.transaction(async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended('an30-catalog-apply-v1', 0))");
       await client.query("SET LOCAL statement_timeout = '60s'");
       const selected = await client.query<{
@@ -152,6 +157,8 @@ export class CatalogApplyService {
         status: "applied",
       };
     });
+    this.categoryTreeCache.invalidate();
+    return result;
   }
 
   async rollback(
@@ -159,7 +166,7 @@ export class CatalogApplyService {
     actor: AuthContext,
     metadata: RequestMetadata,
   ): Promise<Record<string, unknown>> {
-    return this.database.transaction(async (client) => {
+    const result = await this.database.transaction(async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended('an30-catalog-apply-v1', 0))");
       await client.query("SET LOCAL statement_timeout = '60s'");
       const batch = (await client.query<{ status: string }>(
@@ -229,6 +236,8 @@ export class CatalogApplyService {
         status: "rolled_back",
       };
     });
+    this.categoryTreeCache.invalidate();
+    return result;
   }
 
   private sortRows(rows: ApplyRow[]): ApplyRow[] {

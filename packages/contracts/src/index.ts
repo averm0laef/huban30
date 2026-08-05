@@ -559,6 +559,40 @@ export const CatalogProductDetailSchema = CatalogProductSummarySchema.extend({
 }).strict();
 export type CatalogProductDetail = z.infer<typeof CatalogProductDetailSchema>;
 
+/**
+ * One level of the public category tree, nested with its visible children.
+ * `productCount` is a roll-up (this category plus every descendant), not
+ * just direct assignments, so a listing can say "Кузов (12)" even when most
+ * of those products actually sit in a grandchild category.
+ */
+export interface CatalogCategoryNode {
+  children: CatalogCategoryNode[];
+  description: string | null;
+  id: string;
+  name: string;
+  productCount: number;
+  slug: string;
+  sortOrder: number;
+}
+
+// z.lazy + an explicit interface: zod cannot infer a self-referencing object
+// type, so the TS shape above is authoritative and the schema below only
+// validates it at the API boundary.
+export const CatalogCategoryNodeSchema: z.ZodType<CatalogCategoryNode> = z.lazy(() => z.object({
+  children: z.array(CatalogCategoryNodeSchema).max(200),
+  description: z.string().max(2000).nullable(),
+  id: z.uuid(),
+  name: z.string().min(1).max(500),
+  productCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  slug: CatalogPublicSlugSchema,
+  sortOrder: z.number().int(),
+}).strict());
+
+export const CatalogCategoryTreeResponseSchema = z.object({
+  items: z.array(CatalogCategoryNodeSchema).max(200),
+}).strict();
+export type CatalogCategoryTreeResponse = z.infer<typeof CatalogCategoryTreeResponseSchema>;
+
 export const HealthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),
   service: z.string().min(1),

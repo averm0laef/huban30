@@ -21,6 +21,12 @@ export class CatalogPublicController {
     return this.catalog.categories();
   }
 
+  @Get("categories/tree")
+  async categoryTree(@Req() request: FastifyRequest) {
+    await this.rateLimit.consume("catalog-categories-tree", request.ip, 60, 60);
+    return this.catalog.categoryTree();
+  }
+
   @Get("brands")
   async brands(@Req() request: FastifyRequest) {
     await this.rateLimit.consume("catalog-brands", request.ip, 60, 60);

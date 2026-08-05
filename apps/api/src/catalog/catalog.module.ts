@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { CatalogImportController, OneCMachineController } from "./catalog-import.controller.js";
 import { CatalogPublicController } from "./catalog-public.controller.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
@@ -23,6 +24,7 @@ import { OneCIntegrationService } from "./one-c-integration.service.js";
   exports: [CatalogSearchService],
   providers: [
     CatalogApplyService,
+    CatalogCategoryTreeCache,
     CatalogImportService,
     CatalogPublicService,
     CatalogSearchService,

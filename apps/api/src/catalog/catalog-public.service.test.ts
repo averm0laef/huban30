@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { StorageProvider } from "../adapters/provider-contracts.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
+import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { CatalogPublicController } from "./catalog-public.controller.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
 
@@ -59,6 +60,7 @@ describe("CatalogPublicService", () => {
     }),
   };
   const service = new CatalogPublicService(
+    new CatalogCategoryTreeCache(),
     database as unknown as DatabaseService,
     storage,
   );
@@ -107,6 +109,11 @@ describe("CatalogPublicService", () => {
     expect(itemsSql).toContain("warehouse.is_active");
     expect(itemsSql).toContain("storage.status='available'");
     expect(itemsSql).toContain("price.amount_kopeks ASC NULLS LAST");
+    // The category filter matches the category itself and every descendant
+    // (category_subtree), not only an exact slug match — a search scoped to
+    // "Кузов" must also surface products filed under "Кузов / Щётки".
+    expect(itemsSql).toContain("category_subtree");
+    expect(itemsSql).toContain("category.id IN (SELECT id FROM category_subtree)");
     expect(itemsParameters).toEqual([
       "фильтр",
       "фильтр",
@@ -163,6 +170,56 @@ describe("CatalogPublicService", () => {
     });
     expect(query.mock.calls[0]?.[0]).toContain("category.is_active");
     expect(query.mock.calls[1]?.[0]).toContain("brand.is_active");
+  });
+
+  it("assembles and caches the category tree, hiding an inactive subtree", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          description: null,
+          id: "parts",
+          is_active: true,
+          name: "Запчасти",
+          parent_id: null,
+          product_count: "1",
+          slug: "zapchasti",
+          sort_order: 0,
+        },
+        {
+          description: null,
+          id: "body",
+          is_active: true,
+          name: "Кузов",
+          parent_id: "parts",
+          product_count: "2",
+          slug: "kuzov",
+          sort_order: 0,
+        },
+        {
+          description: null,
+          id: "electric",
+          is_active: false,
+          name: "Электрика",
+          parent_id: null,
+          product_count: "9",
+          slug: "elektrika",
+          sort_order: 1,
+        },
+      ],
+    });
+
+    const first = await service.categoryTree();
+    expect(first.items).toMatchObject([
+      { id: "parts", productCount: 3, slug: "zapchasti", children: [{ id: "body", slug: "kuzov" }] },
+    ]);
+    expect(first.items.map((item) => item.id)).not.toContain("electric");
+    expect(query.mock.calls[0]?.[0]).toContain("category.deleted_at IS NULL");
+
+    // A second call must not hit the database again — the tree is cached
+    // until CatalogApplyService invalidates it on the next 1C import.
+    const second = await service.categoryTree();
+    expect(second).toEqual(first);
+    expect(query).toHaveBeenCalledTimes(1);
   });
 
   it("returns detail images in primary-first order without exposing storage keys", async () => {

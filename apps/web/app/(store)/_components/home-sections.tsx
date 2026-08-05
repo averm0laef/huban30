@@ -3,6 +3,8 @@ import Link from "next/link";
 import type { ComponentType } from "react";
 
 import { STORE_HOURS, STORE_LOCALITY, STORE_PHONE, STORE_PHONE_DISPLAY, STORE_STREET } from "../../site-config";
+import { getCategoryTree } from "../_lib/catalog-api";
+import { categoryPath, findCategorySlugPath } from "../_lib/catalog-tree";
 import { PromoCarousel } from "./promo-carousel";
 import type { PromoSlide } from "./promo-carousel";
 import styles from "./storefront.module.css";
@@ -133,12 +135,23 @@ const categoryTiles: CategoryTile[] = [
 
 /**
  * The site's main navigation pattern: category tiles rather than a header
- * mega-menu. There is no per-category taxonomy exposed to the storefront
- * (the catalog API only takes a free-text query), so each tile is an
- * honest shortcut into `/catalog?q=...` by a generic, universal auto-parts
- * term — not a claim about what is currently in stock.
+ * mega-menu. Each tile's `key` doubles as the slug a matching 1C category is
+ * expected to use (see `packages/database/migrations/0001_initial_schema.sql`
+ * for `app.categories.slug`). Once that category exists the tile links
+ * straight to it; until then — the catalog starts empty and only fills in
+ * from a 1C import — it degrades honestly to the old free-text search link
+ * instead of pointing at a category page that would 404.
  */
-export function CategoryGrid() {
+export async function CategoryGrid() {
+  let tree: Awaited<ReturnType<typeof getCategoryTree>> = [];
+  try {
+    tree = await getCategoryTree();
+  } catch {
+    // The home page's job is to get someone into the catalog, not to prove
+    // the category tree endpoint is healthy — a transient outage here just
+    // falls every tile back to its search link below, same as an empty tree.
+  }
+
   return (
     <section className={styles.categorySection} aria-labelledby="category-grid-title">
       <div className={styles.sectionHead}>
@@ -146,14 +159,18 @@ export function CategoryGrid() {
         <p>Выберите раздел — мы поищем в каталоге по названию. Ассортимент наполняется из 1С постепенно.</p>
       </div>
       <div className={styles.categoryGrid}>
-        {categoryTiles.map(({ key, label, query }) => (
-          <Link className={styles.categoryTile} href={`/catalog?q=${encodeURIComponent(query)}`} key={key}>
-            <span className={styles.categoryTileMedia}>
-              <Image alt="" height={320} src={`/categories/${key}.webp`} width={320} />
-            </span>
-            <span className={styles.categoryTileLabel}>{label}</span>
-          </Link>
-        ))}
+        {categoryTiles.map(({ key, label, query }) => {
+          const slugPath = findCategorySlugPath(tree, key);
+          const href = slugPath ? categoryPath(slugPath) : `/catalog?q=${encodeURIComponent(query)}`;
+          return (
+            <Link className={styles.categoryTile} href={href} key={key}>
+              <span className={styles.categoryTileMedia}>
+                <Image alt="" height={320} src={`/categories/${key}.webp`} width={320} />
+              </span>
+              <span className={styles.categoryTileLabel}>{label}</span>
+            </Link>
+          );
+        })}
       </div>
       <div className={styles.categoryMore}>
         <Link className={styles.secondaryAction} href="/catalog">Открыть весь каталог</Link>
