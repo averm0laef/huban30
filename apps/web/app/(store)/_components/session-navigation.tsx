@@ -39,16 +39,24 @@ export function SessionNavigationProvider({ children, initialSessionPresent }: {
   return <SessionNavigationContext.Provider value={destination}>{children}</SessionNavigationContext.Provider>;
 }
 
+/** Read-only access to the same destination `AccountNavigation` renders, for
+ * callers (the bottom tab bar) that need to know whether it is the current
+ * route without duplicating the session lookup. */
+export function useAccountDestination(): AccountDestination {
+  const destination = useContext(SessionNavigationContext);
+  if (!destination) throw new Error("useAccountDestination must be used inside SessionNavigationProvider");
+  return destination;
+}
+
 /**
  * `icon` renders inside the `<Link>` itself (not beside it) so the header's
  * icon-above-caption action link is a single focusable/clickable region —
  * see the matching comment on `CartButton` in `cart-actions.tsx`.
  */
-export function AccountNavigation({ className, icon }: { className?: string; icon?: ReactNode }) {
-  const destination = useContext(SessionNavigationContext);
-  if (!destination) throw new Error("AccountNavigation must be used inside SessionNavigationProvider");
+export function AccountNavigation({ className, icon, isCurrent }: { className?: string; icon?: ReactNode; isCurrent?: boolean }) {
+  const destination = useAccountDestination();
   return (
-    <Link className={className} href={destination.href}>
+    <Link className={className} href={destination.href} aria-current={isCurrent ? "page" : undefined}>
       {icon}
       <span className="storefront-account-label">{destination.label}</span>
     </Link>

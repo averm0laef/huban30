@@ -8,7 +8,7 @@ import { JsonLd } from "../../_components/json-ld";
 import { getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
 import type { CatalogItem } from "../../_lib/catalog-api";
 import { buildCategoryBreadcrumb, categoryPath, resolveCategoryPath } from "../../_lib/catalog-tree";
-import { breadcrumbJsonLd, pageMetadata, privatePageMetadata } from "../../_lib/seo";
+import { breadcrumbJsonLd, pageMetadata } from "../../_lib/seo";
 import { CategoryChipGrid } from "../category-chip-grid";
 import { CatalogSearchPanel } from "../catalog-search-panel";
 import type { CatalogAvailability, CatalogEmptyState, CatalogSort } from "../catalog-search-panel";
@@ -26,7 +26,14 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   const { slug } = await params;
   const tree = await getCategoryTree();
   const location = resolveCategoryPath(tree, slug);
-  if (!location) return privatePageMetadata("Раздел не найден", "Запрошенный раздел каталога АН-30 отсутствует.");
+  // The unknown-category check has to happen here, not only in the component
+  // below. `catalog/loading.tsx` opens a Suspense boundary, so by the time the
+  // component runs the shell has already been flushed with a 200 and the
+  // status can no longer change — an unknown category would answer 200 with
+  // "not found" text, which is a soft 404 that search engines index.
+  // `generateMetadata` runs before the stream opens, so notFound() here yields
+  // a real 404.
+  if (!location) notFound();
   const { ancestors, node } = location;
   return pageMetadata({
     description: node.description

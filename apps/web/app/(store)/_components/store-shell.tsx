@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import {
@@ -6,6 +9,7 @@ import {
   SITE_LEGAL_NAME,
   STORE_HOURS,
   STORE_LOCALITY,
+  STORE_MAP_URL,
   STORE_PHONE,
   STORE_PHONE_DISPLAY,
   STORE_STREET,
@@ -14,9 +18,8 @@ import type { MessengerLink } from "../../site-config";
 import { BrandLockup } from "./brand-mark";
 import { CartButton, CartPanel, MobileCartButton } from "./cart-actions";
 import { CartProvider } from "./cart-provider";
-import { MobileDrawer } from "./mobile-drawer";
 import { HeaderSearchForm } from "./search-box";
-import { AccountNavigation, SessionNavigationProvider } from "./session-navigation";
+import { AccountNavigation, SessionNavigationProvider, useAccountDestination } from "./session-navigation";
 import styles from "./storefront.module.css";
 
 const STORE_PHONE_HREF = `tel:${STORE_PHONE}`;
@@ -157,57 +160,49 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
   );
 }
 
-/** Nav content shown inside the mobile drawer (`MobileDrawer`) — everything
- * the desktop utility row (row A, ≥768px) doesn't have room to repeat. */
-function DrawerNav() {
-  return (
-    <nav aria-label="Дополнительное меню" className={styles.drawerNav}>
-      <Link href="/">Главная</Link>
-      <Link href="/catalog">Весь каталог</Link>
-      <Link href="/expert-help">Подбор с экспертом</Link>
-      <div aria-labelledby="drawer-group-customers" className={styles.drawerNavGroup} role="group">
-        <p className={styles.drawerNavGroupLabel} id="drawer-group-customers">Клиентам</p>
-        {customerLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
-      </div>
-      <div aria-labelledby="drawer-group-company" className={styles.drawerNavGroup} role="group">
-        <p className={styles.drawerNavGroupLabel} id="drawer-group-company">Компания</p>
-        {companyLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
-      </div>
-      <Link href="/profile#wishlist">Закладки</Link>
-      <a className={styles.drawerNavPhone} href={STORE_PHONE_HREF}>{STORE_PHONE_DISPLAY}</a>
-    </nav>
-  );
-}
-
 /**
  * A single ink-blue panel (`.headerInset`), inset from the viewport edges
  * with rounded bottom corners — the rossko.ru reference's "по бокам
- * дизайн" — holding two rows:
+ * дизайн" — holding the reference's row structure. Which rows render is
+ * driven entirely by CSS display toggles at the 768px boundary (the same
+ * boundary the bottom tab bar in `MobileNavigation` uses), not by two
+ * separate component trees, so cart/account state stays in sync everywhere
+ * it appears:
  *
- * Row 1 (`.headerTopRow`) is the thin utility row: store location, a
- * couple of secondary links, and — on the right — the help phone number
- * followed by the messenger icons (per the reference, these live here, not
- * only in the footer). ≥768px only, the same boundary the bottom tab bar
- * (`MobileNavigation`) uses to appear, so cart/account access never has a
- * dead zone between the two.
+ * Desktop (≥768px), two rows:
+ *  - `.headerTopRow` — thin utility line: shop address (links to the map),
+ *    hours, the secondary links, then the help phone number and messenger
+ *    icons pinned right.
+ *  - `.headerMainRow` — brand lockup, the wide rounded search field
+ *    (`.headerDesktopSearch`), and the cart/account actions.
  *
- * Row 2 (`.headerMainRow`) is the tall row: brand lockup, the wide rounded
- * search field, and — ≥768px — the cart/account actions (each an icon with
- * a small caption beneath it). Below 768px the burger trigger renders
- * instead and row 1 disappears, so row 2 is the entire header there — the
- * one part of the previous mobile layout the owner already confirmed
- * works, kept unchanged. There is no separate "Каталог" button in either
- * row: the reference reaches the catalog from the search field and the
- * category tiles, not a dedicated nav item.
+ * Mobile (<768px), five rows per the owner's reference walkthrough:
+ *  1. `.mobileLinksRow` — "О компании" / "Контакты", left aligned.
+ *  2. `.headerMainRow` again, but showing brand + `.mobileHeaderActions`
+ *     (phone / cart with its count badge / account) instead of the desktop
+ *     search + actions.
+ *  3. `.mobileLocationRow` — a pin + "Чернышевск" on the left, a link to
+ *     the shop's street address on the right.
+ *  4. `.mobileSearchRow` — the same pill search field alone on its own row
+ *     ("строка с поиском отдельно").
+ *  5. `.mobileExpertRow` — the single accent CTA to /expert-help.
+ *
+ * There is no separate "Каталог" button in either desktop row: the
+ * reference reaches the catalog from the search field, the category tiles,
+ * and — on a phone — the bottom tab bar.
  */
 function StoreHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.headerInset}>
+        {/* Desktop row 1 (thin utility line). */}
         <div className={styles.headerTopRow}>
           <div className={styles.headerRowInner}>
-            <span className={styles.headerTopLocation}>
+            <a className={styles.headerTopLocation} href={STORE_MAP_URL} target="_blank" rel="noreferrer">
               <PinIcon /> <span>{STORE_LOCALITY}, {STORE_STREET}</span>
+            </a>
+            <span className={styles.headerTopHours}>
+              <ClockIcon /> <span>{STORE_HOURS}</span>
             </span>
             <nav className={styles.headerTopLinks} aria-label="Дополнительные ссылки">
               <Link href="/about">О компании</Link>
@@ -236,25 +231,64 @@ function StoreHeader() {
           </div>
         </div>
 
+        {/* Mobile row 1: two secondary links, left aligned. */}
+        <div className={styles.mobileLinksRow}>
+          <div className={styles.headerRowInner}>
+            <nav className={styles.headerTopLinks} aria-label="Дополнительные ссылки">
+              <Link href="/about">О компании</Link>
+              <Link href="/contacts">Контакты</Link>
+            </nav>
+          </div>
+        </div>
+
+        {/* Row 2 everywhere: brand on the left; desktop search + actions,
+            or (mobile) the phone/cart/account icon cluster, on the right. */}
         <div className={styles.headerMainRow}>
           <div className={styles.headerRowInner}>
             <Link className={styles.brand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
               <BrandLockup className={styles.brandLockup} tone="current" />
             </Link>
-            <HeaderSearchForm id="header-search-q" />
+            <div className={styles.headerDesktopSearch}>
+              <HeaderSearchForm id="header-search-q" />
+            </div>
             <div className={styles.headerActions}>
               <CartButton icon={<CartIcon />} />
               <AccountNavigation icon={<UserIcon />} />
             </div>
-            <MobileDrawer
-              brand={(
-                <Link className={styles.drawerBrand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
-                  <BrandLockup className={styles.drawerBrandMark} />
-                </Link>
-              )}
-            >
-              <DrawerNav />
-            </MobileDrawer>
+            <div className={styles.mobileHeaderActions}>
+              <a href={STORE_PHONE_HREF} aria-label={`Позвонить в магазин: ${STORE_PHONE_DISPLAY}`}>
+                <PhoneIcon />
+              </a>
+              <CartButton icon={<CartIcon />} />
+              <AccountNavigation icon={<UserIcon />} />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile row 3: locality on the left, a link to the street address
+            on the right. */}
+        <div className={styles.mobileLocationRow}>
+          <div className={styles.headerRowInner}>
+            <span className={styles.mobileLocationText}>
+              <PinIcon /> <span>{STORE_LOCALITY}</span>
+            </span>
+            <a className={styles.mobileAddressLink} href={STORE_MAP_URL} target="_blank" rel="noreferrer">
+              {STORE_STREET}
+            </a>
+          </div>
+        </div>
+
+        {/* Mobile row 4: the search field alone, full width. */}
+        <div className={styles.mobileSearchRow}>
+          <div className={styles.headerRowInner}>
+            <HeaderSearchForm id="header-search-q-mobile" />
+          </div>
+        </div>
+
+        {/* Mobile row 5: the single accent CTA. */}
+        <div className={styles.mobileExpertRow}>
+          <div className={styles.headerRowInner}>
+            <Link className={styles.mobileExpertButton} href="/expert-help">Подбор с экспертом</Link>
           </div>
         </div>
       </div>
@@ -311,14 +345,28 @@ function StoreFooter() {
   );
 }
 
+/**
+ * Fixed bottom tab bar (<768px, see `.mobileNav`). The current route is
+ * marked with `aria-current="page"` on whichever tab is an actual page —
+ * Cart has no route of its own (it opens a dialog), so it is deliberately
+ * left out of that check.
+ */
 function MobileNavigation() {
+  const pathname = usePathname() ?? "/";
+  const accountDestination = useAccountDestination();
+  const accountPath = accountDestination.href.split("?")[0];
+  const isHome = pathname === "/";
+  const isCatalog = pathname === "/catalog" || pathname.startsWith("/catalog/");
+  const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+  const isAccount = pathname === accountPath || pathname.startsWith(`${accountPath}/`);
+
   return (
     <nav className={styles.mobileNav} aria-label="Быстрая навигация">
-      <Link className={styles.mobileNavItem} href="/"><HomeIcon /><span>Главная</span></Link>
-      <Link className={styles.mobileNavItem} href="/catalog"><GridIcon /><span>Каталог</span></Link>
+      <Link className={styles.mobileNavItem} href="/" aria-current={isHome ? "page" : undefined}><HomeIcon /><span>Главная</span></Link>
+      <Link className={styles.mobileNavItem} href="/catalog" aria-current={isCatalog ? "page" : undefined}><GridIcon /><span>Каталог</span></Link>
       <div className={styles.mobileNavItem}><CartIcon /><MobileCartButton /></div>
-      <Link className={styles.mobileNavItem} href="/chat"><ChatIcon /><span>Чат</span></Link>
-      <div className={styles.mobileNavItem}><UserIcon /><AccountNavigation /></div>
+      <Link className={styles.mobileNavItem} href="/chat" aria-current={isChat ? "page" : undefined}><ChatIcon /><span>Чат</span></Link>
+      <div className={styles.mobileNavItem}><UserIcon /><AccountNavigation isCurrent={isAccount} /></div>
     </nav>
   );
 }

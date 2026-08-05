@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+
+import { STAFF_SECTIONS } from "./sections";
+import type { StaffSection } from "./sections";
 import {
   Badge,
   Button,
@@ -42,20 +45,11 @@ import { SettingsView } from "./views/settings";
 import { TeamView } from "./views/team";
 import styles from "./workspace.module.css";
 
-export const STAFF_SECTIONS = [
-  "overview",
-  "orders",
-  "requests",
-  "chats",
-  "catalog",
-  "imports",
-  "invoices",
-  "staff",
-  "reports",
-  "settings",
-  "audit",
-] as const;
-export type StaffSection = typeof STAFF_SECTIONS[number];
+// Re-exported for the existing client-side imports. The list itself lives in
+// ./sections so server components can read it without crossing the "use
+// client" boundary, where it would arrive as a reference proxy.
+export { STAFF_SECTIONS };
+export type { StaffSection };
 
 interface NavigationItem {
   href: string;

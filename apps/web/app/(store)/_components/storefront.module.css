@@ -199,9 +199,16 @@
 .headerTopRow { display: none; border-bottom: 1px solid var(--store-header-border); }
 .headerTopRow .headerRowInner { min-height: 48px; padding-block: 4px; gap: var(--store-space-lg); }
 
-.headerTopLocation { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.84rem; line-height: 1.3; }
+.headerTopLocation { display: flex; align-items: center; min-height: 44px; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.84rem; line-height: 1.3; text-decoration: none; transition: color var(--store-duration-fast) var(--store-ease); }
 .headerTopLocation svg { flex: 0 0 auto; }
 .headerTopLocation span { overflow-wrap: anywhere; }
+.headerTopLocation:hover { color: var(--store-header-text); }
+
+/* Opening hours — same thin utility row as the address, but the least
+   essential fact there, so it is the first to go below 1280px (see the
+   1279px block further down). */
+.headerTopHours { display: flex; align-items: center; min-height: 44px; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.84rem; line-height: 1.3; white-space: nowrap; }
+.headerTopHours svg { flex: 0 0 auto; }
 
 .headerTopLinks { display: flex; align-items: center; gap: var(--store-space-md); }
 .headerTopLinks a {
@@ -303,6 +310,62 @@
   text-align: center;
 }
 
+/* Wraps the desktop search field so it can be hidden below 768px (the
+   phone-width header keeps the search field on its own row instead —
+   `.mobileSearchRow` further down) without disturbing `.searchBox`'s own
+   `flex: 1` sizing: `display: contents` at ≥768px makes this wrapper
+   transparent to layout, so the search field still behaves as a direct
+   flex child of `.headerRowInner`, exactly as before this wrapper existed. */
+.headerDesktopSearch { display: none; }
+
+/* Mobile-only row 2 content: brand stays put, this compact icon cluster
+   (phone / cart with its badge / account) takes the desktop search +
+   actions' place on the right. Hidden ≥768px alongside the other
+   mobile-only rows, see the 768px block further down. */
+.mobileHeaderActions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.mobileHeaderActions a,
+.mobileHeaderActions :global(.storefront-cart-button) {
+  position: relative;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--store-radius-sm);
+  background: transparent;
+  color: var(--store-header-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease);
+}
+.mobileHeaderActions a:hover,
+.mobileHeaderActions :global(.storefront-cart-button):hover { background: var(--store-header-control-bg-hover); }
+/* Same "shrink the caption to nothing, keep the count badge legible" trick
+   as `.headerActions` uses at its own icon-only tier (see the 899px block
+   further down) — `font-size: 0` collapses only the label text's own
+   glyphs, not the badge span nested inside it, which restates its size
+   explicitly below. */
+.mobileHeaderActions :global(.storefront-cart-button-label),
+.mobileHeaderActions :global(.storefront-account-label) { font-size: 0; }
+.mobileHeaderActions :global(.storefront-cart-count) {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border: 2px solid var(--store-header-bg);
+  border-radius: var(--store-radius-full);
+  background: var(--store-accent);
+  color: var(--store-accent-text);
+  font-size: 0.62rem;
+  font-weight: var(--store-weight-black);
+  line-height: 11px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .searchBox { position: relative; flex: 1 1 auto; min-width: 0; max-width: 860px; }
 
 .searchForm {
@@ -390,100 +453,43 @@
 .searchSuggestionAll { display: block; margin-top: 2px; padding: 10px var(--store-space-sm); border-top: 1px solid var(--store-border); border-radius: var(--store-radius-sm); color: var(--store-brand); font-size: 0.86rem; font-weight: var(--store-weight-bold); text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .searchSuggestionAll:hover { background: var(--store-surface-strong); }
 
-/* Burger trigger — visible only below 768px (see the 768px block further
-   down), where the header band is the entire header. */
-.burgerButton {
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--store-header-control-border);
-  border-radius: var(--store-radius-sm);
-  background: var(--store-header-control-bg);
-  color: var(--store-header-text);
-  cursor: pointer;
-  transition: background var(--store-duration-fast) var(--store-ease);
-}
-.burgerButton:hover { background: var(--store-header-control-bg-hover); }
+/* ---------------- Mobile-only header rows (<768px) ----------------
+   The reference's five stacked rows inside one panel: secondary links,
+   brand + icon cluster (`.headerMainRow`, shared with desktop — see
+   `.mobileHeaderActions` above), locality + address link, the search field
+   alone, and the accent CTA. All hidden ≥768px in the 768px block below,
+   where the two-row desktop layout (`.headerTopRow` / `.headerMainRow`)
+   takes over instead. */
 
-/* Slide-in drawer. The panel stays mounted at all times (see
-   mobile-drawer.tsx) so both open and close get a real CSS transition —
-   there is no mount-timing trick and no popping in/out. */
-.drawerLayer { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
-.drawerLayer[data-open] { pointer-events: auto; }
+.mobileLinksRow { display: block; border-bottom: 1px solid var(--store-header-border); }
+.mobileLinksRow .headerRowInner { min-height: 40px; padding-block: max(10px, env(safe-area-inset-top)) 6px; gap: var(--store-space-md); }
 
-.drawerBackdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  padding: 0;
-  background: rgb(8 15 30 / 55%);
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity var(--store-duration-base) var(--store-ease);
-}
-.drawerLayer[data-open] .drawerBackdrop { opacity: 1; }
+.mobileLocationRow { display: block; border-bottom: 1px solid var(--store-header-border); }
+.mobileLocationRow .headerRowInner { min-height: 40px; padding-block: 6px; justify-content: space-between; flex-wrap: wrap; row-gap: 2px; }
+.mobileLocationText { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.82rem; line-height: 1.3; }
+.mobileLocationText svg { flex: 0 0 auto; }
+.mobileAddressLink { min-height: 32px; display: inline-flex; align-items: center; color: var(--store-header-text); font-size: 0.8rem; font-weight: var(--store-weight-bold); text-decoration: underline; text-underline-offset: 2px; }
 
-.drawerPanel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(360px, 86vw);
-  display: flex;
-  flex-direction: column;
-  background: var(--store-surface);
-  box-shadow: var(--store-shadow-lg);
-  transform: translateX(100%);
-  transition: transform var(--store-duration-slow) var(--store-ease);
-}
-.drawerLayer[data-open] .drawerPanel { transform: translateX(0); }
+.mobileSearchRow { display: block; }
+.mobileSearchRow .headerRowInner { padding-block: 10px; }
 
-.drawerHead {
-  flex: 0 0 auto;
-  display: flex;
+.mobileExpertRow { display: block; }
+.mobileExpertRow .headerRowInner { padding-block: 4px 16px; }
+.mobileExpertButton {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--store-space-sm);
-  padding: max(var(--store-space-sm), env(safe-area-inset-top)) var(--store-space-sm) var(--store-space-sm) var(--store-space-md);
-  border-bottom: 1px solid var(--store-border);
-}
-.drawerBrand { display: flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
-.drawerBrandMark { height: 34px; width: auto; display: block; }
-.drawerClose {
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--store-border);
-  border-radius: var(--store-radius-sm);
-  background: var(--store-surface);
-  color: var(--store-text);
-  cursor: pointer;
-  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
-}
-.drawerClose:hover { background: var(--store-surface-strong); color: var(--store-brand); }
-
-.drawerBody { flex: 1 1 auto; overflow-y: auto; padding: var(--store-space-sm) var(--store-space-sm) calc(var(--store-space-lg) + env(safe-area-inset-bottom)); }
-.drawerNav { display: grid; gap: 2px; }
-.drawerNavGroup { display: grid; gap: 2px; }
-.drawerNavGroupLabel { margin: var(--store-space-sm) 0 0; padding: 6px var(--store-space-sm) 0; color: var(--store-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
-.drawerNav a {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  padding: 0 var(--store-space-sm);
-  border-radius: var(--store-radius-sm);
-  color: var(--store-text);
-  font-size: 0.96rem;
-  font-weight: var(--store-weight-medium);
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-accent);
+  color: var(--store-accent-text);
+  font-size: 0.88rem;
+  font-weight: var(--store-weight-bold);
   text-decoration: none;
-  transition: background var(--store-duration-fast) var(--store-ease);
+  transition: filter var(--store-duration-fast) var(--store-ease);
 }
-.drawerNav a:hover { background: var(--store-surface-strong); }
-.drawerNavPhone { margin-top: var(--store-space-sm); border-top: 1px solid var(--store-border); color: var(--store-brand) !important; font-weight: var(--store-weight-bold) !important; }
+.mobileExpertButton:hover { filter: brightness(1.06); }
 
 /* ---------------- Layout ---------------- */
 
@@ -606,10 +612,15 @@ button.promoControl {
 .promoSlideBody h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 1.9rem); font-weight: var(--store-weight-black); line-height: 1.12; letter-spacing: var(--store-tracking-tight); }
 .promoSlideBody p { margin: 0; color: var(--store-header-muted); font-size: 0.92rem; line-height: 1.45; }
 .promoSlideCta { justify-self: start; margin-top: 6px; padding: 8px 16px; border-radius: var(--store-radius-full); background: var(--store-accent); color: var(--store-accent-text); font-size: 0.84rem; font-weight: var(--store-weight-bold); }
-.promoDots { display: flex; justify-content: center; gap: 4px; margin-top: var(--store-space-sm); }
-.promoDot { width: 44px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }
-.promoDot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--store-border); transition: background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease); }
-.promoDot[data-active="true"]::before { background: var(--store-brand); transform: scale(1.35); }
+/* Owner: "кружки под каруселью меньше" — the dot glyph itself shrinks
+   (8px -> 5px) and the row sits tighter (no inter-button gap), but the
+   44px tap target is untouched: each button keeps a 44px min box via
+   padding, it just no longer also draws at that size, per "keeping the hit
+   area ≥44px via padding rather than visual size". */
+.promoDots { display: flex; justify-content: center; gap: 0; margin-top: var(--store-space-sm); }
+.promoDot { min-width: 44px; min-height: 44px; padding: 4px; display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }
+.promoDot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--store-border); transition: background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease); }
+.promoDot[data-active="true"]::before { background: var(--store-brand); transform: scale(1.3); }
 
 /* Category tiles — the site's main navigation pattern. Light-grey rounded
    cards, a real product-group photo on top (public/categories/*.webp),
@@ -1031,8 +1042,12 @@ button.promoControl {
 @media (min-width: 768px) {
   .headerTopRow { display: block; }
   .headerActions { display: flex; }
-  .burgerButton,
-  .drawerLayer { display: none; }
+  .headerDesktopSearch { display: contents; }
+  .mobileLinksRow,
+  .mobileLocationRow,
+  .mobileSearchRow,
+  .mobileExpertRow,
+  .mobileHeaderActions { display: none; }
   .headerInset { margin-inline: 16px; }
   .brandLockup { height: 40px; }
 }
@@ -1051,6 +1066,14 @@ button.promoControl {
 @media (min-width: 1280px) {
   .headerInset { margin-inline: 28px; }
   .brandLockup { height: 48px; }
+}
+
+/* Hours is the least essential fact on row 1 (the address it sits next to
+   already implies "shop", and the phone/messengers cover urgent contact),
+   so it is the first thing to go as the row's content budget tightens —
+   before the secondary links below, and well before location itself. */
+@media (max-width: 1279px) {
+  .headerTopHours { display: none; }
 }
 
 /* Row 1's content budget (location + secondary links + phone + messengers)
@@ -1085,18 +1108,15 @@ button.promoControl {
 }
 
 @media (max-width: 767px) {
-  /* Logo + search + burger share row 2 alone here (row 1 is hidden) — keep
-     the fixed-width items compact so the search field never gets pinched
-     at 320px. */
-  /* Owner comparison against rossko.ru: the blue band read as too short and
-     the field sat flush against its top edge. Taller top padding both grows
-     the band and pushes the (vertically centred) row — search field
-     included — down inside it, without touching row height on ≥768px. */
+  /* Row 2 here is brand + the compact phone/cart/account cluster only (the
+     desktop search field is hidden — see `.headerDesktopSearch` — in favour
+     of its own full-width row, `.mobileSearchRow`, further down the panel).
+     The safe-area top padding that used to live on this row moved to
+     `.mobileLinksRow`, now the panel's actual first row. */
   .headerMainRow .headerRowInner {
     gap: var(--store-space-2xs);
-    min-height: 64px;
-    padding-top: max(20px, env(safe-area-inset-top));
-    padding-bottom: 14px;
+    min-height: 56px;
+    padding-block: 8px;
   }
   .searchForm svg { margin-left: var(--store-space-sm); }
   .promo { width: 100%; padding: 0 16px; }

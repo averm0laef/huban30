@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { STAFF_SECTIONS, StaffWorkspace, type StaffSection } from "../staff-workspace";
+import { isStaffSection } from "../sections";
+import { StaffWorkspace } from "../staff-workspace";
 
 export const metadata: Metadata = { robots: { index: false, follow: false }, title: "Рабочее место" };
 
 export default async function StaffSectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
-  if (!STAFF_SECTIONS.includes(section as StaffSection)) notFound();
-  return <StaffWorkspace initialSection={section as StaffSection} />;
+  // The section list is read from a plain module: importing it from the
+  // client component hands the server a reference proxy, not the array.
+  if (!isStaffSection(section)) notFound();
+  return <StaffWorkspace initialSection={section} />;
 }

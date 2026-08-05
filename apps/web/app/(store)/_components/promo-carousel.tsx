@@ -111,7 +111,16 @@ export function PromoCarousel({ slides }: { slides: PromoSlide[] }) {
   function goTo(index: number): void {
     const track = trackRef.current;
     const target = track?.children[index] as HTMLElement | undefined;
-    target?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest", inline: "start" });
+    if (!track || !target) return;
+    // Scroll the track itself rather than calling scrollIntoView on the slide.
+    // Even with block: "nearest", scrollIntoView walks up to the page and
+    // scrolls it vertically whenever the carousel is off screen — so a visitor
+    // reading further down the page was yanked back up every six seconds when
+    // autoplay advanced. Setting scrollLeft only ever moves the track.
+    track.scrollTo({
+      behavior: reducedMotion ? "auto" : "smooth",
+      left: target.offsetLeft - track.offsetLeft,
+    });
   }
 
   function registerInteraction(): void {
