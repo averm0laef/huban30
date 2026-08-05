@@ -20,7 +20,30 @@ type FetchState =
   | { response: SupplierSearchResponse; status: "ready" };
 
 function deliveryLabel(deliveryTime: string | null): string {
-  return deliveryTime ? `Срок: ${deliveryTime}` : "Срок уточняется у поставщика";
+  return deliveryTime ? `Срок: ${deliveryTime}` : "Срок уточняется";
+}
+
+/**
+ * Cheapest line that actually has quantity, falling back to the cheapest
+ * line overall when nothing does. `null` when a part carries no stock lines
+ * of its own (it may still have priced lines via `crosses`).
+ */
+function bestStock(stocks: SupplierStockView[]): SupplierStockView | null {
+  if (stocks.length === 0) return null;
+  return [...stocks].sort((a, b) => {
+    const aOut = a.quantity > 0 ? 0 : 1;
+    const bOut = b.quantity > 0 ? 0 : 1;
+    return aOut !== bOut ? aOut - bOut : a.priceKopeks - b.priceKopeks;
+  })[0] ?? null;
+}
+
+/** Russian plural for "N предложение / предложения / предложений". */
+function offersWord(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "предложение";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "предложения";
+  return "предложений";
 }
 
 function StockRow({
@@ -37,7 +60,7 @@ function StockRow({
   return (
     <div className={styles.supplierStockRow}>
       <span className={styles.supplierStockPrice}>{formatRubles(stock.priceKopeks)}</span>
-      <span className={styles.supplierStockQuantity}>{stock.quantity} шт. у поставщика</span>
+      <span className={styles.supplierStockQuantity}>{stock.quantity} шт.</span>
       <span className={styles.supplierStockDelivery}>{deliveryLabel(stock.deliveryTime)}</span>
       <button
         className={styles.supplierWaitlistButton}
@@ -60,11 +83,46 @@ function StockRow({
   );
 }
 
+function CrossItem({ cross, onWaitlist, query }: {
+  cross: SupplierPartView;
+  onWaitlist: (target: SupplierWaitlistTarget) => void;
+  query: string;
+}) {
+  return (
+    <div className={styles.supplierCrossItem}>
+      <p className={styles.supplierPartMeta}>{cross.brand} · Артикул {cross.partNumber} — {cross.name}</p>
+      {cross.stocks.length > 0 ? (
+        <div className={styles.supplierStockList}>
+          {cross.stocks.map((stock) => (
+            <StockRow brand={cross.brand} key={stock.id} name={cross.name} onWaitlist={onWaitlist} partGuid={cross.guid} partNumber={cross.partNumber} query={query} stock={stock} />
+          ))}
+        </div>
+      ) : (
+        <p className={styles.supplierCrossNoStock}>Предложений пока нет.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One part in the "Привезём под заказ" grid. Self-contained and
+ * top-aligned by design (see `.supplierPartCard` / `.supplierPartList` in
+ * storefront.module.css — the grid must never stretch a card to match a
+ * taller sibling). Only the single cheapest available line is shown up
+ * front with its own waitlist button; every remaining stock line and every
+ * analogue is real data, never dropped, just tucked behind a native
+ * `<details>` disclosure so a part with a dozen offers doesn't turn the
+ * card into a wall of prices.
+ */
 function PartCard({ onWaitlist, part, query }: {
   onWaitlist: (target: SupplierWaitlistTarget) => void;
   part: SupplierPartView;
   query: string;
 }) {
+  const best = bestStock(part.stocks);
+  const restStocks = best ? part.stocks.filter((stock) => stock.id !== best.id) : part.stocks;
+  const hiddenCount = restStocks.length + part.crosses.length;
+
   return (
     <article className={styles.supplierPartCard}>
       <div className={styles.supplierPartHead}>
@@ -73,46 +131,52 @@ function PartCard({ onWaitlist, part, query }: {
         <h3 className={styles.supplierPartName}>{part.name}</h3>
       </div>
 
-      {part.stocks.length > 0 ? (
+      {best ? (
         <div className={styles.supplierStockList}>
-          {part.stocks.map((stock) => (
-            <StockRow brand={part.brand} key={stock.id} name={part.name} onWaitlist={onWaitlist} partGuid={part.guid} partNumber={part.partNumber} query={query} stock={stock} />
-          ))}
+          <StockRow brand={part.brand} key={best.id} name={part.name} onWaitlist={onWaitlist} partGuid={part.guid} partNumber={part.partNumber} query={query} stock={best} />
         </div>
-      ) : null}
+      ) : (
+        <p className={styles.supplierCrossNoStock}>Прямого предложения нет — есть аналоги ниже.</p>
+      )}
 
-      {part.crosses.length > 0 ? (
-        <div className={styles.supplierCrossList}>
-          <p className={styles.supplierCrossLabel}>Аналоги</p>
-          {part.crosses.map((cross) => (
-            <div className={styles.supplierCrossItem} key={cross.guid}>
-              <p className={styles.supplierPartMeta}>{cross.brand} · Артикул {cross.partNumber} — {cross.name}</p>
-              {cross.stocks.length > 0 ? (
-                <div className={styles.supplierStockList}>
-                  {cross.stocks.map((stock) => (
-                    <StockRow brand={cross.brand} key={stock.id} name={cross.name} onWaitlist={onWaitlist} partGuid={cross.guid} partNumber={cross.partNumber} query={query} stock={stock} />
-                  ))}
-                </div>
-              ) : (
-                <p className={styles.supplierCrossNoStock}>Нет предложения у поставщика прямо сейчас.</p>
-              )}
-            </div>
-          ))}
-        </div>
+      {hiddenCount > 0 ? (
+        <details className={styles.supplierMoreDetails}>
+          <summary className={styles.supplierMoreSummary}>Ещё {hiddenCount} {offersWord(hiddenCount)}</summary>
+          <div className={styles.supplierMoreBody}>
+            {restStocks.length > 0 ? (
+              <div className={styles.supplierStockList}>
+                {restStocks.map((stock) => (
+                  <StockRow brand={part.brand} key={stock.id} name={part.name} onWaitlist={onWaitlist} partGuid={part.guid} partNumber={part.partNumber} query={query} stock={stock} />
+                ))}
+              </div>
+            ) : null}
+
+            {part.crosses.length > 0 ? (
+              <div className={styles.supplierCrossList}>
+                <p className={styles.supplierCrossLabel}>Аналоги</p>
+                {part.crosses.map((cross) => <CrossItem cross={cross} key={cross.guid} onWaitlist={onWaitlist} query={query} />)}
+              </div>
+            ) : null}
+          </div>
+        </details>
       ) : null}
     </article>
   );
 }
 
 /**
- * The "Под заказ у поставщика" block on a catalog search. Deliberately
- * separate from the server-rendered "В наличии" block above it: this
- * component fetches `/api/v1/suppliers/search` itself, client-side, after
- * the page (with the shop's own 1C results) has already painted — a cold
- * Rossko call takes 3-5s and must never hold up the page the customer is
- * already reading. `query` only ever reaches this component once it is a
- * real search (≥2 characters); see the `isSearch` gate in catalog page.tsx
- * and catalog/[...slug]/page.tsx.
+ * The "Привезём под заказ" block on a catalog search. Deliberately separate
+ * from the server-rendered "На складе" block above it: this component
+ * fetches `/api/v1/suppliers/search` itself, client-side, after the page
+ * (with the shop's own 1C results) has already painted — a cold under-order
+ * lookup takes 3-5s and must never hold up the page the customer is already
+ * reading. `query` only ever reaches this component once it is a real
+ * search (≥2 characters); see the `isSearch` gate in catalog page.tsx and
+ * catalog/[...slug]/page.tsx.
+ *
+ * The supplier behind this lookup is never named to the customer — see
+ * `filterSupplierParts` and the contract's `source` field for where that
+ * identity actually lives (staff-only, never rendered here).
  */
 export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query: string }) {
   const [state, setState] = useState<FetchState>({ status: "loading" });
@@ -127,7 +191,7 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
         const parsed = SupplierSearchResponseSchema.safeParse(payload);
         setState(parsed.success
           ? { response: parsed.data, status: "ready" }
-          : { message: "Поставщик вернул некорректный ответ.", status: "error" });
+          : { message: "Получен некорректный ответ.", status: "error" });
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -145,19 +209,19 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
 
   return (
     <section aria-labelledby="supplier-results-heading" className={styles.supplierSection}>
-      <h2 className={styles.resultsSourceHeading} id="supplier-results-heading">Под заказ у поставщика</h2>
-      <p className={styles.supplierIntro}>Этих позиций может не быть на нашем складе — поставщик Rossko привезёт их под заказ.</p>
+      <h2 className={styles.resultsSourceHeading} id="supplier-results-heading">Привезём под заказ</h2>
+      <p className={styles.supplierIntro}>Этой детали может не быть на складе прямо сейчас, но мы можем привезти её под заказ.</p>
 
       {state.status === "loading" ? (
         <section aria-busy="true" aria-live="polite" className={styles.loadingState}>
-          <h3>Спрашиваем у поставщика</h3>
+          <h3>Проверяем, что можно привезти</h3>
           <p>Обычно это занимает несколько секунд.</p>
         </section>
       ) : null}
 
       {state.status === "error" ? (
         <section className={styles.errorState} role="alert">
-          <h3>Не удалось спросить поставщика</h3>
+          <h3>Не удалось проверить под заказ</h3>
           <p>{state.message}</p>
           <button className={styles.submitButton} onClick={retry} type="button">Повторить</button>
         </section>
@@ -165,7 +229,7 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
 
       {supplierUnavailable ? (
         <section className={styles.errorState} role="alert">
-          <h3>Поставщик недоступен</h3>
+          <h3>Под заказ временно недоступен</h3>
           <p>{ready?.message || "Попробуйте повторить запрос позже."}</p>
           <button className={styles.submitButton} onClick={retry} type="button">Повторить</button>
         </section>
@@ -177,7 +241,7 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
             <>
               <h3>Ничего не найдено</h3>
               <p>
-                Мы проверили собственный склад и поставщика — по запросу «{query}» пока ничего нет ни там, ни там.
+                Мы проверили склад и возможность привезти под заказ — по запросу «{query}» пока ничего нет ни там, ни там.
                 Позвоните нам или опишите деталь специалисту: подберём аналог или узнаем срок под заказ.
               </p>
               <div className={styles.heroActions}>
@@ -187,7 +251,7 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
             </>
           ) : (
             <>
-              <h3>У поставщика ничего нет</h3>
+              <h3>Под заказ ничего нет</h3>
               <p>По запросу «{query}» подходящих позиций под заказ не нашлось. Попробуйте изменить запрос.</p>
             </>
           )}
@@ -197,7 +261,7 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
       {ready && parts.length > 0 ? (
         <>
           {ready.truncated ? (
-            <p className={styles.supplierTruncatedNote}>Показаны первые {parts.length} из {ready.totalFound} найденных у поставщика.</p>
+            <p className={styles.supplierTruncatedNote}>Показаны первые {parts.length} из {ready.totalFound} найденных под заказ.</p>
           ) : null}
           <div className={styles.supplierPartList}>
             {parts.map((part) => <PartCard key={part.guid} onWaitlist={setWaitlistTarget} part={part} query={query} />)}

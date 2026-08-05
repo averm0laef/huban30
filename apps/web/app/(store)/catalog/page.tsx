@@ -62,7 +62,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
       <JsonLd value={breadcrumbJsonLd([{ name: "Главная", path: "/" }, { name: "Каталог", path: "/catalog" }])} />
       <header className={styles.pageTitle}>
         <h1>Каталог</h1>
-        <p>Выберите раздел ниже или введите не менее двух символов названия либо артикула из 1С. Если детали нет на складе, поищем под заказ у поставщика.</p>
+        <p>Выберите раздел ниже или введите не менее двух символов названия либо артикула из 1С. Если детали нет на складе, привезём её под заказ.</p>
       </header>
 
       <div className={styles.catalogLayout}>

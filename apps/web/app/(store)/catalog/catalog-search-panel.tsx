@@ -44,10 +44,10 @@ export const CATALOG_SEARCH_FORM_ID = "catalog-search-form";
  * none — there is no generic "browse the catalog" grid to fall back to.
  *
  * When `query` is a real search (≥2 characters) the results are wrapped in
- * their own "В наличии" heading — the shop's own 1C stock, deliberately
- * labelled and visually separate from the supplier block the page renders
- * below it (`SupplierResults`). A plain category browse (no query, or the
- * 1-character hint) renders unlabelled, exactly as before.
+ * their own "На складе" heading — the shop's own 1C stock, deliberately
+ * labelled and visually separate from the under-order block the page
+ * renders below it (`SupplierResults`). A plain category browse (no query,
+ * or the 1-character hint) renders unlabelled, exactly as before.
  */
 export function CatalogSearchPanel({
   action, emptyState, errorMessage, items, query, sort,
@@ -115,7 +115,7 @@ export function CatalogSearchPanel({
 
       {isSearch ? (
         <section aria-labelledby="own-results-heading" className={styles.ownResultsSection}>
-          <h2 className={styles.resultsSourceHeading} id="own-results-heading">В наличии</h2>
+          <h2 className={styles.resultsSourceHeading} id="own-results-heading">На складе</h2>
           {body}
         </section>
       ) : body}

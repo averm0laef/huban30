@@ -46,6 +46,11 @@ const RawEnvironmentSchema = z.object({
   // доставка, 000000012 Отправка через Автобус. GetSearch rejects any other
   // value with success=false, so the format is pinned rather than left free text.
   ROSSKO_DELIVERY_ID: z.string().regex(/^\d{9}$/u).default("000000001"),
+  // Retail margin applied to every supplier price before it is shown or
+  // recorded. The shop buys at the distributor's price and sells at its own,
+  // so the markup belongs on the server: a browser must never be able to
+  // influence what a part costs. Expressed in percent.
+  SUPPLIER_MARKUP_PERCENT: z.coerce.number().min(0).max(500).default(30),
   STORAGE_ROOT: z.string().min(1).default("/data/uploads"),
   SANDBOX_PAYMENT_WEBHOOK_SECRET: z.string().min(32).optional(),
   SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: z.string().min(1).optional(),

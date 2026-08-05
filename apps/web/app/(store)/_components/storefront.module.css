@@ -715,8 +715,8 @@ button.promoControl {
    `/catalog` and `/catalog/[...slug]` share a two-column layout: a left
    filter rail (categories + availability, see `CatalogFilterRail`) and a
    right results column (`.catalogMain`, owned by the two page files) that
-   holds the search form, the shop's own "В наличии" results, and — only
-   during a real search — the supplier "Под заказ у поставщика" block
+   holds the search form, the shop's own "На складе" results, and — only
+   during a real search — the "Привезём под заказ" block
    (`SupplierResults`). Mobile-first: `.catalogLayout` is a single stacked
    column by default (the rail's `<details>` collapses natively, no JS
    needed), and only becomes two columns with the rail forced open at
@@ -740,10 +740,21 @@ button.promoControl {
 .supplierIntro { margin: -6px 0 0; color: var(--store-muted); line-height: 1.5; }
 .supplierTruncatedNote { margin: 0; color: var(--store-muted); font-size: 0.86rem; }
 
-.supplierPartList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: var(--store-space-md); }
-.supplierPartCard { min-width: 0; display: grid; gap: var(--store-space-sm); padding: var(--store-space-md); border: 1px dashed var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
-.supplierPartHead { display: grid; gap: 4px; }
-.supplierBadge { justify-self: start; padding: 3px 10px; border-radius: var(--store-radius-full); background: color-mix(in srgb, var(--store-accent) 24%, var(--store-surface)); color: var(--store-accent-text); font-size: 0.68rem; font-weight: var(--store-weight-black); letter-spacing: 0.03em; text-transform: uppercase; }
+/* Cards must never stretch to match a taller sibling in the same grid row
+   (the reported "empty pale rectangle" bug): without `align-items: start`
+   here, every `.supplierPartCard` grid item stretches to the row's tallest
+   card, and — because CSS Grid distributes that leftover space equally
+   across a container's own `auto` rows when `align-content` is left at its
+   `normal` default — the extra height cascades straight down into
+   `.supplierPartHead`'s rows, ballooning the accent-tinted `.supplierBadge`
+   pill into a tall empty box with the name pushed down below it. Pinning
+   `align-items`/`align-content` to `start` at every level below stops the
+   cascade, so a short card and a long card can share a row and each stays
+   exactly as tall as its own content, top-aligned. */
+.supplierPartList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); align-items: start; gap: var(--store-space-md); }
+.supplierPartCard { min-width: 0; display: grid; align-content: start; gap: var(--store-space-sm); padding: var(--store-space-md); border: 1px dashed var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
+.supplierPartHead { display: grid; align-content: start; gap: 4px; }
+.supplierBadge { justify-self: start; align-self: start; padding: 3px 10px; border-radius: var(--store-radius-full); background: color-mix(in srgb, var(--store-accent) 24%, var(--store-surface)); color: var(--store-accent-text); font-size: 0.68rem; font-weight: var(--store-weight-black); letter-spacing: 0.03em; text-transform: uppercase; }
 .supplierPartMeta { margin: 0; color: var(--store-muted); font-size: 0.86rem; overflow-wrap: anywhere; }
 .supplierPartName { margin: 0; color: var(--store-text); font-size: 1.02rem; font-weight: var(--store-weight-medium); line-height: 1.35; }
 
@@ -754,6 +765,18 @@ button.promoControl {
 .supplierStockDelivery { color: var(--store-muted); font-size: 0.8rem; }
 .supplierWaitlistButton { min-height: 44px; margin-left: auto; padding: 0 var(--store-space-md); border: 1px solid var(--store-brand); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-brand); font-weight: var(--store-weight-bold); cursor: pointer; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
 .supplierWaitlistButton:hover { background: var(--store-brand); color: #f8faff; }
+
+/* The "Ещё N предложений" disclosure that collapses every stock line past
+   the one prominent (cheapest-available) row, plus every analogue — real
+   data, hidden not dropped. Native `<details>`/`<summary>` so it works with
+   no JS and gets the sitewide `.storefront summary:focus-visible` outline
+   for free. */
+.supplierMoreDetails { border-top: 1px solid var(--store-border); padding-top: var(--store-space-xs); }
+.supplierMoreSummary { display: flex; align-items: center; gap: 6px; min-height: 44px; color: var(--store-brand); font-size: 0.86rem; font-weight: var(--store-weight-bold); list-style: none; cursor: pointer; }
+.supplierMoreSummary::-webkit-details-marker { display: none; }
+.supplierMoreSummary::before { content: "+"; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: var(--store-radius-full); background: color-mix(in srgb, var(--store-brand) 14%, var(--store-surface)); font-weight: var(--store-weight-black); transform: rotate(0deg); transition: transform var(--store-duration-fast) var(--store-ease); }
+.supplierMoreDetails[open] > .supplierMoreSummary::before { transform: rotate(45deg); }
+.supplierMoreBody { display: grid; gap: var(--store-space-sm); padding-top: var(--store-space-sm); }
 
 .supplierCrossList { display: grid; gap: var(--store-space-sm); padding-top: var(--store-space-sm); border-top: 1px solid var(--store-border); }
 .supplierCrossLabel { margin: 0; color: var(--store-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }

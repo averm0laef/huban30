@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { SupplierProvider, SupplierSearchResult } from "../adapters/provider-contracts.js";
+import type { ConfigService } from "@nestjs/config";
+
+// Markup is applied server-side; tests pin it so expected prices are explicit.
+function makeConfig(markupPercent = 30): ConfigService {
+  return { get: () => markupPercent } as unknown as ConfigService;
+}
+
 import { SupplierSearchService } from "./supplier-search.service.js";
 
 function makeSupplier(result: SupplierSearchResult): SupplierProvider {
@@ -13,7 +20,7 @@ describe("SupplierSearchService", () => {
     const service = new SupplierSearchService({
       enabled: true,
       search: async () => { called = true; return { message: "", parts: [], success: true }; },
-    });
+    }, makeConfig());
     await expect(service.search({ q: "w" })).rejects.toThrow();
     expect(called).toBe(false);
   });
@@ -38,14 +45,15 @@ describe("SupplierSearchService", () => {
       }],
       success: true,
     });
-    const service = new SupplierSearchService(supplier);
+    const service = new SupplierSearchService(supplier, makeConfig());
 
     const result = await service.search({ q: "W914/2" });
     expect(result.source).toBe("rossko");
     expect(result.query).toBe("W914/2");
     expect(result.parts[0]?.availability).toBe("under_order");
     expect(result.parts[0]?.crosses[0]?.availability).toBe("under_order");
-    expect(result.parts[0]?.stocks[0]).toEqual({ deliveryTime: "2", id: "s1", priceKopeks: 45_670, quantity: 12 });
+    // 456.70 at the shop's 30% margin, rounded up to a whole rouble.
+    expect(result.parts[0]?.stocks[0]).toEqual({ deliveryTime: "2", id: "s1", priceKopeks: 59_400, quantity: 12 });
   });
 
   it("passes through a disabled or failed provider result without throwing", async () => {
@@ -53,7 +61,7 @@ describe("SupplierSearchService", () => {
       message: "Поиск у поставщика отключён",
       parts: [],
       success: false,
-    }));
+    }), makeConfig());
     const result = await service.search({ q: "W914/2" });
     expect(result).toEqual({
       message: "Поиск у поставщика отключён",
@@ -85,7 +93,7 @@ describe("SupplierSearchService", () => {
       message: "",
       parts: Array.from({ length: 54 }, (_, i) => part(i)),
       success: true,
-    }));
+    }), makeConfig());
 
     const result = await service.search({ q: "тормозные колодки" });
 

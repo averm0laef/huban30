@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { z } from "zod";
 
 import {
@@ -7,6 +8,7 @@ import {
   type SupplierSearchResponse,
 } from "@an30/contracts";
 
+import { applySupplierMarkup } from "./supplier-pricing.js";
 import {
   SUPPLIER_PROVIDER,
   type SupplierPart,
@@ -37,23 +39,24 @@ const MAX_CROSSES_IN_RESPONSE = 8;
 // Every supplier part is tagged "under_order" — never the shop's own
 // "в наличии" shelf-stock shape — so a client cannot render a Rossko result
 // as if it were 1C inventory. See SupplierPartView in @an30/contracts.
-function toPartView(part: SupplierPart): SupplierPartView {
+function toPartView(part: SupplierPart, markupPercent: number): SupplierPartView {
   return {
     availability: "under_order",
     brand: part.brand,
     // Analogues are one level deep in the response: a cross of a cross is
     // noise for a shopper and multiplies the payload.
     crosses: part.crosses.slice(0, MAX_CROSSES_IN_RESPONSE).map((cross) => ({
-      ...toPartView(cross),
+      ...toPartView(cross, markupPercent),
       crosses: [],
     })),
     guid: part.guid,
     name: part.name,
     partNumber: part.partNumber,
+    // Retail price only. The distributor's own figure never leaves the server.
     stocks: part.stocks.map((stock) => ({
       deliveryTime: stock.deliveryTime,
       id: stock.id,
-      priceKopeks: stock.priceKopeks,
+      priceKopeks: applySupplierMarkup(stock.priceKopeks, markupPercent),
       quantity: stock.quantity,
     })),
   };
@@ -61,7 +64,14 @@ function toPartView(part: SupplierPart): SupplierPartView {
 
 @Injectable()
 export class SupplierSearchService {
-  constructor(@Inject(SUPPLIER_PROVIDER) private readonly supplier: SupplierProvider) {}
+  private readonly markupPercent: number;
+
+  constructor(
+    @Inject(SUPPLIER_PROVIDER) private readonly supplier: SupplierProvider,
+    config: ConfigService,
+  ) {
+    this.markupPercent = config.get<number>("SUPPLIER_MARKUP_PERCENT") ?? 30;
+  }
 
   async search(input: unknown): Promise<SupplierSearchResponse> {
     const query = parse(SupplierSearchQuerySchema, input);
@@ -69,7 +79,7 @@ export class SupplierSearchService {
     const shown = result.parts.slice(0, MAX_PARTS_IN_RESPONSE);
     return {
       message: result.message,
-      parts: shown.map(toPartView),
+      parts: shown.map((part) => toPartView(part, this.markupPercent)),
       query: query.q,
       source: "rossko",
       success: result.success,

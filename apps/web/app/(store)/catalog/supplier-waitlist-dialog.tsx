@@ -125,7 +125,7 @@ export function SupplierWaitlistDialog({ onClose, target }: SupplierWaitlistDial
             {target.name}
           </p>
           <p className={styles.supplierWaitlistDialogPrice}>
-            {formatRubles(target.priceKopeks)} за шт. · под заказ у поставщика
+            {formatRubles(target.priceKopeks)} за шт. · под заказ
             {target.deliveryTime ? `, срок ${target.deliveryTime}` : ""}
           </p>
 
