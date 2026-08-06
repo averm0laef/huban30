@@ -116,6 +116,15 @@
   outline-offset: 0;
   transition: outline-color var(--store-duration-fast) var(--store-ease), outline-offset var(--store-duration-fast) var(--store-ease);
 }
+/* No `border-radius` override here on purpose: it used to force every
+   focused control to a flat 2px corner, and browsers clip `outline` to an
+   element's own `border-radius` automatically — so a 26px-radius category
+   tile or a 12px-radius chip/button would visibly snap to a near-square
+   box the instant it gained keyboard focus, reading as a stray box/outline
+   appearing on the card. Leaving `border-radius` alone lets the ring trace
+   each element's real shape (tiles/chips/buttons) and fall back to the
+   plain corners of ordinary text links — still fully visible, per WCAG 2.2,
+   just no longer distorting the element under it. */
 .storefront a:focus-visible,
 .storefront button:focus-visible,
 .storefront input:focus-visible,
@@ -124,7 +133,6 @@
 .storefront summary:focus-visible {
   outline-color: var(--store-accent);
   outline-offset: 3px;
-  border-radius: 2px;
 }
 
 .skipLink {
@@ -172,7 +180,9 @@
 }
 
 .headerInset {
-  margin-inline: 10px;
+  /* Full-bleed: the owner asked for no white gutters beside the header.
+     The rounded bottom corners stay, so the band still reads as a panel. */
+  margin-inline: 0;
   border-radius: 0 0 var(--store-radius-lg) var(--store-radius-lg);
   background: var(--store-header-bg);
   color: var(--store-header-text);
@@ -425,47 +435,38 @@
 .searchSuggestionAll:hover { background: var(--store-surface-strong); }
 
 /* ---------------- Mobile-only header rows (<768px) ----------------
-   The reference's five stacked rows inside one panel: secondary links,
+   The reference's four stacked rows inside one panel: secondary links,
    brand + icon cluster (`.headerMainRow`, shared with desktop — see
-   `.mobileHeaderActions` above), locality + address link, the search field
-   alone, and the accent CTA. All hidden ≥768px in the 768px block below,
-   where the two-row desktop layout (`.headerTopRow` / `.headerMainRow`)
-   takes over instead.
+   `.mobileHeaderActions` above), locality + address link, and the search
+   field alone (the fifth row, an expert-CTA, was removed outright — see
+   `StoreHeader`'s own docstring in store-shell.tsx). All hidden ≥768px in
+   the 768px block below, where the two-row desktop layout
+   (`.headerTopRow` / `.headerMainRow`) takes over instead.
 
-   Vertical padding on every row here is cut to the minimum that still
-   clears each row's own 44px target — the owner's "слишком высокая шапка,
-   пустое место" complaint — rather than the more generous desktop-derived
-   spacing the rows started with. */
+   Every row's content is already floored by a real 44px tap target (a nav
+   link, the brand link, the phone/address link, or the 52px search field)
+   — that floor is non-negotiable (WCAG 2.2 AA target size). So "cut the
+   slack" here means the padding *around* that floor, not the floor
+   itself: every `padding-block` below is trimmed to the smallest value
+   that still reads as a row rather than the target bleeding straight into
+   its neighbour — 2–3px on the two plain rows (links, location), 3px on
+   the brand row, a still-comfortable 6px on the search row per the
+   owner's own "строка с поиском отдельно" ask. `min-height` on the row
+   itself is dropped to 0 wherever the row's own floor was already below
+   its content's real (target-driven) height, i.e. it was dead weight. */
 
 .mobileLinksRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLinksRow .headerRowInner { min-height: 40px; padding-block: max(6px, env(safe-area-inset-top)) 4px; gap: var(--store-space-md); }
+.mobileLinksRow .headerRowInner { min-height: 0; padding-block: max(3px, env(safe-area-inset-top)) 2px; gap: var(--store-space-md); }
 
 .mobileLocationRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLocationRow .headerRowInner { min-height: 36px; padding-block: 4px; justify-content: space-between; flex-wrap: wrap; row-gap: 2px; }
+.mobileLocationRow .headerRowInner { min-height: 0; padding-block: 2px; justify-content: space-between; flex-wrap: wrap; row-gap: 2px; }
 .mobileLocationText { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.82rem; line-height: 1.3; }
 .mobileLocationText svg { flex: 0 0 auto; }
 .mobileAddressLink { min-height: 44px; display: inline-flex; align-items: center; color: var(--store-header-text); font-size: 0.8rem; font-weight: var(--store-weight-bold); text-decoration: underline; text-underline-offset: 2px; }
 
 .mobileSearchRow { display: block; }
-.mobileSearchRow .headerRowInner { padding-block: 8px; }
+.mobileSearchRow .headerRowInner { padding-block: 6px; }
 
-.mobileExpertRow { display: block; }
-.mobileExpertRow .headerRowInner { padding-block: 4px 10px; }
-.mobileExpertButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 0 22px;
-  border-radius: var(--store-radius-full);
-  background: var(--store-accent);
-  color: var(--store-accent-text);
-  font-size: 0.88rem;
-  font-weight: var(--store-weight-bold);
-  text-decoration: none;
-  transition: filter var(--store-duration-fast) var(--store-ease);
-}
-.mobileExpertButton:hover { filter: brightness(1.06); }
 
 /* ---------------- Layout ---------------- */
 
@@ -569,12 +570,11 @@ button.promoControl {
   position: relative;
   flex: 0 0 100%;
   min-width: 0;
-  /* Wide letterbox, not the old near-square 16/10 the owner called too
-     tall. The source banners are 1600x450 (~16/4.5) so a 16/6 crop stays
-     inside the image's own frame — no empty bars — while cover-cropping a
-     modest ~25% off the sides; see the 767px block for the phone version,
-     capped shorter still relative to width at 16/9. */
-  aspect-ratio: 16 / 6;
+  /* Matches the source banners exactly (1600x450 = 32/9), so `cover` has
+     nothing to crop and the whole artwork is visible. A taller box such as
+     16/6 silently cut about a quarter off the sides — which is what the
+     owner saw as the banner "не влезает". */
+  aspect-ratio: 32 / 9;
   scroll-snap-align: start;
   display: block;
   overflow: hidden;
@@ -1148,9 +1148,8 @@ button.promoControl {
   .mobileLinksRow,
   .mobileLocationRow,
   .mobileSearchRow,
-  .mobileExpertRow,
   .mobileHeaderActions { display: none; }
-  .headerInset { margin-inline: 16px; }
+  .headerInset { margin-inline: 0; }
   .brandLockup { height: 40px; }
   .quickBlocks { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
 }
@@ -1230,41 +1229,40 @@ button.promoControl {
   .headerMainRow .headerRowInner {
     gap: var(--store-space-2xs);
     min-height: 44px;
-    padding-block: 6px;
+    padding-block: 3px;
   }
 
   /* Scroll collapse: `data-collapsed` is set by store-shell.tsx once the
      page has scrolled past a small threshold (header-scroll-collapse.ts) —
      every row but the search field shrinks away, leaving just the search
      bar pinned under `.header`'s own `position: sticky`. Each collapsing
-     row becomes a one-track grid so `grid-template-rows` can animate
-     `1fr -> 0fr` — this tracks the row's real (possibly safe-area-inflated)
-     content height instead of guessing a max-height in pixels, so nothing
-     ever gets clipped mid-transition. `min-height: 0` on the grid item is
-     required for it to actually shrink past its content size; `overflow:
-     hidden` there (not on the row itself, which still owns the border)
-     keeps the content from spilling out while it does. Reduced-motion and
-     focus-within visitors never see `data-collapsed="true"` at all (see
-     isHeaderCollapsed), so nothing here needs its own motion guard. */
+     row becomes a one-track grid (`grid-template-rows: 1fr` at rest) so
+     the collapsed state can animate that track to `0fr` — this tracks the
+     row's real (possibly safe-area-inflated) content height instead of
+     guessing a max-height in pixels, so nothing ever gets clipped
+     mid-transition. `min-height: 0` on the grid item (`.headerRowInner`)
+     is required for it to actually shrink past its content size;
+     `overflow: hidden` there (not on the row itself, which still owns the
+     border) keeps the content from spilling out while it does.
+     Reduced-motion and focus-within visitors never see
+     `data-collapsed="true"` at all (see isHeaderCollapsed), so nothing
+     here needs its own motion guard. */
   .mobileLinksRow,
   .headerMainRow,
-  .mobileLocationRow,
-  .mobileExpertRow {
+  .mobileLocationRow {
     display: grid;
     grid-template-rows: 1fr;
     transition: grid-template-rows var(--store-duration-slow) var(--store-ease);
   }
   .mobileLinksRow > .headerRowInner,
   .headerMainRow > .headerRowInner,
-  .mobileLocationRow > .headerRowInner,
-  .mobileExpertRow > .headerRowInner {
+  .mobileLocationRow > .headerRowInner {
     min-height: 0;
     overflow: hidden;
   }
   .headerInset[data-collapsed="true"] .mobileLinksRow,
   .headerInset[data-collapsed="true"] .headerMainRow,
-  .headerInset[data-collapsed="true"] .mobileLocationRow,
-  .headerInset[data-collapsed="true"] .mobileExpertRow {
+  .headerInset[data-collapsed="true"] .mobileLocationRow {
     grid-template-rows: 0fr;
     /* Flips to hidden only once the collapse animation finishes, so a
        keyboard/AT user tabbing away doesn't lose the row mid-shrink, but
@@ -1286,7 +1284,8 @@ button.promoControl {
   .promo { width: 100%; padding: 0 16px; }
   /* Shorter still on a phone, relative to the narrower width — never
      taller than 16/9 (see the base rule's 16/6 for ≥768px). */
-  .promoSlide { aspect-ratio: 16 / 9; }
+  /* Same 32/9 source ratio; cropping it taller hid the subject. */
+  .promoSlide { aspect-ratio: 2 / 1; }
   .categorySection,
   .featurePanelInner,
   .catalogTeaser,

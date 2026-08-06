@@ -187,7 +187,6 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
  *     the shop's street address on the right.
  *  4. `.mobileSearchRow` — the same pill search field alone on its own row
  *     ("строка с поиском отдельно").
- *  5. `.mobileExpertRow` — the single accent CTA to /expert-help.
  *
  * There is no separate "Каталог" button in either desktop row: the
  * reference reaches the catalog from the search field, the category tiles,
@@ -339,12 +338,6 @@ function StoreHeader() {
           </div>
         </div>
 
-        {/* Mobile row 5: the single accent CTA. */}
-        <div className={styles.mobileExpertRow}>
-          <div className={styles.headerRowInner}>
-            <Link className={styles.mobileExpertButton} href="/expert-help">Подбор с экспертом</Link>
-          </div>
-        </div>
       </div>
     </header>
   );
