@@ -26,6 +26,7 @@ import {
 } from "../security/public-media.js";
 import { buildCategoryTree } from "./catalog-category-tree.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
+import { normalizeArticleNumber } from "./catalog-search-normalize.js";
 import { VISIBLE_CATEGORIES_CTE, visibleCategoriesWithSubtreeCte } from "./catalog-visibility.sql.js";
 
 const PUBLIC_IMAGE_MIME_TYPES = ["image/avif", "image/jpeg", "image/png", "image/webp"] as const;
@@ -110,11 +111,22 @@ const PUBLIC_PRODUCT_FROM = `FROM app.products AS product
       AND warehouse.is_active AND warehouse.deleted_at IS NULL
   ) AS stock ON true`;
 
+// $8 is the query normalised into an article key (see catalog-search-normalize.ts):
+// case-folded, Cyrillic/Latin-homoglyph-folded, punctuation-stripped, compared
+// against the generated app.products.sku_normalized column (migration 0016).
+// This is what lets "W 914/2", "w914-2" and a Cyrillic-"С"-for-Latin-"C" typo
+// all find the same part regardless of how 1C or the customer formatted it —
+// it subsumes (and replaces) a plain case-insensitive sku prefix check.
+// The trigram similarity() fallback on the name only ever matters once every
+// exact/prefix article and substring/full-text branch above it has already
+// failed, so a fuzzy name hit can add recall but can never hide a real match.
 const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
   AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
   AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
-  AND ($1::text IS NULL OR product.sku::text ILIKE $2 || '%' ESCAPE '\\'
+  AND ($1::text IS NULL
+    OR ($8<>'' AND product.sku_normalized LIKE $8 || '%')
     OR (length($1)>=3 AND product.name ILIKE '%' || $2 || '%' ESCAPE '\\')
+    OR (length($1)>=3 AND similarity(product.name, $1) > 0.25)
     OR to_tsvector('simple',coalesce(product.search_text,product.name))
       @@ websearch_to_tsquery('simple',$1))
   AND ($3::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
@@ -259,6 +271,9 @@ export class CatalogPublicService {
       query.minPriceKopeks ?? null,
       query.maxPriceKopeks ?? null,
       query.availability,
+      // Empty (not null) when there is no query, so the SQL side can compare
+      // with a plain <>'' guard instead of a three-valued NULL check.
+      query.q ? normalizeArticleNumber(query.q) : "",
     ];
     const order = this.productOrder(query);
     return withPublicCatalogQuery(() => this.database.transaction(async (client) => {
@@ -276,14 +291,14 @@ export class CatalogPublicService {
            SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
            FROM app.product_images AS image
            JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-           WHERE image.product_id=product.id AND storage.provider=$8
+           WHERE image.product_id=product.id AND storage.provider=$9
              AND storage.status='available' AND storage.deleted_at IS NULL
-             AND storage.mime_type=ANY($11::text[])
+             AND storage.mime_type=ANY($12::text[])
            ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
          ) AS primary_image ON true
          WHERE ${PUBLIC_PRODUCT_FILTERS}
          ORDER BY ${order},product.id
-         LIMIT $9 OFFSET $10`,
+         LIMIT $10 OFFSET $11`,
         [...values, this.storage.name, query.limit, query.offset, [...PUBLIC_IMAGE_MIME_TYPES]],
       );
       const fallbackCount = items.rows.length === 0 && query.offset > 0
@@ -479,11 +494,21 @@ export class CatalogPublicService {
       case "name": return "lower(product.name) ASC";
       case "price_asc": return "price.amount_kopeks ASC NULLS LAST";
       case "price_desc": return "price.amount_kopeks DESC NULLS LAST";
+      // Ranking never lets a fuzzy match outrank an exact one: an exact
+      // normalised-article match is tier 1, a prefix match is tier 2 (both
+      // insensitive to case, W/w, "-"/" "/"/" and the Cyrillic homoglyphs a
+      // customer's keyboard can substitute — see catalog-search-normalize.ts),
+      // and only once neither applies does trigram/full-text relevance on the
+      // product name decide the order.
       case "relevance": return query.q
-        ? `(lower(product.sku::text)=lower($1)) DESC,
-           (product.sku::text ILIKE $2 || '%' ESCAPE '\\') DESC,
-           ts_rank_cd(to_tsvector('simple',coalesce(product.search_text,product.name)),
-             websearch_to_tsquery('simple',$1)) DESC,lower(product.name) ASC`
+        ? `($8<>'' AND product.sku_normalized=$8) DESC,
+           ($8<>'' AND product.sku_normalized LIKE $8 || '%') DESC,
+           GREATEST(
+             similarity(product.name, $1),
+             ts_rank_cd(to_tsvector('simple',coalesce(product.search_text,product.name)),
+               websearch_to_tsquery('simple',$1))
+           ) DESC,
+           lower(product.name) ASC`
         : "product.updated_at DESC";
     }
   }

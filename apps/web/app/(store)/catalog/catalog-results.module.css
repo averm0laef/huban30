@@ -1,0 +1,145 @@
+/* ============================================================
+   Catalog results — the unified row list.
+
+   New classes only (see the task's constraint against editing
+   storefront.module.css while another pass is rewriting it). This file
+   consumes the same --store-* tokens defined on `.storefront` in that
+   file — single light theme, no dark variant, same 12/18/26px radii scale.
+
+   The shop's own 1C stock (`catalog-search-panel.tsx`) and the supplier's
+   under-order offers (`supplier-results.tsx`) both render through
+   `CatalogResultRow` using these classes, deliberately with no outer box
+   border around the list — a plain stack of thin-divided rows, so the two
+   sources read as one continuous list instead of two boxed card grids.
+   ============================================================ */
+
+.resultsList { display: grid; }
+
+.resultRow {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) minmax(112px, auto) minmax(92px, auto) auto;
+  align-items: center;
+  gap: var(--store-space-sm) var(--store-space-md);
+  padding: var(--store-space-sm) var(--store-space-2xs);
+  border-bottom: 1px solid var(--store-border);
+}
+
+.resultRowMedia {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface-strong);
+}
+.resultRowMedia img { object-fit: contain; padding: 6px; }
+
+.resultRowIdentity { min-width: 0; display: grid; align-content: center; gap: 2px; }
+.resultRowBadges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 2px; }
+.resultRowBadge {
+  padding: 2px 8px;
+  border-radius: var(--store-radius-full);
+  background: color-mix(in srgb, var(--store-accent) 24%, var(--store-surface));
+  color: var(--store-accent-text);
+  font-size: 0.64rem;
+  font-weight: var(--store-weight-black);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.resultRowBadgeAnalog { background: color-mix(in srgb, var(--store-brand) 16%, var(--store-surface)); color: var(--store-brand-strong); }
+
+.resultRowMeta { margin: 0; color: var(--store-muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+.resultRowName { margin: 0; color: var(--store-text); font-size: 0.96rem; font-weight: var(--store-weight-medium); line-height: 1.32; overflow-wrap: anywhere; }
+.resultRowName a { color: inherit; text-decoration: none; }
+.resultRowName a:hover { color: var(--store-brand); }
+
+.resultRowStock { min-width: 0; display: grid; justify-items: start; gap: 2px; }
+.resultRowDelivery { margin: 0; color: var(--store-muted); font-size: 0.76rem; }
+
+.resultRowPrice { font-variant-numeric: tabular-nums; font-size: 1.02rem; font-weight: var(--store-weight-black); color: var(--store-text); white-space: nowrap; }
+
+.resultRowAction { display: flex; justify-content: flex-end; }
+
+/* Honest "nothing priced here" note that replaces the stock/price/action
+   columns — a cross with no stock line still gets its own full-identity
+   row, it just has nothing to sell right now. Never a fake price. */
+.resultRowNote { grid-column: 3 / -1; margin: 0; color: var(--store-muted); font-size: 0.86rem; }
+
+/* ---------------- Stock indicator ----------------
+   Three-segment battery meter + word. Colour is never the only signal —
+   `tone` only tints the filled bars and the word itself; the word (in
+   `.stockMeterLabel`, painted on screen, not just in the aria-label) is
+   what actually carries the meaning, per WCAG 2.2 1.4.1. */
+.stockMeter { display: inline-flex; align-items: center; gap: 6px; }
+.stockMeterBars { display: inline-flex; align-items: flex-end; gap: 3px; }
+.stockMeterBar { width: 6px; height: 14px; border-radius: 2px; background: var(--store-border); }
+.stockMeter[data-tone="danger"] .stockMeterBar[data-filled="true"] { background: var(--store-danger); }
+.stockMeter[data-tone="warning"] .stockMeterBar[data-filled="true"] { background: var(--store-accent); }
+.stockMeter[data-tone="success"] .stockMeterBar[data-filled="true"] { background: var(--store-success); }
+.stockMeterLabel { font-size: 0.8rem; font-weight: var(--store-weight-bold); color: var(--store-muted); }
+.stockMeter[data-tone="danger"] .stockMeterLabel { color: var(--store-danger); }
+.stockMeter[data-tone="warning"] .stockMeterLabel { color: color-mix(in srgb, var(--store-accent) 65%, var(--store-text)); }
+.stockMeter[data-tone="success"] .stockMeterLabel { color: var(--store-success); }
+
+/* ---------------- Source captions / divider ----------------
+   Light-touch labels, not boxed section headers: "На складе" sits above
+   the shop's own rows, and the "Привезём под заказ" divider marks where
+   they end and the supplier rows begin — one continuous list throughout,
+   never two separately bordered blocks. */
+.sourceCaption { margin: 0; padding: 2px var(--store-space-2xs) var(--store-space-xs); color: var(--store-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.sourceDivider { margin-top: var(--store-space-sm); padding-top: var(--store-space-md); border-top: 1px solid var(--store-border); }
+
+/* ---------------- "Ещё N предложений" disclosure ----------------
+   Kept from the previous layout: extra stock lines and analogues fold away
+   behind a native <details>, so a part with a dozen offers doesn't turn
+   the list into a wall of rows. What changed is only what is inside it —
+   every revealed row is now a full `CatalogResultRow`, not an anonymous
+   price line. */
+.moreDetails { border-bottom: 1px solid var(--store-border); }
+.moreSummary { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 var(--store-space-2xs); color: var(--store-brand); font-size: 0.84rem; font-weight: var(--store-weight-bold); list-style: none; cursor: pointer; }
+.moreSummary::-webkit-details-marker { display: none; }
+.moreSummary::before {
+  content: "+";
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--store-radius-full);
+  background: color-mix(in srgb, var(--store-brand) 14%, var(--store-surface));
+  font-weight: var(--store-weight-black);
+  transition: transform var(--store-duration-fast) var(--store-ease);
+}
+.moreDetails[open] > .moreSummary::before { transform: rotate(45deg); }
+.moreBody { display: grid; }
+.moreBody .resultRow:last-child { border-bottom: 0; }
+
+.waitlistButton {
+  min-height: 44px;
+  padding: 0 var(--store-space-md);
+  border: 1px solid var(--store-brand);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-brand);
+  font-weight: var(--store-weight-bold);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.waitlistButton:hover { background: var(--store-brand); color: #f8faff; }
+
+/* Nothing may scroll horizontally at 320px — the row reflows to a stacked
+   layout instead of squashing five columns into a narrow phone screen. */
+@media (max-width: 640px) {
+  .resultRow { grid-template-columns: 56px minmax(0, 1fr); row-gap: 6px; }
+  .resultRowMedia { width: 56px; height: 56px; }
+  .resultRowStock,
+  .resultRowPrice,
+  .resultRowNote { grid-column: 1 / -1; }
+  .resultRowAction { grid-column: 1 / -1; }
+  .resultRowAction .waitlistButton,
+  .resultRowAction :global(.storefront-add-cart) { width: 100%; }
+}

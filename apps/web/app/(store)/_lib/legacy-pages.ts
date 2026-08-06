@@ -1,14 +1,33 @@
+import { STORE_LOCALITY, STORE_MAP_URL, STORE_STREET } from "../../site-config";
+
 export interface StoreContentSection {
   body: string;
   heading: string;
   links?: Array<{ href: string; label: string }>;
 }
 
+export interface StoreMapEmbed {
+  /** iframe title — a route/address link stays below it as a fallback. */
+  title: string;
+  src: string;
+}
+
 export interface StoreContentPage {
   intro: string;
+  /** Only the `/map` page sets this today. */
+  mapEmbed?: StoreMapEmbed;
   sections: StoreContentSection[];
   title: string;
 }
+
+/**
+ * Yandex's map-widget accepts the same `text=` address search as the
+ * yandex.ru/maps link already used elsewhere (`STORE_MAP_URL` in
+ * site-config.ts) — built from the same two constants here instead of
+ * duplicating a hand-encoded string, so the embedded pin and the "open in
+ * Яндекс Карты" fallback link can never point at different addresses.
+ */
+const MAP_EMBED_SRC = `https://yandex.ru/map-widget/v1/?z=16&text=${encodeURIComponent(`${STORE_LOCALITY}, ${STORE_STREET}`)}`;
 
 /**
  * Static storefront content served from `/[page]`.
@@ -111,12 +130,16 @@ export const storeContentPages: Record<string, StoreContentPage> = {
   map: {
     title: "Адрес магазина",
     intro: "Чернышевск, ул. Куйбышева, 118А. Ежедневно с 09:00 до 19:00.",
+    mapEmbed: {
+      title: `Карта: ${STORE_LOCALITY}, ${STORE_STREET}`,
+      src: MAP_EMBED_SRC,
+    },
     sections: [
       {
         heading: "Как добраться",
         body: "Магазин находится в Чернышевске Забайкальского края. Ориентируйтесь на улицу Куйбышева, дом 118А. Рядом есть место для парковки автомобиля.",
         links: [
-          { href: "https://yandex.ru/maps/?text=%D0%A7%D0%B5%D1%80%D0%BD%D1%8B%D1%88%D0%B5%D0%B2%D1%81%D0%BA%2C%20%D1%83%D0%BB.%20%D0%9A%D1%83%D0%B9%D0%B1%D1%8B%D1%88%D0%B5%D0%B2%D0%B0%2C%20118%D0%90", label: "Открыть в Яндекс Картах" },
+          { href: STORE_MAP_URL, label: "Открыть в Яндекс Картах" },
           PHONE_LINK,
         ],
       },

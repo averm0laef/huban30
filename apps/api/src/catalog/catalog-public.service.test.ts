@@ -8,6 +8,7 @@ import type { DatabaseService } from "../infrastructure/database.service.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { CatalogPublicController } from "./catalog-public.controller.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
+import { normalizeArticleNumber } from "./catalog-search-normalize.js";
 
 const PRODUCT_ID = "019bf9ea-0d3e-7def-9c9a-000000000010";
 const IMAGE_ID = "019bf9ea-0d3e-7def-8c9a-000000000011";
@@ -122,11 +123,34 @@ describe("CatalogPublicService", () => {
       100000,
       200000,
       "in_stock",
+      normalizeArticleNumber("фильтр"),
       "local",
       12,
       24,
       ["image/avif", "image/jpeg", "image/png", "image/webp"],
     ]);
+  });
+
+  it("ranks an exact normalised article match before a prefix match before fuzzy name relevance", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await service.products({ q: "w914-2" });
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    // Rank order lives in ORDER BY. The same LIKE also appears earlier in the
+    // WHERE clause, so searching the whole statement would measure the filter
+    // rather than the ranking and read the tiers as inverted.
+    const ranking = sql.slice(sql.lastIndexOf("ORDER BY"));
+    const exactTier = ranking.indexOf("product.sku_normalized=$8");
+    const prefixTier = ranking.indexOf("product.sku_normalized LIKE $8");
+    const fuzzyTier = ranking.indexOf("similarity(product.name");
+    const nameTiebreak = ranking.indexOf("lower(product.name) ASC");
+    expect(exactTier).toBeGreaterThan(-1);
+    expect(prefixTier).toBeGreaterThan(exactTier);
+    expect(fuzzyTier).toBeGreaterThan(prefixTier);
+    expect(nameTiebreak).toBeGreaterThan(fuzzyTier);
+    expect(parameters[7]).toBe(normalizeArticleNumber("w914-2"));
+    expect(parameters[7]).toBe("W9142");
   });
 
   it("escapes SQL LIKE wildcards without changing full-text search input", async () => {

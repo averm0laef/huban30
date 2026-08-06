@@ -1,10 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { AddToCartButton } from "../_components/cart-actions";
 import styles from "../_components/storefront.module.css";
 import { formatRubles } from "../_lib/catalog-api";
 import type { CatalogItem } from "../_lib/catalog-api";
+import { CatalogResultRow } from "./catalog-result-row";
+import resultsStyles from "./catalog-results.module.css";
 
 export type CatalogAvailability = "all" | "in_stock" | "out_of_stock";
 export type CatalogSort = "name" | "price_asc" | "price_desc" | "relevance";
@@ -34,20 +35,24 @@ export interface CatalogSearchPanelProps {
 export const CATALOG_SEARCH_FORM_ID = "catalog-search-form";
 
 /**
- * The search form + product grid shared by `/catalog` (site-wide) and every
- * `/catalog/[...slug]` category level — the category itself comes from the
- * route, not a query parameter, so a search here always combines with
- * whichever category the page already scoped `searchCatalog` to.
+ * The search form + the shop's own 1C rows, shared by `/catalog` (site-wide)
+ * and every `/catalog/[...slug]` category level — the category itself comes
+ * from the route, not a query parameter, so a search here always combines
+ * with whichever category the page already scoped `searchCatalog` to.
  *
  * Honest by construction: it only ever renders `items` the server actually
  * returned, and the caller must supply `emptyState` copy whenever there are
- * none — there is no generic "browse the catalog" grid to fall back to.
+ * none — there is no generic "browse the catalog" list to fall back to.
  *
- * When `query` is a real search (≥2 characters) the results are wrapped in
- * their own "На складе" heading — the shop's own 1C stock, deliberately
- * labelled and visually separate from the under-order block the page
- * renders below it (`SupplierResults`). A plain category browse (no query,
- * or the 1-character hint) renders unlabelled, exactly as before.
+ * Each row renders through `CatalogResultRow`, the exact same row component
+ * `supplier-results.tsx` uses for the under-order offers below it — that
+ * shared anatomy is what makes the two sources read as one continuous list
+ * rather than two differently-shaped blocks. When `query` is a real search
+ * (≥2 characters) the rows get a small "На складе" caption above them,
+ * deliberately light — not a boxed section — so the reader can still see
+ * where the shop's own stock ends and the under-order rows begin. A plain
+ * category browse (no query, or the 1-character hint) renders unlabelled,
+ * exactly as before.
  */
 export function CatalogSearchPanel({
   action, emptyState, errorMessage, items, query, sort,
@@ -67,27 +72,22 @@ export function CatalogSearchPanel({
   ) : (
     <>
       <p className={styles.catalogSummary} aria-live="polite">Найдено: {items.length}</p>
-      <section className={styles.productGrid} aria-label="Результаты поиска">
+      {isSearch ? <h2 className={resultsStyles.sourceCaption}>На складе</h2> : null}
+      <section aria-label="Результаты поиска" className={resultsStyles.resultsList}>
         {items.map((item) => {
           const available = item.availableQuantity > 0;
           return (
-            <article className={styles.productCard} key={item.id}>
-              <div className={styles.productVisual}>
-                <Image
-                  alt={item.primaryImage ? item.primaryImage.altText : `Нет фото товара «${item.name}»`}
-                  fill
-                  sizes="(max-width: 767px) 50vw, 240px"
-                  src={item.primaryImage ? item.primaryImage.url : "/catalog/no-photo.webp"}
-                />
-              </div>
-              <div className={styles.productBody}>
-                <p className={styles.productMeta}>{item.brand ? `${item.brand.name} · ` : ""}Артикул: {item.sku}</p>
-                <h2 className={styles.productName}><Link href={`/catalog/product/${encodeURIComponent(item.slug)}`}>{item.name}</Link></h2>
-                <p className={styles.productPrice}>{item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}</p>
-                <p className={`${styles.stock} ${available ? "" : styles.stockOut}`}>{available ? `В наличии: ${item.availableQuantity}` : "Нет в наличии"}</p>
-                <AddToCartButton disabled={!available || item.priceKopeks === null} productId={item.id} />
-              </div>
-            </article>
+            <CatalogResultRow
+              actionSlot={<AddToCartButton disabled={!available || item.priceKopeks === null} productId={item.id} />}
+              brand={item.brand ? item.brand.name : null}
+              imageAlt={item.primaryImage ? item.primaryImage.altText : `Нет фото товара «${item.name}»`}
+              imageUrl={item.primaryImage ? item.primaryImage.url : "/catalog/no-photo.webp"}
+              key={item.id}
+              name={<Link href={`/catalog/product/${encodeURIComponent(item.slug)}`}>{item.name}</Link>}
+              priceLabel={item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}
+              quantity={item.availableQuantity}
+              sku={item.sku}
+            />
           );
         })}
       </section>
@@ -113,12 +113,7 @@ export function CatalogSearchPanel({
         <button className={styles.submitButton} type="submit">Найти</button>
       </form>
 
-      {isSearch ? (
-        <section aria-labelledby="own-results-heading" className={styles.ownResultsSection}>
-          <h2 className={styles.resultsSourceHeading} id="own-results-heading">На складе</h2>
-          {body}
-        </section>
-      ) : body}
+      {body}
     </>
   );
 }

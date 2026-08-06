@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FocusEvent, ReactNode } from "react";
 
 import {
   MESSENGERS,
@@ -18,6 +19,7 @@ import type { MessengerLink } from "../../site-config";
 import { BrandLockup } from "./brand-mark";
 import { CartButton, CartPanel, MobileCartButton } from "./cart-actions";
 import { CartProvider } from "./cart-provider";
+import { isHeaderCollapsed } from "./header-scroll-collapse";
 import { HeaderSearchForm } from "./search-box";
 import { AccountNavigation, SessionNavigationProvider, useAccountDestination } from "./session-navigation";
 import styles from "./storefront.module.css";
@@ -169,7 +171,7 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
  * separate component trees, so cart/account state stays in sync everywhere
  * it appears:
  *
- * Desktop (≥768px), two rows:
+ * Desktop (≥768px), two rows, unchanged by the mobile work below:
  *  - `.headerTopRow` — thin utility line: shop address (links to the map),
  *    hours, the secondary links, then the help phone number and messenger
  *    icons pinned right.
@@ -179,8 +181,8 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
  * Mobile (<768px), five rows per the owner's reference walkthrough:
  *  1. `.mobileLinksRow` — "О компании" / "Контакты", left aligned.
  *  2. `.headerMainRow` again, but showing brand + `.mobileHeaderActions`
- *     (phone / cart with its count badge / account) instead of the desktop
- *     search + actions.
+ *     (just the phone now — see below) instead of the desktop search +
+ *     actions.
  *  3. `.mobileLocationRow` — a pin + "Чернышевск" on the left, a link to
  *     the shop's street address on the right.
  *  4. `.mobileSearchRow` — the same pill search field alone on its own row
@@ -190,11 +192,60 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
  * There is no separate "Каталог" button in either desktop row: the
  * reference reaches the catalog from the search field, the category tiles,
  * and — on a phone — the bottom tab bar.
+ *
+ * Cart and account dropped off the mobile panel (the owner's "убери
+ * корзину и аккаунт" ask) because `MobileNavigation`'s fixed bottom tab
+ * bar already carries both — same `<768px` breakpoint, so there is no
+ * width where either becomes unreachable.
+ *
+ * Scroll collapse (mobile only): past `HEADER_COLLAPSE_SCROLL_THRESHOLD_PX`
+ * every row but the search field collapses to nothing via the CSS
+ * grid-rows trick (`data-collapsed` below drives the `[data-collapsed]`
+ * selectors in storefront.module.css), leaving just the pinned search bar —
+ * see header-scroll-collapse.ts for why this needed a scroll listener
+ * instead of being pure CSS, and for the focus/reduced-motion guards.
  */
 function StoreHeader() {
+  const [scrollY, setScrollY] = useState(0);
+  const [focusWithin, setFocusWithin] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const tickingRef = useRef(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(query.matches);
+    const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (tickingRef.current) return;
+      tickingRef.current = true;
+      window.requestAnimationFrame(() => {
+        setScrollY(window.scrollY);
+        tickingRef.current = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const collapsed = isHeaderCollapsed({ focusWithin, reducedMotion, scrollY });
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false);
+  }
+
   return (
     <header className={styles.header}>
-      <div className={styles.headerInset}>
+      <div
+        className={styles.headerInset}
+        data-collapsed={collapsed ? "true" : undefined}
+        onFocus={() => setFocusWithin(true)}
+        onBlur={handleBlur}
+      >
         {/* Desktop row 1 (thin utility line). */}
         <div className={styles.headerTopRow}>
           <div className={styles.headerRowInner}>
@@ -256,11 +307,14 @@ function StoreHeader() {
               <AccountNavigation icon={<UserIcon />} />
             </div>
             <div className={styles.mobileHeaderActions}>
+              {/* Cart and account live on the fixed bottom tab bar only
+                  below 768px (see `MobileNavigation`) — kept off this
+                  panel so it has one job (call the shop) instead of
+                  duplicating controls that are always one thumb-reach
+                  away regardless of scroll position. */}
               <a href={STORE_PHONE_HREF} aria-label={`Позвонить в магазин: ${STORE_PHONE_DISPLAY}`}>
                 <PhoneIcon />
               </a>
-              <CartButton icon={<CartIcon />} />
-              <AccountNavigation icon={<UserIcon />} />
             </div>
           </div>
         </div>
@@ -302,8 +356,11 @@ function StoreFooter() {
       <div className={styles.footerGrid}>
         <section aria-labelledby="footer-store">
           <div className={styles.footerBrand}>
-            <span className={styles.footerWordmark} aria-hidden="true">АН-30</span>
-            <h2 id="footer-store">{SITE_LEGAL_NAME}</h2>
+            <BrandLockup className={styles.footerWordmark} tone="current" />
+            {/* BrandLockup's own <svg> is aria-hidden (it is a logotype
+                rendering of this exact name), so the section still needs a
+                real accessible name — visually hidden, not removed. */}
+            <h2 className={styles.visuallyHidden} id="footer-store">{SITE_LEGAL_NAME}</h2>
           </div>
           <p>Автозапчасти для легковых и грузовых автомобилей в {STORE_LOCALITY}. Цены и остатки — из 1С, самовывоз из магазина.</p>
           <ul className={styles.footerContactList}>

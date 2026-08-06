@@ -1,101 +1,43 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { ComponentType } from "react";
 
 import { STORE_HOURS, STORE_LOCALITY, STORE_PHONE, STORE_PHONE_DISPLAY, STORE_STREET } from "../../site-config";
 import { getCategoryTree } from "../_lib/catalog-api";
 import { categoryPath, findCategorySlugPath } from "../_lib/catalog-tree";
 import { PromoCarousel } from "./promo-carousel";
 import type { PromoSlide } from "./promo-carousel";
+import { HeaderSearchForm } from "./search-box";
+import { computeShopStatusNow } from "./shop-status";
+import { ShopStatusBlock } from "./shop-status-block";
 import styles from "./storefront.module.css";
 
 const STORE_PHONE_HREF = `tel:${STORE_PHONE}`;
 
-function ShieldCheckIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3.2 19 6v5.5c0 4.6-3 8.3-7 9.3-4-1-7-4.7-7-9.3V6Z" />
-      <polyline points="8.8 12.2 11 14.4 15.4 9.8" />
-    </svg>
-  );
-}
-
-function StoreIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9.5 4.5 4h15L21 9.5" />
-      <path d="M4 9.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5Z" />
-      <path d="M10 20v-5h4v5" />
-    </svg>
-  );
-}
-
-function TruckIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 7h11v10H2z" />
-      <path d="M13 10h4l4 3.2V17h-8" />
-      <circle cx="6" cy="18.5" r="1.6" />
-      <circle cx="16.5" cy="18.5" r="1.6" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <polyline points="12 7 12 12 15.5 14" />
-    </svg>
-  );
-}
-
-function VinIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      <path d="M8 9v4M11 9v4M14 9l-1.5 4" />
-    </svg>
-  );
-}
-
-function HeadsetIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 13v-1a8 8 0 0 1 16 0v1" />
-      <rect x="3" y="13" width="4" height="6" rx="1.5" />
-      <rect x="17" y="13" width="4" height="6" rx="1.5" />
-      <path d="M19 19v1a3 3 0 0 1-3 3h-2" />
-    </svg>
-  );
-}
-
 const promoSlides: PromoSlide[] = [
   {
     href: "/catalog",
-    src: "/banners/hero-banner.jpg",
+    src: "/banners/promo-parts.webp",
     title: "Нужная запчасть без лишней переписки",
     text: "Ищите по названию, артикулу или VIN — цену и остаток проверяет сервер перед оформлением.",
     cta: "Открыть каталог",
   },
   {
     href: "/expert-help",
-    src: "/banners/banner-expert.jpg",
+    src: "/banners/promo-brakes.webp",
     title: "Не уверены в артикуле?",
     text: "Сотрудник магазина поможет подобрать деталь по VIN или марке автомобиля.",
     cta: "Подбор с экспертом",
   },
   {
     href: "/delivery",
-    src: "/banners/banner-delivery.jpg",
+    src: "/banners/promo-warehouse.webp",
     title: "Самовывоз сегодня, доставка по договорённости",
     text: `${STORE_LOCALITY}, ${STORE_STREET} · ${STORE_HOURS}`,
     cta: "Условия доставки",
   },
   {
     href: "/catalog",
-    src: "/banners/banner-quality.jpg",
+    src: "/banners/promo-oil.webp",
     title: "Проверяем совместимость перед продажей",
     text: "Мы не отправляем деталь, пока не убедимся, что она подходит вашему автомобилю.",
     cta: "Смотреть каталог",
@@ -179,37 +121,54 @@ export async function CategoryGrid() {
   );
 }
 
-interface FeatureItem {
-  Icon: ComponentType;
-  title: string;
-  text: string;
-}
-
-const featureItems: FeatureItem[] = [
-  { Icon: VinIcon, title: "Поиск по VIN и артикулу", text: "Быстрый подбор без лишних переписок" },
-  { Icon: ShieldCheckIcon, title: "Гарантия качества", text: "Проверяем совместимость перед продажей" },
-  { Icon: StoreIcon, title: "Самовывоз", text: `${STORE_LOCALITY}, ${STORE_STREET}` },
-  { Icon: TruckIcon, title: "Доставка по согласованию", text: "Условия уточняет менеджер" },
-  { Icon: ClockIcon, title: "Ежедневно", text: STORE_HOURS.replace("Ежедневно ", "") },
-  { Icon: HeadsetIcon, title: "Помощь эксперта", text: "Поможем подобрать деталь" },
-];
-
-/** Ink-blue 2x3 feature panel, real service facts only — no invented stats. */
+/**
+ * Three blocks that each *do* something, replacing the old 2x3 grid of
+ * claim tiles ("Гарантия качества", "Ежедневно 09:00–19:00" next to a thin
+ * icon-in-a-circle) — the owner's call: those tiles only asserted facts a
+ * visitor had to take on faith, and the pictograms could belong to any
+ * shop in any industry. Each block below is either computed from a real
+ * clock, a real search, or a real link — nothing here is illustration:
+ *  1. `ShopStatusBlock` — open/closed right now, computed server-side
+ *     (see `computeShopStatusNow` below) and kept fresh client-side (see
+ *     shop-status-block.tsx) so an open tab never shows a stale answer.
+ *  2. The VIN/article field is the exact same `HeaderSearchForm` the
+ *     header uses — one search implementation, not a tile describing one.
+ *  3. The expert-help block is a real link to `/expert-help`, with the
+ *     one honest wait-time fact the shop has actually committed to.
+ * Photographs (an engine bay, a car in plan view — both already in
+ * `public/parts/`) stand in for icons where a real object reads better
+ * than an abstract glyph; the status block instead gets a plain colour
+ * dot, because that *is* the information, not decoration for it.
+ */
 export function FeaturePanel() {
+  const initialStatus = computeShopStatusNow();
+
   return (
     <section className={styles.featurePanel} aria-labelledby="feature-panel-title">
       <div className={styles.featurePanelInner}>
-        <p className={styles.featurePanelHead} id="feature-panel-title">Условия покупки</p>
-        <div className={styles.featureGrid}>
-          {featureItems.map((item) => (
-            <div className={styles.featureCard} key={item.title}>
-              <span className={styles.featureCardIcon}><item.Icon /></span>
-              <span>
-                <p className={styles.featureCardTitle}>{item.title}</p>
-                <p className={styles.featureCardText}>{item.text}</p>
-              </span>
+        <p className={styles.featurePanelHead} id="feature-panel-title">Магазин прямо сейчас</p>
+        <div className={styles.quickBlocks}>
+          <ShopStatusBlock initialStatus={initialStatus} />
+
+          <div className={styles.quickBlock}>
+            <div className={styles.quickBlockMedia}>
+              <Image alt="" height={90} src="/parts/engine-bay.png" width={160} />
             </div>
-          ))}
+            <p className={styles.quickBlockTitle}>Знаете VIN или артикул?</p>
+            <div className={styles.quickBlockSearch}>
+              <HeaderSearchForm id="home-quick-search-q" />
+            </div>
+            <p className={styles.quickBlockHint}>VIN указан в СТС, ПТС или на кузове автомобиля. На японских авто вместо VIN используйте номер рамы (frame).</p>
+          </div>
+
+          <div className={styles.quickBlock}>
+            <div className={styles.quickBlockMedia}>
+              <Image alt="" height={90} src="/parts/lc300-topdown.png" width={160} />
+            </div>
+            <p className={styles.quickBlockTitle}>Не уверены, какая деталь нужна?</p>
+            <p className={styles.quickBlockText}>Менеджер отвечает обычно за 10 минут — в чате или по телефону.</p>
+            <Link className={styles.quickBlockCta} href="/expert-help">Спросить эксперта</Link>
+          </div>
         </div>
       </div>
     </section>

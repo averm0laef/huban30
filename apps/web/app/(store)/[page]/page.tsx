@@ -33,6 +33,15 @@ export default async function LegacyPage({ params }: LegacyPageProps) {
         <h1>{content.title}</h1>
         <p>{content.intro}</p>
       </header>
+      {content.mapEmbed ? (
+        <iframe
+          className={styles.mapEmbed}
+          src={content.mapEmbed.src}
+          title={content.mapEmbed.title}
+          loading="lazy"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+      ) : null}
       {content.sections.map((section) => (
         <section key={section.heading}>
           <h2>{section.heading}</h2>

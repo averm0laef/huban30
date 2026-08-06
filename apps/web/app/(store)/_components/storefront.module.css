@@ -318,53 +318,24 @@
    flex child of `.headerRowInner`, exactly as before this wrapper existed. */
 .headerDesktopSearch { display: none; }
 
-/* Mobile-only row 2 content: brand stays put, this compact icon cluster
-   (phone / cart with its badge / account) takes the desktop search +
-   actions' place on the right. Hidden ≥768px alongside the other
-   mobile-only rows, see the 768px block further down. */
+/* Mobile-only row 2 content: brand stays put, this single call button
+   takes the desktop search + actions' place on the right — cart and
+   account moved to the fixed bottom tab bar (`.mobileNav`), so this row
+   has one job. Hidden ≥768px alongside the other mobile-only rows, see the
+   768px block further down. */
 .mobileHeaderActions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
-.mobileHeaderActions a,
-.mobileHeaderActions :global(.storefront-cart-button) {
-  position: relative;
+.mobileHeaderActions a {
   min-width: 44px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
   border-radius: var(--store-radius-sm);
-  background: transparent;
   color: var(--store-header-text);
   text-decoration: none;
-  cursor: pointer;
   transition: background var(--store-duration-fast) var(--store-ease);
 }
-.mobileHeaderActions a:hover,
-.mobileHeaderActions :global(.storefront-cart-button):hover { background: var(--store-header-control-bg-hover); }
-/* Same "shrink the caption to nothing, keep the count badge legible" trick
-   as `.headerActions` uses at its own icon-only tier (see the 899px block
-   further down) — `font-size: 0` collapses only the label text's own
-   glyphs, not the badge span nested inside it, which restates its size
-   explicitly below. */
-.mobileHeaderActions :global(.storefront-cart-button-label),
-.mobileHeaderActions :global(.storefront-account-label) { font-size: 0; }
-.mobileHeaderActions :global(.storefront-cart-count) {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
-  border: 2px solid var(--store-header-bg);
-  border-radius: var(--store-radius-full);
-  background: var(--store-accent);
-  color: var(--store-accent-text);
-  font-size: 0.62rem;
-  font-weight: var(--store-weight-black);
-  line-height: 11px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
+.mobileHeaderActions a:hover { background: var(--store-header-control-bg-hover); }
 
 .searchBox { position: relative; flex: 1 1 auto; min-width: 0; max-width: 860px; }
 
@@ -459,22 +430,27 @@
    `.mobileHeaderActions` above), locality + address link, the search field
    alone, and the accent CTA. All hidden ≥768px in the 768px block below,
    where the two-row desktop layout (`.headerTopRow` / `.headerMainRow`)
-   takes over instead. */
+   takes over instead.
+
+   Vertical padding on every row here is cut to the minimum that still
+   clears each row's own 44px target — the owner's "слишком высокая шапка,
+   пустое место" complaint — rather than the more generous desktop-derived
+   spacing the rows started with. */
 
 .mobileLinksRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLinksRow .headerRowInner { min-height: 40px; padding-block: max(10px, env(safe-area-inset-top)) 6px; gap: var(--store-space-md); }
+.mobileLinksRow .headerRowInner { min-height: 40px; padding-block: max(6px, env(safe-area-inset-top)) 4px; gap: var(--store-space-md); }
 
 .mobileLocationRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLocationRow .headerRowInner { min-height: 40px; padding-block: 6px; justify-content: space-between; flex-wrap: wrap; row-gap: 2px; }
+.mobileLocationRow .headerRowInner { min-height: 36px; padding-block: 4px; justify-content: space-between; flex-wrap: wrap; row-gap: 2px; }
 .mobileLocationText { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.82rem; line-height: 1.3; }
 .mobileLocationText svg { flex: 0 0 auto; }
-.mobileAddressLink { min-height: 32px; display: inline-flex; align-items: center; color: var(--store-header-text); font-size: 0.8rem; font-weight: var(--store-weight-bold); text-decoration: underline; text-underline-offset: 2px; }
+.mobileAddressLink { min-height: 44px; display: inline-flex; align-items: center; color: var(--store-header-text); font-size: 0.8rem; font-weight: var(--store-weight-bold); text-decoration: underline; text-underline-offset: 2px; }
 
 .mobileSearchRow { display: block; }
-.mobileSearchRow .headerRowInner { padding-block: 10px; }
+.mobileSearchRow .headerRowInner { padding-block: 8px; }
 
 .mobileExpertRow { display: block; }
-.mobileExpertRow .headerRowInner { padding-block: 4px 16px; }
+.mobileExpertRow .headerRowInner { padding-block: 4px 10px; }
 .mobileExpertButton {
   display: inline-flex;
   align-items: center;
@@ -593,7 +569,12 @@ button.promoControl {
   position: relative;
   flex: 0 0 100%;
   min-width: 0;
-  aspect-ratio: 16 / 10;
+  /* Wide letterbox, not the old near-square 16/10 the owner called too
+     tall. The source banners are 1600x450 (~16/4.5) so a 16/6 crop stays
+     inside the image's own frame — no empty bars — while cover-cropping a
+     modest ~25% off the sides; see the 767px block for the phone version,
+     capped shorter still relative to width at 16/9. */
+  aspect-ratio: 16 / 6;
   scroll-snap-align: start;
   display: block;
   overflow: hidden;
@@ -654,15 +635,48 @@ button.promoControl {
 .sectionHead p { margin: 10px 0 0; color: var(--store-muted); font-size: 1rem; line-height: 1.55; }
 
 /* Ink-blue feature panel, like the header band, so it reads as a distinct
-   "signage" surface against the rest of the (light) page. */
+   "signage" surface against the rest of the (light) page. Three blocks
+   that each do something (live open/closed status, a real VIN/article
+   search, a real link to expert help — see `FeaturePanel` in
+   home-sections.tsx) replaced the old 2x3 grid of icon-in-a-circle claim
+   tiles here; `.quickBlock*` below is that replacement. */
 .featurePanel { background: var(--store-header-bg-strong); color: var(--store-header-text); }
 .featurePanelInner { width: var(--store-container); margin: 0 auto; padding: clamp(28px, 5vw, 48px) 0; }
 .featurePanelHead { margin: 0 0 var(--store-space-lg); color: var(--store-header-muted); font-size: 0.76rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
-.featureGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--store-space-md); }
-.featureCard { display: flex; align-items: center; gap: var(--store-space-sm); padding: var(--store-space-md); border: 1px solid var(--store-header-border); border-radius: var(--store-radius); background: var(--store-header-control-bg); }
-.featureCardIcon { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--store-radius-sm); background: var(--store-header-control-bg-hover); color: var(--store-accent); }
-.featureCardTitle { margin: 0; font-size: 0.92rem; font-weight: var(--store-weight-bold); line-height: 1.3; }
-.featureCardText { margin: 2px 0 0; color: var(--store-header-muted); font-size: 0.8rem; line-height: 1.35; }
+
+.quickBlocks { display: grid; grid-template-columns: 1fr; gap: var(--store-space-md); }
+.quickBlock { display: flex; flex-direction: column; align-items: flex-start; gap: var(--store-space-2xs); padding: var(--store-space-lg); border: 1px solid var(--store-header-border); border-radius: var(--store-radius); background: var(--store-header-control-bg); }
+
+.quickBlockMedia { overflow: hidden; border-radius: var(--store-radius-sm); }
+.quickBlockMedia img { display: block; width: 84px; height: 47px; object-fit: cover; }
+
+.quickBlockTitle { margin: 0; font-size: 1.02rem; font-weight: var(--store-weight-black); line-height: 1.3; }
+.quickBlockText { margin: 0; color: var(--store-header-muted); font-size: 0.88rem; line-height: 1.4; }
+.quickBlockHint { margin: 2px 0 0; color: var(--store-header-muted); font-size: 0.78rem; line-height: 1.42; }
+
+/* Live status dot — real-time state, not decoration, so it stays a plain
+   colour rather than an icon-in-a-circle: grey while closed, the shop's
+   `--store-success` green the instant `ShopStatusBlock` computes "open". */
+.quickBlockStatusLine { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.statusDot { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%; background: var(--store-header-muted); }
+.statusDot[data-open="true"] { background: var(--store-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--store-success) 30%, transparent); }
+.quickBlockStatusDetail { color: var(--store-header-muted); font-size: 0.88rem; }
+
+.quickBlockSearch { width: 100%; margin: 2px 0; }
+
+.quickBlockLink,
+.quickBlockCta {
+  align-self: flex-start;
+  margin-top: auto;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: var(--store-weight-bold);
+  text-decoration: none;
+}
+.quickBlockLink { padding-top: var(--store-space-2xs); color: var(--store-accent); font-size: 0.88rem; text-decoration: underline; text-underline-offset: 2px; }
+.quickBlockCta { justify-content: center; padding: 0 22px; border-radius: var(--store-radius-full); background: var(--store-accent); color: var(--store-accent-text); font-size: 0.88rem; transition: filter var(--store-duration-fast) var(--store-ease); }
+.quickBlockCta:hover { filter: brightness(1.06); }
 
 .catalogTeaser { width: var(--store-container); margin: 0 auto; }
 .catalogTeaserEmpty { display: flex; flex-wrap: wrap; align-items: center; gap: var(--store-space-xl); padding: clamp(28px, 4vw, 44px); border: 1px dashed var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
@@ -903,6 +917,11 @@ button.promoControl {
 .contentPage li { color: var(--store-muted); line-height: 1.65; }
 .contentPage a { color: var(--store-brand); }
 
+/* /map's real Yandex embed (`/[page]/page.tsx`) — the text address and the
+   "Открыть в Яндекс Картах" link stay in the section below it as a
+   fallback, so the page still works if the iframe is blocked or slow. */
+.mapEmbed { width: 100%; height: min(60vh, 420px); margin: var(--store-space-lg) 0; border: 1px solid var(--store-border); border-radius: var(--store-radius); }
+
 .visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .eyebrow { margin: 0 0 9px; color: var(--store-brand); font-size: 0.76rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
 .mutedText,
@@ -1060,9 +1079,11 @@ button.promoControl {
 .footer { margin-top: auto; background: var(--store-header-bg-strong); color: var(--store-header-text); }
 .footerGrid { width: var(--store-container); margin: 0 auto; padding: var(--store-space-2xl) 0 var(--store-space-xl); display: grid; grid-template-columns: 1.35fr 1fr 1fr 0.85fr; gap: var(--store-space-xl); }
 .footerBrand { display: flex; align-items: center; gap: var(--store-space-sm); margin-bottom: var(--store-space-md); }
-.footerWordmark { color: var(--store-header-text); font-size: 1.65rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
+/* `.footerWordmark` now sizes the real `<BrandLockup>` mark (see
+   store-shell.tsx) instead of styling a plain-text wordmark — the section's
+   accessible name moved to a visually-hidden `<h2>` alongside it. */
+.footerWordmark { height: 30px; width: auto; display: block; color: var(--store-header-text); }
 .footerGrid h2 { margin: 0 0 var(--store-space-sm); color: var(--store-header-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
-.footerBrand h2 { margin: 0; color: var(--store-header-text); font-size: 1.05rem; letter-spacing: var(--store-tracking-tight); text-transform: none; }
 .footerGrid p { margin: 6px 0; color: var(--store-header-muted); font-size: 0.9rem; line-height: 1.5; }
 .footerGrid nav,
 .footerGrid section { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -1131,17 +1152,16 @@ button.promoControl {
   .mobileHeaderActions { display: none; }
   .headerInset { margin-inline: 16px; }
   .brandLockup { height: 40px; }
+  .quickBlocks { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
 }
 
 @media (min-width: 1024px) {
   .headerInset { margin-inline: 22px; }
   .brandLockup { height: 44px; }
-  /* 4 across for the category tiles and a 3x2 (3 columns, 2 rows) grid for
-     the honest-facts panel — both were fixed at their phone/tablet column
-     counts before, which is the "stretched mobile layout" the desktop
+  /* 4 across for the category tiles — fixed at its phone/tablet column
+     count before, which is the "stretched mobile layout" the desktop
      pass needs to undo. */
   .categoryGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .featureGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (min-width: 1280px) {
@@ -1200,18 +1220,73 @@ button.promoControl {
 }
 
 @media (max-width: 767px) {
-  /* Row 2 here is brand + the compact phone/cart/account cluster only (the
-     desktop search field is hidden — see `.headerDesktopSearch` — in favour
-     of its own full-width row, `.mobileSearchRow`, further down the panel).
-     The safe-area top padding that used to live on this row moved to
-     `.mobileLinksRow`, now the panel's actual first row. */
+  /* Row 2 here is brand + the compact phone cluster only (the desktop
+     search field is hidden — see `.headerDesktopSearch` — in favour of its
+     own full-width row, `.mobileSearchRow`, further down the panel). The
+     safe-area top padding that used to live on this row moved to
+     `.mobileLinksRow`, now the panel's actual first row. Height cut to
+     match the other rows' hard-trimmed padding, per the file-header
+     comment above `.mobileLinksRow`. */
   .headerMainRow .headerRowInner {
     gap: var(--store-space-2xs);
-    min-height: 56px;
-    padding-block: 8px;
+    min-height: 44px;
+    padding-block: 6px;
   }
+
+  /* Scroll collapse: `data-collapsed` is set by store-shell.tsx once the
+     page has scrolled past a small threshold (header-scroll-collapse.ts) —
+     every row but the search field shrinks away, leaving just the search
+     bar pinned under `.header`'s own `position: sticky`. Each collapsing
+     row becomes a one-track grid so `grid-template-rows` can animate
+     `1fr -> 0fr` — this tracks the row's real (possibly safe-area-inflated)
+     content height instead of guessing a max-height in pixels, so nothing
+     ever gets clipped mid-transition. `min-height: 0` on the grid item is
+     required for it to actually shrink past its content size; `overflow:
+     hidden` there (not on the row itself, which still owns the border)
+     keeps the content from spilling out while it does. Reduced-motion and
+     focus-within visitors never see `data-collapsed="true"` at all (see
+     isHeaderCollapsed), so nothing here needs its own motion guard. */
+  .mobileLinksRow,
+  .headerMainRow,
+  .mobileLocationRow,
+  .mobileExpertRow {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--store-duration-slow) var(--store-ease);
+  }
+  .mobileLinksRow > .headerRowInner,
+  .headerMainRow > .headerRowInner,
+  .mobileLocationRow > .headerRowInner,
+  .mobileExpertRow > .headerRowInner {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .headerInset[data-collapsed="true"] .mobileLinksRow,
+  .headerInset[data-collapsed="true"] .headerMainRow,
+  .headerInset[data-collapsed="true"] .mobileLocationRow,
+  .headerInset[data-collapsed="true"] .mobileExpertRow {
+    grid-template-rows: 0fr;
+    /* Flips to hidden only once the collapse animation finishes, so a
+       keyboard/AT user tabbing away doesn't lose the row mid-shrink, but
+       expanding again (the un-collapsed rule below has no delay) restores
+       it immediately. Belt-and-braces alongside `overflow: hidden` +
+       `min-height: 0` above: a zero-height row already keeps its content
+       out of the tab order in every evergreen browser, this just makes it
+       explicit and out of the accessibility tree too. */
+    visibility: hidden;
+    transition: grid-template-rows var(--store-duration-slow) var(--store-ease), visibility 0s linear var(--store-duration-slow);
+  }
+  .headerInset[data-collapsed="true"] .mobileLinksRow,
+  .headerInset[data-collapsed="true"] .mobileLocationRow {
+    border-bottom-color: transparent;
+    transition: grid-template-rows var(--store-duration-slow) var(--store-ease), visibility 0s linear var(--store-duration-slow), border-color var(--store-duration-slow) var(--store-ease);
+  }
+
   .searchForm svg { margin-left: var(--store-space-sm); }
   .promo { width: 100%; padding: 0 16px; }
+  /* Shorter still on a phone, relative to the narrower width — never
+     taller than 16/9 (see the base rule's 16/6 for ≥768px). */
+  .promoSlide { aspect-ratio: 16 / 9; }
   .categorySection,
   .featurePanelInner,
   .catalogTeaser,
@@ -1220,7 +1295,6 @@ button.promoControl {
   .categoryTile { padding: var(--store-space-md) var(--store-space-2xs); }
   .categoryTileMedia { max-width: 64px; }
   .categoryTileLabel { font-size: 0.76rem; }
-  .featureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .helpBlock { grid-template-columns: 1fr; }
   .helpBlockMedia { aspect-ratio: 16 / 9; }
   .main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
