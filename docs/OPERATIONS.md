@@ -48,12 +48,36 @@ sudo AN30_SECRETS_DIR=/etc/an30/secrets docker compose --env-file /etc/an30/stag
 
 ## Обновление
 
+Исходники распаковываются в **чистый** каталог, который затем подменяет
+рабочий. Распаковка поверх существующего дерева (`tar xzf -C /opt/an30/app`)
+для обновления непригодна: `tar` записывает то, что есть в архиве, но не
+удаляет то, чего в нём больше нет. Файл, удалённый из репозитория, остаётся
+на сервере навсегда и продолжает отдаваться — так на витрине несколько недель
+жили удалённые баннеры, а `COPY` в `apps/web/Dockerfile` собирался с давно
+удалённого пути, из-за чего поломка сборки не проявлялась до чистого сервера.
+
 ```bash
+# 1. Архив с машины разработчика
+git archive --format=tar HEAD | gzip > /tmp/an30-src.tar.gz
+scp /tmp/an30-src.tar.gz an30-deploy@185.177.216.238:/tmp/
+
+# 2. Распаковка в чистое дерево и подмена. Предыдущее остаётся как app.old —
+#    это и есть быстрый откат: mv app.old app && пересборка.
+ssh an30-deploy@185.177.216.238 'set -e
+  cd /opt/an30
+  rm -rf app.new && mkdir -p app.new
+  tar xzf /tmp/an30-src.tar.gz -C app.new
+  rm -rf app.old && mv app app.old && mv app.new app'
+
+# 3. Сборка и запуск
 cd /opt/an30/app
 sudo AN30_SECRETS_DIR=/etc/an30/secrets docker compose --env-file /etc/an30/staging.env up -d --build
 sudo AN30_SECRETS_DIR=/etc/an30/secrets docker compose --env-file /etc/an30/staging.env ps
 curl -fsS https://staging.an30.ru/health/ready
 ```
+
+Проверка, что удаление действительно доехало: запросить любой заведомо
+удалённый файл и убедиться, что отдаётся 404, а не 200 из старого образа.
 
 Перед обновлением production обязательно запускается внеочередная резервная
 копия: `sudo systemctl start an30-backup.service`.
