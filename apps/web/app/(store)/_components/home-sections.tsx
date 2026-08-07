@@ -4,6 +4,7 @@ import Link from "next/link";
 import { STORE_HOURS, STORE_LOCALITY, STORE_PHONE, STORE_PHONE_DISPLAY, STORE_STREET } from "../../site-config";
 import { getCategoryTree } from "../_lib/catalog-api";
 import { categoryPath, findCategorySlugPath } from "../_lib/catalog-tree";
+import { BrandLockup } from "./brand-mark";
 import { PromoCarousel } from "./promo-carousel";
 import type { PromoSlide } from "./promo-carousel";
 import { HeaderSearchForm } from "./search-box";
@@ -135,10 +136,12 @@ export async function CategoryGrid() {
  *     header uses — one search implementation, not a tile describing one.
  *  3. The expert-help block is a real link to `/expert-help`, with the
  *     one honest wait-time fact the shop has actually committed to.
- * Photographs (an engine bay, a car in plan view — both already in
- * `public/parts/`) stand in for icons where a real object reads better
- * than an abstract glyph; the status block instead gets a plain colour
- * dot, because that *is* the information, not decoration for it.
+ * None of the three carries a photograph. A cropped engine bay or a
+ * top-down car shot only reads at the size a photo needs to stay honest —
+ * shrunk to fit a block this size, both turned into a grey smear, which is
+ * worse than no image at all. The status block's plain colour dot proved
+ * the point: the fact itself is the content, so the other two blocks were
+ * brought in line rather than given a matching illustration.
  */
 export function FeaturePanel() {
   const initialStatus = computeShopStatusNow();
@@ -151,9 +154,6 @@ export function FeaturePanel() {
           <ShopStatusBlock initialStatus={initialStatus} />
 
           <div className={styles.quickBlock}>
-            <div className={styles.quickBlockMedia}>
-              <Image alt="" height={90} src="/parts/engine-bay.png" width={160} />
-            </div>
             <p className={styles.quickBlockTitle}>Знаете VIN или артикул?</p>
             <div className={styles.quickBlockSearch}>
               <HeaderSearchForm id="home-quick-search-q" />
@@ -162,9 +162,6 @@ export function FeaturePanel() {
           </div>
 
           <div className={styles.quickBlock}>
-            <div className={styles.quickBlockMedia}>
-              <Image alt="" height={90} src="/parts/lc300-topdown.png" width={160} />
-            </div>
             <p className={styles.quickBlockTitle}>Не уверены, какая деталь нужна?</p>
             <p className={styles.quickBlockText}>Менеджер отвечает обычно за 10 минут — в чате или по телефону.</p>
             <Link className={styles.quickBlockCta} href="/expert-help">Спросить эксперта</Link>
@@ -200,12 +197,21 @@ export function CatalogTeaser() {
   );
 }
 
-/** Light help block with a full-width primary CTA, per the reference pattern. */
+/**
+ * Light help block with a full-width primary CTA, per the reference pattern.
+ *
+ * The media slot used to hold a stock-photo banner (`banner-catalog.jpg`) —
+ * pulled after the owner rejected it as AI slop: garbled fake text on the
+ * oil bottles, and shelving in a competitor's red/orange, not ours. Rather
+ * than commission or fake another photograph, the slot is now a CSS panel in
+ * the shop's own ink-blue and its own logotype (`BrandLockup`, already used
+ * on the header and footer) — brand signage instead of invented scenery.
+ */
 export function ChooseHelpBlock() {
   return (
     <section className={styles.helpBlock} aria-labelledby="help-block-title">
       <div className={styles.helpBlockMedia}>
-        <Image alt="" fill sizes="(max-width: 767px) 100vw, 500px" src="/banners/banner-catalog.jpg" />
+        <BrandLockup className={styles.helpBlockMark} tone="current" />
       </div>
       <div className={styles.helpBlockBody}>
         <h2 id="help-block-title">Не знаете, какую запчасть выбрать?</h2>

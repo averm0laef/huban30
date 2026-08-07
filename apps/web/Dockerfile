@@ -12,7 +12,6 @@ RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
 COPY tsconfig.base.json ./tsconfig.base.json
 COPY apps/web ./apps/web
 COPY packages/contracts ./packages/contracts
-COPY src/assets/hero-banner.jpg ./src/assets/hero-banner.jpg
 RUN pnpm --filter @an30/contracts build && pnpm --filter @an30/web build
 
 FROM node:24.12.0-alpine AS runtime
