@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -11,6 +12,8 @@ import type { PoolClient } from "pg";
 
 import {
   AdminPendingTokenQuerySchema,
+  REGISTRATION_PERSONAL_DATA_CONSENT_TEXT,
+  REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
   RoleSchema,
   type AdminPendingTokenPurpose,
   type Role,
@@ -18,6 +21,7 @@ import {
 
 import { DatabaseService, type DatabaseExecutor } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
+import { normalizeConsentUserAgent } from "../security/consent-evidence.js";
 import { CryptoService } from "../security/crypto.service.js";
 import { PasswordService } from "../security/password.service.js";
 import { TotpService } from "../security/totp.service.js";
@@ -83,6 +87,7 @@ export class AuthService {
   private readonly adminTokenLookupEnabled: boolean;
   private readonly appOrigin: string;
   private readonly debugTokens: boolean;
+  private readonly legalDocumentsApproved: boolean;
 
   constructor(
     config: ConfigService,
@@ -96,9 +101,21 @@ export class AuthService {
     this.adminTokenLookupEnabled = config.getOrThrow<boolean>("AUTH_ADMIN_TOKEN_LOOKUP");
     this.appOrigin = config.getOrThrow<string>("APP_ORIGIN");
     this.debugTokens = config.getOrThrow<boolean>("AUTH_DEBUG_TOKENS");
+    this.legalDocumentsApproved = config.getOrThrow<boolean>("LEGAL_DOCUMENTS_APPROVED");
   }
 
   async register(input: RegisterDto, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+    if (!this.legalDocumentsApproved) {
+      throw new ServiceUnavailableException(
+        "Регистрация временно недоступна до утверждения обязательных документов",
+      );
+    }
+    if (
+      input.personalDataConsent !== true
+      || input.personalDataConsentVersion !== REGISTRATION_PERSONAL_DATA_CONSENT_VERSION
+    ) {
+      throw new BadRequestException("Требуется актуальное согласие на обработку персональных данных");
+    }
     assertStrongPassword(input.password, input.email);
     const passwordHash = await this.passwords.hash(input.password);
     const rawToken = this.crypto.randomToken();
@@ -138,6 +155,24 @@ export class AuthService {
       if (!userId) throw new Error("Registration did not resolve a user identifier");
 
       await client.query(
+        `
+          INSERT INTO app.personal_data_consents
+            (user_id,purpose,policy_version,document_path,consent_text,
+             accepted_at,ip_address,user_agent)
+          VALUES
+            ($1,'account_registration',$2,'/personal-data-consent',$3,
+             clock_timestamp(),$4,$5)
+        `,
+        [
+          userId,
+          REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+          REGISTRATION_PERSONAL_DATA_CONSENT_TEXT,
+          metadata.ipAddress || null,
+          normalizeConsentUserAgent(metadata.userAgent),
+        ],
+      );
+
+      await client.query(
         `UPDATE app.email_verification_tokens SET used_at = clock_timestamp()
          WHERE user_id = $1 AND used_at IS NULL`,
         [userId],
@@ -161,6 +196,7 @@ export class AuthService {
         entityId: userId,
         entityType: "user",
         ipAddress: metadata.ipAddress,
+        metadata: { personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION },
         userAgent: metadata.userAgent,
       }, client);
       return rawToken;

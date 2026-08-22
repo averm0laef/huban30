@@ -12,8 +12,9 @@ import {
 } from "react";
 
 import { errorText, readSession, type SessionView } from "../_lib/storefront-api";
-import { ChatAttachmentImage } from "./attachment-preview";
+import { ChatAttachmentMedia } from "./attachment-preview";
 import {
+  CHAT_ATTACHMENT_ACCEPT,
   CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
   STATUS_LABELS,
@@ -21,7 +22,7 @@ import {
   formatDate,
   isChatThread,
   isOwnMessage,
-  isPreviewableImage,
+  isPreviewableMedia,
   parseStoredGuestThreads,
   senderLabel,
   serializeGuestThreads,
@@ -73,10 +74,16 @@ export function ChatClient() {
     downloadError,
     fileError,
     filePending,
+    hasOlderMessages,
     historyError,
     historyLoading,
+    loadOlderMessages,
     lastStaffReadMessageId,
     messages,
+    newerMessageCount,
+    olderHistoryError,
+    olderHistoryLoading,
+    renderedMessages,
     resetFileAttempt,
     resetSendAttempt,
     retryHistory,
@@ -84,7 +91,9 @@ export function ChatClient() {
     sendError,
     sendMessage: submitDraft,
     sendPending,
+    showLatestMessages,
     uploadAttachment: submitAttachment,
+    viewingLatest,
   } = useChatThread(selectedThread, viewerKind, true);
 
   const persistGuestThreads = useCallback((next: ChatThread[]) => {
@@ -162,8 +171,24 @@ export function ChatClient() {
   }, [viewer.kind]);
 
   useEffect(() => {
-    messageEnd.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+    if (viewingLatest) messageEnd.current?.scrollIntoView({ block: "end" });
+  }, [renderedMessages, viewingLatest]);
+
+  async function showOlderMessages(): Promise<void> {
+    const container = messageEnd.current?.parentElement;
+    const containerTop = container?.getBoundingClientRect().top ?? 0;
+    const anchor = container
+      ? [...container.querySelectorAll<HTMLElement>("[data-chat-message-id]")]
+        .find((item) => item.getBoundingClientRect().bottom >= containerTop)
+      : null;
+    const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+    await loadOlderMessages();
+    window.requestAnimationFrame(() => {
+      if (!container || !anchor) return;
+      const currentAnchor = container.querySelector<HTMLElement>(`[data-chat-message-id="${anchor.dataset.chatMessageId}"]`);
+      if (currentAnchor) container.scrollTop += currentAnchor.getBoundingClientRect().top - anchorTop;
+    });
+  }
 
   async function createThread(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -320,15 +345,58 @@ export function ChatClient() {
               {connectionError ? <div className={styles.inlineError} role="alert">{connectionError}</div> : null}
               {historyError ? <div className={styles.historyError} role="alert"><strong>История не загружена</strong><span>{historyError}</span><button type="button" onClick={retryHistory}>Повторить</button></div> : null}
               {historyLoading ? <div className={styles.historyState} role="status">Загружаем историю</div> : (
-                <div className={styles.messages} role="log" aria-live="polite" aria-relevant="additions text">
-                  {messages.length === 0 ? <div className={styles.emptyMessages}><strong>Сообщений пока нет</strong><span>Напишите вопрос, и сотрудник ответит в этом чате.</span></div> : null}
-                  {messages.map((message) => (
-                    <article className={styles.message} data-own={isOwnMessage(message) || undefined} key={message.id}>
+                <div
+                  aria-busy={olderHistoryLoading || undefined}
+                  aria-live={viewingLatest ? "polite" : "off"}
+                  aria-relevant="additions text"
+                  className={styles.messages}
+                  id="chat-message-log"
+                  role="log"
+                >
+                  {hasOlderMessages || !viewingLatest ? (
+                    <div className={styles.historyControls}>
+                      {hasOlderMessages ? (
+                        <button
+                          aria-controls="chat-message-log"
+                          disabled={olderHistoryLoading}
+                          onClick={() => void showOlderMessages()}
+                          type="button"
+                        >
+                          {olderHistoryLoading
+                            ? "Загружаем предыдущие сообщения..."
+                            : olderHistoryError
+                              ? "Повторить загрузку предыдущих"
+                              : "Показать предыдущие сообщения"}
+                        </button>
+                      ) : <span>Это начало переписки.</span>}
+                      {!viewingLatest ? (
+                        <button aria-controls="chat-message-log" onClick={showLatestMessages} type="button">
+                          {newerMessageCount > 0
+                            ? `К последним сообщениям (${newerMessageCount})`
+                            : "К последним сообщениям"}
+                        </button>
+                      ) : null}
+                      {olderHistoryError ? <span role="alert">{olderHistoryError}</span> : null}
+                    </div>
+                  ) : null}
+                  {messages.length === 0 ? (
+                    <div className={styles.emptyMessages}>
+                      <strong>Здравствуйте! Вы в чате магазина АН-30</strong>
+                      <span>Укажите VIN или марку, модель и год автомобиля, название нужной детали. Фото или короткое видео помогут показать деталь и место установки.</span>
+                    </div>
+                  ) : null}
+                  {renderedMessages.map((message) => (
+                    <article
+                      className={styles.message}
+                      data-chat-message-id={message.id}
+                      data-own={isOwnMessage(message) || undefined}
+                      key={message.id}
+                    >
                       <header><strong>{senderLabel(message.senderKind)}</strong><time dateTime={message.createdAt}>{formatDate(message.createdAt)}</time></header>
                       {message.body && message.messageType !== "attachment" ? <p>{message.body}</p> : null}
                       {message.attachments.map((attachment) => (
-                        isPreviewableImage(attachment) && selectedThread && viewerKind ? (
-                          <ChatAttachmentImage
+                        isPreviewableMedia(attachment) && selectedThread && viewerKind ? (
+                          <ChatAttachmentMedia
                             attachment={attachment}
                             key={attachment.id}
                             onDownload={() => void downloadAttachment(attachment)}
@@ -372,9 +440,9 @@ export function ChatClient() {
                     </form>
                     {sendError ? <div className={styles.inlineError} role="alert">{sendError}</div> : null}
                     <div className={styles.uploadRow}>
-                      <label htmlFor="chat-attachment">Изображение JPEG, PNG или WebP до 5 МБ</label>
+                      <label htmlFor="chat-attachment">Фото до 5 МБ. Видео до 15 МБ и до 2 минут</label>
                       <input
-                        accept="image/jpeg,image/png,image/webp"
+                        accept={CHAT_ATTACHMENT_ACCEPT}
                         id="chat-attachment"
                         onChange={(event) => {
                           setSelectedFile(event.target.files?.[0] ?? null);
@@ -383,7 +451,7 @@ export function ChatClient() {
                         ref={fileInput}
                         type="file"
                       />
-                      <button disabled={!selectedFile || filePending || !online} onClick={() => void uploadAttachment()} type="button">{filePending ? "Проверяем и загружаем..." : fileError ? "Повторить загрузку" : "Отправить изображение"}</button>
+                      <button disabled={!selectedFile || filePending || !online} onClick={() => void uploadAttachment()} type="button">{filePending ? "Проверяем и загружаем..." : fileError ? "Повторить загрузку" : "Отправить фото или видео"}</button>
                     </div>
                     {fileError ? <div className={styles.inlineError} role="alert">{fileError}</div> : null}
                   </>

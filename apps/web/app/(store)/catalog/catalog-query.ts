@@ -1,0 +1,102 @@
+export type CatalogAvailability = "all" | "in_stock" | "out_of_stock";
+export type CatalogSort = "name" | "price_asc" | "price_desc" | "relevance";
+
+export const CATALOG_PAGE_SIZE = 24;
+const MAX_PAGE = 201;
+const MAX_PRICE_RUBLES = Math.floor(Number.MAX_SAFE_INTEGER / 100);
+const PUBLIC_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+
+export interface CatalogPageQuery {
+  availability: CatalogAvailability;
+  brands: string[];
+  maxPriceRubles: number | null;
+  minPriceRubles: number | null;
+  page: number;
+  priceRangeValid: boolean;
+  query: string;
+  sort: CatalogSort;
+}
+
+type SearchParameters = Record<string, string | string[] | undefined>;
+
+function first(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+function values(value: string | string[] | undefined): string[] {
+  return Array.isArray(value) ? value : value === undefined ? [] : [value];
+}
+
+function boundedInteger(value: string, maximum: number): number | null {
+  const normalized = value.trim();
+  if (!/^\d+$/u.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) && parsed <= maximum ? parsed : null;
+}
+
+export function parseCatalogPageQuery(parameters: SearchParameters): CatalogPageQuery {
+  const availabilityValue = first(parameters.availability);
+  const sortValue = first(parameters.sort);
+  const minPriceRubles = boundedInteger(first(parameters.minPrice), MAX_PRICE_RUBLES);
+  const maxPriceRubles = boundedInteger(first(parameters.maxPrice), MAX_PRICE_RUBLES);
+  const requestedPage = boundedInteger(first(parameters.page), MAX_PAGE);
+  const brands = Array.from(new Set(
+    values(parameters.brand)
+      .map((brand) => brand.trim().toLowerCase())
+      .filter((brand) => brand.length <= 180 && PUBLIC_SLUG.test(brand)),
+  )).slice(0, 20);
+
+  return {
+    availability: availabilityValue === "in_stock" || availabilityValue === "out_of_stock"
+      ? availabilityValue
+      : "all",
+    brands,
+    maxPriceRubles,
+    minPriceRubles,
+    page: requestedPage && requestedPage > 0 ? requestedPage : 1,
+    priceRangeValid: minPriceRubles === null || maxPriceRubles === null
+      || minPriceRubles <= maxPriceRubles,
+    query: first(parameters.q).trim().slice(0, 120),
+    sort: sortValue === "name" || sortValue === "price_asc" || sortValue === "price_desc"
+      ? sortValue
+      : "relevance",
+  };
+}
+
+export function priceKopeks(rubles: number): number;
+export function priceKopeks(rubles: null): undefined;
+export function priceKopeks(rubles: number | null): number | undefined {
+  return rubles === null ? undefined : rubles * 100;
+}
+
+export function hasActiveCatalogFilters(state: CatalogPageQuery): boolean {
+  return state.availability !== "all"
+    || state.brands.length > 0
+    || state.minPriceRubles !== null
+    || state.maxPriceRubles !== null;
+}
+
+export function catalogPageHref(basePath: string, state: CatalogPageQuery, page = 1): string {
+  const parameters = new URLSearchParams();
+  if (state.query.length > 0) parameters.set("q", state.query);
+  if (state.sort !== "relevance") parameters.set("sort", state.sort);
+  if (state.availability !== "all") parameters.set("availability", state.availability);
+  for (const brand of state.brands) parameters.append("brand", brand);
+  if (state.minPriceRubles !== null) parameters.set("minPrice", String(state.minPriceRubles));
+  if (state.maxPriceRubles !== null) parameters.set("maxPrice", String(state.maxPriceRubles));
+  if (page > 1) parameters.set("page", String(page));
+  const query = parameters.toString();
+  return query ? `${basePath}?${query}` : basePath;
+}
+
+export function clearCatalogFiltersHref(basePath: string, state: CatalogPageQuery): string {
+  return catalogPageHref(basePath, {
+    ...state,
+    availability: "all",
+    brands: [],
+    maxPriceRubles: null,
+    minPriceRubles: null,
+    page: 1,
+    priceRangeValid: true,
+  });
+}

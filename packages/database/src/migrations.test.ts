@@ -28,6 +28,13 @@ describe("database migrations", () => {
       "0014_storefront_account",
       "0015_supplier_waiting_list",
       "0016_one_c_exchange",
+      "0017_one_c_exchange_credentials",
+      "0018_article_crosses",
+      "0019_registration_personal_data_consent",
+      "0020_checkout_personal_data_consent",
+      "0021_supplier_waitlist_retention",
+      "0022_article_crosses_confirmed_by_index",
+      "0023_supplier_waitlist_anonymized_name",
     ]);
     expect(migrations.every(({ checksum }) => /^[a-f0-9]{64}$/.test(checksum))).toBe(true);
     expect(migrations[0]?.sql).toContain("CREATE SCHEMA app");

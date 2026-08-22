@@ -120,11 +120,22 @@ const PUBLIC_PRODUCT_FROM = `FROM app.products AS product
 // The trigram similarity() fallback on the name only ever matters once every
 // exact/prefix article and substring/full-text branch above it has already
 // failed, so a fuzzy name hit can add recall but can never hide a real match.
+//
+// cross_equivalents (see ARTICLE_CROSS_EQUIVALENTS_CTE) widens this one step
+// further: every *confirmed* app.article_crosses equivalent of $8, so a
+// search for an OEM number also finds the shop's own product listed only
+// under an aftermarket number, and vice versa. It is a CTE joined into the
+// same statement rather than a second query — see that constant's comment.
 const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
   AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
   AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
   AND ($1::text IS NULL
     OR ($8<>'' AND product.sku_normalized LIKE $8 || '%')
+    OR (product.sku_normalized<>'' AND EXISTS (
+      SELECT 1 FROM cross_equivalents
+      WHERE cross_equivalents.article=product.sku_normalized
+        AND cross_equivalents.brand=app.normalize_brand(brand.name)
+    ))
     OR (length($1)>=3 AND product.name ILIKE '%' || $2 || '%' ESCAPE '\\')
     OR (length($1)>=3 AND similarity(product.name, $1) > 0.25)
     OR to_tsvector('simple',coalesce(product.search_text,product.name))
@@ -135,6 +146,36 @@ const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
   AND ($6::bigint IS NULL OR price.amount_kopeks <= $6)
   AND ($7::text='all' OR ($7='in_stock' AND stock.available_quantity>0)
     OR ($7='out_of_stock' AND stock.available_quantity=0))`;
+
+// Every *confirmed* article-cross equivalent of the normalised query article
+// ($8), read back in both stored directions (see migration 0018's
+// table-level comment for why app.article_crosses stores one row per pair
+// and is queried both ways instead of storing two mirrored rows). Spliced
+// onto visibleCategoriesWithSubtreeCte's WITH clause as one more CTE (that
+// function already returns a complete, unterminated-by-comma WITH clause) so
+// this costs zero extra round trips — not a second query per search.
+//
+// The target brand travels with the target article: article numbers are not
+// globally unique across manufacturers, and docs/CATALOG_MATCHING.md defines
+// identity as normalised article + normalised brand. The product-side EXISTS
+// therefore checks both fields; matching only article could return an
+// unrelated Bosch OC90 for a confirmed MAHLE OC90 cross.
+//
+// Only status='confirmed' rows ever reach here — this is the actual
+// enforcement point for the correctness bar in docs/CATALOG_MATCHING.md and
+// this feature's own safety requirement: a cross weak enough to need human
+// review (see article_crosses.status) must never silently widen a
+// customer's search to a different part than the one they typed. $8='' (no
+// article-shaped query) naturally yields zero rows here too, since
+// app.article_crosses.article_a/article_b can never be '' (CHECK
+// constraint) — no extra guard needed.
+const ARTICLE_CROSS_EQUIVALENTS_CTE = `cross_equivalents AS (
+  SELECT article_b AS article,brand_b AS brand FROM app.article_crosses
+    WHERE article_a=$8 AND status='confirmed'
+  UNION
+  SELECT article_a AS article,brand_a AS brand FROM app.article_crosses
+    WHERE article_b=$8 AND status='confirmed'
+)`;
 
 const PRODUCT_SELECT = `SELECT product.id,product.sku::text,product.name,product.slug::text,
   product.created_at,product.updated_at,price.amount_kopeks::text AS price_kopeks,
@@ -244,16 +285,18 @@ export class CatalogPublicService {
          WHERE product.brand_id=brand.id AND product.is_active AND product.deleted_at IS NULL
            AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
        ) AS products ON true
-       WHERE brand.is_active AND brand.deleted_at IS NULL
+       WHERE brand.is_active AND brand.deleted_at IS NULL AND products.product_count>0
        ORDER BY lower(brand.name),brand.id`,
     );
     return {
-      items: result.rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        productCount: safeInteger(row.product_count, "brand product count"),
-        slug: row.slug,
-      })),
+      items: result.rows
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          productCount: safeInteger(row.product_count, "brand product count"),
+          slug: row.slug,
+        }))
+        .filter((brand) => brand.productCount > 0),
     };
   }
 
@@ -278,9 +321,15 @@ export class CatalogPublicService {
     const order = this.productOrder(query);
     return withPublicCatalogQuery(() => this.database.transaction(async (client) => {
       await client.query("SET LOCAL statement_timeout='2500ms'");
-      const items = await client.query<ProductRow & { total_count: string }>(
-        `${visibleCategoriesWithSubtreeCte("$3")}
+      const items = await client.query<ProductRow & { is_cross_match: boolean; total_count: string }>(
+        `${visibleCategoriesWithSubtreeCte("$3")}, ${ARTICLE_CROSS_EQUIVALENTS_CTE}
          ${PRODUCT_SELECT},count(*) OVER()::text AS total_count,
+                (NOT ($8<>'' AND product.sku_normalized LIKE $8 || '%')
+                  AND product.sku_normalized<>'' AND EXISTS (
+                  SELECT 1 FROM cross_equivalents
+                  WHERE cross_equivalents.article=product.sku_normalized
+                    AND cross_equivalents.brand=app.normalize_brand(brand.name)
+                )) AS is_cross_match,
                 primary_image.id AS primary_image_id,
                 primary_image.alt_text AS primary_image_alt_text,
                 primary_image.is_primary AS primary_image_is_primary,
@@ -303,14 +352,14 @@ export class CatalogPublicService {
       );
       const fallbackCount = items.rows.length === 0 && query.offset > 0
         ? await client.query<{ count: string }>(
-        `${visibleCategoriesWithSubtreeCte("$3")}
+        `${visibleCategoriesWithSubtreeCte("$3")}, ${ARTICLE_CROSS_EQUIVALENTS_CTE}
          SELECT count(*)::text AS count ${PUBLIC_PRODUCT_FROM}
          WHERE ${PUBLIC_PRODUCT_FILTERS}`,
         values,
       )
         : null;
       return {
-        items: items.rows.map((row) => this.productSummary(row)),
+        items: items.rows.map((row) => this.productSummary(row, row.is_cross_match ? "cross" : "query")),
         limit: query.limit,
         offset: query.offset,
         total: safeInteger(
@@ -459,7 +508,7 @@ export class CatalogPublicService {
     };
   }
 
-  private productSummary(row: ProductRow) {
+  private productSummary(row: ProductRow, matchedVia: "cross" | "query" = "query") {
     const image = row.primary_image_id && row.primary_image_alt_text
       && row.primary_image_mime_type && row.primary_image_byte_size
       ? this.imageView({
@@ -479,6 +528,7 @@ export class CatalogPublicService {
         : null,
       createdAt: row.created_at.toISOString(),
       id: row.id,
+      matchedVia,
       name: row.name,
       priceKopeks: row.price_kopeks === null ? null : safeInteger(row.price_kopeks, "price"),
       primaryImage: image,
@@ -495,13 +545,21 @@ export class CatalogPublicService {
       case "price_asc": return "price.amount_kopeks ASC NULLS LAST";
       case "price_desc": return "price.amount_kopeks DESC NULLS LAST";
       // Ranking never lets a fuzzy match outrank an exact one: an exact
-      // normalised-article match is tier 1, a prefix match is tier 2 (both
-      // insensitive to case, W/w, "-"/" "/"/" and the Cyrillic homoglyphs a
-      // customer's keyboard can substitute — see catalog-search-normalize.ts),
-      // and only once neither applies does trigram/full-text relevance on the
-      // product name decide the order.
+      // normalised-article match is tier 1, a confirmed cross-equivalent
+      // article is tier 2 (still an exact identity match, just under a
+      // different known-equivalent number — see ARTICLE_CROSS_EQUIVALENTS_CTE),
+      // a plain prefix match is tier 3 (all insensitive to case, W/w, "-"/"
+      // "/"/" and the Cyrillic homoglyphs a customer's keyboard can
+      // substitute — see catalog-search-normalize.ts), and only once none of
+      // those apply does trigram/full-text relevance on the product name
+      // decide the order.
       case "relevance": return query.q
         ? `($8<>'' AND product.sku_normalized=$8) DESC,
+           (product.sku_normalized<>'' AND EXISTS (
+             SELECT 1 FROM cross_equivalents
+             WHERE cross_equivalents.article=product.sku_normalized
+               AND cross_equivalents.brand=app.normalize_brand(brand.name)
+           )) DESC,
            ($8<>'' AND product.sku_normalized LIKE $8 || '%') DESC,
            GREATEST(
              similarity(product.name, $1),

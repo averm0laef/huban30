@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
-import { CONTACT_CONSENT_POLICY_VERSION } from "@an30/contracts";
+import {
+  CONTACT_CONSENT_POLICY_VERSION,
+  CONTACT_PERSONAL_DATA_CONSENT_TEXT,
+} from "@an30/contracts";
 
 import { clearIdempotencyKey, stableIdempotencyKey } from "../_lib/idempotency";
 import { apiRequest, errorText } from "../_lib/storefront-api";
@@ -102,7 +105,7 @@ export function ContactRequestForm({
         </div>
         <p className={styles.fieldNote}>Укажите хотя бы один способ связи.</p>
         <label className={styles.field}>Сообщение<textarea name="message" required minLength={10} maxLength={4000} placeholder={messagePlaceholder ?? "Опишите ваш вопрос"} /></label>
-        <label className={styles.checkboxField}><input name="consent" type="checkbox" required /> Я даю согласие на обработку указанных данных для ответа на обращение и ознакомился с <Link href="/privacy" target="_blank">политикой конфиденциальности</Link>.</label>
+        <label className={styles.checkboxField}><input name="consent" type="checkbox" required /> {CONTACT_PERSONAL_DATA_CONSENT_TEXT} <Link href="/contact-personal-data-consent" target="_blank">Открыть документ</Link>.</label>
         <button className={styles.submitButton} type="submit" disabled={pending || !online}>{pending ? "Отправляем..." : "Отправить обращение"}</button>
       </form>
       </>}

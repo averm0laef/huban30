@@ -4,11 +4,9 @@ import { AddToCartButton } from "../_components/cart-actions";
 import styles from "../_components/storefront.module.css";
 import { formatRubles } from "../_lib/catalog-api";
 import type { CatalogItem } from "../_lib/catalog-api";
-import { CatalogResultRow } from "./catalog-result-row";
+import { CatalogResultRow, RowBadge } from "./catalog-result-row";
+import { catalogPageHref, type CatalogPageQuery } from "./catalog-query";
 import resultsStyles from "./catalog-results.module.css";
-
-export type CatalogAvailability = "all" | "in_stock" | "out_of_stock";
-export type CatalogSort = "name" | "price_asc" | "price_desc" | "relevance";
 
 export interface CatalogEmptyState {
   body: string;
@@ -20,10 +18,12 @@ export interface CatalogSearchPanelProps {
   action: string;
   /** Set by the caller whenever `items` is empty, with level-appropriate copy. */
   emptyState: CatalogEmptyState | null;
+  errorHeading?: string;
   errorMessage: string | null;
   items: CatalogItem[];
-  query: string;
-  sort: CatalogSort;
+  pageSize: number;
+  state: CatalogPageQuery;
+  total: number;
 }
 
 /**
@@ -55,13 +55,15 @@ export const CATALOG_SEARCH_FORM_ID = "catalog-search-form";
  * exactly as before.
  */
 export function CatalogSearchPanel({
-  action, emptyState, errorMessage, items, query, sort,
+  action, emptyState, errorHeading = "Каталог не отвечает", errorMessage, items, pageSize, state, total,
 }: CatalogSearchPanelProps) {
-  const isSearch = query.trim().length >= 2;
+  const isSearch = state.query.trim().length >= 2;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const showPagination = !errorMessage && total > pageSize;
 
   const body = errorMessage ? (
     <section className={styles.errorState} role="alert">
-      <h2>Каталог не отвечает</h2>
+      <h2>{errorHeading}</h2>
       <p>{errorMessage}</p>
     </section>
   ) : emptyState ? (
@@ -71,7 +73,9 @@ export function CatalogSearchPanel({
     </section>
   ) : (
     <>
-      <p className={styles.catalogSummary} aria-live="polite">Найдено: {items.length}</p>
+      <p className={styles.catalogSummary} aria-live="polite">
+        Найдено: {total}{total > items.length ? ` · показано ${items.length}` : ""}
+      </p>
       {isSearch ? <h2 className={resultsStyles.sourceCaption}>На складе</h2> : null}
       <section aria-label="Результаты поиска" className={resultsStyles.resultsList}>
         {items.map((item) => {
@@ -79,6 +83,13 @@ export function CatalogSearchPanel({
           return (
             <CatalogResultRow
               actionSlot={<AddToCartButton disabled={!available || item.priceKopeks === null} productId={item.id} />}
+              // A product found via a confirmed article cross (see
+              // catalog-public.service.ts / migration 0018) is never the
+              // exact article the customer typed — it must read like the
+              // supplier analogue badge (`RowBadge analog`, "Аналог") in
+              // supplier-results.tsx, not like an ordinary own-stock row,
+              // so nobody is sold a different part without being told.
+              badges={item.matchedVia === "cross" ? <RowBadge analog>Аналог</RowBadge> : undefined}
               brand={item.brand ? item.brand.name : null}
               imageAlt={item.primaryImage ? item.primaryImage.altText : `Нет фото товара «${item.name}»`}
               imageUrl={item.primaryImage ? item.primaryImage.url : "/catalog/no-photo.webp"}
@@ -91,6 +102,17 @@ export function CatalogSearchPanel({
           );
         })}
       </section>
+      {showPagination ? (
+        <nav aria-label="Страницы каталога" className={resultsStyles.pagination}>
+          {state.page > 1 ? (
+            <Link href={catalogPageHref(action, state, state.page - 1)} rel="prev">Назад</Link>
+          ) : <span aria-hidden="true" />}
+          <span>Страница {Math.min(state.page, totalPages)} из {totalPages}</span>
+          {state.page < totalPages ? (
+            <Link href={catalogPageHref(action, state, state.page + 1)} rel="next">Дальше</Link>
+          ) : <span aria-hidden="true" />}
+        </nav>
+      ) : null}
     </>
   );
 
@@ -99,11 +121,11 @@ export function CatalogSearchPanel({
       <form action={action} className={styles.catalogForm} id={CATALOG_SEARCH_FORM_ID} method="get" role="search">
         <div className={styles.field}>
           <label htmlFor="catalog-query">Название или артикул</label>
-          <input defaultValue={query} id="catalog-query" maxLength={120} minLength={2} name="q" placeholder="Например, фильтр или артикул" type="search" />
+          <input defaultValue={state.query} id="catalog-query" maxLength={120} minLength={2} name="q" placeholder="Например, фильтр или артикул" type="search" />
         </div>
         <div className={styles.field}>
           <label htmlFor="catalog-sort">Сортировка</label>
-          <select defaultValue={sort} id="catalog-sort" name="sort">
+          <select defaultValue={state.sort} id="catalog-sort" name="sort">
             <option value="relevance">По совпадению</option>
             <option value="name">По названию</option>
             <option value="price_asc">Сначала дешевле</option>

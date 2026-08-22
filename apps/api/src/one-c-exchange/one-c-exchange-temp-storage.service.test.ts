@@ -29,27 +29,20 @@ describe("OneCExchangeTempStorageService", () => {
     expect(assembled.toString("utf8")).toBe("<КоммерческаяИнформация/>");
   });
 
-  it("does not duplicate content when the same trailing chunk is resent", async () => {
+  it("preserves adjacent chunks even when their bytes are identical", async () => {
     await service.appendChunk("offers.xml", Buffer.from("AAAA"));
     await service.appendChunk("offers.xml", Buffer.from("BBBB"));
-    // 1C times out waiting for our response and resends the last chunk.
     await service.appendChunk("offers.xml", Buffer.from("BBBB"));
 
     const assembled = await service.readAssembled("offers.xml");
-    expect(assembled.toString("utf8")).toBe("AAAABBBB");
+    expect(assembled.toString("utf8")).toBe("AAAABBBBBBBB");
   });
 
-  it("appends a genuinely repeated chunk value that is not actually a resend", async () => {
-    // "AA" followed by "AA" again is a legitimate distinct chunk (not a
-    // retry) only when it does not exactly reproduce the current tail; here
-    // it does reproduce the tail, so by design it is treated as a resend.
-    // This documents the accepted trade-off: CommerceML gives the server no
-    // chunk sequence number, so an exact-tail match is the only signal
-    // available to tell a resend from new data that happens to repeat.
+  it("does not guess that an equal chunk is a retry when the protocol supplies no offset", async () => {
     await service.appendChunk("dup.xml", Buffer.from("AA"));
     await service.appendChunk("dup.xml", Buffer.from("AA"));
     const assembled = await service.readAssembled("dup.xml");
-    expect(assembled.toString("utf8")).toBe("AA");
+    expect(assembled.toString("utf8")).toBe("AAAA");
   });
 
   it("computes a stable sha256 over the assembled file", async () => {

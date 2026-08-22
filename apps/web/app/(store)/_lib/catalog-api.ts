@@ -4,9 +4,11 @@ import { headers } from "next/headers";
 import { cache } from "react";
 
 import {
+  CatalogBrandsResponseSchema,
   CatalogCategoryTreeResponseSchema,
   CatalogProductDetailSchema,
   CatalogProductsResponseSchema,
+  type CatalogBrandView,
   type CatalogCategoryNode,
   type CatalogImageView,
   type CatalogProductDetail,
@@ -18,6 +20,7 @@ export type CatalogImage = CatalogImageView;
 export type CatalogItem = CatalogProductSummary;
 export type CatalogProduct = CatalogProductDetail;
 export type CatalogSearchResponse = CatalogProductsResponse;
+export type CatalogBrand = CatalogBrandView;
 export type { CatalogCategoryNode };
 
 export class StorefrontApiError extends Error {
@@ -36,6 +39,12 @@ function parseCatalogResponse(value: unknown): CatalogSearchResponse {
 function parseCategoryTree(value: unknown): CatalogCategoryNode[] {
   const parsed = CatalogCategoryTreeResponseSchema.safeParse(value);
   if (!parsed.success) throw new Error("Некорректный ответ дерева категорий.");
+  return parsed.data.items;
+}
+
+function parseCatalogBrands(value: unknown): CatalogBrand[] {
+  const parsed = CatalogBrandsResponseSchema.safeParse(value);
+  if (!parsed.success) throw new Error("Некорректный ответ списка брендов.");
   return parsed.data.items;
 }
 
@@ -79,19 +88,39 @@ async function getJson(path: string): Promise<unknown> {
   return response.json();
 }
 
+export interface CatalogSearchOptions {
+  availability?: "all" | "in_stock" | "out_of_stock";
+  brands?: string[];
+  category?: string;
+  limit?: number;
+  maxPriceKopeks?: number;
+  minPriceKopeks?: number;
+  offset?: number;
+  query?: string;
+  sort?: "relevance" | "newest" | "name" | "price_asc" | "price_desc";
+}
+
 export const searchCatalog = cache(async (
-  query: string,
-  limit = 48,
-  availability: "all" | "in_stock" | "out_of_stock" = "all",
-  sort: "relevance" | "newest" | "name" | "price_asc" | "price_desc" = "relevance",
-  category?: string,
+  options: CatalogSearchOptions,
 ): Promise<CatalogSearchResponse> => {
-  const parameters = new URLSearchParams({ availability, limit: String(limit), sort });
+  const parameters = new URLSearchParams({
+    availability: options.availability ?? "all",
+    limit: String(options.limit ?? 48),
+    offset: String(options.offset ?? 0),
+    sort: options.sort ?? "relevance",
+  });
   // `q` must be omitted rather than sent empty: the contract requires at
   // least two characters when the key is present at all, which is how a
   // category level browses with no search text (see catalog/[...slug]).
-  if (query) parameters.set("q", query);
-  if (category) parameters.set("category", category);
+  if (options.query) parameters.set("q", options.query);
+  if (options.category) parameters.set("category", options.category);
+  for (const brand of options.brands ?? []) parameters.append("brand", brand);
+  if (options.minPriceKopeks !== undefined) {
+    parameters.set("minPriceKopeks", String(options.minPriceKopeks));
+  }
+  if (options.maxPriceKopeks !== undefined) {
+    parameters.set("maxPriceKopeks", String(options.maxPriceKopeks));
+  }
   return parseCatalogResponse(await getJson(`/catalog/products?${parameters.toString()}`));
 });
 
@@ -103,6 +132,10 @@ export const searchCatalog = cache(async (
  */
 export const getCategoryTree = cache(async (): Promise<CatalogCategoryNode[]> => (
   parseCategoryTree(await getJson("/catalog/categories/tree"))
+));
+
+export const getCatalogBrands = cache(async (): Promise<CatalogBrand[]> => (
+  parseCatalogBrands(await getJson("/catalog/brands"))
 ));
 
 export const findCatalogItem = cache(async (slug: string): Promise<CatalogProduct | null> => {

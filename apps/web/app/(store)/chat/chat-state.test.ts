@@ -1,20 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   accessFor,
   attachmentSignatureError,
   isChatMessage,
+  isChatHistoryWindow,
   isOwnMessage,
   latestSequence,
+  loadLatestHistory,
+  loadOlderHistory,
   mergeMessages,
   parseStoredGuestThreads,
   reconnectDelay,
+  renderedMessageWindow,
   safeDownloadName,
   senderLabel,
   serializeGuestThreads,
   type ChatMessage,
   type ChatThread,
 } from "./chat-state";
+
+afterEach(() => vi.unstubAllGlobals());
 
 const thread: ChatThread = {
   assignedStaffId: null,
@@ -68,22 +74,73 @@ describe("guest chat state", () => {
     expect(latestSequence("broken", "7")).toBe("7");
   });
 
+  it("keeps both latest and older rendered history windows bounded", () => {
+    const history = Array.from({ length: 220 }, (_, index) => message(
+      `019bf9ea-0d3e-7def-9c9a-${String(index + 1).padStart(12, "0")}`,
+      String(index + 1),
+    ));
+    const latest = renderedMessageWindow(history, "latest");
+    const older = renderedMessageWindow(history, "older");
+    expect(latest).toHaveLength(150);
+    expect(latest[0]?.sequence).toBe("71");
+    expect(latest.at(-1)?.sequence).toBe("220");
+    expect(older).toHaveLength(150);
+    expect(older[0]?.sequence).toBe("1");
+    expect(older.at(-1)?.sequence).toBe("150");
+  });
+
+  it("accepts only strictly ascending newest-window responses", () => {
+    const first = message("019bf9ea-0d3e-7def-9c9a-000000000021", "21");
+    const second = message("019bf9ea-0d3e-7def-9c9a-000000000022", "22");
+    expect(isChatHistoryWindow({ items: [first, second], nextSequence: "22", olderCursor: "21" })).toBe(true);
+    expect(isChatHistoryWindow({ items: [second, first], nextSequence: "22", olderCursor: "21" })).toBe(false);
+    expect(isChatHistoryWindow({ items: [first], nextSequence: "bad", olderCursor: null })).toBe(false);
+  });
+
+  it("requests the newest page first and older pages only after explicit pagination", async () => {
+    const item = message("019bf9ea-0d3e-7def-9c9a-000000000031", "31");
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      items: [item],
+      nextSequence: "31",
+      olderCursor: "31",
+    }), { headers: { "content-type": "application/json" }, status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const access = { guestToken: thread.guestToken!, kind: "guest" as const };
+
+    await loadLatestHistory(thread, access);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(`/messages?before=latest&limit=50`);
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject(expect.any(Headers));
+    expect(((fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Headers).get("X-Guest-Chat-Token")).toBe(thread.guestToken);
+
+    await loadOlderHistory(thread, access, "31");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(`/messages?before=31&limit=50`);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects malformed realtime messages before BigInt sorting", () => {
     expect(isChatMessage({ ...message("019bf9ea-0d3e-7def-9c9a-000000000003", "3"), sequence: "-1" })).toBe(false);
     expect(isChatMessage(message("019bf9ea-0d3e-7def-9c9a-000000000003", "3"))).toBe(true);
   });
 
-  it("accepts only images whose declared MIME matches their signature", () => {
+  it("accepts only photos and videos whose declared MIME matches their signature", () => {
     const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const mp4 = Uint8Array.from([0, 0, 0, 32, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]);
+    const mov = Uint8Array.from([0, 0, 0, 20, 0x66, 0x74, 0x79, 0x70, 0x71, 0x74, 0x20, 0x20]);
+    const webm = Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]);
     expect(attachmentSignatureError({ size: png.length, type: "image/png" }, png)).toBeNull();
     expect(attachmentSignatureError({ size: png.length, type: "image/jpeg" }, png)).toMatch(/не совпадает/u);
-    expect(attachmentSignatureError({ size: png.length, type: "application/pdf" }, png)).toMatch(/JPEG/u);
+    expect(attachmentSignatureError({ size: mp4.length, type: "video/mp4" }, mp4)).toBeNull();
+    expect(attachmentSignatureError({ size: mov.length, type: "video/quicktime" }, mov)).toBeNull();
+    expect(attachmentSignatureError({ size: webm.length, type: "video/webm" }, webm)).toBeNull();
+    expect(attachmentSignatureError({ size: png.length, type: "application/pdf" }, png)).toMatch(/MP4/u);
+    expect(attachmentSignatureError({ size: 15 * 1024 * 1024 + 1, type: "video/mp4" }, mp4)).toMatch(/15 МБ/u);
+    expect(attachmentSignatureError({ size: 5 * 1024 * 1024 + 1, type: "image/png" }, png)).toMatch(/5 МБ/u);
   });
 
   it("removes path separators and controls from download names", () => {
     expect(safeDownloadName("../photo\u0000.png")).toBe(".._photo_.png");
     expect(safeDownloadName("../../photo.png")).toBe(".._.._photo.png");
-    expect(safeDownloadName("..")).toBe("an30-image");
+    expect(safeDownloadName("..")).toBe("an30-file");
   });
 });
 

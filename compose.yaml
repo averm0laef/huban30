@@ -50,6 +50,53 @@ services:
           memory: 128M
     networks: [backend]
 
+  clamav:
+    image: clamav/clamav:1.5.3
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_CLAMD: "false"
+      CLAMAV_NO_FRESHCLAMD: "false"
+      CLAMAV_NO_MILTERD: "true"
+      CLAMD_CONF_CommandReadTimeout: "5"
+      CLAMD_CONF_MaxFileSize: 20M
+      CLAMD_CONF_MaxFiles: "1000"
+      CLAMD_CONF_MaxQueue: "20"
+      CLAMD_CONF_MaxRecursion: "8"
+      CLAMD_CONF_MaxScanSize: 32M
+      CLAMD_CONF_MaxScanTime: "30000"
+      CLAMD_CONF_MaxThreads: "4"
+      CLAMD_CONF_ReadTimeout: "65"
+      CLAMD_CONF_StreamMaxLength: 20M
+    expose:
+      - "3310"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      # The official entrypoint applies CLAMD_CONF_* with sed -i. A named
+      # volume is populated from the image on first use and keeps /etc writable
+      # without making the container root filesystem writable.
+      - clamav_config:/etc/clamav
+      - clamav_signatures:/var/lib/clamav
+    tmpfs:
+      - /run:rw,noexec,nosuid,nodev,size=16m,mode=0755
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /var/log/clamav:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 6m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 3G
+        reservations:
+          memory: 2G
+    networks: [backend]
+
   migrate:
     build:
       context: .
@@ -93,6 +140,10 @@ services:
       AI_MODEL: ${AI_MODEL:-gemini-2.5-flash}
       APP_ORIGIN: ${APP_BASE_URL:-http://localhost}
       AUTH_DEBUG_TOKENS: "false"
+      CLAMAV_CONNECT_TIMEOUT_MS: "2000"
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      CLAMAV_SCAN_TIMEOUT_MS: "60000"
       COOKIE_SECURE: "true"
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
@@ -102,8 +153,11 @@ services:
       DB_USER: an30_app
       NODE_ENV: production
       ENABLE_PUBLIC_CHECKOUT: ${ENABLE_PUBLIC_CHECKOUT:-false}
+      FFMPEG_PATH: /usr/bin/ffmpeg
+      FFPROBE_PATH: /usr/bin/ffprobe
       GEMINI_API_KEY_FILE: /run/secrets/gemini_api_key
       LEGAL_DOCUMENTS_APPROVED: ${LEGAL_DOCUMENTS_APPROVED:-false}
+      MEDIA_PROBE_TIMEOUT_MS: "10000"
       PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-disabled}
       PORT: 4000
       POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
@@ -129,6 +183,8 @@ services:
       - rossko_key2
       - gemini_api_key
     depends_on:
+      clamav:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       redis:
@@ -311,6 +367,8 @@ secrets:
 volumes:
   caddy_config:
   caddy_data:
+  clamav_config:
+  clamav_signatures:
   postgres_data:
   redis_data:
   uploads_data:

@@ -26,5 +26,11 @@ export default async function AuthPage({ searchParams }: AuthPageProps) {
     : "login";
   const accepted = (Array.isArray(query.accepted) ? query.accepted[0] : query.accepted) === "1";
 
-  return <AuthClient initialMode={mode} initialSuccess={accepted ? "Приглашение принято. Войдите и настройте TOTP" : ""} />;
+  return (
+    <AuthClient
+      initialMode={mode}
+      initialSuccess={accepted ? "Приглашение принято. Войдите и настройте TOTP" : ""}
+      registrationEnabled={process.env.LEGAL_DOCUMENTS_APPROVED === "true"}
+    />
+  );
 }

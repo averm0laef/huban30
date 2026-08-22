@@ -1,4 +1,5 @@
-import type { SupplierPartView, SupplierSearchResponse } from "@an30/contracts";
+import { normalizeArticleNumber, normalizeBrand } from "@an30/contracts";
+import type { SupplierPartView, SupplierSearchResponse, SupplierStockView } from "@an30/contracts";
 
 import type { CatalogItem } from "./catalog-api";
 
@@ -18,9 +19,55 @@ import type { CatalogItem } from "./catalog-api";
  * the project's hard rule — a supplier listing must never be presentable as
  * shelf stock — enforced in code, not just by convention.
  */
-export function filterSupplierParts(response: SupplierSearchResponse | null): SupplierPartView[] {
+export interface SupplierPartFilter {
+  brandNames?: string[];
+  maxPriceKopeks?: number;
+  minPriceKopeks?: number;
+  ownAvailable?: Array<{ brand: string | null; sku: string }>;
+}
+
+function partIdentity(article: string, brand: string): string {
+  return `${normalizeArticleNumber(article)}\u0000${normalizeBrand(brand)}`;
+}
+
+function filterStocks(stocks: SupplierStockView[], options: SupplierPartFilter): SupplierStockView[] {
+  return stocks.filter((stock) => (
+    (options.minPriceKopeks === undefined || stock.priceKopeks >= options.minPriceKopeks)
+    && (options.maxPriceKopeks === undefined || stock.priceKopeks <= options.maxPriceKopeks)
+  ));
+}
+
+export function filterSupplierParts(
+  response: SupplierSearchResponse | null,
+  options: SupplierPartFilter = {},
+): SupplierPartView[] {
   if (!response || !response.success) return [];
-  return response.parts.filter((part) => part.availability === "under_order");
+  const brands = new Set((options.brandNames ?? []).map(normalizeBrand).filter(Boolean));
+  const ownAvailable = new Set((options.ownAvailable ?? [])
+    .filter((item) => item.brand)
+    .map((item) => partIdentity(item.sku, item.brand ?? "")));
+  const acceptsBrand = (brand: string) => brands.size === 0 || brands.has(normalizeBrand(brand));
+  return response.parts.flatMap((part): SupplierPartView[] => {
+    if (part.availability !== "under_order") return [];
+
+    const directDuplicate = ownAvailable.has(partIdentity(part.partNumber, part.brand));
+    const stocks = acceptsBrand(part.brand) && !directDuplicate
+      ? filterStocks(part.stocks, options)
+      : [];
+    const crosses = part.crosses.flatMap((cross) => {
+      if (!acceptsBrand(cross.brand)) return [];
+      if (ownAvailable.has(partIdentity(cross.partNumber, cross.brand))) return [];
+      const crossStocks = filterStocks(cross.stocks, options);
+      if (crossStocks.length === 0) return [];
+      return [{ ...cross, stocks: crossStocks }];
+    });
+
+    // An identity without any offer is not actionable. It used to render an
+    // empty row saying "Предложений пока нет", which looked like a result but
+    // gave the customer nothing to buy or wait for.
+    if (stocks.length === 0 && crosses.length === 0) return [];
+    return [{ ...part, crosses, stocks }];
+  });
 }
 
 /**

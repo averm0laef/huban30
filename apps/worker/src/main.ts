@@ -7,6 +7,7 @@ import { Pool } from "pg";
 
 import { WorkerJobSchema } from "@an30/contracts";
 
+import { ingestArticleCrosses } from "./article-cross-ingest.js";
 import { readWorkerConfig } from "./config.js";
 import { OutboxDispatcher } from "./outbox-dispatcher.js";
 
@@ -24,6 +25,8 @@ const worker = new Worker(
     switch (parsed.name) {
       case "system.heartbeat":
         return { processedAt: new Date().toISOString() };
+      case "supplier.crosses.ingest":
+        return ingestArticleCrosses(database, parsed.payload.pairs, parsed.payload.source);
     }
   },
   { connection: redis, concurrency: 4 },
@@ -77,6 +80,32 @@ const contactRetentionTimer = setInterval(() => void anonymizeExpiredContactRequ
 contactRetentionTimer.unref();
 void anonymizeExpiredContactRequests();
 
+let supplierWaitlistRetentionRunning = false;
+async function anonymizeExpiredSupplierWaitlistRequests() {
+  if (supplierWaitlistRetentionRunning) return;
+  supplierWaitlistRetentionRunning = true;
+  try {
+    const result = await database.query<{ anonymized_count: number }>(
+      "SELECT app.anonymize_expired_supplier_waitlist_requests(500) AS anonymized_count",
+    );
+    const anonymizedCount = result.rows[0]?.anonymized_count ?? 0;
+    if (anonymizedCount > 0) {
+      logger.info({ anonymizedCount }, "Expired supplier waitlist requests anonymized");
+    }
+  } catch (error) {
+    logger.error({ error }, "Supplier waitlist retention sweep failed");
+  } finally {
+    supplierWaitlistRetentionRunning = false;
+  }
+}
+
+const supplierWaitlistRetentionTimer = setInterval(
+  () => void anonymizeExpiredSupplierWaitlistRequests(),
+  60 * 60 * 1_000,
+);
+supplierWaitlistRetentionTimer.unref();
+void anonymizeExpiredSupplierWaitlistRequests();
+
 const outboxTimer = setInterval(() => void outbox.poll(), 5_000);
 outboxTimer.unref();
 void outbox.poll();
@@ -126,6 +155,7 @@ async function shutdown(signal: string) {
   healthServer.close();
   clearInterval(expiryTimer);
   clearInterval(contactRetentionTimer);
+  clearInterval(supplierWaitlistRetentionTimer);
   clearInterval(outboxTimer);
   await worker.close();
   await database.end();

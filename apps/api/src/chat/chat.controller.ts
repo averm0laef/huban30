@@ -1,3 +1,5 @@
+import type { Readable } from "node:stream";
+
 import {
   Body,
   Controller,
@@ -18,14 +20,21 @@ import { ChatService } from "./chat.service.js";
 
 function sendAttachment(
   reply: FastifyReply,
-  value: { content: Buffer; mimeType: string; originalName: string },
+  value: { byteSize: number; content: Readable; mimeType: string; originalName: string },
 ) {
-  const extension = value.mimeType === "image/png" ? "png"
-    : value.mimeType === "image/webp" ? "webp" : "jpg";
+  const extensions: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+  };
+  const extension = extensions[value.mimeType] ?? "bin";
   return reply
     .header("Cache-Control", "private, no-store")
     .header("Content-Disposition", `attachment; filename="an30-attachment.${extension}"`)
-    .header("Content-Length", String(value.content.length))
+    .header("Content-Length", String(value.byteSize))
     .header("Content-Type", value.mimeType)
     .header("X-Content-Type-Options", "nosniff")
     .send(value.content);
@@ -54,9 +63,16 @@ export class CustomerChatController {
   history(
     @Param("threadId") threadId: string,
     @Query("after") after: string | undefined,
+    @Query("before") before: string | undefined,
+    @Query("limit") limit: string | undefined,
     @Req() request: FastifyRequest,
   ) {
-    return this.chat.history(threadId, after, { auth: request.authContext!, kind: "authenticated" });
+    return this.chat.history(
+      threadId,
+      after,
+      { auth: request.authContext!, kind: "authenticated" },
+      { before, limit },
+    );
   }
 
   @Post("threads/:threadId/messages")
@@ -123,6 +139,7 @@ export class CustomerChatController {
     @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
+    await this.rateLimit.consume("chat-attachment-download", request.authContext!.userId, 30, 60);
     return sendAttachment(
       reply,
       await this.chat.readAttachment(
@@ -156,9 +173,16 @@ export class GuestChatController {
   history(
     @Param("threadId") threadId: string,
     @Query("after") after: string | undefined,
+    @Query("before") before: string | undefined,
+    @Query("limit") limit: string | undefined,
     @Headers("x-guest-chat-token") guestToken: string,
   ) {
-    return this.chat.history(threadId, after, { guestToken: guestToken ?? "", kind: "guest" });
+    return this.chat.history(
+      threadId,
+      after,
+      { guestToken: guestToken ?? "", kind: "guest" },
+      { before, limit },
+    );
   }
 
   @Post("threads/:threadId/messages")
@@ -218,8 +242,10 @@ export class GuestChatController {
   async attachment(
     @Param("attachmentId") attachmentId: string,
     @Headers("x-guest-chat-token") guestToken: string,
+    @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
+    await this.rateLimit.consume("guest-chat-attachment-download", request.ip, 30, 60);
     return sendAttachment(
       reply,
       await this.chat.readAttachment(attachmentId, { guestToken: guestToken ?? "", kind: "guest" }),

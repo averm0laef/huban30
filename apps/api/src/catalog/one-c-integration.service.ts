@@ -8,7 +8,7 @@ import { z } from "zod";
 import type { AuthContext } from "../auth/auth-context.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
-import { CryptoService } from "../security/crypto.service.js";
+import { PasswordService } from "../security/password.service.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
 import { parseBasicAuthorization, safeTextEqual } from "./catalog-import.utils.js";
 
@@ -30,9 +30,23 @@ const RequestLogQuerySchema = z.object({
 interface OneCSettingsRow {
   allowed_networks: string[];
   is_enabled: boolean;
-  secret_ciphertext: Buffer | null;
+  last_exchange_at: Date | null;
+  last_exchange_summary: Record<string, unknown>;
+  secret_hash: Buffer | null;
   updated_at: Date;
   username: string | null;
+}
+
+// Written by OneCExchangeService once a chunked CommerceML run reaches
+// 'completed' (see app.one_c_exchange_runs / migration 0016) — kept as a
+// small denormalised summary on the settings row itself so the admin panel
+// can show "last exchange result" without a join or a second round trip.
+export interface OneCExchangeSummary {
+  containsOnlyChanges: boolean;
+  filename: string;
+  kind: "catalog" | "offers";
+  rowsRejected: number;
+  rowsTouched: number;
 }
 
 export interface IntegrationRequestEvent {
@@ -51,8 +65,8 @@ export interface IntegrationRequestEvent {
 export class OneCIntegrationService {
   constructor(
     private readonly audit: AuditService,
-    private readonly crypto: CryptoService,
     private readonly database: DatabaseService,
+    private readonly passwords: PasswordService,
     private readonly rateLimit: RateLimitService,
   ) {}
 
@@ -72,16 +86,20 @@ export class OneCIntegrationService {
     const input = parsedInput.data;
     return this.database.transaction(async (client) => {
       const existing = await client.query<OneCSettingsRow>(
-        `SELECT is_enabled, username, secret_ciphertext, allowed_networks::text[], updated_at
+        `SELECT is_enabled, username, secret_hash, allowed_networks::text[], updated_at,
+                last_exchange_at, last_exchange_summary
          FROM app.integration_endpoints
          WHERE integration_key = 'one_c'
          FOR UPDATE`,
       );
       const before = existing.rows[0];
       const username = input.username ?? before?.username ?? null;
+      // Hashed, not encrypted: this only ever needs to be *verified* against
+      // whatever 1C sends on the next request, never read back, so there is
+      // no reason to keep it reversible (see migration 0017).
       const secret = input.password
-        ? this.crypto.encrypt(input.password, "integration:one_c:basic_password")
-        : before?.secret_ciphertext ?? null;
+        ? Buffer.from(await this.passwords.hash(input.password), "utf8")
+        : before?.secret_hash ?? null;
       const allowedNetworks = input.allowedNetworks ?? before?.allowed_networks ?? [];
       const enabled = input.enabled ?? before?.is_enabled ?? false;
 
@@ -99,15 +117,16 @@ export class OneCIntegrationService {
       const updated = await client.query<OneCSettingsRow>(
         `
           INSERT INTO app.integration_endpoints (
-            integration_key, is_enabled, username, secret_ciphertext, allowed_networks
+            integration_key, is_enabled, username, secret_hash, allowed_networks
           ) VALUES ('one_c', $1, $2, $3, $4::cidr[])
           ON CONFLICT (integration_key) DO UPDATE
           SET is_enabled = EXCLUDED.is_enabled,
               username = EXCLUDED.username,
-              secret_ciphertext = EXCLUDED.secret_ciphertext,
+              secret_hash = EXCLUDED.secret_hash,
               allowed_networks = EXCLUDED.allowed_networks,
               updated_at = clock_timestamp()
-          RETURNING is_enabled, username, secret_ciphertext, allowed_networks::text[], updated_at
+          RETURNING is_enabled, username, secret_hash, allowed_networks::text[], updated_at,
+                    last_exchange_at, last_exchange_summary
         `,
         [enabled, username, secret, allowedNetworks],
       );
@@ -143,37 +162,7 @@ export class OneCIntegrationService {
       throw error;
     }
 
-    const credentials = parseBasicAuthorization(authorization);
-    const result = await this.database.query<OneCSettingsRow & { ip_allowed: boolean }>(
-      `
-        SELECT is_enabled, username, secret_ciphertext, allowed_networks::text[], updated_at,
-               COALESCE($1::inet <<= ANY(allowed_networks), false) AS ip_allowed
-        FROM app.integration_endpoints
-        WHERE integration_key = 'one_c'
-      `,
-      [ipAddress],
-    );
-    const settings = result.rows[0];
-    let accepted = false;
-    if (
-      credentials
-      && settings?.is_enabled
-      && settings.ip_allowed
-      && settings.username
-      && settings.secret_ciphertext
-    ) {
-      try {
-        const password = this.crypto.decrypt(
-          settings.secret_ciphertext,
-          "integration:one_c:basic_password",
-        );
-        accepted = safeTextEqual(credentials.username, settings.username)
-          && safeTextEqual(credentials.password, password);
-      } catch {
-        accepted = false;
-      }
-    }
-
+    const accepted = await this.checkCredentials(authorization, ipAddress);
     if (!accepted) {
       await this.recordRequest({
         details: { outcome: "rejected" },
@@ -188,6 +177,64 @@ export class OneCIntegrationService {
     await this.database.query(
       "UPDATE app.integration_endpoints SET last_used_at = clock_timestamp() WHERE integration_key = 'one_c'",
     );
+  }
+
+  /**
+   * Same credential + CIDR check as {@link authorize}, but for the
+   * one-c-exchange CommerceML handshake (one-c-exchange.controller.ts):
+   * mode=checkauth owns its own plain-text reply and request-log entry (a
+   * "success\n<cookie>\n<value>" body has nothing in common with the JSON
+   * machine endpoint's exception-driven response), so it needs a boolean
+   * rather than a throw. Both transports authenticate against the same
+   * integration_key='one_c' row -- one shop, one 1C integration, two wire
+   * protocols.
+   */
+  async verifyBasicAuth(authorization: string | undefined, ipAddress: string): Promise<boolean> {
+    const accepted = await this.checkCredentials(authorization, ipAddress);
+    if (accepted) {
+      await this.database.query(
+        "UPDATE app.integration_endpoints SET last_used_at = clock_timestamp() WHERE integration_key = 'one_c'",
+      );
+    }
+    return accepted;
+  }
+
+  /** Denormalised onto the settings row by migration 0016 so the admin panel can show it without a second table -- see OneCExchangeSummary. */
+  async recordExchangeResult(summary: OneCExchangeSummary): Promise<void> {
+    await this.database.query(
+      `UPDATE app.integration_endpoints
+       SET last_exchange_at = clock_timestamp(), last_exchange_summary = $1::jsonb
+       WHERE integration_key = 'one_c'`,
+      [JSON.stringify(summary)],
+    );
+  }
+
+  private async checkCredentials(authorization: string | undefined, ipAddress: string): Promise<boolean> {
+    const credentials = parseBasicAuthorization(authorization);
+    const result = await this.database.query<OneCSettingsRow & { ip_allowed: boolean }>(
+      `
+        SELECT is_enabled, username, secret_hash, allowed_networks::text[], updated_at,
+               last_exchange_at, last_exchange_summary,
+               COALESCE($1::inet <<= ANY(allowed_networks), false) AS ip_allowed
+        FROM app.integration_endpoints
+        WHERE integration_key = 'one_c'
+      `,
+      [ipAddress],
+    );
+    const settings = result.rows[0];
+    // PasswordService.verify() always runs an argon2 pass -- even a null
+    // hash falls back to its own dummy hash -- so a disabled integration or
+    // an unknown IP takes the same time to reject as a wrong password. Doing
+    // the lookup unconditionally (rather than short-circuiting on
+    // settings/ip_allowed first) is what keeps that guarantee.
+    const passwordMatches = await this.passwords.verify(
+      credentials?.password ?? "",
+      settings?.secret_hash?.toString("utf8"),
+    );
+    const usernameMatches = Boolean(
+      credentials && settings?.username && safeTextEqual(credentials.username, settings.username),
+    );
+    return Boolean(credentials && settings?.is_enabled && settings.ip_allowed && usernameMatches && passwordMatches);
   }
 
   async listRequests(rawQuery: unknown): Promise<Record<string, unknown>> {
@@ -262,7 +309,8 @@ export class OneCIntegrationService {
 
   private async loadSettings(): Promise<OneCSettingsRow | undefined> {
     return (await this.database.query<OneCSettingsRow>(
-      `SELECT is_enabled, username, secret_ciphertext, allowed_networks::text[], updated_at
+      `SELECT is_enabled, username, secret_hash, allowed_networks::text[], updated_at,
+              last_exchange_at, last_exchange_summary
        FROM app.integration_endpoints WHERE integration_key = 'one_c'`,
     )).rows[0];
   }
@@ -271,7 +319,9 @@ export class OneCIntegrationService {
     return {
       allowedNetworks: row?.allowed_networks ?? [],
       enabled: row?.is_enabled ?? false,
-      hasPassword: Boolean(row?.secret_ciphertext),
+      hasPassword: Boolean(row?.secret_hash),
+      lastExchangeAt: row?.last_exchange_at?.toISOString() ?? null,
+      lastExchangeSummary: row?.last_exchange_summary ?? {},
       updatedAt: row?.updated_at?.toISOString() ?? null,
       username: row?.username ?? null,
     };

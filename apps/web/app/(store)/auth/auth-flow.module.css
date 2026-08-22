@@ -1,10 +1,137 @@
-/* ============================================================
-   Auth flow extras — additive states for the /auth screen that
-   the shared storefront.module.css does not define (warning
-   banner, inline field errors, login troubleshooting details).
-   Reuses the design tokens from storefront.module.css's
-   `.storefront` root; keep them in sync when new states are added.
-   ============================================================ */
+.authPage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 500px);
+  align-items: start;
+  gap: clamp(44px, 8vw, 108px);
+  padding-block: clamp(42px, 7vw, 84px) clamp(72px, 9vw, 112px);
+}
+
+.authIntro {
+  max-width: 650px;
+  padding-top: clamp(14px, 3vw, 38px);
+}
+
+.contextLabel {
+  margin: 0 0 14px;
+  color: var(--store-brand);
+  font-size: 0.86rem;
+  font-weight: var(--store-weight-bold);
+}
+
+.authIntro h1 {
+  max-width: 620px;
+  margin: 0;
+  font-size: clamp(2.15rem, 4.7vw, 4rem);
+  font-weight: var(--store-weight-black);
+  letter-spacing: var(--store-tracking-tighter);
+  line-height: 1.02;
+}
+
+.contextDescription {
+  max-width: 570px;
+  margin: 20px 0 0;
+  color: var(--store-muted);
+  font-size: clamp(1rem, 1.8vw, 1.12rem);
+  line-height: 1.6;
+}
+
+.benefitList {
+  max-width: 590px;
+  display: grid;
+  margin: 34px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--store-border);
+  list-style: none;
+}
+
+.benefitList li {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+  gap: var(--store-space-md);
+  padding-block: var(--store-space-md);
+  border-bottom: 1px solid var(--store-border);
+}
+
+.benefitList strong {
+  color: var(--store-text);
+  font-weight: var(--store-weight-bold);
+  line-height: 1.35;
+}
+
+.benefitList span {
+  color: var(--store-muted);
+  line-height: 1.5;
+}
+
+.formPanel {
+  min-width: 0;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid var(--store-border);
+  border-top: 5px solid var(--store-brand);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+  box-shadow: var(--store-shadow-md);
+}
+
+.segmentedNav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  margin: 0 0 var(--store-space-lg);
+  padding: 3px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+}
+
+.segmentedNav a {
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 5px 7px;
+  border-radius: 9px;
+  color: var(--store-muted);
+  font-size: clamp(0.7rem, 2.6vw, 0.82rem);
+  font-weight: var(--store-weight-bold);
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+
+.segmentedNav a:hover {
+  color: var(--store-text);
+}
+
+.segmentedNav a[aria-current="page"] {
+  background: var(--store-surface);
+  color: var(--store-text);
+  box-shadow: var(--store-shadow-xs);
+}
+
+.formHeading {
+  margin: 0 0 var(--store-space-lg);
+}
+
+.formHeading h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 3vw, 2rem);
+  font-weight: var(--store-weight-black);
+  letter-spacing: var(--store-tracking-tight);
+  line-height: 1.12;
+}
+
+.formHeading p {
+  margin: 9px 0 0;
+  color: var(--store-muted);
+  line-height: 1.5;
+}
+
+.statusBanner {
+  overflow-wrap: anywhere;
+}
 
 .formWarning {
   margin: 0 0 var(--store-space-lg);
@@ -14,53 +141,269 @@
   background: color-mix(in srgb, var(--store-accent) 13%, var(--store-surface));
   box-shadow: var(--store-shadow-xs);
 }
-.formWarning strong { display: block; font-weight: var(--store-weight-black); }
-.formWarning p { margin: 5px 0 0; color: var(--store-muted); line-height: 1.45; }
 
+.formWarning strong {
+  display: block;
+  font-weight: var(--store-weight-black);
+}
+
+.formWarning p {
+  margin: 5px 0 0;
+  color: var(--store-muted);
+  line-height: 1.45;
+}
+
+.stackForm {
+  display: grid;
+  gap: 18px;
+}
+
+.formField {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.formField label {
+  color: var(--store-text);
+  font-size: 0.86rem;
+  font-weight: var(--store-weight-bold);
+}
+
+.formField input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-text);
+  font-size: 1rem;
+  transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
+}
+
+.formField input:hover {
+  border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border));
+}
+
+.formField input:focus {
+  border-color: var(--store-brand);
+  box-shadow: 0 0 0 1px var(--store-brand);
+}
+
+.formField input[aria-invalid="true"] {
+  border-color: var(--store-danger);
+}
+
+.formField small,
 .fieldHint {
   margin: 0;
   color: var(--store-muted);
   font-size: 0.82rem;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.fieldError {
+.formField .fieldSuccess {
+  color: var(--store-success);
+}
+
+.formField .fieldError {
   color: var(--store-danger);
-  font-size: 0.82rem;
   font-weight: var(--store-weight-medium);
 }
 
-.helpDetails {
-  margin-top: var(--store-space-md);
-  padding: var(--store-space-sm) var(--store-space-md);
+.passwordControl {
+  position: relative;
+}
+
+.passwordControl input {
+  padding-right: 102px;
+}
+
+.passwordToggle {
+  position: absolute;
+  inset: 2px 3px 2px auto;
+  min-width: 92px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--store-border);
+  border-radius: 0 9px 9px 0;
+  background: transparent;
+  color: var(--store-brand);
+  font-size: 0.82rem;
+  font-weight: var(--store-weight-bold);
+  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+
+.passwordToggle:hover {
+  background: color-mix(in srgb, var(--store-brand) 8%, transparent);
+  color: var(--store-brand-strong);
+}
+
+.passwordToggle:active {
+  transform: translateY(1px);
+}
+
+.consentBlock {
+  padding: var(--store-space-md);
   border: 1px solid var(--store-border);
   border-radius: var(--store-radius-sm);
-  background: var(--store-surface-strong);
+  background: color-mix(in srgb, var(--store-brand) 4%, var(--store-surface));
 }
-.helpDetails summary {
-  cursor: pointer;
+
+.consentField {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
   color: var(--store-text);
   font-size: 0.9rem;
-  font-weight: var(--store-weight-bold);
-  list-style: none;
+  line-height: 1.5;
+  cursor: pointer;
 }
-.helpDetails summary::-webkit-details-marker { display: none; }
-.helpDetails summary::before {
-  content: "+";
-  display: inline-block;
-  width: 1.1em;
+
+.consentField input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  accent-color: var(--store-brand);
+}
+
+.consentField a,
+.formLinks a,
+.devNotice a,
+.statusBanner a {
   color: var(--store-brand);
+  font-weight: var(--store-weight-bold);
+  text-underline-offset: 3px;
+}
+
+.consentBlock > p {
+  margin: 9px 0 0 31px;
+  color: var(--store-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.submitButton {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.devNotice {
+  margin: 0 0 var(--store-space-lg);
+  padding: var(--store-space-sm);
+  border-left: 4px solid var(--store-accent);
+  border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0;
+  background: var(--store-surface-strong);
+  color: var(--store-text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.loadingState {
+  min-height: 210px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: var(--store-space-xl);
+  border: 1px dashed var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-bg);
+  text-align: center;
+}
+
+.loadingState::before {
+  width: 44px;
+  height: 4px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-brand);
+  content: "";
+}
+
+.loadingState strong {
   font-weight: var(--store-weight-black);
 }
-.helpDetails[open] summary::before { content: "\2212"; }
-.helpDetails ul {
-  display: grid;
-  gap: 8px;
-  margin: var(--store-space-sm) 0 0;
-  padding: 0 0 0 1.1em;
+
+.loadingState span {
   color: var(--store-muted);
   font-size: 0.88rem;
+}
+
+.nextStep {
+  display: grid;
+  gap: 11px;
+  margin-top: -4px;
+}
+
+.unavailableState {
+  display: grid;
+  gap: 12px;
+  padding: var(--store-space-lg);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+}
+
+.unavailableState h3,
+.unavailableState p {
+  margin: 0;
+}
+
+.unavailableState h3 {
+  font-size: 1.08rem;
+  font-weight: var(--store-weight-black);
+}
+
+.unavailableState p {
+  color: var(--store-muted);
   line-height: 1.5;
+}
+
+.unavailableState a {
+  justify-self: start;
+  margin-top: 3px;
+}
+
+.nextStep h3,
+.nextStep p {
+  margin: 0;
+}
+
+.nextStep h3 {
+  font-size: 1.05rem;
+  font-weight: var(--store-weight-black);
+}
+
+.nextStep > p:not(.fieldHint) {
+  color: var(--store-text);
+  line-height: 1.5;
+}
+
+.secondaryButton {
+  min-height: 44px;
+  justify-self: start;
+  margin-top: 4px;
+  padding: 0 var(--store-space-md);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-brand);
+  font-weight: var(--store-weight-bold);
+  cursor: pointer;
+  transition: border-color var(--store-duration-fast) var(--store-ease), background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
+}
+
+.secondaryButton:hover {
+  border-color: var(--store-brand);
+  background: color-mix(in srgb, var(--store-brand) 5%, var(--store-surface));
+}
+
+.secondaryButton:active {
+  transform: translateY(1px);
 }
 
 .successActions {
@@ -68,4 +411,161 @@
   flex-wrap: wrap;
   gap: 10px 20px;
   margin: 4px 0 var(--store-space-lg);
+}
+
+.helpDetails {
+  margin-top: var(--store-space-lg);
+  padding: var(--store-space-sm) var(--store-space-md);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+}
+
+.helpDetails summary {
+  min-height: 32px;
+  color: var(--store-text);
+  font-size: 0.9rem;
+  font-weight: var(--store-weight-bold);
+  line-height: 32px;
+  cursor: pointer;
+}
+
+.helpDetails ul {
+  display: grid;
+  gap: 8px;
+  margin: var(--store-space-sm) 0 0;
+  padding: 0 0 0 1.2em;
+  color: var(--store-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.formLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 20px;
+  margin-top: var(--store-space-xl);
+  padding-top: var(--store-space-md);
+  border-top: 1px solid var(--store-border);
+  font-size: 0.88rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .formPanel {
+    animation: auth-panel-enter 240ms var(--store-ease) both;
+  }
+
+  .statusBanner,
+  .nextStep,
+  .unavailableState {
+    animation: auth-state-enter 180ms var(--store-ease) both;
+  }
+
+  .loadingState::before {
+    animation: auth-loading-pulse 1.3s var(--store-ease) infinite alternate;
+  }
+}
+
+@keyframes auth-panel-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes auth-state-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes auth-loading-pulse {
+  from { opacity: 0.45; transform: scaleX(0.72); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+@media (max-width: 980px) {
+  .authPage {
+    grid-template-columns: 1fr;
+    gap: 34px;
+    padding-top: 32px;
+  }
+
+  .authIntro {
+    max-width: 720px;
+    padding-top: 0;
+  }
+
+  .authIntro h1 {
+    max-width: 720px;
+  }
+
+  .formPanel {
+    width: min(100%, 620px);
+  }
+}
+
+@media (max-width: 560px) {
+  .authPage {
+    gap: 26px;
+    padding-block: 24px 84px;
+  }
+
+  .contextLabel {
+    margin-bottom: 9px;
+  }
+
+  .authIntro h1 {
+    font-size: clamp(2rem, 10vw, 2.7rem);
+  }
+
+  .contextDescription {
+    margin-top: 14px;
+  }
+
+  .benefitList {
+    margin-top: 22px;
+  }
+
+  .benefitList li {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding-block: 12px;
+  }
+
+  .formPanel {
+    padding: 20px 16px 22px;
+    border-radius: var(--store-radius);
+  }
+
+  .segmentedNav a {
+    padding-inline: 4px;
+  }
+
+  .formHeading {
+    margin-bottom: 20px;
+  }
+
+  .consentBlock {
+    padding: 14px 12px;
+  }
+
+  .consentBlock > p {
+    margin-left: 31px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .formPanel,
+  .statusBanner,
+  .nextStep,
+  .unavailableState,
+  .loadingState::before {
+    animation: none;
+  }
+
+  .passwordToggle,
+  .secondaryButton,
+  .segmentedNav a,
+  .formField input {
+    transition-duration: 0.01ms;
+  }
 }

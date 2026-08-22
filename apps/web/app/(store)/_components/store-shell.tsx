@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FocusEvent, ReactNode } from "react";
 
 import {
@@ -19,12 +19,15 @@ import type { MessengerLink } from "../../site-config";
 import { BrandLockup } from "./brand-mark";
 import { CartButton, CartPanel, MobileCartButton } from "./cart-actions";
 import { CartProvider } from "./cart-provider";
-import { isHeaderCollapsed } from "./header-scroll-collapse";
+import { createHeaderCollapseState, getNextHeaderCollapseState } from "./header-scroll-collapse";
 import { HeaderSearchForm } from "./search-box";
 import { AccountNavigation, SessionNavigationProvider, useAccountDestination } from "./session-navigation";
 import styles from "./storefront.module.css";
 
 const STORE_PHONE_HREF = `tel:${STORE_PHONE}`;
+// CSS uses `--store-duration-slow: 320ms`; the small buffer lets scroll
+// anchoring finish before direction sampling resumes.
+const HEADER_LAYOUT_SETTLE_MS = 360;
 
 const customerLinks = [
   { href: "/delivery", label: "Условия доставки" },
@@ -197,44 +200,100 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
  * bar already carries both — same `<768px` breakpoint, so there is no
  * width where either becomes unreachable.
  *
- * Scroll collapse (mobile only): past `HEADER_COLLAPSE_SCROLL_THRESHOLD_PX`
- * every row but the search field collapses to nothing via the CSS
- * grid-rows trick (`data-collapsed` below drives the `[data-collapsed]`
- * selectors in storefront.module.css), leaving just the pinned search bar —
- * see header-scroll-collapse.ts for why this needed a scroll listener
- * instead of being pure CSS, and for the focus/reduced-motion guards.
+ * Scroll collapse (all viewport widths): a deliberate downward gesture hides
+ * the utility/brand/actions content while the VIN/article search stays pinned.
+ * A shorter upward gesture restores the full header. The direction-aware
+ * reducer in header-scroll-collapse.ts supplies hysteresis, so trackpad noise
+ * cannot make the header flicker around a direction change.
  */
 function StoreHeader() {
-  const [scrollY, setScrollY] = useState(0);
-  const [focusWithin, setFocusWithin] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const tickingRef = useRef(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const collapseStateRef = useRef(createHeaderCollapseState());
+  const focusWithinCollapsibleContentRef = useRef(false);
+  const reducedMotionRef = useRef(false);
+  const animationFrameRef = useRef<number | null>(null);
+  const layoutSettleTimerRef = useRef<number | null>(null);
+  const layoutSettlingRef = useRef(false);
+
+  const updateCollapseState = useCallback((scrollY: number, force = false) => {
+    // Collapsing a sticky element changes its document height. Browsers then
+    // adjust scrollY to preserve the reading position; that synthetic upward
+    // delta must not be mistaken for a visitor asking to reveal the header.
+    // Focus and motion-preference changes bypass the lock for accessibility.
+    if (layoutSettlingRef.current && !force) return;
+
+    const previous = collapseStateRef.current;
+    const next = getNextHeaderCollapseState(previous, {
+      focusWithinCollapsibleContent: focusWithinCollapsibleContentRef.current,
+      reducedMotion: reducedMotionRef.current,
+      scrollY,
+    });
+    collapseStateRef.current = next;
+
+    // Scroll samples update refs only. React renders solely when visibility
+    // actually changes, rather than once per scroll frame.
+    if (next.collapsed !== previous.collapsed) {
+      setCollapsed(next.collapsed);
+      layoutSettlingRef.current = true;
+      if (layoutSettleTimerRef.current !== null) window.clearTimeout(layoutSettleTimerRef.current);
+      layoutSettleTimerRef.current = window.setTimeout(() => {
+        layoutSettleTimerRef.current = null;
+        layoutSettlingRef.current = false;
+        collapseStateRef.current = {
+          ...collapseStateRef.current,
+          anchorScrollY: Math.max(0, window.scrollY),
+        };
+      }, HEADER_LAYOUT_SETTLE_MS);
+    }
+  }, []);
 
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(query.matches);
-    const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
+    reducedMotionRef.current = query.matches;
+    collapseStateRef.current = createHeaderCollapseState(window.scrollY);
+    layoutSettlingRef.current = false;
 
-  useEffect(() => {
     const onScroll = () => {
-      if (tickingRef.current) return;
-      tickingRef.current = true;
-      window.requestAnimationFrame(() => {
-        setScrollY(window.scrollY);
-        tickingRef.current = false;
+      if (animationFrameRef.current !== null) return;
+      animationFrameRef.current = window.requestAnimationFrame(() => {
+        animationFrameRef.current = null;
+        updateCollapseState(window.scrollY);
       });
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
-  const collapsed = isHeaderCollapsed({ focusWithin, reducedMotion, scrollY });
+    const onMotionPreferenceChange = (event: MediaQueryListEvent) => {
+      reducedMotionRef.current = event.matches;
+      updateCollapseState(window.scrollY, true);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    query.addEventListener("change", onMotionPreferenceChange);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      query.removeEventListener("change", onMotionPreferenceChange);
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      if (layoutSettleTimerRef.current !== null) {
+        window.clearTimeout(layoutSettleTimerRef.current);
+        layoutSettleTimerRef.current = null;
+      }
+      layoutSettlingRef.current = false;
+    };
+  }, [updateCollapseState]);
+
+  function handleFocus(event: FocusEvent<HTMLDivElement>) {
+    const target = event.target as Element;
+    focusWithinCollapsibleContentRef.current = !target.closest("[data-header-persistent-search]");
+    updateCollapseState(window.scrollY, true);
+  }
 
   function handleBlur(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false);
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      focusWithinCollapsibleContentRef.current = false;
+      updateCollapseState(window.scrollY, true);
+    }
   }
 
   return (
@@ -242,7 +301,7 @@ function StoreHeader() {
       <div
         className={styles.headerInset}
         data-collapsed={collapsed ? "true" : undefined}
-        onFocus={() => setFocusWithin(true)}
+        onFocus={handleFocus}
         onBlur={handleBlur}
       >
         {/* Desktop row 1 (thin utility line). */}
@@ -298,7 +357,7 @@ function StoreHeader() {
             <Link className={styles.brand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
               <BrandLockup className={styles.brandLockup} tone="current" />
             </Link>
-            <div className={styles.headerDesktopSearch}>
+            <div className={styles.headerDesktopSearch} data-header-persistent-search>
               <HeaderSearchForm id="header-search-q" />
             </div>
             <div className={styles.headerActions}>
@@ -332,7 +391,7 @@ function StoreHeader() {
         </div>
 
         {/* Mobile row 4: the search field alone, full width. */}
-        <div className={styles.mobileSearchRow}>
+        <div className={styles.mobileSearchRow} data-header-persistent-search>
           <div className={styles.headerRowInner}>
             <HeaderSearchForm id="header-search-q-mobile" />
           </div>

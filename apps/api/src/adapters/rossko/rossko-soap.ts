@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 
 import type { SupplierPart, SupplierSearchResult, SupplierStock } from "../provider-contracts.js";
 
-// Rossko GetSearch, verified live:
-//   targetNamespace = https://api.rossko.ru/, SOAPAction = "https://api.rossko.ru/GetSearch".
+// Rossko GetSearch, verified against the live v2.1 WSDL:
+//   targetNamespace = https://api.rossko.ru/,
+//   SOAPAction = "https://api.rossko.ru/service/v2.1/GetSearch".
 // The v1 endpoint on chita.rossko.ru is closed; do not fall back to it.
 //
 // The operation name is part of the path — the WSDL publishes
@@ -11,7 +12,7 @@ import type { SupplierPart, SupplierSearchResult, SupplierStock } from "../provi
 // Posting to the bare service/v2.1/ directory answers HTTP 404.
 export const ROSSKO_ENDPOINT = "https://api.rossko.ru/service/v2.1/GetSearch";
 export const ROSSKO_NAMESPACE = "https://api.rossko.ru/";
-export const ROSSKO_SOAP_ACTION = "https://api.rossko.ru/GetSearch";
+export const ROSSKO_SOAP_ACTION = "https://api.rossko.ru/service/v2.1/GetSearch";
 
 const CACHE_KEY_PREFIX = "an30:rossko:search:";
 
@@ -23,6 +24,7 @@ const MAX_STOCKS_PER_PART = 50;
 const MAX_CROSSES_PER_PART = 50;
 const MAX_PART_DEPTH = 6;
 const MAX_XML_NODE_VISITS = 20_000;
+const MAX_STOCK_QUANTITY = 1_000_000;
 
 export interface RosskoSearchParams {
   addressId?: string;
@@ -153,6 +155,7 @@ function isWhitespace(character: string | undefined): boolean {
 
 function parseXmlDocument(input: string): XmlNode {
   const length = input.length;
+  let nodesParsed = 0;
   let position = 0;
 
   function fail(message: string): never {
@@ -210,6 +213,8 @@ function parseXmlDocument(input: string): XmlNode {
 
   function parseElement(depth: number): XmlNode {
     if (depth > 200) fail("XML nesting too deep");
+    nodesParsed += 1;
+    if (nodesParsed > MAX_XML_NODE_VISITS) fail("XML document has too many nodes");
     if (input[position] !== "<") fail("Expected '<'");
     position += 1;
     const nameMatch = /^[^\s/>]+/u.exec(input.slice(position));
@@ -263,6 +268,7 @@ function parseXmlDocument(input: string): XmlNode {
   if (position >= length) fail("Empty document");
   const root = parseElement(0);
   skipMisc();
+  if (position !== length) fail("Unexpected content after root element");
   return root;
 }
 
@@ -306,27 +312,64 @@ function parseBoolean(text: string): boolean | null {
 
 function parseNonNegativeInt(raw: string | undefined): number {
   if (raw === undefined) return 0;
-  const value = Number.parseInt(raw.trim(), 10);
-  return Number.isInteger(value) && value >= 0 ? value : 0;
+  const trimmed = raw.trim();
+  // Number.parseInt("12abc") and Number.parseInt("1.5") both used to report
+  // stock that Rossko never actually stated. Availability must fail closed:
+  // only an entire decimal integer token is accepted.
+  if (!/^\d+$/u.test(trimmed)) return 0;
+  const value = Number(trimmed);
+  return Number.isSafeInteger(value) && value <= MAX_STOCK_QUANTITY ? value : 0;
+}
+
+function deliveryDate(raw: string | undefined): string | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}T/iu.test(raw) || !Number.isFinite(Date.parse(raw))) return null;
+  const [year, month, day] = raw.slice(0, 10).split("-");
+  return year && month && day ? `${day}.${month}.${year}` : null;
+}
+
+function parseDeliveryTime(node: XmlNode): string | null {
+  // Kept for compatibility with the older payload captured in the existing
+  // fixtures. The current v2.1 WSDL exposes deliveryStart/deliveryEnd instead.
+  const legacy = findChild(node, "delivery_time")?.text;
+  if (legacy && legacy.length <= 120) return legacy;
+  const start = deliveryDate(findChild(node, "deliveryStart")?.text);
+  const end = deliveryDate(findChild(node, "deliveryEnd")?.text);
+  if (start && end) return start === end ? start : `${start}–${end}`;
+  if (end) return `до ${end}`;
+  if (start) return `с ${start}`;
+  return null;
 }
 
 function parseStock(node: XmlNode): SupplierStock | null {
+  const id = findChild(node, "id")?.text ?? "";
+  // The public contract and wait-list lookup both require an opaque stock
+  // id. Keeping an id-less line would make the browser reject the entire
+  // otherwise-valid response and could never produce a resolvable request.
+  if (id.length === 0 || id.length > 120) return null;
   const priceRaw = findChild(node, "price")?.text;
   if (priceRaw === undefined) return null;
   const priceKopeks = parsePriceToKopeks(priceRaw);
   // A stock line with an unparseable price is dropped rather than rounded,
   // coerced or allowed to crash the whole search — see parsePriceToKopeks.
   if (priceKopeks === null) return null;
-  const deliveryTime = findChild(node, "delivery_time")?.text;
   return {
-    deliveryTime: deliveryTime && deliveryTime.length > 0 ? deliveryTime : null,
-    id: findChild(node, "id")?.text ?? "",
+    deliveryTime: parseDeliveryTime(node),
+    id,
     priceKopeks,
     quantity: parseNonNegativeInt(findChild(node, "count")?.text),
   };
 }
 
-function parsePart(node: XmlNode, depth: number): SupplierPart {
+function parsePart(node: XmlNode, depth: number): SupplierPart | null {
+  const brand = findChild(node, "brand")?.text ?? "";
+  const guid = findChild(node, "guid")?.text ?? "";
+  const name = findChild(node, "name")?.text ?? "";
+  const partNumber = findChild(node, "partnumber")?.text ?? "";
+  // guid and partnumber are load-bearing identifiers in the HTTP contract;
+  // oversized display fields are equally invalid there. Drop only the bad
+  // part instead of poisoning the complete supplier response in the browser.
+  if (guid.length === 0 || guid.length > 200 || partNumber.length === 0 || partNumber.length > 200
+    || brand.length > 200 || name.length > 500) return null;
   const stocksNode = findChild(node, "stocks");
   const stocks = stocksNode
     // The element is lowercase `stock`; `Stock` is only the WSDL type name.
@@ -342,13 +385,14 @@ function parsePart(node: XmlNode, depth: number): SupplierPart {
     ? findChildren(crossesNode, "Part")
       .slice(0, MAX_CROSSES_PER_PART)
       .map((child) => parsePart(child, depth + 1))
+      .filter((part): part is SupplierPart => part !== null)
     : [];
   return {
-    brand: findChild(node, "brand")?.text ?? "",
+    brand,
     crosses,
-    guid: findChild(node, "guid")?.text ?? "",
-    name: findChild(node, "name")?.text ?? "",
-    partNumber: findChild(node, "partnumber")?.text ?? "",
+    guid,
+    name,
+    partNumber,
     stocks,
   };
 }
@@ -370,12 +414,13 @@ export function parseSearchResponseXml(xml: string): SupplierSearchResult {
     if (success === null) {
       return { message: "Поставщик вернул неожиданный ответ", parts: [], success: false };
     }
-    const message = findChild(resultNode, "message")?.text ?? "";
+    const message = (findChild(resultNode, "message")?.text ?? "").slice(0, 2_000);
     const partsListNode = findChild(resultNode, "PartsList");
     const parts = partsListNode
       ? findChildren(partsListNode, "Part")
         .slice(0, MAX_TOP_LEVEL_PARTS)
         .map((node) => parsePart(node, 0))
+        .filter((part): part is SupplierPart => part !== null)
       : [];
     return { message, parts, success };
   } catch {

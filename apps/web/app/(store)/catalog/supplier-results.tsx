@@ -77,7 +77,7 @@ function partOffers(part: SupplierPartView): { hidden: FlatOffer[]; primary: Fla
   const best = bestStock(part.stocks);
   const restStocks = best ? part.stocks.filter((stock) => stock.id !== best.id) : part.stocks;
 
-  const primary: FlatOffer | null = best
+  const directPrimary: FlatOffer | null = best
     ? { analog: false, brand: part.brand, guid: part.guid, key: `${part.guid}:${best.id}`, name: part.name, partNumber: part.partNumber, stock: best }
     : null;
 
@@ -93,7 +93,9 @@ function partOffers(part: SupplierPartView): { hidden: FlatOffer[]; primary: Fla
       : [{ analog: true, brand: cross.brand, guid: cross.guid, key: `${cross.guid}:none`, name: cross.name, partNumber: cross.partNumber, stock: null }]
   ));
 
-  return { hidden: [...restOffers, ...crossOffers], primary };
+  const remaining = [...restOffers, ...crossOffers];
+  const primary = directPrimary ?? remaining.shift() ?? null;
+  return { hidden: remaining, primary };
 }
 
 function OfferBadges({ offer }: { offer: FlatOffer }) {
@@ -223,7 +225,16 @@ function PartRows({ onWaitlist, part, query }: {
  * `filterSupplierParts` and the contract's `source` field for where that
  * identity actually lives (staff-only, never rendered here).
  */
-export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query: string }) {
+export function SupplierResults({
+  brandNames = [], maxPriceKopeks, minPriceKopeks, ownAvailable = [], ownEmpty, query,
+}: {
+  brandNames?: string[];
+  maxPriceKopeks?: number;
+  minPriceKopeks?: number;
+  ownAvailable?: Array<{ brand: string | null; sku: string }>;
+  ownEmpty: boolean;
+  query: string;
+}) {
   const [state, setState] = useState<FetchState>({ status: "loading" });
   const [reloadToken, setReloadToken] = useState(0);
   const [waitlistTarget, setWaitlistTarget] = useState<SupplierWaitlistTarget | null>(null);
@@ -248,7 +259,15 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
   const retry = useCallback(() => setReloadToken((token) => token + 1), []);
 
   const ready = state.status === "ready" ? state.response : null;
-  const parts = filterSupplierParts(ready);
+  const parts = filterSupplierParts(ready, {
+    brandNames,
+    ownAvailable,
+    ...(maxPriceKopeks === undefined ? {} : { maxPriceKopeks }),
+    ...(minPriceKopeks === undefined ? {} : { minPriceKopeks }),
+  });
+  const hasSupplierFilters = brandNames.length > 0
+    || minPriceKopeks !== undefined
+    || maxPriceKopeks !== undefined;
   const supplierUnavailable = Boolean(ready && !ready.success);
   const supplierEmpty = Boolean(ready?.success && parts.length === 0);
 
@@ -297,7 +316,7 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
           ) : (
             <>
               <h3>Под заказ ничего нет</h3>
-              <p>По запросу «{query}» подходящих позиций под заказ не нашлось. Попробуйте изменить запрос.</p>
+              <p>По запросу «{query}» подходящих позиций под заказ не нашлось. {hasSupplierFilters ? "Попробуйте снять часть фильтров." : "Попробуйте изменить запрос."}</p>
             </>
           )}
         </section>
@@ -306,7 +325,9 @@ export function SupplierResults({ ownEmpty, query }: { ownEmpty: boolean; query:
       {ready && parts.length > 0 ? (
         <>
           {ready.truncated ? (
-            <p className={styles.supplierTruncatedNote}>Показаны первые {parts.length} из {ready.totalFound} найденных под заказ.</p>
+            <p className={styles.supplierTruncatedNote}>
+              Поиск вернул не все {ready.totalFound} результатов. Показано подходящих: {parts.length}.
+            </p>
           ) : null}
           <div className={resultsStyles.resultsList}>
             {parts.map((part) => <PartRows key={part.guid} onWaitlist={setWaitlistTarget} part={part} query={query} />)}

@@ -4,6 +4,8 @@ import { ConflictException, ServiceUnavailableException } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { describe, expect, it, vi } from "vitest";
 
+import { CONTACT_CONSENT_POLICY_VERSION } from "@an30/contracts";
+
 import type { StorageProvider } from "../adapters/provider-contracts.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { AuditService } from "../security/audit.service.js";
@@ -23,7 +25,7 @@ const contact = {
   idempotencyKey: IDEMPOTENCY_KEY,
   message: "Нужна помощь с подбором детали",
   name: "Антон Ермолаев",
-  policyVersion: "contact-consent-v1",
+  policyVersion: CONTACT_CONSENT_POLICY_VERSION,
   source: "expert_help",
 };
 const config = { getOrThrow: () => true } as unknown as ConfigService;

@@ -40,35 +40,24 @@ export class OneCExchangeTempStorageService {
 
   /**
    * Appends one chunk to the target file, creating parent directories as
-   * needed. If the file already ends with exactly these bytes (a resumed or
-   * repeated chunk — 1C has no way to tell us "you already have this"), the
-   * append is skipped so the file is never duplicated in place.
+   * needed. The CommerceML exchange protocol carries neither a chunk offset
+   * nor a sequence/idempotency key, so byte content cannot tell a retry from
+   * two legitimate adjacent equal chunks. Every successful mode=file request
+   * is therefore one append; guessing from a matching tail would silently
+   * corrupt valid XML (for example across a repeated padding/text boundary).
    */
   async appendChunk(relativePath: string, chunk: Buffer): Promise<void> {
     const target = this.resolve(relativePath);
     await mkdir(path.dirname(target), { mode: 0o700, recursive: true });
 
-    // -1 marks "no file yet", which is why this is not initialised to 0: a
-    // zero-length file and a missing one must take different branches below.
     let currentSize: number;
     try {
       currentSize = (await stat(target)).size;
     } catch {
-      currentSize = -1;
+      currentSize = 0;
     }
 
-    if (currentSize >= 0 && chunk.length > 0 && currentSize >= chunk.length) {
-      const handle = await open(target, "r");
-      try {
-        const tail = Buffer.alloc(chunk.length);
-        await handle.read(tail, 0, chunk.length, currentSize - chunk.length);
-        if (tail.equals(chunk)) return; // exact repeat of the last chunk: already durable, do not duplicate it
-      } finally {
-        await handle.close();
-      }
-    }
-
-    if (currentSize > 0 && currentSize + chunk.length > MAX_ASSEMBLED_BYTES) {
+    if (currentSize + chunk.length > MAX_ASSEMBLED_BYTES) {
       throw new Error("Assembled 1C exchange file exceeds the size limit");
     }
 

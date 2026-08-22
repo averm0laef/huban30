@@ -233,6 +233,68 @@ describe("parseSearchResponseXml", () => {
     expect(result.parts[0]!.stocks).toEqual([{ deliveryTime: "1", id: "stock-good", priceKopeks: 1_000, quantity: 2 }]);
   });
 
+  it("fails closed on a malformed or out-of-contract stock count", () => {
+    const xml = `${ENVELOPE_OPEN}
+        <success>true</success>
+        <PartsList>
+          <Part>
+            <guid>part-guid-count</guid><brand>LUK</brand><partnumber>COUNT</partnumber><name>Деталь</name>
+            <stocks>
+              <stock><id>suffix</id><price>10.00</price><count>12abc</count></stock>
+              <stock><id>decimal</id><price>11.00</price><count>1.5</count></stock>
+              <stock><id>huge</id><price>12.00</price><count>1000001</count></stock>
+              <stock><id>clean</id><price>13.00</price><count>12</count></stock>
+            </stocks><crosses></crosses>
+          </Part>
+        </PartsList>${ENVELOPE_CLOSE}`;
+
+    expect(parseSearchResponseXml(xml).parts[0]?.stocks.map((stock) => stock.quantity)).toEqual([0, 0, 0, 12]);
+  });
+
+  it("drops only identifier-less stock lines and parts so the public response remains valid", () => {
+    const xml = `${ENVELOPE_OPEN}
+        <success>true</success>
+        <PartsList>
+          <Part>
+            <guid>good-part</guid><brand>LUK</brand><partnumber>GOOD</partnumber><name>Деталь</name>
+            <stocks>
+              <stock><price>10.00</price><count>1</count></stock>
+              <stock><id>good-stock</id><price>11.00</price><count>2</count></stock>
+            </stocks><crosses></crosses>
+          </Part>
+          <Part>
+            <brand>LUK</brand><partnumber>NO-GUID</partnumber><name>Некорректная деталь</name>
+            <stocks></stocks><crosses></crosses>
+          </Part>
+        </PartsList>${ENVELOPE_CLOSE}`;
+
+    const result = parseSearchResponseXml(xml);
+    expect(result.parts).toHaveLength(1);
+    expect(result.parts[0]?.guid).toBe("good-part");
+    expect(result.parts[0]?.stocks).toEqual([
+      { deliveryTime: null, id: "good-stock", priceKopeks: 1_100, quantity: 2 },
+    ]);
+  });
+
+  it("reads the current v2.1 WSDL deliveryStart/deliveryEnd window", () => {
+    const xml = `${ENVELOPE_OPEN}
+        <success>true</success>
+        <PartsList>
+          <Part>
+            <guid>delivery-part</guid><brand>LUK</brand><partnumber>DELIVERY</partnumber><name>Деталь</name>
+            <stocks>
+              <stock>
+                <id>delivery-stock</id><price>10.00</price><count>1</count>
+                <deliveryStart>2026-08-17T09:00:00+09:00</deliveryStart>
+                <deliveryEnd>2026-08-19T18:00:00+09:00</deliveryEnd>
+              </stock>
+            </stocks><crosses></crosses>
+          </Part>
+        </PartsList>${ENVELOPE_CLOSE}`;
+
+    expect(parseSearchResponseXml(xml).parts[0]?.stocks[0]?.deliveryTime).toBe("17.08.2026–19.08.2026");
+  });
+
   it("reports a supplier-side failure without throwing", () => {
     const xml = `${ENVELOPE_OPEN}
         <success>false</success>
@@ -259,6 +321,13 @@ describe("parseSearchResponseXml", () => {
         <message>OK</message>
         <PartsList><Part><guid>x</guid></Wrong></PartsList>${ENVELOPE_CLOSE}`;
     const result = parseSearchResponseXml(xml);
+    expect(result.success).toBe(false);
+    expect(result.parts).toEqual([]);
+  });
+
+  it("rejects trailing non-XML content instead of accepting only the valid prefix", () => {
+    const valid = `${ENVELOPE_OPEN}<success>true</success>${ENVELOPE_CLOSE}`;
+    const result = parseSearchResponseXml(`${valid}unexpected trailing bytes`);
     expect(result.success).toBe(false);
     expect(result.parts).toEqual([]);
   });

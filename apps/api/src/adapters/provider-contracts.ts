@@ -1,3 +1,5 @@
+import type { Readable } from "node:stream";
+
 import type { AssistantCatalogItem, AssistantChatResult } from "@an30/contracts";
 
 export interface NotificationMessage {
@@ -77,8 +79,14 @@ export interface StoredObject {
   storageKey: string;
 }
 
+export interface StoredObjectStream {
+  byteSize: number;
+  content: Readable;
+}
+
 export interface StorageProvider {
   readonly name: string;
+  open?(storageKey: string): Promise<StoredObjectStream>;
   read(storageKey: string): Promise<Buffer>;
   remove(storageKey: string): Promise<void>;
   store(content: Buffer, extension: string): Promise<StoredObject>;
@@ -122,4 +130,3 @@ export const NOTIFICATION_PROVIDER = Symbol("NOTIFICATION_PROVIDER");
 export const SOCIAL_AUTH_PROVIDER = Symbol("SOCIAL_AUTH_PROVIDER");
 export const STORAGE_PROVIDER = Symbol("STORAGE_PROVIDER");
 export const SUPPLIER_PROVIDER = Symbol("SUPPLIER_PROVIDER");
-

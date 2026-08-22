@@ -259,7 +259,7 @@ async function main(): Promise<void> {
   try {
     await cleanup.query("BEGIN");
     await cleanup.query(`UPDATE app.integration_endpoints
-      SET is_enabled=false,username=NULL,secret_ciphertext=NULL,allowed_networks=ARRAY[]::cidr[]
+      SET is_enabled=false,username=NULL,secret_hash=NULL,allowed_networks=ARRAY[]::cidr[]
       WHERE integration_key='one_c'`);
     const account = (await cleanup.query<{ id: string }>(
       "SELECT id FROM app.users WHERE email=$1", [ownerEmail],

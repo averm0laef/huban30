@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
-import type { StorageProvider, StoredObject } from "./provider-contracts.js";
+import type {
+  StorageProvider,
+  StoredObject,
+  StoredObjectStream,
+} from "./provider-contracts.js";
 
 const SAFE_STORAGE_KEY = /^(?:catalog|chat|content)\/[0-9]{4}-[0-9]{2}\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/u;
 
@@ -30,6 +34,21 @@ export class LocalStorageProvider implements StorageProvider {
 
   async read(storageKey: string): Promise<Buffer> {
     return readFile(this.resolve(storageKey));
+  }
+
+  async open(storageKey: string): Promise<StoredObjectStream> {
+    const handle = await open(this.resolve(storageKey), "r");
+    try {
+      const details = await handle.stat();
+      if (!details.isFile()) throw new Error("Storage object is not a regular file");
+      return {
+        byteSize: details.size,
+        content: handle.createReadStream({ autoClose: true }),
+      };
+    } catch (error) {
+      await handle.close();
+      throw error;
+    }
   }
 
   async remove(storageKey: string): Promise<void> {

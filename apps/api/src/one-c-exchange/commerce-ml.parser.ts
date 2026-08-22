@@ -91,8 +91,13 @@ function parseExportedAt(raw: string | undefined): string {
   return new Date().toISOString();
 }
 
-function readRootInfo(root: XmlNode): CommerceMlRootInfo {
-  const flag = root.attributes["СодержитТолькоИзменения"];
+function readRootInfo(root: XmlNode, dataNode: XmlNode | undefined): CommerceMlRootInfo {
+  // CommerceML puts this flag on the data container itself -- <Каталог> in
+  // import.xml and <ПакетПредложений> in offers.xml. Some older/custom 1C
+  // exporters put it on the document root, so keep that as a compatibility
+  // fallback, but never let it override the standard, more specific value.
+  const flag = dataNode?.attributes["СодержитТолькоИзменения"]
+    ?? root.attributes["СодержитТолькоИзменения"];
   // The highest-consequence decision in this file: guessing "full snapshot"
   // on an ambiguous or missing flag is how a partial upload can deactivate a
   // live catalog, so anything other than an explicit "false" is a delta.
@@ -106,6 +111,11 @@ function readRootInfo(root: XmlNode): CommerceMlRootInfo {
 function textOf(node: XmlNode | undefined): string | undefined {
   const value = node?.text.trim();
   return value && value.length > 0 ? value : undefined;
+}
+
+function isDeletionMarked(node: XmlNode): boolean {
+  const value = textOf(findChild(node, "ПометкаУдаления"))?.toLowerCase();
+  return value === "true" || value === "1";
 }
 
 function collectCategories(
@@ -128,7 +138,7 @@ function collectCategories(
       description: null,
       entityType: "category",
       externalId: id,
-      isActive: true,
+      isActive: !isDeletionMarked(group),
       name,
       parentExternalId,
       slug: buildSlug(name, id),
@@ -160,6 +170,53 @@ function parseProductAttributes(productNode: XmlNode): Record<string, unknown> {
   return attributes;
 }
 
+function parseProductRequisite(productNode: XmlNode, requisiteName: string): string | undefined {
+  const container = findChild(productNode, "ЗначенияРеквизитов");
+  if (!container) return undefined;
+  for (const entry of findChildren(container, "ЗначениеРеквизита")) {
+    if (textOf(findChild(entry, "Наименование"))?.toLowerCase() !== requisiteName.toLowerCase()) continue;
+    return textOf(findChild(entry, "Значение"));
+  }
+  return undefined;
+}
+
+// TODO(article crosses, AN30-013 cross-reference index): CommerceML *can*
+// carry analogue/cross article numbers as product properties, but this
+// parser cannot identify them yet, and none of the properties captured
+// above are usable for that today. What is missing, precisely:
+//
+//   1. Property *definitions* are never parsed. 1C declares each property's
+//      id -> human name (and, for enumerated properties, its allowed
+//      values) once, under <Классификатор><Свойства><Свойство>...
+//      <Ид>/<Наименование>/<ТипЗначений> — this file only reads
+//      <Классификатор><Группы> (collectCategories, above) and never touches
+//      <Свойства> at all. Without that map, parseProductAttributes above
+//      can only record raw property-id -> value pairs (see its "ЗначенияСвойств"
+//      loop): it has no way to know which id, if any, means "аналог",
+//      "кросс-номер" or "OEM номер" for a given 1C catalog, because that
+//      mapping is assigned per-database, not fixed by the CommerceML spec.
+//   2. A cross-bearing property can be plain text (one delimited string of
+//      several article numbers — the delimiter is 1C-instance-specific: a
+//      comma, a semicolon, or newlines have all been seen in the wild) or a
+//      reference to a *separate* value catalog (<ТипЗначений>Справочник...),
+//      in which case the actual article numbers live in yet another part of
+//      the export this parser does not read at all.
+//   3. Even once found, a 1C-sourced cross has no supplier-style nested
+//      structure to lean on (contrast rossko-soap.ts's `<crosses><Part>`
+//      tree) — brand attribution for each linked article would have to come
+//      from a *second* property on the same product, looked up the same way.
+//
+// None of this is implemented here on purpose, per AN30-013's instruction
+// not to half-build a parser change concurrent work (this file) is already
+// touching. If it is picked up later: parse <Свойства> into an id->name map
+// next to collectCategories, let parseProduct optionally emit any resolved
+// cross article strings it finds (split on the tenant's actual delimiter),
+// and feed the result through the exact same ingestion path Rossko crosses
+// already use — canonicalizeCrossPair/ingestArticleCrosses in
+// apps/worker/src/article-cross-ingest.ts, with source: 'one_c' (already a
+// valid app.article_crosses.source value — see migration 0018). Do not add
+// a second normaliser or a second ingest path for it.
+
 interface ParsedProduct {
   brandName: string | null;
   row: Extract<OneCCatalogRow, { entityType: "product" }>;
@@ -168,7 +225,13 @@ interface ParsedProduct {
 function parseProduct(productNode: XmlNode): ParsedProduct | null {
   const id = textOf(findChild(productNode, "Ид"));
   const name = textOf(findChild(productNode, "Наименование"));
-  const sku = textOf(findChild(productNode, "Артикул"));
+  // Артикул is optional in real 1C exports. Bitrix-compatible CommerceML
+  // commonly carries the stable nomenclature code either as a direct <Код>
+  // or as the predefined "Код" requisite instead; dropping those products
+  // would make a normal 1C catalog look mysteriously incomplete.
+  const sku = textOf(findChild(productNode, "Артикул"))
+    ?? textOf(findChild(productNode, "Код"))
+    ?? parseProductRequisite(productNode, "Код");
   if (!id || !name || !sku) return null; // a product missing a required field is dropped, not fatal to the file
   const groupsNode = findChild(productNode, "Группы");
   // CommerceML allows multiple <Ид> under <Группы> (multiple categories);
@@ -182,10 +245,10 @@ function parseProduct(productNode: XmlNode): ParsedProduct | null {
       attributes: parseProductAttributes(productNode),
       brandExternalId: manufacturer ? buildBrandExternalId(manufacturer) : null,
       categoryExternalId,
-      description: null,
+      description: textOf(findChild(productNode, "Описание")) ?? null,
       entityType: "product",
       externalId: id,
-      isActive: true,
+      isActive: !isDeletionMarked(productNode),
       name,
       searchText: `${sku} ${name}`,
       sku,
@@ -221,6 +284,15 @@ function parseQuantity(raw: string | undefined): number | null {
   return Number.isSafeInteger(value) && value >= 0 && value <= 2_147_483_647 ? value : null;
 }
 
+function isRubCurrency(raw: string | undefined): boolean {
+  if (raw === undefined || raw.trim() === "") return true;
+  const normalized = raw.trim().toUpperCase().replace(/[.\s]+/gu, "");
+  // RUB is the ISO 4217 code. RUR and the Russian spelling are retained for
+  // older/custom 1C configurations that still emit them; every other
+  // currency must be rejected rather than silently relabelled as roubles.
+  return normalized === "RUB" || normalized === "RUR" || normalized === "РУБ" || normalized === "643";
+}
+
 function parseOffer(offerNode: XmlNode): {
   price: Extract<OneCCatalogRow, { entityType: "price" }> | null;
   stock: Extract<OneCCatalogRow, { entityType: "stock" }> | null;
@@ -233,8 +305,9 @@ function parseOffer(offerNode: XmlNode): {
   // uses a single retail price, so the first <Цена> entry wins.
   const firstPrice = pricesNode ? findChildren(pricesNode, "Цена")[0] : undefined;
   const rawPrice = firstPrice ? findChild(firstPrice, "ЦенаЗаЕдиницу")?.text : undefined;
+  const rawCurrency = firstPrice ? findChild(firstPrice, "Валюта")?.text : undefined;
   const kopeks = rawPrice !== undefined ? parseMoneyToKopeks(rawPrice) : null;
-  const price = kopeks !== null
+  const price = kopeks !== null && isRubCurrency(rawCurrency)
     ? { amountKopeks: kopeks, currency: "RUB" as const, entityType: "price" as const, productExternalId, version: 1 }
     : null;
 
@@ -255,7 +328,6 @@ function parseOffer(offerNode: XmlNode): {
 /** Parses import.xml: Классификатор/Группы (recursive category tree) + Каталог/Товары/Товар. */
 export function parseImportXml(xml: string): CatalogParseResult {
   const root = requireRoot(parseDocument(xml));
-  const info = readRootInfo(root);
   const headerRows: OneCCatalogRow[] = [];
   const bodyRows: OneCCatalogRow[] = [];
   const productExternalIds: string[] = [];
@@ -265,6 +337,7 @@ export function parseImportXml(xml: string): CatalogParseResult {
   if (classifierGroups) collectCategories(classifierGroups, null, 0, headerRows);
 
   const catalogNode = findChild(root, "Каталог");
+  const info = readRootInfo(root, catalogNode ?? classifierNode);
   const productsNode = catalogNode ? findChild(catalogNode, "Товары") : undefined;
   const brandNames = new Map<string, string>();
   if (productsNode) {
@@ -293,10 +366,10 @@ export function parseImportXml(xml: string): CatalogParseResult {
 /** Parses offers.xml: ПакетПредложений/Предложения/Предложение -> price + stock rows against one synthetic warehouse. */
 export function parseOffersXml(xml: string): OffersParseResult {
   const root = requireRoot(parseDocument(xml));
-  const info = readRootInfo(root);
   const bodyRows: OneCCatalogRow[] = [];
 
   const packageNode = findChild(root, "ПакетПредложений");
+  const info = readRootInfo(root, packageNode);
   const offersNode = packageNode ? findChild(packageNode, "Предложения") : undefined;
   if (offersNode) {
     for (const offerNode of findChildren(offersNode, "Предложение")) {

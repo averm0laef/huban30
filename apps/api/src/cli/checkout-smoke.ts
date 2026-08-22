@@ -3,6 +3,12 @@ import { createHmac, randomUUID } from "node:crypto";
 import { NestFactory } from "@nestjs/core";
 import { Client } from "pg";
 
+import {
+  CHECKOUT_LEGAL_POLICY_VERSION,
+  CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
+  REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+} from "@an30/contracts";
+
 import type { AuthContext } from "../auth/auth-context.js";
 import { AppModule } from "../app.module.js";
 import { OrderService } from "../checkout/order.service.js";
@@ -106,7 +112,9 @@ async function main(): Promise<void> {
     delivery: { method: "pickup" },
     idempotencyKey,
     items: [{ productId, quantity }],
-    legalPolicyVersion: "checkout-terms-v1",
+    legalPolicyVersion: CHECKOUT_LEGAL_POLICY_VERSION,
+    personalDataConsent: true,
+    personalDataConsentVersion: CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
     sandboxScenario: scenario,
     termsAccepted: true,
   });
@@ -173,6 +181,8 @@ async function main(): Promise<void> {
       displayName: "Checkout Smoke Customer",
       email: customerEmail,
       password: customerPassword,
+      personalDataConsent: true,
+      personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
     }, 202);
     const verificationToken = String(registration.developmentToken ?? "");
     if (!verificationToken) throw new Error("Customer verification token is missing");

@@ -72,7 +72,17 @@ function sortSiblings(rows: CategoryTreeRow[]): CategoryTreeRow[] {
   ));
 }
 
-/** Builds the nested, visibility-filtered category tree with roll-up counts. */
+/**
+ * Builds the nested, visibility-filtered category tree with roll-up counts.
+ *
+ * A public category must lead to at least one public product. 1C import
+ * history intentionally keeps soft-deleted products and their categories,
+ * and a failed/old smoke run can therefore leave an otherwise valid active
+ * category with no visible products. Keeping that row is useful in the staff
+ * workspace, but rendering it as `Smoke category 0` in the storefront is not.
+ * Pruning happens after child roll-up so an empty organisational parent is
+ * retained when any populated descendant still makes it useful to browse.
+ */
 export function buildCategoryTree(rows: CategoryTreeRow[]): CategoryTreeNode[] {
   const byId = new Map(rows.map((row) => [row.id, row]));
   const memo = new Map<string, boolean>();
@@ -87,10 +97,13 @@ export function buildCategoryTree(rows: CategoryTreeRow[]): CategoryTreeNode[] {
     else childrenByParent.set(key, [row]);
   }
 
-  function assemble(row: CategoryTreeRow): CategoryTreeNode {
-    const children = sortSiblings(childrenByParent.get(row.id) ?? []).map(assemble);
+  function assemble(row: CategoryTreeRow): CategoryTreeNode | null {
+    const children = sortSiblings(childrenByParent.get(row.id) ?? [])
+      .map(assemble)
+      .filter((child): child is CategoryTreeNode => child !== null);
     const productCount = row.productCount
       + children.reduce((sum, child) => sum + child.productCount, 0);
+    if (productCount === 0) return null;
     return {
       children,
       description: row.description,
@@ -102,7 +115,9 @@ export function buildCategoryTree(rows: CategoryTreeRow[]): CategoryTreeNode[] {
     };
   }
 
-  return sortSiblings(childrenByParent.get("") ?? []).map(assemble);
+  return sortSiblings(childrenByParent.get("") ?? [])
+    .map(assemble)
+    .filter((node): node is CategoryTreeNode => node !== null);
 }
 
 /** A resolved category level: the matched node plus its ordered ancestors. */

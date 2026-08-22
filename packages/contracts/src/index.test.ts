@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AdminPendingTokenQuerySchema,
+  CatalogBrandsResponseSchema,
   CatalogFeaturedQuerySchema,
   CatalogImageIdentifierSchema,
   CatalogProductIdentifierSchema,
@@ -9,11 +10,15 @@ import {
   CatalogSearchQuerySchema,
   ChatClientEventSchema,
   ChatMessageCreateSchema,
+  CHECKOUT_LEGAL_POLICY_VERSION,
+  CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
   CheckoutRequestSchema,
   MoneySchema,
   OneCImportEnvelopeSchema,
   OrderStatusSchema,
   PaymentStatusSchema,
+  REGISTRATION_PERSONAL_DATA_CONSENT_TEXT,
+  REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
   ROLE_PERMISSIONS,
   RoleSchema,
   StaffCatalogQuerySchema,
@@ -21,9 +26,16 @@ import {
   StaffOrdersQuerySchema,
   StaffRequestsQuerySchema,
   StaffRequestUpdateSchema,
+  CatalogProductSummarySchema,
+  WorkerJobSchema,
 } from "./index.js";
 
 describe("public contracts", () => {
+  it("exposes one versioned registration consent text for the browser and API", () => {
+    expect(REGISTRATION_PERSONAL_DATA_CONSENT_VERSION).toBe("registration-personal-data-2026-08-15-v1");
+    expect(REGISTRATION_PERSONAL_DATA_CONSENT_TEXT).toContain("регистрации и использования личного кабинета");
+  });
+
   it("accepts only declared roles and states", () => {
     expect(RoleSchema.safeParse("manager").success).toBe(true);
     expect(RoleSchema.safeParse("super_admin").success).toBe(false);
@@ -43,7 +55,9 @@ describe("public contracts", () => {
       delivery: { method: "pickup" },
       idempotencyKey: "019bf9ea-0d3e-7def-9c9a-000000000001",
       items: [{ productId: "019bf9ea-0d3e-7def-9c9a-000000000002", quantity: 2 }],
-      legalPolicyVersion: "checkout-terms-v1",
+      legalPolicyVersion: CHECKOUT_LEGAL_POLICY_VERSION,
+      personalDataConsent: true,
+      personalDataConsentVersion: CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
       sandboxScenario: "success",
       termsAccepted: true,
     };
@@ -57,6 +71,13 @@ describe("public contracts", () => {
       ...request,
       items: [request.items[0], request.items[0]],
     }).success).toBe(false);
+    const { personalDataConsent: ignored, ...withoutConsent } = request;
+    void ignored;
+    expect(CheckoutRequestSchema.safeParse(withoutConsent).success).toBe(false);
+    expect(CheckoutRequestSchema.safeParse({
+      ...request,
+      personalDataConsent: false,
+    }).success).toBe(false);
   });
 
   it("normalises a pasted or autofilled contact email before validating it", () => {
@@ -65,7 +86,9 @@ describe("public contracts", () => {
       delivery: { method: "pickup" },
       idempotencyKey: "019bf9ea-0d3e-7def-9c9a-000000000001",
       items: [{ productId: "019bf9ea-0d3e-7def-9c9a-000000000002", quantity: 1 }],
-      legalPolicyVersion: "checkout-terms-v1",
+      legalPolicyVersion: CHECKOUT_LEGAL_POLICY_VERSION,
+      personalDataConsent: true,
+      personalDataConsentVersion: CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
       termsAccepted: true,
     };
 
@@ -256,5 +279,54 @@ describe("public contracts", () => {
       reason: "Снято назначение",
       version: 1,
     }).success).toBe(true);
+  });
+
+  it("defaults a catalog product summary's matchedVia to a direct query match", () => {
+    const base = {
+      availableQuantity: 1,
+      brand: null,
+      category: null,
+      createdAt: "2026-08-01T00:00:00.000Z",
+      id: "019bf9ea-0d3e-7def-9c9a-000000000001",
+      name: "Фильтр масляный",
+      priceKopeks: 1_000,
+      primaryImage: null,
+      sku: "W914/2",
+      slug: "oil-filter",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+    expect(CatalogProductSummarySchema.parse(base).matchedVia).toBe("query");
+    expect(CatalogProductSummarySchema.parse({ ...base, matchedVia: "cross" }).matchedVia).toBe("cross");
+    expect(CatalogProductSummarySchema.safeParse({ ...base, matchedVia: "fuzzy" }).success).toBe(false);
+  });
+
+  it("validates the public brand facet and its real product counts", () => {
+    const response = {
+      items: [{
+        id: "019bf9ea-0d3e-7def-9c9a-000000000001",
+        name: "MANN-FILTER",
+        productCount: 14,
+        slug: "mann-filter",
+      }],
+    };
+    expect(CatalogBrandsResponseSchema.parse(response)).toEqual(response);
+    expect(CatalogBrandsResponseSchema.safeParse({
+      items: [{ ...response.items[0], productCount: -1 }],
+    }).success).toBe(false);
+  });
+
+  it("accepts a supplier.crosses.ingest worker job and rejects an unknown job name", () => {
+    expect(WorkerJobSchema.safeParse({
+      name: "supplier.crosses.ingest",
+      payload: {
+        pairs: [{ partA: { article: "W914/2", brand: "MANN" }, partB: { article: "OC90", brand: "MAHLE" } }],
+        source: "rossko",
+      },
+    }).success).toBe(true);
+    expect(WorkerJobSchema.safeParse({ name: "unknown.job", payload: {} }).success).toBe(false);
+    expect(WorkerJobSchema.safeParse({
+      name: "supplier.crosses.ingest",
+      payload: { pairs: [], source: "rossko" },
+    }).success).toBe(false);
   });
 });

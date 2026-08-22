@@ -10,8 +10,18 @@ import {
 
 import { AttachmentObjectUrl } from "./attachment-object-url";
 import {
+  activeVideoRegistry,
+  attachmentFetchScheduler,
+  attachmentImageCache,
+  imagePreviewLoadingMode,
+  type ActiveVideoClaim,
+  type ImageCacheLease,
+  type ScheduledFetch,
+} from "./attachment-media-pool";
+import {
   accessFor,
   downloadChatAttachmentBlob,
+  isPreviewableVideo,
   type ChatAttachment,
   type ChatThread,
 } from "./chat-state";
@@ -21,8 +31,23 @@ const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled
 
 type PreviewState =
   | { status: "error" }
+  | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; url: string };
+
+const PREVIEW_ROOT_MARGIN = "480px 0px";
+
+function attachmentSize(byteSize: number): string {
+  if (byteSize >= 1024 * 1024) {
+    const megabytes = byteSize / 1024 / 1024;
+    return `${megabytes >= 10 ? Math.ceil(megabytes) : megabytes.toFixed(1).replace(".0", "")} МБ`;
+  }
+  return `${Math.max(1, Math.ceil(byteSize / 1024))} КБ`;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
 
 function CloseIcon() {
   return (
@@ -34,20 +59,13 @@ function CloseIcon() {
 }
 
 /**
- * Inline thumbnail + lightbox for one image chat attachment. Shared by the
- * full `/chat` page and the floating widget so the fetch/object-URL/focus
- * logic only exists once.
- *
- * The blob is fetched through the same authenticated helper the click-to-
- * download button already used (`downloadChatAttachmentBlob` — thread
- * ownership check, `nosniff`/`no-store`/`attachment` headers all still
- * apply server-side, untouched), then rendered from a local object URL —
- * never `<img src>` pointed straight at the endpoint. The object URL is
- * owned by one `AttachmentObjectUrl` per mounted attachment (one fetch,
- * shared by both the thumbnail and its lightbox) and is revoked on
- * unmount by `AttachmentObjectUrl` itself (see attachment-object-url.ts).
+ * Inline attachment preview shared by `/chat` and the widget. Images enter a
+ * global three-request queue only when they approach the scroll viewport and
+ * reuse a bounded eight-entry/40 MiB LRU. Videos never fetch on mount: a full
+ * video response starts only after the customer presses the load button, and
+ * opening another video revokes the previous video blob globally.
  */
-export function ChatAttachmentImage({
+export function ChatAttachmentMedia({
   attachment,
   onDownload,
   thread,
@@ -58,61 +76,217 @@ export function ChatAttachmentImage({
   thread: ChatThread;
   viewerKind: "customer" | "guest";
 }) {
-  const [state, setState] = useState<PreviewState>({ status: "loading" });
+  const video = isPreviewableVideo(attachment);
+  const [state, setState] = useState<PreviewState>({ status: "idle" });
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const objectUrlRef = useRef<AttachmentObjectUrl | null>(null);
+  const [manualImageLoad, setManualImageLoad] = useState(false);
+  const tileRef = useRef<HTMLDivElement>(null);
+  const attachmentRef = useRef(attachment);
+  const threadRef = useRef(thread);
+  const videoObjectUrlRef = useRef<AttachmentObjectUrl | null>(null);
+  const videoClaimRef = useRef<ActiveVideoClaim | null>(null);
+  const imageLeaseRef = useRef<ImageCacheLease | null>(null);
+  const imageFetchRef = useRef<ScheduledFetch<Blob> | null>(null);
+  const mountedRef = useRef(false);
+  const nearViewportRef = useRef(false);
+  const stateRef = useRef<PreviewState>({ status: "idle" });
   const thumbRef = useRef<HTMLButtonElement>(null);
-  // Lazy init written the way react-hooks/refs expects, so the holder is
-  // created exactly once per mount without allocating on every render.
-  if (objectUrlRef.current === null) objectUrlRef.current = new AttachmentObjectUrl();
+  if (videoObjectUrlRef.current === null) videoObjectUrlRef.current = new AttachmentObjectUrl();
 
   useEffect(() => {
-    const access = accessFor({ kind: viewerKind }, thread);
-    if (!access) {
-      setState({ status: "error" });
+    attachmentRef.current = attachment;
+    threadRef.current = thread;
+  }, [attachment, thread]);
+
+  const updateState = useCallback((next: PreviewState) => {
+    stateRef.current = next;
+    if (mountedRef.current) setState(next);
+  }, []);
+
+  const releaseImage = useCallback((resetState = true) => {
+    imageFetchRef.current?.cancel();
+    imageFetchRef.current = null;
+    imageLeaseRef.current?.release();
+    imageLeaseRef.current = null;
+    if (resetState && stateRef.current.status !== "idle") updateState({ status: "idle" });
+  }, [updateState]);
+
+  const releaseVideo = useCallback((resetState = true) => {
+    videoClaimRef.current?.release();
+    videoClaimRef.current = null;
+    videoObjectUrlRef.current?.revoke();
+    if (resetState && stateRef.current.status !== "idle") updateState({ status: "idle" });
+  }, [updateState]);
+
+  const loadImage = useCallback((manual = false) => {
+    if (video || (!nearViewportRef.current && !manual)
+      || stateRef.current.status === "loading"
+      || stateRef.current.status === "ready") return;
+    if (manual) nearViewportRef.current = true;
+    const currentAttachment = attachmentRef.current;
+    const currentThread = threadRef.current;
+    const cached = attachmentImageCache.acquire(currentAttachment.id);
+    if (cached) {
+      imageLeaseRef.current = cached;
+      updateState({ status: "ready", url: cached.url });
       return;
     }
-    let cancelled = false;
-    setState({ status: "loading" });
-    downloadChatAttachmentBlob(attachment, thread, access)
+    const access = accessFor({ kind: viewerKind }, currentThread);
+    if (!access) {
+      updateState({ status: "error" });
+      return;
+    }
+    updateState({ status: "loading" });
+    const scheduled = attachmentFetchScheduler.schedule((signal) => (
+      downloadChatAttachmentBlob(currentAttachment, currentThread, access, signal)
+    ));
+    imageFetchRef.current = scheduled;
+    void scheduled.promise
       .then((blob) => {
-        if (cancelled) return;
-        const url = objectUrlRef.current!.issue(attachment.id, blob);
-        setState({ status: "ready", url });
+        if (!mountedRef.current || !nearViewportRef.current) return;
+        const lease = attachmentImageCache.insertAndAcquire(currentAttachment.id, blob);
+        imageLeaseRef.current = lease;
+        updateState({ status: "ready", url: lease.url });
       })
-      .catch(() => {
-        if (!cancelled) setState({ status: "error" });
+      .catch((error: unknown) => {
+        if (mountedRef.current && nearViewportRef.current && !isAbortError(error)) {
+          updateState({ status: "error" });
+        }
+      })
+      .finally(() => {
+        if (imageFetchRef.current === scheduled) imageFetchRef.current = null;
       });
-    return () => { cancelled = true; };
-    // Re-fetch only on a genuine identity change (a different attachment or
-    // an explicit retry) — not on every re-render of `thread`/`viewerKind`
-    // object references, which the parent message list can recreate often.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachment.id, thread.id, viewerKind, attempt]);
+  }, [updateState, video, viewerKind]);
 
-  // One object URL per mounted attachment, released the moment this
-  // component goes away (thread switch, chat closed) — never left dangling.
-  useEffect(() => () => objectUrlRef.current?.revoke(), []);
+  const loadVideo = useCallback(() => {
+    if (!video || stateRef.current.status === "loading" || stateRef.current.status === "ready") return;
+    const currentAttachment = attachmentRef.current;
+    const currentThread = threadRef.current;
+    const access = accessFor({ kind: viewerKind }, currentThread);
+    if (!access) {
+      updateState({ status: "error" });
+      return;
+    }
+    updateState({ status: "loading" });
+    const claim: ActiveVideoClaim = activeVideoRegistry.claim(() => {
+      videoObjectUrlRef.current?.revoke();
+      if (videoClaimRef.current === claim) videoClaimRef.current = null;
+      if (mountedRef.current) updateState({ status: "idle" });
+    });
+    videoClaimRef.current = claim;
+    void downloadChatAttachmentBlob(currentAttachment, currentThread, access, claim.signal)
+      .then((blob) => {
+        if (!mountedRef.current || !claim.isCurrent()) return;
+        const url = videoObjectUrlRef.current!.issue(currentAttachment.id, blob);
+        updateState({ status: "ready", url });
+      })
+      .catch((error: unknown) => {
+        if (!mountedRef.current || isAbortError(error)) return;
+        claim.release();
+        if (videoClaimRef.current === claim) videoClaimRef.current = null;
+        updateState({ status: "error" });
+      });
+  }, [updateState, video, viewerKind]);
 
-  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  useEffect(() => {
+    mountedRef.current = true;
+    const node = tileRef.current;
+    const handleVisibility = (visible: boolean) => {
+      nearViewportRef.current = visible;
+      if (visible) {
+        if (!video) loadImage();
+      } else if (video) {
+        releaseVideo();
+      } else {
+        releaseImage();
+      }
+    };
+    if (!node || imagePreviewLoadingMode(typeof IntersectionObserver !== "undefined") === "manual") {
+      // Legacy/embedded browsers without IntersectionObserver must opt in per
+      // image. Falling back to eager loading would recreate the original GET
+      // storm for a long history.
+      nearViewportRef.current = false;
+      setManualImageLoad(!video);
+      return () => {
+        mountedRef.current = false;
+        releaseImage(false);
+        releaseVideo(false);
+      };
+    }
+    setManualImageLoad(false);
+    const scrollRoot = node.closest<HTMLElement>("[role='log']");
+    const observer = new IntersectionObserver(
+      ([entry]) => handleVisibility(Boolean(entry?.isIntersecting)),
+      { root: scrollRoot, rootMargin: PREVIEW_ROOT_MARGIN },
+    );
+    observer.observe(node);
+    return () => {
+      mountedRef.current = false;
+      observer.disconnect();
+      releaseImage(false);
+      releaseVideo(false);
+    };
+  }, [attachment.id, loadImage, releaseImage, releaseVideo, video]);
+
+  const retry = useCallback(() => {
+    updateState({ status: "idle" });
+    if (video) loadVideo();
+    else loadImage(manualImageLoad);
+  }, [loadImage, loadVideo, manualImageLoad, updateState, video]);
+  const handleImageDecodeError = useCallback(() => {
+    imageLeaseRef.current?.release();
+    imageLeaseRef.current = null;
+    attachmentImageCache.discard(attachment.id);
+    updateState({ status: "error" });
+  }, [attachment.id, updateState]);
   const closeLightbox = useCallback(() => {
     setLightboxOpen(false);
     thumbRef.current?.focus();
   }, []);
 
   return (
-    <div className={styles.tile}>
-      {state.status === "loading" ? (
+    <div className={styles.tile} ref={tileRef}>
+      {state.status === "idle" && video ? (
+        <button
+          className={styles.videoLoadButton}
+          onClick={loadVideo}
+          type="button"
+        >
+          <strong>Загрузить видео</strong>
+          <span>{attachmentSize(attachment.byteSize)}. Данные не загружаются без нажатия.</span>
+        </button>
+      ) : state.status === "idle" && manualImageLoad ? (
+        <button className={styles.videoLoadButton} onClick={() => loadImage(true)} type="button">
+          <strong>Загрузить изображение</strong>
+          <span>{attachmentSize(attachment.byteSize)}. Автоматическая загрузка недоступна в этом браузере.</span>
+        </button>
+      ) : state.status === "idle" ? (
+        <div aria-label={`Изображение «${attachment.originalName}» ожидает появления на экране`} className={styles.thumbIdle} role="img">
+          Изображение появится при прокрутке
+        </div>
+      ) : state.status === "loading" ? (
         <div className={styles.thumbLoading} role="status">
           <span aria-hidden="true" className={styles.spinner} />
-          <span>Загружаем изображение…</span>
+          <span>Загружаем {video ? "видео" : "изображение"}…</span>
         </div>
       ) : state.status === "error" ? (
         <div className={styles.thumbError} role="alert">
-          <span>Не удалось загрузить изображение</span>
+          <span>Не удалось загрузить {video ? "видео" : "изображение"}</span>
           <button onClick={retry} type="button">Повторить</button>
         </div>
+      ) : video ? (
+        <video
+          aria-label={`Видео «${attachment.originalName}»`}
+          className={styles.thumbVideo}
+          controls
+          onError={() => {
+            releaseVideo(false);
+            updateState({ status: "error" });
+          }}
+          playsInline
+          preload="metadata"
+          src={state.url}
+        />
       ) : (
         <button
           aria-label={`Открыть изображение «${attachment.originalName}» на весь экран`}
@@ -125,7 +299,7 @@ export function ChatAttachmentImage({
           <img
             alt=""
             className={styles.thumbImage}
-            onError={() => setState({ status: "error" })}
+            onError={handleImageDecodeError}
             src={state.url}
           />
         </button>
@@ -133,10 +307,10 @@ export function ChatAttachmentImage({
       <div className={styles.tileMeta}>
         <span className={styles.tileName}>{attachment.originalName}</span>
         <button className={styles.downloadLink} onClick={onDownload} type="button">
-          Скачать ({Math.max(1, Math.ceil(attachment.byteSize / 1024))} КБ)
+          Скачать ({attachmentSize(attachment.byteSize)})
         </button>
       </div>
-      {lightboxOpen && state.status === "ready" ? (
+      {!video && lightboxOpen && state.status === "ready" ? (
         <ChatAttachmentLightbox
           imageUrl={state.url}
           name={attachment.originalName}

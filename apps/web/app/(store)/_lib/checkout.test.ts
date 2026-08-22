@@ -24,8 +24,27 @@ describe("checkout boundary", () => {
       email: " Client@Example.RU ",
       name: " Антон ",
       phone: "+79240000000",
-    }, [{ productId: productA, quantity: 1 }], productB);
+    }, [{ productId: productA, quantity: 1 }], productB, {
+      personalDataConsent: true,
+      termsAccepted: true,
+    });
     expect(payload).not.toHaveProperty("sandboxScenario");
     expect(payload.contact).toEqual({ email: "client@example.ru", name: "Антон", phone: "+79240000000" });
+  });
+
+  it("never fabricates either legal action when building the request", () => {
+    const payload = checkoutPayload({
+      deliveryMethod: "pickup",
+      email: "client@example.ru",
+      name: "Антон",
+      phone: "+79240000000",
+    }, [{ productId: productA, quantity: 1 }], productB, {
+      personalDataConsent: false,
+      termsAccepted: true,
+    });
+
+    expect(payload.termsAccepted).toBe(true);
+    expect(payload.personalDataConsent).toBe(false);
+    expect(payload.personalDataConsentVersion).toBe("checkout-personal-data-2026-08-15-v1");
   });
 });

@@ -730,6 +730,22 @@
   background: var(--colorNeutralBackground2);
 }
 
+.historyControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--colorNeutralBackground2) 94%, transparent);
+}
+
+.inlineHistoryError {
+  color: var(--colorPaletteRedForeground1);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
 .message {
   max-width: min(78%, 640px);
   display: grid;

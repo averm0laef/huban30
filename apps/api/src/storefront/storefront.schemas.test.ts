@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { CONTACT_CONSENT_POLICY_VERSION } from "@an30/contracts";
+
 import {
   AccountUpdateSchema,
   AddressCreateSchema,
@@ -14,7 +16,7 @@ describe("storefront input schemas", () => {
       idempotencyKey: "019bf9ea-0d3e-7def-8c9a-000000000002",
       message: "Нужна помощь с подбором детали",
       name: "Антон Ермолаев",
-      policyVersion: "contact-consent-v1",
+      policyVersion: CONTACT_CONSENT_POLICY_VERSION,
       source: "expert_help",
     };
     expect(ContactRequestSchema.safeParse({ ...base, consent: false, phone: "+79990000000" }).success)

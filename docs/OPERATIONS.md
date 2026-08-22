@@ -165,7 +165,7 @@ Docker управляет `iptables` в обход UFW, поэтому опуб�
 
 ```bash
 curl -fsS https://staging.an30.ru/health/live
-curl -fsS https://staging.an30.ru/health/ready   # подтверждает PostgreSQL и Redis
+curl -fsS https://staging.an30.ru/health/ready   # подтверждает PostgreSQL, Redis и ClamAV
 docker compose --env-file /etc/an30/staging.env ps
 ```
 

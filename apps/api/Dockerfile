@@ -17,7 +17,8 @@ RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
 FROM node:24.12.0-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-RUN addgroup -S -g 10001 an30 && \
+RUN apk add --no-cache ffmpeg && \
+  addgroup -S -g 10001 an30 && \
   adduser -S -D -H -u 10001 -G an30 an30 && \
   install -d -o an30 -g an30 -m 0700 /data/uploads
 COPY --from=build --chown=an30:an30 /opt/an30/api ./

@@ -17,13 +17,28 @@ import { api } from "../api";
 import { formatDate, RequestError, SectionHeader, useResource } from "../workspace-utils";
 import styles from "../workspace.module.css";
 
+interface OneCExchangeSummary {
+  containsOnlyChanges: boolean;
+  filename: string;
+  kind: "catalog" | "offers";
+  rowsRejected: number;
+  rowsTouched: number;
+}
+
 interface OneCSettings {
   allowedNetworks: string[];
   enabled: boolean;
   hasPassword: boolean;
+  lastExchangeAt: string | null;
+  lastExchangeSummary: OneCExchangeSummary | Record<string, never>;
   updatedAt: string | null;
   username: string | null;
 }
+
+const EXCHANGE_KIND_LABELS: Record<OneCExchangeSummary["kind"], string> = {
+  catalog: "Классификатор и товары (import.xml)",
+  offers: "Цены и остатки (offers.xml)",
+};
 
 export function SettingsView() {
   const resource = useResource(() => api<OneCSettings>("/catalog/1c/settings"), []);
@@ -33,6 +48,12 @@ export function SettingsView() {
   const [networks, setNetworks] = useState("");
   const [baseline, setBaseline] = useState("");
   const [busy, setBusy] = useState(false);
+  // Caddy is the only public entry point (see docs/ONE_C_INTEGRATION.md) and
+  // routes /api on the same origin as this admin page, so the URL 1C needs
+  // is just this page's own origin plus the exchange path -- computed on the
+  // client rather than baked into the API response, since the server has no
+  // reliable notion of "the URL the browser is actually on".
+  const [exchangeUrl, setExchangeUrl] = useState("");
   const [mutationError, setMutationError] = useState<unknown>(null);
   const [success, setSuccess] = useState("");
 
@@ -45,6 +66,10 @@ export function SettingsView() {
     setPassword("");
     setBaseline(JSON.stringify({ enabled: resource.data.enabled, networks: nextNetworks, username: resource.data.username ?? "" }));
   }, [resource.data]);
+
+  useEffect(() => {
+    setExchangeUrl(`${window.location.origin}/api/v1/integrations/1c/exchange`);
+  }, []);
 
   const current = JSON.stringify({ enabled, networks, username });
   const dirty = current !== baseline || password.length > 0;
@@ -121,7 +146,7 @@ export function SettingsView() {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={reload}>Перечитать</Button>}
-        description="Пароль хранится зашифрованно и никогда не возвращается в браузер."
+        description="Пароль хранится в виде необратимого хеша (argon2id) и никогда не возвращается в браузер."
         eyebrow="Конфигурация"
         title="Настройки интеграций"
       />
@@ -133,6 +158,12 @@ export function SettingsView() {
             <div><h2>Подключение 1С</h2><p>Базовая HTTP-аутентификация доступна только из разрешённых CIDR-сетей и защищена лимитами.</p></div>
             <Switch checked={enabled} label={enabled ? "Включено" : "Выключено"} onChange={(_event, data) => setEnabled(data.checked)} />
           </div>
+          <Field
+            hint="Укажите этот адрес в 1С: Администрирование → Настройка синхронизации данных → Обмен с сайтом (CommerceML), вместе с логином и паролем ниже."
+            label="Адрес обмена для 1С"
+          >
+            <Input readOnly value={exchangeUrl} onClick={(event) => event.currentTarget.select()} />
+          </Field>
           <Field label="Имя пользователя" required>
             <Input autoComplete="off" onChange={(_event, data) => setUsername(data.value)} value={username} />
           </Field>
@@ -151,8 +182,43 @@ export function SettingsView() {
           </div>
         </form>
       ) : null}
+      {resource.data ? <LastExchangeResult summary={resource.data.lastExchangeSummary} timestamp={resource.data.lastExchangeAt} /> : null}
       {success ? <MessageBar intent="success"><MessageBarBody>{success}</MessageBarBody></MessageBar> : null}
       {mutationError ? <RequestError error={mutationError} onRetry={reload} /> : null}
     </>
+  );
+}
+
+// "kind" in lastExchangeSummary is enough to tell an empty summary ({}, the
+// database default before any run has ever completed) apart from a real one
+// -- narrower than checking Object.keys().length, and it doubles as the type
+// guard the rest of the component needs.
+function LastExchangeResult({
+  summary,
+  timestamp,
+}: {
+  summary: OneCExchangeSummary | Record<string, never>;
+  timestamp: string | null;
+}) {
+  return (
+    <section aria-labelledby="one-c-exchange-result-title" className={styles.settingsForm}>
+      <div className={styles.settingsHeading}>
+        <div>
+          <h2 id="one-c-exchange-result-title">Последний обмен CommerceML</h2>
+          <p>Результат самого недавнего завершённого запроса 1С к адресу обмена выше.</p>
+        </div>
+      </div>
+      {!("kind" in summary) || !timestamp ? (
+        <p className={styles.muted}>Обмена с 1С через этот адрес ещё не было.</p>
+      ) : (
+        <dl className={styles.detailList}>
+          <div><dt>Файл</dt><dd>{EXCHANGE_KIND_LABELS[summary.kind]} — {summary.filename}</dd></div>
+          <div><dt>Тип выгрузки</dt><dd>{summary.containsOnlyChanges ? "Только изменения" : "Полная выгрузка"}</dd></div>
+          <div><dt>Применено строк</dt><dd>{summary.rowsTouched}</dd></div>
+          <div><dt>Отклонено строк</dt><dd>{summary.rowsRejected}</dd></div>
+          <div><dt>Завершён</dt><dd>{formatDate(timestamp)}</dd></div>
+        </dl>
+      )}
+    </section>
   );
 }

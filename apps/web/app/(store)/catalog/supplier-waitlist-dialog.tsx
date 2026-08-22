@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import { SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION } from "@an30/contracts";
+import {
+  SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION,
+  SUPPLIER_WAITLIST_PERSONAL_DATA_CONSENT_TEXT,
+} from "@an30/contracts";
 import type { SupplierWaitlistCreated } from "@an30/contracts";
 
 import { formatRubles } from "../_lib/catalog-format";
@@ -153,7 +156,7 @@ export function SupplierWaitlistDialog({ onClose, target }: SupplierWaitlistDial
               <label className={styles.field}>Количество<input defaultValue={1} max={quantityCap} min={1} name="quantity" type="number" /></label>
               <label className={styles.checkboxField}>
                 <input name="consent" required type="checkbox" />
-                Я даю согласие на обработку указанных данных для заявки на ожидание и ознакомился с <Link href="/privacy" target="_blank">политикой конфиденциальности</Link>.
+                {SUPPLIER_WAITLIST_PERSONAL_DATA_CONSENT_TEXT} <Link href="/supplier-waitlist-personal-data-consent" target="_blank">Открыть документ</Link>.
               </label>
               <button className={styles.submitButton} disabled={pending} type="submit">{pending ? "Отправляем..." : "Встать в ожидание"}</button>
             </form>

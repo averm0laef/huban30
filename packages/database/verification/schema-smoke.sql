@@ -189,6 +189,117 @@ END;
 $$;
 
 DO $$
+DECLARE
+  waitlist_id uuid;
+  anonymized_count integer;
+  remaining_pii_count integer;
+BEGIN
+  INSERT INTO app.supplier_waitlist_requests (
+    idempotency_key,
+    request_hash,
+    part_guid,
+    part_brand,
+    part_number,
+    part_name,
+    stock_id,
+    price_kopeks,
+    quantity,
+    customer_name,
+    customer_email,
+    consent_at,
+    consent_policy_version,
+    retention_until
+  ) VALUES (
+    gen_random_uuid(),
+    decode(repeat('ab',32),'hex'),
+    'schema-smoke-part',
+    'Schema Smoke Brand',
+    'SCHEMA-SMOKE-PART',
+    'Schema smoke waitlist product',
+    'schema-smoke-stock',
+    10000,
+    1,
+    'Schema Smoke Waitlist Customer',
+    'schema-smoke-waitlist@example.test',
+    clock_timestamp()-interval '2 days',
+    'supplier-waitlist-personal-data-2026-08-15-v2',
+    clock_timestamp()-interval '1 day'
+  ) RETURNING id INTO waitlist_id;
+
+  SELECT app.anonymize_expired_supplier_waitlist_requests(500) INTO anonymized_count;
+
+  SELECT (
+    customer_name<>''
+    OR customer_email IS NOT NULL
+    OR customer_phone IS NOT NULL
+    OR user_id IS NOT NULL
+  )::integer
+  INTO remaining_pii_count
+  FROM app.supplier_waitlist_requests
+  WHERE id=waitlist_id AND anonymized_at IS NOT NULL;
+
+  IF anonymized_count<1 OR remaining_pii_count<>0 THEN
+    RAISE EXCEPTION 'Expired supplier waitlist request was not safely anonymized';
+  END IF;
+END;
+$$;
+
+DO $$
+DECLARE
+  checkout_order_id uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO app.orders (
+    id,
+    public_number,
+    idempotency_key,
+    customer_email,
+    customer_phone,
+    customer_name,
+    contact_snapshot,
+    delivery_snapshot,
+    subtotal_kopeks,
+    total_amount_kopeks,
+    terms_accepted_at,
+    legal_policy_version,
+    personal_data_consent_at,
+    personal_data_consent_policy_version,
+    personal_data_consent_document_path,
+    personal_data_consent_text,
+    personal_data_consent_ip_address,
+    personal_data_consent_user_agent
+  ) VALUES (
+    checkout_order_id,
+    'AN-SCHEMA-CONSENT-' || replace(checkout_order_id::text,'-',''),
+    'schema-consent:' || checkout_order_id::text,
+    'schema-smoke-checkout@example.test',
+    '+79141234567',
+    'Schema Smoke Checkout Customer',
+    '{"email":"schema-smoke-checkout@example.test"}'::jsonb,
+    '{"method":"pickup"}'::jsonb,
+    0,
+    0,
+    clock_timestamp(),
+    'checkout-terms-2026-08-15-v2',
+    clock_timestamp(),
+    'checkout-personal-data-2026-08-15-v1',
+    '/checkout-personal-data-consent',
+    'Schema smoke exact checkout consent text',
+    '127.0.0.1',
+    'schema-smoke'
+  );
+
+  BEGIN
+    UPDATE app.orders
+    SET personal_data_consent_text='Changed consent text'
+    WHERE id=checkout_order_id;
+    RAISE EXCEPTION 'Checkout consent evidence mutation unexpectedly succeeded';
+  EXCEPTION
+    WHEN SQLSTATE '55000' THEN NULL;
+  END;
+END;
+$$;
+
+DO $$
 BEGIN
   IF to_regprocedure('app.expire_stock_reservations(integer)') IS NULL THEN
     RAISE EXCEPTION 'Reservation expiry function is missing';

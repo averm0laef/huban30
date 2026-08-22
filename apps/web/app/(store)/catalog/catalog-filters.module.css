@@ -1,0 +1,103 @@
+.filterGroup {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.filterGroup legend {
+  margin-bottom: 9px;
+  color: var(--store-text);
+  font-size: 0.82rem;
+  font-weight: var(--store-weight-bold);
+}
+
+.brandOptions {
+  display: grid;
+  gap: 3px;
+}
+
+.brandOption {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  color: var(--store-text);
+  cursor: pointer;
+}
+
+.brandOption input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--store-brand);
+}
+
+.brandOption span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brandOption small {
+  color: var(--store-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.moreBrands summary {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--store-brand);
+  font-weight: var(--store-weight-bold);
+  cursor: pointer;
+}
+
+.moreBrands[open] summary {
+  margin-bottom: 4px;
+}
+
+.priceRange {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.priceRange label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--store-muted);
+  font-size: 0.75rem;
+}
+
+.priceRange input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 9px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-text);
+  font: inherit;
+}
+
+.filterActions {
+  display: grid;
+  gap: 4px;
+}
+
+.filterActions a {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--store-muted);
+  font-size: 0.85rem;
+  font-weight: var(--store-weight-bold);
+}

@@ -9,6 +9,8 @@ import {
 } from "@an30/contracts";
 
 import { applySupplierMarkup } from "./supplier-pricing.js";
+import { extractCrossPairs } from "./supplier-cross-pairs.js";
+import { SupplierCrossQueueService } from "./supplier-cross-queue.service.js";
 import {
   SUPPLIER_PROVIDER,
   type SupplierPart,
@@ -69,6 +71,7 @@ export class SupplierSearchService {
   constructor(
     @Inject(SUPPLIER_PROVIDER) private readonly supplier: SupplierProvider,
     config: ConfigService,
+    private readonly crossQueue: SupplierCrossQueueService,
   ) {
     this.markupPercent = config.get<number>("SUPPLIER_MARKUP_PERCENT") ?? 30;
   }
@@ -76,6 +79,16 @@ export class SupplierSearchService {
   async search(input: unknown): Promise<SupplierSearchResponse> {
     const query = parse(SupplierSearchQuerySchema, input);
     const result = await this.supplier.search(query.q);
+    // Learn every cross this search turned up, but never make the customer
+    // wait on it: persistence happens later, in apps/worker, off the
+    // response path (see SupplierCrossQueueService and
+    // apps/worker/src/article-cross-ingest.ts). Deliberately not awaited.
+    // A failed SOAP result is not evidence, even if a malformed supplier
+    // response happened to carry a PartsList alongside success=false.
+    if (result.success) {
+      const pairs = extractCrossPairs(result.parts);
+      if (pairs.length > 0) this.crossQueue.enqueue(pairs);
+    }
     const shown = result.parts.slice(0, MAX_PARTS_IN_RESPONSE);
     return {
       message: result.message,

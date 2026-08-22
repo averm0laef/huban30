@@ -17,7 +17,12 @@ export type SupplierSource = z.infer<typeof SupplierSourceSchema>;
 // Consent text version for the waiting-list flow — deliberately its own
 // version, distinct from the storefront contact-form consent, because it
 // covers a different processing purpose (ordering a specific supplier part).
-export const SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION = "supplier-waitlist-consent-v1" as const;
+export const SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION =
+  "supplier-waitlist-personal-data-2026-08-15-v2" as const;
+export const SUPPLIER_WAITLIST_PERSONAL_DATA_CONSENT_DOCUMENT_PATH =
+  "/supplier-waitlist-personal-data-consent" as const;
+export const SUPPLIER_WAITLIST_PERSONAL_DATA_CONSENT_TEXT =
+  "Я даю согласие на обработку указанных персональных данных только для заявки ожидания выбранного товара на условиях отдельного документа «Согласие на обработку данных для ожидания товара»." as const;
 
 // ---------------------------------------------------------------------------
 // Supplier search. Structurally separate from the shop's own catalog types:
@@ -60,6 +65,23 @@ export const SupplierPartViewSchema: z.ZodType<SupplierPartView> = z.object({
   partNumber: z.string().trim().min(1).max(200),
   stocks: z.array(SupplierStockViewSchema).max(50),
 }).strict();
+
+// One directly-stated equivalence edge out of a supplier's cross-reference
+// tree (see extractCrossPairs in apps/api/src/suppliers/supplier-cross-pairs.ts
+// and the ingestion job in apps/worker/src/article-cross-ingest.ts). Raw,
+// pre-normalisation strings -- normalising and canonicalising the pair
+// happens once, in the worker, not here.
+export const SupplierCrossPairSchema = z.object({
+  partA: z.object({
+    article: z.string().trim().min(1).max(200),
+    brand: z.string().trim().max(200),
+  }).strict(),
+  partB: z.object({
+    article: z.string().trim().min(1).max(200),
+    brand: z.string().trim().max(200),
+  }).strict(),
+}).strict();
+export type SupplierCrossPair = z.infer<typeof SupplierCrossPairSchema>;
 
 export const SupplierSearchResponseSchema = z.object({
   message: z.string().max(2_000),

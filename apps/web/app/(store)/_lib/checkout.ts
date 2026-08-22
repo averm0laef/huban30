@@ -1,4 +1,7 @@
-import { CHECKOUT_LEGAL_POLICY_VERSION } from "@an30/contracts";
+import {
+  CHECKOUT_LEGAL_POLICY_VERSION,
+  CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
+} from "@an30/contracts";
 
 import type { CartLine } from "../_components/cart-provider";
 
@@ -13,6 +16,11 @@ export interface CheckoutFormValue {
   phone: string;
 }
 
+export interface CheckoutLegalAcceptance {
+  personalDataConsent: boolean;
+  termsAccepted: boolean;
+}
+
 export function checkoutItems(lines: CartLine[]) {
   const unique = new Map<string, number>();
   for (const line of lines) {
@@ -24,7 +32,12 @@ export function checkoutItems(lines: CartLine[]) {
     .sort((left, right) => left.productId.localeCompare(right.productId));
 }
 
-export function checkoutPayload(value: CheckoutFormValue, lines: CartLine[], idempotencyKey: string) {
+export function checkoutPayload(
+  value: CheckoutFormValue,
+  lines: CartLine[],
+  idempotencyKey: string,
+  legalAcceptance: CheckoutLegalAcceptance,
+) {
   const delivery = value.deliveryMethod === "pickup"
     ? { method: "pickup" as const }
     : { address: value.address?.trim() ?? "", method: "needs_quote" as const };
@@ -35,6 +48,8 @@ export function checkoutPayload(value: CheckoutFormValue, lines: CartLine[], ide
     idempotencyKey,
     items: checkoutItems(lines),
     legalPolicyVersion: CHECKOUT_LEGAL_POLICY_VERSION,
-    termsAccepted: true as const,
+    personalDataConsent: legalAcceptance.personalDataConsent,
+    personalDataConsentVersion: CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
+    termsAccepted: legalAcceptance.termsAccepted,
   };
 }

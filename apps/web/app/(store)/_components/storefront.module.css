@@ -447,25 +447,30 @@
    link, the brand link, the phone/address link, or the 52px search field)
    — that floor is non-negotiable (WCAG 2.2 AA target size). So "cut the
    slack" here means the padding *around* that floor, not the floor
-   itself: every `padding-block` below is trimmed to the smallest value
-   that still reads as a row rather than the target bleeding straight into
-   its neighbour — 2–3px on the two plain rows (links, location), 3px on
-   the brand row, a still-comfortable 6px on the search row per the
-   owner's own "строка с поиском отдельно" ask. `min-height` on the row
-   itself is dropped to 0 wherever the row's own floor was already below
-   its content's real (target-driven) height, i.e. it was dead weight. */
+   itself: every `padding-block` below is trimmed to the bare minimum that
+   still reads as a row rather than the target bleeding straight into its
+   neighbour — 1px on the two plain rows (links, location, still backed by
+   their own border-bottom as the real separator), 2px on the brand row,
+   and 4px on the search row — trimmed again from the previous pass'
+   2–3/3/6px per the owner's "ещё воздух над поиском" follow-up: the three
+   rows above the search field are each still governed by a 44px content
+   floor (3 × 44 = 132px, non-negotiable), so this second pass only had the
+   remaining ~17px of discretionary padding/border to cut, not the floor
+   itself. `min-height` on the row itself is dropped to 0 wherever the
+   row's own floor was already below its content's real (target-driven)
+   height, i.e. it was dead weight. */
 
 .mobileLinksRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLinksRow .headerRowInner { min-height: 0; padding-block: max(3px, env(safe-area-inset-top)) 2px; gap: var(--store-space-md); }
+.mobileLinksRow .headerRowInner { min-height: 0; padding-block: max(1px, env(safe-area-inset-top)) 1px; gap: var(--store-space-md); }
 
 .mobileLocationRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLocationRow .headerRowInner { min-height: 0; padding-block: 2px; justify-content: space-between; flex-wrap: wrap; row-gap: 2px; }
+.mobileLocationRow .headerRowInner { min-height: 0; padding-block: 1px; justify-content: space-between; flex-wrap: wrap; row-gap: 1px; }
 .mobileLocationText { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.82rem; line-height: 1.3; }
 .mobileLocationText svg { flex: 0 0 auto; }
 .mobileAddressLink { min-height: 44px; display: inline-flex; align-items: center; color: var(--store-header-text); font-size: 0.8rem; font-weight: var(--store-weight-bold); text-decoration: underline; text-underline-offset: 2px; }
 
 .mobileSearchRow { display: block; }
-.mobileSearchRow .headerRowInner { padding-block: 6px; }
+.mobileSearchRow .headerRowInner { padding-block: 4px; }
 
 
 /* ---------------- Layout ---------------- */
@@ -1164,7 +1169,75 @@ button.promoControl {
    and the logo also step up here and again at 1024/1280 — generous on a
    wide screen, modest enough on a phone not to crowd the search field. */
 @media (min-width: 768px) {
-  .headerTopRow { display: block; }
+  /* Desktop keeps the same visual row structure as before, but now the
+     utility row and the controls flanking search can collapse too. Search is
+     the persistent VIN/article row at every width. The utility row uses a
+     measured grid track, while the side controls fade and give their width
+     back to search; no fixed header-height guess is involved. */
+  .headerTopRow {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+      grid-template-rows var(--store-duration-slow) var(--store-ease),
+      visibility 0s linear,
+      border-color var(--store-duration-slow) var(--store-ease);
+  }
+  .headerTopRow > .headerRowInner {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .headerMainRow .headerRowInner {
+    transition:
+      padding-block var(--store-duration-slow) var(--store-ease),
+      padding-top var(--store-duration-slow) var(--store-ease);
+  }
+  .brand,
+  .headerActions {
+    max-width: 220px;
+    overflow: hidden;
+    opacity: 1;
+    transform: none;
+    transition:
+      max-width var(--store-duration-slow) var(--store-ease),
+      margin var(--store-duration-slow) var(--store-ease),
+      opacity var(--store-duration-base) var(--store-ease),
+      transform var(--store-duration-slow) var(--store-ease),
+      visibility 0s linear;
+  }
+  .headerInset[data-collapsed="true"] .headerTopRow {
+    grid-template-rows: 0fr;
+    border-bottom-color: transparent;
+    visibility: hidden;
+    transition:
+      grid-template-rows var(--store-duration-slow) var(--store-ease),
+      visibility 0s linear var(--store-duration-slow),
+      border-color var(--store-duration-slow) var(--store-ease);
+  }
+  .headerInset[data-collapsed="true"] .headerTopRow > .headerRowInner {
+    padding-block: 0;
+  }
+  .headerInset[data-collapsed="true"] .headerMainRow .headerRowInner {
+    padding-block: 4px;
+    padding-top: max(4px, env(safe-area-inset-top));
+  }
+  .headerInset[data-collapsed="true"] .headerMainRow .searchBox {
+    max-width: 100%;
+  }
+  .headerInset[data-collapsed="true"] .brand,
+  .headerInset[data-collapsed="true"] .headerActions {
+    max-width: 0;
+    margin-inline: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px) scale(0.96);
+    visibility: hidden;
+    transition:
+      max-width var(--store-duration-slow) var(--store-ease),
+      margin var(--store-duration-slow) var(--store-ease),
+      opacity var(--store-duration-base) var(--store-ease),
+      transform var(--store-duration-slow) var(--store-ease),
+      visibility 0s linear var(--store-duration-slow);
+  }
   .headerActions { display: flex; }
   .headerDesktopSearch { display: contents; }
   .mobileLinksRow,
@@ -1241,6 +1314,11 @@ button.promoControl {
 }
 
 @media (max-width: 767px) {
+  /* The generic tablet rule hides secondary links below 1180px. Restore
+     them inside the purpose-built mobile row so its documented navigation
+     is not an empty 3px strip. */
+  .mobileLinksRow .headerTopLinks { display: flex; }
+
   /* Row 2 here is brand + the compact phone cluster only (the desktop
      search field is hidden — see `.headerDesktopSearch` — in favour of its
      own full-width row, `.mobileSearchRow`, further down the panel). The
@@ -1251,13 +1329,13 @@ button.promoControl {
   .headerMainRow .headerRowInner {
     gap: var(--store-space-2xs);
     min-height: 44px;
-    padding-block: 3px;
+    padding-block: 2px;
   }
 
-  /* Scroll collapse: `data-collapsed` is set by store-shell.tsx once the
-     page has scrolled past a small threshold (header-scroll-collapse.ts) —
-     every row but the search field shrinks away, leaving just the search
-     bar pinned under `.header`'s own `position: sticky`. Each collapsing
+  /* Scroll collapse: `data-collapsed` is set by store-shell.tsx after a
+     deliberate downward gesture (header-scroll-collapse.ts). Every row but
+     the search field shrinks away, leaving just the VIN/article search bar
+     pinned under `.header`'s own `position: sticky`. Each collapsing
      row becomes a one-track grid (`grid-template-rows: 1fr` at rest) so
      the collapsed state can animate that track to `0fr` — this tracks the
      row's real (possibly safe-area-inflated) content height instead of
@@ -1267,8 +1345,8 @@ button.promoControl {
      `overflow: hidden` there (not on the row itself, which still owns the
      border) keeps the content from spilling out while it does.
      Reduced-motion and focus-within visitors never see
-     `data-collapsed="true"` at all (see isHeaderCollapsed), so nothing
-     here needs its own motion guard. */
+     `data-collapsed="true"` at all (see getNextHeaderCollapseState), so
+     nothing here needs its own motion guard. */
   .mobileLinksRow,
   .headerMainRow,
   .mobileLocationRow {
@@ -1296,6 +1374,11 @@ button.promoControl {
     visibility: hidden;
     transition: grid-template-rows var(--store-duration-slow) var(--store-ease), visibility 0s linear var(--store-duration-slow);
   }
+  .headerInset[data-collapsed="true"] .mobileLinksRow > .headerRowInner,
+  .headerInset[data-collapsed="true"] .headerMainRow > .headerRowInner,
+  .headerInset[data-collapsed="true"] .mobileLocationRow > .headerRowInner {
+    padding-block: 0;
+  }
   .headerInset[data-collapsed="true"] .mobileLinksRow,
   .headerInset[data-collapsed="true"] .mobileLocationRow {
     border-bottom-color: transparent;
@@ -1318,7 +1401,7 @@ button.promoControl {
   .categoryTileLabel { font-size: 0.76rem; }
   .helpBlock { grid-template-columns: 1fr; }
   .helpBlockMedia { aspect-ratio: 16 / 9; }
-  .main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .main { padding-bottom: calc(52px + env(safe-area-inset-bottom)); }
   .catalogTeaserEmpty { flex-direction: column; text-align: center; }
   .catalogTeaserEmptyBody { align-items: center; }
   .catalogTeaserActions { justify-content: center; }

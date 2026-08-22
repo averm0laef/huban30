@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION,
+  SupplierCrossPairSchema,
   SupplierSearchQuerySchema,
   SupplierSearchResponseSchema,
   SupplierWaitlistContactSchema,
@@ -88,6 +89,29 @@ describe("supplier search contracts", () => {
       success: true,
       totalFound: 1,
       truncated: false,
+    }).success).toBe(false);
+  });
+});
+
+describe("supplier cross pair contract", () => {
+  it("accepts a pair with a brand on both sides and one with a blank brand", () => {
+    expect(SupplierCrossPairSchema.safeParse({
+      partA: { article: "W914/2", brand: "MANN" },
+      partB: { article: "OC90", brand: "MAHLE" },
+    }).success).toBe(true);
+    // A supplier cross entry can carry an empty brand (see rossko-soap.ts's
+    // `findChild(node, "brand")?.text ?? ""`) -- the schema must accept it,
+    // ingestion is what decides such a pair is unconfirmed, not this schema.
+    expect(SupplierCrossPairSchema.safeParse({
+      partA: { article: "W914/2", brand: "MANN" },
+      partB: { article: "OC90", brand: "" },
+    }).success).toBe(true);
+  });
+
+  it("rejects a pair missing an article number on either side", () => {
+    expect(SupplierCrossPairSchema.safeParse({
+      partA: { article: "", brand: "MANN" },
+      partB: { article: "OC90", brand: "MAHLE" },
     }).success).toBe(false);
   });
 });

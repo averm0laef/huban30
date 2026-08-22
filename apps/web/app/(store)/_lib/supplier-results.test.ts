@@ -11,6 +11,7 @@ function ownItem(overrides: Partial<CatalogProductSummary> = {}): CatalogProduct
     category: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     id: "11111111-1111-4111-8111-111111111111",
+    matchedVia: "query",
     name: "Фильтр масляный",
     priceKopeks: 45000,
     primaryImage: null,
@@ -66,6 +67,39 @@ describe("filterSupplierParts", () => {
     const mistagged = { ...supplierPart(), availability: "in_stock" } as unknown as SupplierPartView;
     const clean = supplierPart({ guid: "clean-guid" });
     expect(filterSupplierParts(supplierResponse({ parts: [mistagged, clean] }))).toEqual([clean]);
+  });
+
+  it("applies real brand and retail-price filters to direct and analogue offers", () => {
+    const part = supplierPart({
+      crosses: [{
+        availability: "under_order",
+        brand: "Bosch",
+        crosses: [],
+        guid: "cross-bosch",
+        name: "Аналог Bosch",
+        partNumber: "B-1",
+        stocks: [{ deliveryTime: "2 дня", id: "B", priceKopeks: 80_000, quantity: 2 }],
+      }],
+      stocks: [{ deliveryTime: null, id: "M", priceKopeks: 50_000, quantity: 1 }],
+    });
+
+    expect(filterSupplierParts(supplierResponse({ parts: [part] }), {
+      brandNames: ["BOSCH"],
+      minPriceKopeks: 70_000,
+      maxPriceKopeks: 90_000,
+    })).toEqual([{ ...part, stocks: [] }]);
+  });
+
+  it("removes supplier identities already available on the shop floor", () => {
+    expect(filterSupplierParts(supplierResponse(), {
+      ownAvailable: [{ brand: "MANN", sku: "W914/2" }],
+    })).toEqual([]);
+  });
+
+  it("does not render a supplier identity without an actionable stock line", () => {
+    expect(filterSupplierParts(supplierResponse({
+      parts: [supplierPart({ crosses: [], stocks: [] })],
+    }))).toEqual([]);
   });
 });
 

@@ -1,6 +1,9 @@
 import { z } from "zod";
 
+import { SupplierCrossPairSchema } from "./suppliers.js";
+
 export * from "./assistant.js";
+export * from "./catalog-search-normalize.js";
 export * from "./one-c-exchange.js";
 export * from "./suppliers.js";
 
@@ -125,8 +128,27 @@ export const CheckoutSandboxScenarioSchema = z.enum(CHECKOUT_SANDBOX_SCENARIOS);
 export type CheckoutSandboxScenario = z.infer<typeof CheckoutSandboxScenarioSchema>;
 
 const CheckoutIdempotencyKeySchema = z.uuid();
-export const CHECKOUT_LEGAL_POLICY_VERSION = "checkout-terms-v1" as const;
-export const CONTACT_CONSENT_POLICY_VERSION = "contact-consent-v1" as const;
+export const CHECKOUT_LEGAL_POLICY_VERSION = "checkout-terms-2026-08-15-v2" as const;
+export const CHECKOUT_PERSONAL_DATA_CONSENT_VERSION =
+  "checkout-personal-data-2026-08-15-v1" as const;
+export const CHECKOUT_PERSONAL_DATA_CONSENT_DOCUMENT_PATH =
+  "/checkout-personal-data-consent" as const;
+export const CHECKOUT_PERSONAL_DATA_CONSENT_TEXT =
+  "Я даю согласие на обработку указанных персональных данных для создания и исполнения заказа на условиях отдельного документа «Согласие на обработку данных для заказа»." as const;
+export const CONTACT_CONSENT_POLICY_VERSION = "contact-personal-data-2026-08-15-v2" as const;
+export const CONTACT_PERSONAL_DATA_CONSENT_DOCUMENT_PATH =
+  "/contact-personal-data-consent" as const;
+export const CONTACT_PERSONAL_DATA_CONSENT_TEXT =
+  "Я даю согласие на обработку указанных персональных данных только для ответа на это обращение на условиях отдельного документа «Согласие на обработку данных для обращения»." as const;
+/**
+ * The browser sends this value with an explicit registration consent. The
+ * API rejects stale versions and stores the accepted version with the user,
+ * server timestamp and request metadata as an immutable evidence record.
+ */
+export const REGISTRATION_PERSONAL_DATA_CONSENT_VERSION =
+  "registration-personal-data-2026-08-15-v1" as const;
+export const REGISTRATION_PERSONAL_DATA_CONSENT_TEXT =
+  "Я даю согласие на обработку персональных данных для регистрации и использования личного кабинета на условиях документа «Согласие на обработку персональных данных»." as const;
 const CheckoutPhoneSchema = z.string().trim().min(7).max(32).regex(/^\+[1-9]\d{6,14}$/u);
 
 export const CheckoutItemSchema = z.object({
@@ -161,6 +183,8 @@ export const CheckoutRequestSchema = z.object({
   idempotencyKey: CheckoutIdempotencyKeySchema,
   items: z.array(CheckoutItemSchema).min(1).max(100),
   legalPolicyVersion: z.literal(CHECKOUT_LEGAL_POLICY_VERSION),
+  personalDataConsent: z.literal(true, { error: "personal data consent is required" }),
+  personalDataConsentVersion: z.literal(CHECKOUT_PERSONAL_DATA_CONSENT_VERSION),
   sandboxScenario: CheckoutSandboxScenarioSchema.optional(),
   termsAccepted: z.literal(true, { error: "terms acceptance is required" }),
 }).strict().superRefine((value, context) => {
@@ -537,12 +561,29 @@ const CatalogEntityViewSchema = z.object({
   slug: CatalogPublicSlugSchema,
 }).strict();
 
+export const CatalogBrandViewSchema = CatalogEntityViewSchema.extend({
+  productCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+}).strict();
+export type CatalogBrandView = z.infer<typeof CatalogBrandViewSchema>;
+
+export const CatalogBrandsResponseSchema = z.object({
+  items: z.array(CatalogBrandViewSchema).max(10_000),
+}).strict();
+export type CatalogBrandsResponse = z.infer<typeof CatalogBrandsResponseSchema>;
+
 export const CatalogProductSummarySchema = z.object({
   availableQuantity: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   brand: CatalogEntityViewSchema.nullable(),
   category: CatalogEntityViewSchema.nullable(),
   createdAt: z.iso.datetime(),
   id: z.uuid(),
+  // "cross" means this row was never itself named by the customer's search
+  // text -- it surfaced because app.article_crosses links a *different*,
+  // confirmed-equivalent article to it (see catalog-public.service.ts and
+  // migration 0018). The storefront must render this exactly like a
+  // supplier analogue badge (`RowBadge analog`, "Аналог") -- selling someone
+  // a different article without saying so is how a shop gets a return.
+  matchedVia: z.enum(["query", "cross"]).default("query"),
   name: z.string().min(1).max(500),
   priceKopeks: MoneySchema.nullable(),
   primaryImage: CatalogImageViewSchema.nullable(),
@@ -613,6 +654,17 @@ export const WorkerJobSchema = z.discriminatedUnion("name", [
   z.object({
     name: z.literal("system.heartbeat"),
     payload: z.object({ requestedAt: z.iso.datetime() }),
+  }),
+  // Persists article-cross pairs a supplier search turned up (see
+  // SupplierSearchService.search and apps/worker/src/article-cross-ingest.ts).
+  // Queued outside the customer's request/response cycle -- see the comment
+  // on SupplierCrossQueueService for why this must never be awaited there.
+  z.object({
+    name: z.literal("supplier.crosses.ingest"),
+    payload: z.object({
+      pairs: z.array(SupplierCrossPairSchema).min(1).max(1_000),
+      source: z.literal("rossko"),
+    }),
   }),
 ]);
 export type WorkerJob = z.infer<typeof WorkerJobSchema>;

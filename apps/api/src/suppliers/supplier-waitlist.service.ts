@@ -7,7 +7,9 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 
@@ -28,6 +30,7 @@ import type { AuthContext } from "../auth/auth-context.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
 import { canManagerChangeAssignment, canReopenRequest } from "../staff/staff.service.js";
+import { applySupplierMarkup } from "./supplier-pricing.js";
 
 interface RequestMetadata {
   ipAddress?: string;
@@ -131,13 +134,25 @@ const WAITLIST_FROM = `
 
 @Injectable()
 export class SupplierWaitlistService {
+  private readonly legalDocumentsApproved: boolean;
+  private readonly markupPercent: number;
+
   constructor(
     private readonly audit: AuditService,
     private readonly database: DatabaseService,
     @Inject(SUPPLIER_PROVIDER) private readonly supplier: SupplierProvider,
-  ) {}
+    config: ConfigService,
+  ) {
+    this.legalDocumentsApproved = config.get<boolean>("LEGAL_DOCUMENTS_APPROVED") ?? false;
+    this.markupPercent = config.get<number>("SUPPLIER_MARKUP_PERCENT") ?? 30;
+  }
 
   async create(input: unknown, metadata: RequestMetadata) {
+    if (!this.legalDocumentsApproved) {
+      throw new ServiceUnavailableException(
+        "Приём персональных данных откроется после публикации утверждённых документов",
+      );
+    }
     const body = parse(SupplierWaitlistCreateSchema, input, "Некорректная заявка на ожидание");
 
     // Re-resolve the part/stock from the server's own trusted supplier
@@ -145,10 +160,14 @@ export class SupplierWaitlistService {
     // points at which line it means; price and delivery time always come
     // from here, never from the request body.
     const searchResult = await this.supplier.search(body.query);
+    if (!searchResult.success) {
+      throw new ServiceUnavailableException("Поставщик временно недоступен. Повторите заявку позже.");
+    }
     const part = findSupplierPart(searchResult.parts, body.partGuid);
     if (!part) throw new NotFoundException("Деталь у поставщика больше не найдена. Повторите поиск.");
     const stock = part.stocks.find((candidate) => candidate.id === body.stockId);
     if (!stock) throw new NotFoundException("Эта позиция больше не доступна у поставщика. Повторите поиск.");
+    const retailPriceKopeks = applySupplierMarkup(stock.priceKopeks, this.markupPercent);
 
     const hash = requestHash(body);
     return this.database.transaction(async (client) => {
@@ -162,7 +181,7 @@ export class SupplierWaitlistService {
          RETURNING id,status,created_at`,
         [
           body.idempotencyKey, hash, body.source, part.guid, part.brand, part.partNumber, part.name,
-          stock.id, stock.priceKopeks, stock.deliveryTime, body.quantity, body.contact.name,
+          stock.id, retailPriceKopeks, stock.deliveryTime, body.quantity, body.contact.name,
           body.contact.email ?? null, body.contact.phone ?? null, body.policyVersion,
         ],
       )).rows[0];

@@ -1,5 +1,6 @@
 import { Transform } from "class-transformer";
 import {
+  Equals,
   IsEmail,
   IsIn,
   IsString,
@@ -8,7 +9,10 @@ import {
   MinLength,
 } from "class-validator";
 
-import type { Role } from "@an30/contracts";
+import {
+  REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+  type Role,
+} from "@an30/contracts";
 
 export class RegisterDto {
   @IsEmail()
@@ -25,6 +29,14 @@ export class RegisterDto {
   @MinLength(12)
   @MaxLength(128)
   password!: string;
+
+  @Equals(true, { message: "Требуется отдельное согласие на обработку персональных данных" })
+  personalDataConsent!: true;
+
+  @Equals(REGISTRATION_PERSONAL_DATA_CONSENT_VERSION, {
+    message: "Версия согласия устарела. Обновите страницу и повторите регистрацию",
+  })
+  personalDataConsentVersion!: typeof REGISTRATION_PERSONAL_DATA_CONSENT_VERSION;
 }
 
 export class LoginDto {

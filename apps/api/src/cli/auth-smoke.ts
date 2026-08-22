@@ -1,5 +1,7 @@
 import { Client } from "pg";
 
+import { REGISTRATION_PERSONAL_DATA_CONSENT_VERSION } from "@an30/contracts";
+
 import { validateEnvironment } from "../config.js";
 
 interface JsonResponse {
@@ -80,15 +82,29 @@ async function main(): Promise<void> {
   try {
     await request("/auth/session", { method: "GET" }, 401);
     await request("/auth/register", {
-      body: JSON.stringify({ displayName: "Smoke Test", email, password: originalPassword }),
+      body: JSON.stringify({
+        displayName: "Smoke Test",
+        email,
+        password: originalPassword,
+        personalDataConsent: true,
+        personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+      }),
       headers: { "content-type": "application/json" },
       method: "POST",
     }, 403);
+
+    await post("/auth/register", {
+      displayName: "Smoke Test",
+      email,
+      password: originalPassword,
+    }, 400);
 
     const registration = await post("/auth/register", {
       displayName: "Smoke Test",
       email,
       password: originalPassword,
+      personalDataConsent: true,
+      personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
     }, 202);
     const verificationToken = String(registration.body.developmentToken ?? "");
     if (!verificationToken) throw new Error("Development verification token is missing");
@@ -170,7 +186,7 @@ async function main(): Promise<void> {
 
   if (smokeError) throw smokeError;
   if (cleanupError) throw cleanupError;
-  process.stdout.write(JSON.stringify({ event: "auth.smoke.passed", tests: 18 }) + "\n");
+  process.stdout.write(JSON.stringify({ event: "auth.smoke.passed", tests: 19 }) + "\n");
 }
 
 main().catch((error: unknown) => {

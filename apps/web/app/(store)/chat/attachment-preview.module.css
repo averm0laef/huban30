@@ -35,6 +35,17 @@
   object-fit: cover;
 }
 
+.thumbVideo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: block;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: #05070b;
+  object-fit: contain;
+}
+
+.thumbIdle,
 .thumbLoading,
 .thumbError {
   width: 100%;
@@ -50,6 +61,40 @@
   font-size: 0.76rem;
   line-height: 1.4;
   text-align: center;
+}
+
+.thumbIdle {
+  color: var(--store-muted);
+}
+
+.videoLoadButton {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-text);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+
+.videoLoadButton:hover {
+  border-color: var(--store-brand);
+  color: var(--store-brand);
+}
+
+.videoLoadButton strong { font-size: 0.86rem; }
+
+.videoLoadButton span {
+  color: var(--store-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .thumbError { color: var(--store-danger); }
@@ -263,4 +308,5 @@
   .lightboxBackdrop,
   .lightboxPanel { animation: none; }
   .thumbButton { transition: none; }
+  .videoLoadButton { transition: none; }
 }

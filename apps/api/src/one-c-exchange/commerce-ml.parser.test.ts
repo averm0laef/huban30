@@ -13,7 +13,7 @@ import {
 // this project has previously shipped fixtures that encoded the same mistake
 // as the code they tested.
 const DEEP_CATEGORY_IMPORT_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<КоммерческаяИнформация ВерсияСхемы="2.10" ДатаФормирования="2026-08-06T03:00:00" СодержитТолькоИзменения="false">
+<КоммерческаяИнформация ВерсияСхемы="2.10" ДатаФормирования="2026-08-06T03:00:00">
   <Классификатор>
     <Ид>classifier-1</Ид>
     <Наименование>АН-30</Наименование>
@@ -40,7 +40,7 @@ const DEEP_CATEGORY_IMPORT_XML = `<?xml version="1.0" encoding="UTF-8"?>
       </Группа>
     </Группы>
   </Классификатор>
-  <Каталог>
+  <Каталог СодержитТолькоИзменения="false">
     <Ид>catalog-1</Ид>
     <Товары>
       <Товар>
@@ -72,8 +72,8 @@ const DEEP_CATEGORY_IMPORT_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </КоммерческаяИнформация>`;
 
 const OFFERS_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<КоммерческаяИнформация ВерсияСхемы="2.10" ДатаФормирования="2026-08-06T04:00:00" СодержитТолькоИзменения="true">
-  <ПакетПредложений>
+<КоммерческаяИнформация ВерсияСхемы="2.10" ДатаФормирования="2026-08-06T04:00:00">
+  <ПакетПредложений СодержитТолькоИзменения="true">
     <Ид>offers-1</Ид>
     <Предложения>
       <Предложение>
@@ -171,6 +171,44 @@ describe("parseImportXml", () => {
     expect(parseImportXml(garbled).containsOnlyChanges).toBe(true);
   });
 
+  it("prefers the standard Каталог flag over a conflicting legacy root flag", () => {
+    const xml = DEEP_CATEGORY_IMPORT_XML
+      .replace("<КоммерческаяИнформация ", '<КоммерческаяИнформация СодержитТолькоИзменения="true" ');
+    expect(parseImportXml(xml).containsOnlyChanges).toBe(false);
+  });
+
+  it("loads products that use the predefined Код requisite instead of Артикул", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<КоммерческаяИнформация>
+  <Каталог СодержитТолькоИзменения="true">
+    <Товары>
+      <Товар>
+        <Ид>product-with-code</Ид>
+        <Наименование>Товар без артикула</Наименование>
+        <Артикул />
+        <Описание>Полезное описание</Описание>
+        <ЗначенияРеквизитов>
+          <ЗначениеРеквизита><Наименование>Код</Наименование><Значение>00000000165</Значение></ЗначениеРеквизита>
+        </ЗначенияРеквизитов>
+      </Товар>
+    </Товары>
+  </Каталог>
+</КоммерческаяИнформация>`;
+    const product = parseImportXml(xml).bodyRows.find((row) => row.entityType === "product");
+    expect(product).toMatchObject({ description: "Полезное описание", sku: "00000000165" });
+  });
+
+  it("maps CommerceML deletion markers to inactive categories and products", () => {
+    const xml = DEEP_CATEGORY_IMPORT_XML
+      .replace("<Ид>g-filters</Ид>", "<Ид>g-filters</Ид><ПометкаУдаления>true</ПометкаУдаления>")
+      .replace("<Ид>product-2</Ид>", "<Ид>product-2</Ид><ПометкаУдаления>true</ПометкаУдаления>");
+    const result = parseImportXml(xml);
+    expect(result.headerRows.find((row) => row.entityType === "category" && row.externalId === "g-filters"))
+      .toMatchObject({ isActive: false });
+    expect(result.bodyRows.find((row) => row.entityType === "product" && row.externalId === "product-2"))
+      .toMatchObject({ isActive: false });
+  });
+
   it("never lets a corrupt file reach the catalog", () => {
     expect(() => parseImportXml("<КоммерческаяИнформация><Открыт")).toThrow(CommerceMlParseError);
     expect(() => parseImportXml("<НеТоЧтоНадо></НеТоЧтоНадо>")).toThrow(CommerceMlParseError);
@@ -238,5 +276,18 @@ describe("parseOffersXml", () => {
 
   it("reads СодержитТолькоИзменения=true as a delta", () => {
     expect(parseOffersXml(OFFERS_XML).containsOnlyChanges).toBe(true);
+  });
+
+  it("never imports a non-RUB price as roubles", () => {
+    const usd = OFFERS_XML.replace("<Валюта>руб</Валюта>", "<Валюта>USD</Валюта>");
+    const prices = parseOffersXml(usd).bodyRows.filter((row) => row.entityType === "price");
+    expect(prices.some((row) => row.entityType === "price" && row.productExternalId === "product-1")).toBe(false);
+    expect(prices.some((row) => row.entityType === "price" && row.productExternalId === "product-2")).toBe(true);
+  });
+
+  it("prefers the standard ПакетПредложений flag over a conflicting root flag", () => {
+    const xml = OFFERS_XML
+      .replace("<КоммерческаяИнформация ", '<КоммерческаяИнформация СодержитТолькоИзменения="false" ');
+    expect(parseOffersXml(xml).containsOnlyChanges).toBe(true);
   });
 });

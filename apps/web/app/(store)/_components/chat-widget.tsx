@@ -12,20 +12,24 @@ import {
 } from "react";
 
 import { errorText, readSession } from "../_lib/storefront-api";
-import { ChatAttachmentImage } from "../chat/attachment-preview";
+import { ChatAttachmentMedia } from "../chat/attachment-preview";
 import {
+  CHAT_ATTACHMENT_ACCEPT,
   CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
+  attachmentSignatureError,
   chatRequest,
   formatDate,
   isChatThread,
   isOwnMessage,
-  isPreviewableImage,
+  isPreviewableMedia,
   parseStoredGuestThreads,
   sendChatMessageRest,
   senderLabel,
   serializeGuestThreads,
   upsertThread,
+  uploadChatAttachment,
+  type ChatAccess,
   type ChatThread,
 } from "../chat/chat-state";
 import { useChatThread } from "../chat/use-chat-thread";
@@ -33,6 +37,11 @@ import styles from "./chat-widget.module.css";
 
 /** Subject staff sees in their queue for a thread the widget started lazily. */
 const DEFAULT_SUBJECT = "Обращение из чата на сайте";
+
+function conversationSubject(seed: string): string {
+  const summary = seed.replace(/\s+/gu, " ").trim().slice(0, 160);
+  return summary ? `Чат: ${summary}` : DEFAULT_SUBJECT;
+}
 
 type Viewer =
   | { kind: "customer" }
@@ -120,6 +129,7 @@ export function ChatWidget() {
   const [online, setOnline] = useState(true);
   const [draft, setDraft] = useState("");
   const [bootstrapPending, setBootstrapPending] = useState(false);
+  const [attachmentBootstrapPending, setAttachmentBootstrapPending] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
   const [announcement, setAnnouncement] = useState("");
 
@@ -143,18 +153,26 @@ export function ChatWidget() {
     downloadError,
     fileError,
     filePending,
+    hasOlderMessages,
     historyError,
     historyLoading,
+    loadOlderMessages,
     lastStaffReadMessageId,
     messages,
+    newerMessageCount,
+    olderHistoryError,
+    olderHistoryLoading,
+    renderedMessages,
     resetSendAttempt,
     retryHistory,
     sendAttemptId,
     sendError,
     sendMessage: submitDraft,
     sendPending,
+    showLatestMessages,
     unreadCount,
     uploadAttachment: submitAttachment,
+    viewingLatest,
   } = useChatThread(channelActive ? thread : null, channelActive ? viewerKind : null, isOpen);
 
   const resolveConversation = useCallback(async () => {
@@ -212,8 +230,24 @@ export function ChatWidget() {
   }, [viewer.kind]);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+    if (viewingLatest) messageEndRef.current?.scrollIntoView({ block: "end" });
+  }, [renderedMessages, viewingLatest]);
+
+  async function showOlderMessages(): Promise<void> {
+    const container = messageEndRef.current?.parentElement;
+    const containerTop = container?.getBoundingClientRect().top ?? 0;
+    const anchor = container
+      ? [...container.querySelectorAll<HTMLElement>("[data-chat-message-id]")]
+        .find((item) => item.getBoundingClientRect().bottom >= containerTop)
+      : null;
+    const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+    await loadOlderMessages();
+    window.requestAnimationFrame(() => {
+      if (!container || !anchor) return;
+      const currentAnchor = container.querySelector<HTMLElement>(`[data-chat-message-id="${anchor.dataset.chatMessageId}"]`);
+      if (currentAnchor) container.scrollTop += currentAnchor.getBoundingClientRect().top - anchorTop;
+    });
+  }
 
   // Native <dialog> owns focus-trapping, background inertness and the
   // Escape -> cancel gesture; this effect just keeps it in sync with React
@@ -251,34 +285,41 @@ export function ChatWidget() {
     launcherRef.current?.focus();
   }, []);
 
+  async function createConversation(seed: string): Promise<{ access: ChatAccess; created: ChatThread }> {
+    const subject = conversationSubject(seed);
+    if (viewer.kind === "guest") {
+      const created = await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, {
+        body: { orderId: null, subject }, method: "POST",
+      });
+      if (!isChatThread(created) || !created.guestToken || created.guestToken.length < 32 || created.guestToken.length > 256) {
+        throw new Error("Сервер не вернул безопасный доступ к новому чату");
+      }
+      const stored = parseStoredGuestThreads(window.localStorage.getItem(GUEST_CHAT_STORAGE_KEY));
+      try {
+        window.localStorage.setItem(GUEST_CHAT_STORAGE_KEY, serializeGuestThreads(upsertThread(stored, created)));
+      } catch {
+        // Best effort: the conversation still works for this page view
+        // even when the browser refuses persistent storage.
+      }
+      return { access: { guestToken: created.guestToken, kind: "guest" }, created };
+    }
+    if (viewer.kind === "customer") {
+      const created = await chatRequest<ChatThread>("/chat/threads", { kind: "customer" }, {
+        body: { orderId: null, subject }, method: "POST",
+      });
+      if (!isChatThread(created)) throw new Error("Сервер не вернул безопасный доступ к новому чату");
+      return { access: { kind: "customer" }, created };
+    }
+    throw new Error("Чат доступен только покупателям");
+  }
+
   async function bootstrapThreadAndSend(body: string): Promise<void> {
     setBootstrapPending(true);
     setBootstrapError("");
     try {
-      if (viewer.kind === "guest") {
-        const created = await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, {
-          body: { orderId: null, subject: DEFAULT_SUBJECT }, method: "POST",
-        });
-        if (!isChatThread(created) || !created.guestToken || created.guestToken.length < 32 || created.guestToken.length > 256) {
-          throw new Error("Сервер не вернул безопасный доступ к новому чату");
-        }
-        const stored = parseStoredGuestThreads(window.localStorage.getItem(GUEST_CHAT_STORAGE_KEY));
-        try {
-          window.localStorage.setItem(GUEST_CHAT_STORAGE_KEY, serializeGuestThreads(upsertThread(stored, created)));
-        } catch {
-          // Best effort: the conversation still works for this page view
-          // even when the browser refuses persistent storage.
-        }
-        await sendChatMessageRest(created, { guestToken: created.guestToken, kind: "guest" }, body, crypto.randomUUID());
-        setThread(created);
-      } else if (viewer.kind === "customer") {
-        const created = await chatRequest<ChatThread>("/chat/threads", { kind: "customer" }, {
-          body: { orderId: null, subject: DEFAULT_SUBJECT }, method: "POST",
-        });
-        if (!isChatThread(created)) throw new Error("Сервер не вернул безопасный доступ к новому чату");
-        await sendChatMessageRest(created, { kind: "customer" }, body, crypto.randomUUID());
-        setThread(created);
-      }
+      const { access, created } = await createConversation(body);
+      await sendChatMessageRest(created, access, body, crypto.randomUUID());
+      setThread(created);
       setDraft("");
     } catch (caught) {
       setBootstrapError(errorText(caught));
@@ -289,7 +330,7 @@ export function ChatWidget() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!online || bootstrapPending || sendPending) return;
+    if (!online || bootstrapPending || attachmentBootstrapPending || sendPending) return;
     if (viewer.kind !== "guest" && viewer.kind !== "customer") return;
     const body = draft.trim();
     if (!body || body.length > 4_000) return;
@@ -303,23 +344,45 @@ export function ChatWidget() {
   }
 
   async function handleFileChange(file: File | null): Promise<void> {
-    if (!file || !online || !thread || thread.status === "closed") return;
-    await submitAttachment(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!file || !online || (viewer.kind !== "guest" && viewer.kind !== "customer")) return;
+    try {
+      if (thread && thread.status !== "closed") {
+        await submitAttachment(file);
+        return;
+      }
+      setAttachmentBootstrapPending(true);
+      setBootstrapError("");
+      const signature = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+      const validationError = attachmentSignatureError(file, signature);
+      if (validationError) throw new Error(validationError);
+      const { access, created } = await createConversation(`Файл для подбора: ${file.name}`);
+      try {
+        await uploadChatAttachment(created, access, file, crypto.randomUUID());
+      } finally {
+        // Even when the file itself is invalid, keep the new conversation so
+        // the customer can retry without silently creating another thread.
+        setThread(created);
+      }
+    } catch (caught) {
+      setBootstrapError(errorText(caught));
+    } finally {
+      setAttachmentBootstrapPending(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   if (hidden) return null;
 
   const canChat = viewer.kind === "guest" || viewer.kind === "customer";
-  const attachDisabled = !thread || thread.status === "closed" || filePending || !online || bootstrapPending;
-  const sendDisabled = !draft.trim() || !online || bootstrapPending || sendPending;
+  const attachDisabled = filePending || !online || bootstrapPending || attachmentBootstrapPending;
+  const sendDisabled = !draft.trim() || !online || bootstrapPending || attachmentBootstrapPending || sendPending;
   const isRetry = Boolean(sendAttemptId) && !sendPending;
   const statusVariant = viewer.kind === "loading" || threadLoading ? "busy"
     : viewer.kind === "error" ? "error"
       : viewer.kind === "staff" ? "muted"
         : !online ? "error"
-          : !thread ? "muted"
-            : bootstrapPending ? "busy"
+          : bootstrapPending || attachmentBootstrapPending ? "busy"
+            : !thread ? "muted"
               : connection === "live" ? "live"
                 : connection === "error" || connection === "offline" ? "error"
                   : "busy";
@@ -327,8 +390,9 @@ export function ChatWidget() {
     : viewer.kind === "error" ? "Чат недоступен"
       : viewer.kind === "staff" ? "Только для покупателей"
         : !online ? "Нет сети"
-          : !thread ? "Новое обращение"
+          : attachmentBootstrapPending ? "Загружаем файл…"
             : bootstrapPending ? "Отправляем…"
+              : !thread ? "Новое обращение"
               : CONNECTION_LABELS[connection];
 
   return (
@@ -405,23 +469,58 @@ export function ChatWidget() {
               {threadLoading || historyLoading ? (
                 <div className={styles.state} role="status">Загружаем сообщения…</div>
               ) : (
-                <div className={styles.messages} role="log" aria-live="polite" aria-relevant="additions text">
-                  {messages.length === 0 ? (
-                    <div className={styles.empty}>
-                      <strong>Сообщений пока нет</strong>
-                      <span>Напишите вопрос, и сотрудник магазина ответит здесь.</span>
+                <div
+                  aria-busy={olderHistoryLoading || undefined}
+                  aria-live={viewingLatest ? "polite" : "off"}
+                  aria-relevant="additions text"
+                  className={styles.messages}
+                  id={`${titleId}-message-log`}
+                  role="log"
+                >
+                  {hasOlderMessages || !viewingLatest ? (
+                    <div className={styles.historyControls}>
+                      {hasOlderMessages ? (
+                        <button
+                          aria-controls={`${titleId}-message-log`}
+                          disabled={olderHistoryLoading}
+                          onClick={() => void showOlderMessages()}
+                          type="button"
+                        >
+                          {olderHistoryLoading
+                            ? "Загружаем предыдущие..."
+                            : olderHistoryError
+                              ? "Повторить загрузку предыдущих"
+                              : "Показать предыдущие"}
+                        </button>
+                      ) : <span>Это начало переписки.</span>}
+                      {!viewingLatest ? (
+                        <button aria-controls={`${titleId}-message-log`} onClick={showLatestMessages} type="button">
+                          {newerMessageCount > 0 ? `К последним (${newerMessageCount})` : "К последним"}
+                        </button>
+                      ) : null}
+                      {olderHistoryError ? <span role="alert">{olderHistoryError}</span> : null}
                     </div>
                   ) : null}
-                  {messages.map((message) => (
-                    <article className={styles.message} data-own={isOwnMessage(message) || undefined} key={message.id}>
+                  <article className={styles.welcomeMessage}>
+                    <header><strong>АН-30</strong></header>
+                    <p>Здравствуйте! Поможем подобрать нужную деталь.</p>
+                    <p>Отправьте VIN или марку, модель и год автомобиля, затем название детали или артикул. Фото или короткое видео можно прикрепить кнопкой ниже.</p>
+                  </article>
+                  {renderedMessages.map((message) => (
+                    <article
+                      className={styles.message}
+                      data-chat-message-id={message.id}
+                      data-own={isOwnMessage(message) || undefined}
+                      key={message.id}
+                    >
                       <header>
                         <strong>{senderLabel(message.senderKind)}</strong>
                         <time dateTime={message.createdAt}>{formatDate(message.createdAt)}</time>
                       </header>
                       {message.body && message.messageType !== "attachment" ? <p>{message.body}</p> : null}
                       {message.attachments.map((attachment) => (
-                        isPreviewableImage(attachment) && thread && viewerKind ? (
-                          <ChatAttachmentImage
+                        isPreviewableMedia(attachment) && thread && viewerKind ? (
+                          <ChatAttachmentMedia
                             attachment={attachment}
                             key={attachment.id}
                             onDownload={() => void downloadAttachment(attachment)}
@@ -457,12 +556,12 @@ export function ChatWidget() {
                 className={styles.iconButton}
                 onClick={() => fileInputRef.current?.click()}
                 disabled={attachDisabled}
-                aria-label={!thread || thread.status === "closed" ? "Сначала отправьте сообщение, затем можно приложить изображение" : "Прикрепить изображение"}
+                aria-label="Прикрепить фото или видео"
               >
                 <AttachImageIcon />
               </button>
               <input
-                accept="image/jpeg,image/png,image/webp"
+                accept={CHAT_ATTACHMENT_ACCEPT}
                 className={styles.visuallyHidden}
                 id={`${titleId}-file`}
                 onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
@@ -501,7 +600,8 @@ export function ChatWidget() {
             </div>
             {sendError || bootstrapError ? <p className={styles.inlineError} role="alert">{sendError || bootstrapError}</p> : null}
             {fileError ? <p className={styles.inlineError} role="alert">{fileError}</p> : null}
-            {filePending ? <p className={styles.hint} role="status">Загружаем изображение…</p> : null}
+            <p className={styles.hint}>Фото до 5 МБ. Видео до 15 МБ и до 2 минут.</p>
+            {filePending || attachmentBootstrapPending ? <p className={styles.hint} role="status">Загружаем файл…</p> : null}
           </form>
         ) : null}
       </dialog>

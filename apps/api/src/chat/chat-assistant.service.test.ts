@@ -23,6 +23,7 @@ function catalogItem(overrides: Partial<CatalogProductSummary> = {}): CatalogPro
     category: { id: "cat-1", name: "Фильтры", slug: "filters" },
     createdAt: "2026-08-01T00:00:00.000Z",
     id: "product-1",
+    matchedVia: "query",
     name: "Фильтр масляный",
     priceKopeks: 125_000,
     primaryImage: null,

@@ -153,6 +153,66 @@ describe("CatalogPublicService", () => {
     expect(parameters[7]).toBe("W9142");
   });
 
+  it("widens search to confirmed article-cross equivalents, ranked between an exact and a prefix match", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await service.products({ q: "w914-2" });
+
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    // Symmetric lookup: a confirmed cross is found whichever side of the
+    // stored pair the searched article landed on (see migration 0018's
+    // "one row per pair" comment) — both UNION branches must be present.
+    expect(sql).toContain("WHERE article_a=$8 AND status='confirmed'");
+    expect(sql).toContain("WHERE article_b=$8 AND status='confirmed'");
+    // Never widens on an unconfirmed cross — this is the actual enforcement
+    // of the correctness bar: nothing in this statement ever reads a
+    // article_crosses row without also filtering status='confirmed'.
+    expect(sql.match(/FROM app\.article_crosses/gu)).toHaveLength(2);
+    expect(sql.match(/status='confirmed'/gu)).toHaveLength(2);
+    expect(sql).not.toContain("unconfirmed");
+    // A cross identity is article + brand. The target article alone is not
+    // enough because the same number can belong to unrelated manufacturers.
+    expect(sql).toContain("cross_equivalents.brand=app.normalize_brand(brand.name)");
+    // A product whose own SKU already matches the typed prefix is a direct
+    // query result even if another-brand same-number cross also exists.
+    expect(sql).toContain("NOT ($8<>'' AND product.sku_normalized LIKE $8 || '%')");
+
+    const ranking = sql.slice(sql.lastIndexOf("ORDER BY"));
+    const exactTier = ranking.indexOf("product.sku_normalized=$8");
+    const crossTier = ranking.indexOf("cross_equivalents.article=product.sku_normalized");
+    const prefixTier = ranking.indexOf("product.sku_normalized LIKE $8");
+    expect(exactTier).toBeGreaterThan(-1);
+    expect(crossTier).toBeGreaterThan(exactTier);
+    expect(prefixTier).toBeGreaterThan(crossTier);
+  });
+
+  it("labels a result found only through a confirmed cross as an equivalent, not the searched-for article", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        productRow({ id: PRODUCT_ID, is_cross_match: false, sku: "W914/2" }),
+        productRow({ id: "019bf9ea-0d3e-7def-9c9a-000000000099", is_cross_match: true, sku: "OC90" }),
+      ],
+    });
+
+    const result = await service.products({ q: "W914/2" });
+
+    expect(result.items).toEqual([
+      expect.objectContaining({ matchedVia: "query", sku: "W914/2" }),
+      expect.objectContaining({ matchedVia: "cross", sku: "OC90" }),
+    ]);
+  });
+
+  it("defaults matchedVia to a direct query match for product() and featured(), which never widen via crosses", async () => {
+    query.mockResolvedValueOnce({ rows: [productRow({ description: null, public_attributes: {} })] })
+      .mockResolvedValueOnce({ rows: [] });
+    const detail = await service.product("oil-filter-1");
+    expect(detail.matchedVia).toBe("query");
+
+    query.mockResolvedValueOnce({ rows: [productRow()] });
+    const featured = await service.featured({});
+    expect(featured.items[0]?.matchedVia).toBe("query");
+  });
+
   it("escapes SQL LIKE wildcards without changing full-text search input", async () => {
     query.mockResolvedValueOnce({ rows: [] });
 
@@ -178,22 +238,34 @@ describe("CatalogPublicService", () => {
         }],
       })
       .mockResolvedValueOnce({
-        rows: [{
-          id: "019bf9ea-0d3e-7def-8c9a-000000000020",
-          name: "NGK",
-          product_count: "3",
-          slug: "ngk",
-        }],
+        rows: [
+          {
+            id: "019bf9ea-0d3e-7def-8c9a-000000000020",
+            name: "NGK",
+            product_count: "3",
+            slug: "ngk",
+          },
+          {
+            id: "019bf9ea-0d3e-7def-8c9a-000000000021",
+            name: "Commerce Smoke Staging",
+            product_count: "0",
+            slug: "commerce-smoke-staging",
+          },
+        ],
       });
 
-    await expect(service.categories()).resolves.toMatchObject({
+    const categories = await service.categories();
+    const brands = await service.brands();
+    expect(categories).toMatchObject({
       items: [{ productCount: 4, slug: "filters" }],
     });
-    await expect(service.brands()).resolves.toMatchObject({
+    expect(brands).toMatchObject({
       items: [{ productCount: 3, slug: "ngk" }],
     });
+    expect(brands.items).toHaveLength(1);
     expect(query.mock.calls[0]?.[0]).toContain("category.is_active");
     expect(query.mock.calls[1]?.[0]).toContain("brand.is_active");
+    expect(query.mock.calls[1]?.[0]).toContain("products.product_count>0");
   });
 
   it("assembles and caches the category tree, hiding an inactive subtree", async () => {
@@ -229,6 +301,16 @@ describe("CatalogPublicService", () => {
           slug: "elektrika",
           sort_order: 1,
         },
+        {
+          description: null,
+          id: "commerce-smoke",
+          is_active: true,
+          name: "Smoke category",
+          parent_id: null,
+          product_count: "0",
+          slug: "smoke-category",
+          sort_order: 2,
+        },
       ],
     });
 
@@ -237,6 +319,7 @@ describe("CatalogPublicService", () => {
       { id: "parts", productCount: 3, slug: "zapchasti", children: [{ id: "body", slug: "kuzov" }] },
     ]);
     expect(first.items.map((item) => item.id)).not.toContain("electric");
+    expect(first.items.map((item) => item.id)).not.toContain("commerce-smoke");
     expect(query.mock.calls[0]?.[0]).toContain("category.deleted_at IS NULL");
 
     // A second call must not hit the database again — the tree is cached

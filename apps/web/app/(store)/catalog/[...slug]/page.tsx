@@ -1,26 +1,28 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Fragment } from "react";
 
 import styles from "../../_components/storefront.module.css";
 import { JsonLd } from "../../_components/json-ld";
-import { getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
+import { getCatalogBrands, getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
 import type { CatalogItem } from "../../_lib/catalog-api";
 import { buildCategoryBreadcrumb, categoryPath, resolveCategoryPath } from "../../_lib/catalog-tree";
 import { breadcrumbJsonLd, pageMetadata } from "../../_lib/seo";
 import { CatalogFilterRail } from "../catalog-filter-rail";
 import { CatalogSearchPanel } from "../catalog-search-panel";
-import type { CatalogAvailability, CatalogEmptyState, CatalogSort } from "../catalog-search-panel";
+import type { CatalogEmptyState } from "../catalog-search-panel";
+import {
+  CATALOG_PAGE_SIZE,
+  catalogPageHref,
+  parseCatalogPageQuery,
+  priceKopeks,
+} from "../catalog-query";
 import { SupplierResults } from "../supplier-results";
 
 interface CategoryPageProps {
   params: Promise<{ slug: string[] }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function first(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
@@ -46,7 +48,10 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
 
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
   const { slug } = await params;
-  const tree = await getCategoryTree();
+  const [tree, brands] = await Promise.all([
+    getCategoryTree(),
+    getCatalogBrands().catch(() => []),
+  ]);
   const location = resolveCategoryPath(tree, slug);
   if (!location) notFound();
   const { ancestors, node } = location;
@@ -54,37 +59,59 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const breadcrumbTrail = buildCategoryBreadcrumb(ancestors, node);
 
   const parameters = await searchParams;
-  const query = first(parameters.q).trim().slice(0, 120);
-  const availabilityValue = first(parameters.availability);
-  const sortValue = first(parameters.sort);
-  const availability: CatalogAvailability = availabilityValue === "in_stock" || availabilityValue === "out_of_stock" ? availabilityValue : "all";
-  const sort: CatalogSort = sortValue === "name" || sortValue === "price_asc" || sortValue === "price_desc" ? sortValue : "relevance";
+  const state = parseCatalogPageQuery(parameters);
 
   let items: CatalogItem[] = [];
+  let total = 0;
+  let errorHeading = "Каталог не отвечает";
   let errorMessage: string | null = null;
-  const isSearch = query.length >= 2;
+  const isSearch = state.query.length >= 2;
   // A one-character query never matches the contract's two-character minimum
   // (see `searchCatalog`), so it gets the same short-query hint as `/catalog`
   // instead of a real request. An empty query is normal here — this page
   // browses the category (and every descendant), it does not require search
   // text the way the site-wide `/catalog` page does.
-  if (query.length !== 1) {
+  if (!state.priceRangeValid) {
+    errorHeading = "Проверьте диапазон цены";
+    errorMessage = "Цена «от» не может быть больше цены «до».";
+  } else if (state.query.length !== 1) {
     try {
-      const response = await searchCatalog(query, 48, availability, sort, node.slug);
+      const response = await searchCatalog({
+        availability: state.availability,
+        brands: state.brands,
+        category: node.slug,
+        limit: CATALOG_PAGE_SIZE,
+        offset: (state.page - 1) * CATALOG_PAGE_SIZE,
+        sort: state.sort,
+        ...(state.maxPriceRubles === null ? {} : { maxPriceKopeks: priceKopeks(state.maxPriceRubles) }),
+        ...(state.minPriceRubles === null ? {} : { minPriceKopeks: priceKopeks(state.minPriceRubles) }),
+        ...(state.query ? { query: state.query } : {}),
+      });
       items = response.items;
+      total = response.total;
     } catch (error) {
       errorMessage = error instanceof StorefrontApiError ? error.message : "Не удалось прочитать ответ каталога.";
     }
   }
+  const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
+  if (!errorMessage && total > 0 && state.page > totalPages) {
+    redirect(catalogPageHref(path, state, totalPages));
+  }
 
-  const emptyState: CatalogEmptyState | null = query.length === 1
+  const emptyState: CatalogEmptyState | null = state.query.length === 1
     ? { body: "Введите минимум два символа названия или артикула.", heading: "Нужно ещё немного текста" }
     : !errorMessage && items.length === 0
       ? {
           body: "Ассортимент наполняется из 1С. Уточните наличие и цену по телефону, пока раздел пуст.",
           heading: `В разделе «${node.name}» пока нет товаров`,
         }
-      : null;
+        : null;
+  const selectedBrandNames = brands
+    .filter((brand) => state.brands.includes(brand.slug))
+    .map((brand) => brand.name);
+  const ownAvailable = items
+    .filter((item) => item.availableQuantity > 0)
+    .map((item) => ({ brand: item.brand?.name ?? null, sku: item.sku }));
 
   return (
     <div className={styles.page}>
@@ -106,17 +133,28 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       </header>
 
       <div className={styles.catalogLayout}>
-        <CatalogFilterRail availability={availability} basePath={path} nodes={node.children} />
+        <CatalogFilterRail basePath={path} brands={brands} nodes={node.children} state={state} />
         <div className={styles.catalogMain}>
           <CatalogSearchPanel
             action={path}
             emptyState={emptyState}
+            errorHeading={errorHeading}
             errorMessage={errorMessage}
             items={items}
-            query={query}
-            sort={sort}
+            pageSize={CATALOG_PAGE_SIZE}
+            state={state}
+            total={total}
           />
-          {isSearch ? <SupplierResults ownEmpty={!errorMessage && items.length === 0} query={query} /> : null}
+          {isSearch && state.page === 1 && state.availability !== "in_stock" ? (
+            <SupplierResults
+              brandNames={selectedBrandNames}
+              ownAvailable={ownAvailable}
+              ownEmpty={!errorMessage && items.length === 0}
+              query={state.query}
+              {...(state.maxPriceRubles === null ? {} : { maxPriceKopeks: priceKopeks(state.maxPriceRubles) })}
+              {...(state.minPriceRubles === null ? {} : { minPriceKopeks: priceKopeks(state.minPriceRubles) })}
+            />
+          ) : null}
         </div>
       </div>
     </div>

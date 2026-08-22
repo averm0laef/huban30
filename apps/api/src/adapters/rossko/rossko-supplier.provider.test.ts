@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RedisService } from "../../infrastructure/redis.service.js";
 import type { RateLimitService } from "../../security/rate-limit.service.js";
-import { RosskoSupplierProvider } from "./rossko-supplier.provider.js";
+import {
+  ROSSKO_REQUEST_TIMEOUT_MS,
+  RosskoSupplierProvider,
+} from "./rossko-supplier.provider.js";
+import { supplierCacheKey } from "./rossko-soap.js";
 
 const CONFIG_VALUES: Record<string, unknown> = {
   ROSSKO_DELIVERY_ID: "000000001",
@@ -74,7 +78,13 @@ describe("RosskoSupplierProvider", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it("allows the measured 19-second broad-search path to finish before aborting", () => {
+    expect(ROSSKO_REQUEST_TIMEOUT_MS).toBeGreaterThan(19_000);
+    expect(ROSSKO_REQUEST_TIMEOUT_MS).toBeLessThan(30_000);
   });
 
   it("stays disabled and never touches Redis, the rate limiter or the network", async () => {
@@ -107,7 +117,8 @@ describe("RosskoSupplierProvider", () => {
     // The operation name belongs in the path; the bare directory answers 404.
     expect(url).toBe("https://api.rossko.ru/service/v2.1/GetSearch");
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>).SOAPAction).toBe("https://api.rossko.ru/GetSearch");
+    expect((init.headers as Record<string, string>).SOAPAction)
+      .toBe("https://api.rossko.ru/service/v2.1/GetSearch");
     expect(String(init.body)).toContain("<KEY1>test-key-1</KEY1>");
     expect(String(init.body)).toContain("<KEY2>test-key-2</KEY2>");
     expect(String(init.body)).toContain("<text>W914/2</text>");
@@ -136,6 +147,27 @@ describe("RosskoSupplierProvider", () => {
     expect(second.parts).toHaveLength(1);
   });
 
+  it("coalesces concurrent misses for the same key into one outbound SOAP call", async () => {
+    const redis = makeRedis();
+    const rateLimit = makeRateLimit();
+    let release!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => { release = resolve; });
+    const fetchSpy = vi.fn(async () => response);
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const provider = new RosskoSupplierProvider(makeConfig(), redis, rateLimit);
+    const first = provider.search("W914/2");
+    const second = provider.search("  w914/2  ");
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+
+    release(new Response(SUCCESS_XML, { status: 200 }));
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult).toEqual(secondResult);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(rateLimit.consume).toHaveBeenCalledTimes(1);
+  });
+
   it("returns a clean failure instead of throwing when the network call rejects", async () => {
     const redis = makeRedis();
     const rateLimit = makeRateLimit();
@@ -160,6 +192,55 @@ describe("RosskoSupplierProvider", () => {
       parts: [],
       success: false,
     });
+  });
+
+  it("rejects an oversized successful body before parsing or caching it", async () => {
+    const redis = makeRedis();
+    const rateLimit = makeRateLimit();
+    globalThis.fetch = vi.fn(async () => new Response(SUCCESS_XML, {
+      headers: { "content-length": String(6 * 1024 * 1024) },
+      status: 200,
+    })) as unknown as typeof fetch;
+
+    const provider = new RosskoSupplierProvider(makeConfig(), redis, rateLimit);
+    await expect(provider.search("W914/2")).resolves.toEqual({
+      message: "Поставщик временно недоступен",
+      parts: [],
+      success: false,
+    });
+    expect(redis.client.set).not.toHaveBeenCalled();
+  });
+
+  it("does not cache a transient failure for the normal 15-minute success TTL", async () => {
+    const redis = makeRedis();
+    const rateLimit = makeRateLimit();
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce(new Response("Internal Server Error", { status: 500 }))
+      .mockResolvedValueOnce(new Response(SUCCESS_XML, { status: 200 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const provider = new RosskoSupplierProvider(makeConfig(), redis, rateLimit);
+    expect((await provider.search("W914/2")).success).toBe(false);
+    expect((await provider.search("W914/2")).success).toBe(true);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(redis.client.set).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a stale cached failure or malformed nested payload from an older process", async () => {
+    const redis = makeRedis();
+    const rateLimit = makeRateLimit();
+    const key = supplierCacheKey("W914/2", "000000001");
+    const fetchSpy = vi.fn(async () => new Response(SUCCESS_XML, { status: 200 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    const provider = new RosskoSupplierProvider(makeConfig(), redis, rateLimit);
+
+    redis.store.set(key, JSON.stringify({ message: "temporary", parts: [], success: false }));
+    expect((await provider.search("W914/2")).success).toBe(true);
+
+    redis.store.set(key, JSON.stringify({ message: "OK", parts: [{}], success: true }));
+    expect((await provider.search("W914/2")).success).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
   it("falls through to a live call when the Redis cache read fails", async () => {

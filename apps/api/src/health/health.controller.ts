@@ -22,7 +22,7 @@ export class HealthController {
 
   @Get("ready")
   @Header("Cache-Control", "no-store")
-  @ApiOkResponse({ description: "PostgreSQL and Redis are available" })
+  @ApiOkResponse({ description: "PostgreSQL, Redis, and ClamAV are available" })
   @ApiServiceUnavailableResponse({ description: "A required dependency is unavailable" })
   async ready(@Res({ passthrough: true }) reply: FastifyReply): Promise<HealthResponse> {
     const response = await this.healthService.ready();

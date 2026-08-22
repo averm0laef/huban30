@@ -3,20 +3,25 @@
 ## Границы и безопасность
 
 1С остаётся единственным production-источником каталога, цен и фактических
-остатков. Endpoint выключен по умолчанию. Admin включает его только после
+остатков. Оба endpoint выключены одной общей настройкой по умолчанию. Admin включает их только после
 сохранения username, нового пароля длиной не менее 16 символов и непустого CIDR
 allowlist.
 
-- Машинный endpoint: `POST /api/v1/integrations/1c/imports`.
+- JSON endpoint с preview/apply: `POST /api/v1/integrations/1c/imports`.
+- Стандартный CommerceML endpoint «Обмен с сайтом»:
+  `GET|POST /api/v1/integrations/1c/exchange` (`checkauth`, `init`, `file`,
+  `import`, только `type=catalog`).
 - Авторизация: HTTP Basic поверх обязательного HTTPS.
 - Доступ: только адреса из `allowedNetworks`; Caddy является единственной
   публичной точкой входа, API-порт наружу не публикуется.
-- Ограничения: 60 запросов/минуту на HMAC-маскированный IP, 10 MiB на request и
-  максимум 5 000 строк в batch.
-- Пароль шифруется AES-256-GCM с purpose binding и никогда не возвращается API.
+- Ограничения JSON: 60 запросов/минуту на HMAC-маскированный IP, 10 MiB на
+  request и максимум 5 000 строк в batch. CommerceML сообщает 1С лимит чанка
+  8 MiB и применяет максимум 500 строк за один poll `mode=import`.
+- Пароль хранится только как Argon2id hash и никогда не возвращается API.
   GET сообщает только `hasPassword`.
-- Каждая принятая и отклонённая операция попадает в append-only
-  `integration_request_log` без Authorization header и тела запроса.
+- JSON uploads и CommerceML `checkauth` попадают в append-only
+  `integration_request_log` без Authorization header и тела запроса;
+  пошаговый прогресс `file/import` хранится в `one_c_exchange_runs`.
 
 Настройки доступны только admin с `settings:manage`:
 
@@ -92,7 +97,8 @@ JSON envelope имеет фиксированную версию. Деньги �
 
 ## Двухфазное применение
 
-Upload не изменяет production-каталог. Он создаёт staging batch, нормализует
+Этот раздел относится к JSON endpoint. Upload не изменяет production-каталог.
+Он создаёт staging batch, нормализует
 каждую строку и формирует preview:
 
 1. `uploaded/validating` — технические промежуточные состояния одной транзакции;
@@ -139,6 +145,28 @@ Preview блокирует apply, в частности, при кодах:
 Строка с той же version и теми же данными получает `skipped/noop`, а не создаёт
 лишнюю историю.
 
+## Стандартный обмен CommerceML
+
+1С проходит `checkauth → init → file → import`. `mode=file` последовательно
+дописывает присланные части `import*.xml` или `offers*.xml` во временное
+хранилище. `mode=import` разбирает собранный файл, сохраняет resumable run в
+`app.one_c_exchange_runs` и применяет его порциями по 500 строк; ответы между
+порциями имеют вид `progress\n...`.
+
+- `СодержитТолькоИзменения` читается со стандартных узлов `<Каталог>` и
+  `<ПакетПредложений>`; атрибут корня поддерживается только как legacy fallback.
+- `ПометкаУдаления=true` деактивирует товар или категорию, физического удаления
+  нет.
+- Если `Артикул` пуст, SKU берётся из `<Код>` или предопределённого реквизита
+  `Код`; товар без любого стабильного кода не импортируется.
+- Цены принимаются только в рублях. Иная явно указанная валюта не
+  переименовывается в RUB.
+- В полном `offers.xml` остаток отсутствующего предложения обнуляется, но
+  наличие предложения с ценой и без необязательного `<Количество>` не считается
+  отсутствием товара.
+- Повтор полностью идентичного уже завершённого файла определяется по SHA-256 и
+  не создаёт вторую историю цен или остатков.
+
 ## Локальная проверка
 
 Smoke создаёт одноразового owner, настраивает TOTP и write-only пароль 1С,
@@ -154,4 +182,30 @@ printf '%s' 'Owner 1C smoke password phrase 2026' | \
 
 docker compose -f compose.yaml -f compose.dev.yaml exec -T api \
   node dist/cli/one-c-import-smoke.js
+```
+
+### Staging CommerceML smoke
+
+После миграций и deploy стандартный HTTPS handshake проверяется отдельным CLI.
+Он не использует `AUTH_DEBUG_TOKENS`, отказывается работать вне окружения и БД
+с меткой `staging`, требует точное имя `staging.an30.ru` и дополнительное явное
+подтверждение. Если staging-интеграция 1С уже включена, smoke также отказывается
+её прерывать.
+
+CLI создаёт случайные одноразовые Basic credentials, сначала определяет IP,
+который реально видит API, затем сужает временный allowlist до `/32` или `/128`.
+Один стабильный staging-fixture импортируется, получает цену и остаток, а затем
+тем же CommerceML помечается удалённым. Это не засоряет публичный каталог новыми
+товарами при каждом прогоне и не пытается незаконно удалять append-only историю
+остатков и обменов. В `finally` CLI гарантированно скрывает fixture при любой
+ошибке, отключает credential, отзывает Redis-сессию, удаляет временные файлы и
+восстанавливает прежнюю строку `integration_endpoints` (или удаляет временную,
+если строки раньше не было). `integration_request_log`, exchange runs и
+inventory events остаются как корректный журнал smoke-проверок.
+
+```bash
+sudo AN30_SECRETS_DIR=/etc/an30/secrets \
+  docker compose --env-file /etc/an30/staging.env exec \
+  -e ONE_C_COMMERCE_SMOKE_CONFIRM=staging.an30.ru -T api \
+  node dist/cli/one-c-commerce-smoke.js
 ```

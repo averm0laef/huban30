@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Input, Select, Spinner, Textarea } from "@fluentui/react-components";
 import {
   ArrowClockwise20Regular,
@@ -33,18 +33,19 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
   return [...messages.values()].sort((left, right) => Number(BigInt(left.sequence) - BigInt(right.sequence)));
 }
 
-async function loadCompleteHistory(threadId: string): Promise<ChatMessage[]> {
-  const collected: ChatMessage[] = [];
-  let after = "0";
-  for (let page = 0; page < 101; page += 1) {
-    const history = await api<{ items: ChatMessage[]; nextSequence: string }>(
-      `/chat/threads/${threadId}/messages?after=${after}`,
-    );
-    collected.push(...history.items);
-    if (history.items.length < 100 || history.nextSequence === after) return collected;
-    after = history.nextSequence;
-  }
-  throw new Error("История обращения превышает 10 000 сообщений. Уточните период через архив.");
+interface HistoryWindow {
+  items: ChatMessage[];
+  nextSequence: string;
+  olderCursor: string | null;
+}
+
+const HISTORY_PAGE_SIZE = 50;
+const RENDERED_MESSAGE_LIMIT = 150;
+
+async function loadHistoryWindow(threadId: string, before: "latest" | string): Promise<HistoryWindow> {
+  return api<HistoryWindow>(
+    `/chat/threads/${threadId}/messages?before=${encodeURIComponent(before)}&limit=${HISTORY_PAGE_SIZE}`,
+  );
 }
 
 export function ChatsView({ session }: { session: SessionView }) {
@@ -55,13 +56,27 @@ export function ChatsView({ session }: { session: SessionView }) {
   const [assigned, setAssigned] = useState("any");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const [historyView, setHistoryView] = useState<"latest" | "older">("latest");
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [olderError, setOlderError] = useState<unknown>(null);
   const [messageText, setMessageText] = useState("");
   const [messageAttemptId, setMessageAttemptId] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<unknown>(null);
   const [connection, setConnection] = useState<ConnectionState>("offline");
   const [busy, setBusy] = useState(false);
   const [mutationError, setMutationError] = useState<unknown>(null);
+  const historyViewRef = useRef<"latest" | "older">("latest");
+  const olderRequestRef = useRef<symbol | null>(null);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
   const limit = 25;
+  const renderedMessages = useMemo(() => historyView === "latest"
+    ? messages.slice(-RENDERED_MESSAGE_LIMIT)
+    : messages.slice(0, RENDERED_MESSAGE_LIMIT), [historyView, messages]);
+  const newerMessageCount = historyView === "older"
+    ? Math.max(0, messages.length - renderedMessages.length)
+    : 0;
 
   useEffect(() => {
     const parameters = new URLSearchParams(window.location.search);
@@ -85,6 +100,10 @@ export function ChatsView({ session }: { session: SessionView }) {
   );
   const selected = resource.data?.items.find((item) => item.id === selectedId) ?? null;
   const reloadQueue = resource.reload;
+
+  useEffect(() => {
+    if (historyView === "latest") messageEndRef.current?.scrollIntoView({ block: "end" });
+  }, [historyView, renderedMessages]);
 
   // Keeps the queue list (left column) live for this whole view — independent
   // of whichever single thread is open on the right. Without this, a second
@@ -141,7 +160,16 @@ export function ChatsView({ session }: { session: SessionView }) {
   }, [reloadQueue]);
 
   useEffect(() => {
-    if (!selectedId) { setMessages([]); setConnection("offline"); return; }
+    if (!selectedId) {
+      olderRequestRef.current = null;
+      setMessages([]);
+      setOlderCursor(null);
+      setOlderLoading(false);
+      historyViewRef.current = "latest";
+      setHistoryView("latest");
+      setConnection("offline");
+      return;
+    }
     let active = true;
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -149,7 +177,7 @@ export function ChatsView({ session }: { session: SessionView }) {
     let cursor = "0";
 
     function markLatestIncomingRead(incoming: ChatMessage[]): void {
-      if (document.visibilityState !== "visible") return;
+      if (historyViewRef.current !== "latest" || document.visibilityState !== "visible") return;
       const latestCustomer = [...incoming].reverse()
         .find((message) => message.senderKind === "customer" || message.senderKind === "guest");
       if (!latestCustomer) return;
@@ -182,6 +210,10 @@ export function ChatsView({ session }: { session: SessionView }) {
         }
         if (record.type === "message" && record.message) {
           const incoming = record.message as ChatMessage;
+          if (incoming.senderKind === "staff") {
+            historyViewRef.current = "latest";
+            setHistoryView("latest");
+          }
           cursor = incoming.sequence;
           setMessages((current) => mergeMessages(current, [incoming]));
           reloadQueue();
@@ -198,16 +230,23 @@ export function ChatsView({ session }: { session: SessionView }) {
     }
 
     setMessages([]);
+    olderRequestRef.current = null;
+    setOlderCursor(null);
+    setOlderLoading(false);
+    setOlderError(null);
+    historyViewRef.current = "latest";
+    setHistoryView("latest");
     setMessageText("");
     setMessageAttemptId(null);
     setMessageError(null);
     setConnection("connecting");
-    loadCompleteHistory(selectedId)
+    loadHistoryWindow(selectedId, "latest")
       .then((history) => {
         if (!active) return;
-        cursor = history.at(-1)?.sequence ?? "0";
-        setMessages(history);
-        markLatestIncomingRead(history);
+        cursor = history.nextSequence;
+        setMessages(history.items);
+        setOlderCursor(history.olderCursor);
+        markLatestIncomingRead(history.items);
       })
       .catch((error: unknown) => { if (active) setMessageError(error); })
       .finally(() => { if (active) connect(); });
@@ -217,6 +256,46 @@ export function ChatsView({ session }: { session: SessionView }) {
       socket?.close(1000, "view_changed");
     };
   }, [reloadQueue, selectedId]);
+
+  async function loadOlderMessages(): Promise<void> {
+    if (!selectedId || !olderCursor || olderLoading) return;
+    const container = messageListRef.current;
+    const requestToken = Symbol("older-history");
+    olderRequestRef.current = requestToken;
+    const containerTop = container?.getBoundingClientRect().top ?? 0;
+    const anchor = container
+      ? [...container.querySelectorAll<HTMLElement>("[data-chat-message-id]")]
+        .find((item) => item.getBoundingClientRect().bottom >= containerTop)
+      : null;
+    const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+    setOlderLoading(true);
+    setOlderError(null);
+    try {
+      const history = await loadHistoryWindow(selectedId, olderCursor);
+      if (olderRequestRef.current !== requestToken) return;
+      setMessages((current) => mergeMessages(history.items, current));
+      setOlderCursor(history.olderCursor);
+      historyViewRef.current = "older";
+      setHistoryView("older");
+      window.requestAnimationFrame(() => {
+        if (!container || !anchor) return;
+        const currentAnchor = container.querySelector<HTMLElement>(`[data-chat-message-id="${anchor.dataset.chatMessageId}"]`);
+        if (currentAnchor) container.scrollTop += currentAnchor.getBoundingClientRect().top - anchorTop;
+      });
+    } catch (error) {
+      if (olderRequestRef.current === requestToken) setOlderError(error);
+    } finally {
+      if (olderRequestRef.current === requestToken) {
+        olderRequestRef.current = null;
+        setOlderLoading(false);
+      }
+    }
+  }
+
+  function showLatestMessages(): void {
+    historyViewRef.current = "latest";
+    setHistoryView("latest");
+  }
 
   async function updateThread(update: Record<string, unknown>): Promise<void> {
     if (!selected) return;
@@ -248,6 +327,8 @@ export function ChatsView({ session }: { session: SessionView }) {
         method: "POST",
       });
       setMessages((current) => mergeMessages(current, [created]));
+      historyViewRef.current = "latest";
+      setHistoryView("latest");
       setMessageText("");
       setMessageAttemptId(null);
       resource.reload();
@@ -354,10 +435,45 @@ export function ChatsView({ session }: { session: SessionView }) {
                 ) : null}
               </div>
               {messageError ? <div className={styles.inlineError}>{errorText(messageError)}</div> : null}
-              <div className={styles.messageList} role="log" aria-live="polite">
+              <div
+                aria-busy={olderLoading || undefined}
+                aria-live={historyView === "latest" ? "polite" : "off"}
+                className={styles.messageList}
+                id="staff-chat-message-log"
+                ref={messageListRef}
+                role="log"
+              >
+                {olderCursor || historyView === "older" ? (
+                  <div className={styles.historyControls}>
+                    {olderCursor ? (
+                      <Button
+                        aria-controls="staff-chat-message-log"
+                        disabled={olderLoading}
+                        onClick={() => void loadOlderMessages()}
+                      >
+                        {olderLoading
+                          ? "Загружаем предыдущие..."
+                          : olderError
+                            ? "Повторить загрузку предыдущих"
+                            : "Показать предыдущие сообщения"}
+                      </Button>
+                    ) : <span className={styles.muted}>Это начало переписки.</span>}
+                    {historyView === "older" ? (
+                      <Button aria-controls="staff-chat-message-log" onClick={showLatestMessages}>
+                        {newerMessageCount > 0 ? `К последним (${newerMessageCount})` : "К последним сообщениям"}
+                      </Button>
+                    ) : null}
+                    {olderError ? <span className={styles.inlineHistoryError} role="alert">{errorText(olderError)}</span> : null}
+                  </div>
+                ) : null}
                 {messages.length === 0 ? <span className={styles.muted}>Сообщений пока нет.</span> : null}
-                {messages.map((message) => (
-                  <article className={styles.message} data-own={message.senderKind === "staff" || undefined} key={message.id}>
+                {renderedMessages.map((message) => (
+                  <article
+                    className={styles.message}
+                    data-chat-message-id={message.id}
+                    data-own={message.senderKind === "staff" || undefined}
+                    key={message.id}
+                  >
                     <span>{message.senderKind === "staff" ? "Сотрудник" : message.senderKind === "system" ? "Система" : "Клиент"}</span>
                     {message.body ? <p>{message.body}</p> : null}
                     {message.attachments.map((attachment) => (
@@ -366,6 +482,7 @@ export function ChatsView({ session }: { session: SessionView }) {
                     <time>{formatDate(message.createdAt)}</time>
                   </article>
                 ))}
+                <div ref={messageEndRef} />
               </div>
               <div className={styles.composer}>
                 <Textarea

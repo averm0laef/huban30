@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StorefrontApiError, errorText } from "../_lib/storefront-api";
 import {
@@ -10,10 +10,12 @@ import {
   isChatThreadAssignment,
   isOwnMessage,
   latestSequence,
-  loadCompleteHistory,
+  loadLatestHistory,
+  loadOlderHistory,
   markChatMessageRead,
   mergeMessages,
   reconnectDelay,
+  renderedMessageWindow,
   safeDownloadName,
   sendChatMessageRest,
   uploadChatAttachment,
@@ -41,10 +43,16 @@ export interface UseChatThreadResult {
   downloadError: string;
   fileError: string;
   filePending: boolean;
+  hasOlderMessages: boolean;
   historyError: string;
   historyLoading: boolean;
+  loadOlderMessages: () => Promise<void>;
   lastStaffReadMessageId: string | null;
   messages: ChatMessage[];
+  newerMessageCount: number;
+  olderHistoryError: string;
+  olderHistoryLoading: boolean;
+  renderedMessages: ChatMessage[];
   resetFileAttempt: () => void;
   resetSendAttempt: () => void;
   retryHistory: () => void;
@@ -52,10 +60,12 @@ export interface UseChatThreadResult {
   sendError: string;
   sendMessage: (body: string) => Promise<SendOutcome>;
   sendPending: boolean;
+  showLatestMessages: () => void;
   /** Server-confirmed thread status, seeded from the `thread` prop and kept live over the socket (e.g. staff closing the thread elsewhere). */
   threadStatus: ChatThread["status"] | null;
   unreadCount: number;
   uploadAttachment: (file: File) => Promise<boolean>;
+  viewingLatest: boolean;
 }
 
 /**
@@ -79,6 +89,10 @@ export function useChatThread(
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [historyRevision, setHistoryRevision] = useState(0);
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const [olderHistoryLoading, setOlderHistoryLoading] = useState(false);
+  const [olderHistoryError, setOlderHistoryError] = useState("");
+  const [historyView, setHistoryView] = useState<"latest" | "older">("latest");
   const [connection, setConnection] = useState<ConnectionState>("idle");
   const [connectionError, setConnectionError] = useState("");
   const [lastStaffReadMessageId, setLastStaffReadMessageId] = useState<string | null>(null);
@@ -102,6 +116,9 @@ export function useChatThread(
   const sendInFlight = useRef(false);
   const uploadInFlight = useRef(false);
   const messagesRef = useRef<ChatMessage[]>([]);
+  const historyViewRef = useRef<"latest" | "older">("latest");
+  const activeThreadIdRef = useRef<string | null>(null);
+  const olderLoadInFlight = useRef(false);
   const isVisibleRef = useRef(isVisible);
   const markLatestReadRef = useRef<((incoming: ChatMessage[], socket?: WebSocket | null) => void) | null>(null);
   const ackWaiters = useRef(new Map<string, {
@@ -114,21 +131,35 @@ export function useChatThread(
   // time the panel opens/closes) can still read the current visibility.
   useEffect(() => {
     isVisibleRef.current = isVisible;
-    if (isVisible) {
+    if (isVisible && historyViewRef.current === "latest") {
       setUnreadCount(0);
       markLatestReadRef.current?.(messagesRef.current, socketRef.current);
     }
   }, [isVisible]);
 
+  const renderedMessages = useMemo(
+    () => renderedMessageWindow(messages, historyView),
+    [historyView, messages],
+  );
+  const newerMessageCount = historyView === "older"
+    ? Math.max(0, messages.length - renderedMessages.length)
+    : 0;
+
   useEffect(() => {
     const access = thread && viewerKind ? accessFor({ kind: viewerKind }, thread) : null;
     if (!thread || !access) {
+      activeThreadIdRef.current = null;
       messagesRef.current = [];
       setMessages([]);
       setConnection("idle");
       setConnectionError("");
       setHistoryError("");
       setHistoryLoading(false);
+      setOlderCursor(null);
+      setOlderHistoryLoading(false);
+      setOlderHistoryError("");
+      historyViewRef.current = "latest";
+      setHistoryView("latest");
       setLastStaffReadMessageId(null);
       setUnreadCount(0);
       setAssignedStaffId(null);
@@ -138,6 +169,7 @@ export function useChatThread(
     }
     const activeThread = thread;
     const activeAccess = access;
+    activeThreadIdRef.current = activeThread.id;
     let active = true;
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -149,6 +181,11 @@ export function useChatThread(
     setUnreadCount(0);
     setHistoryLoading(true);
     setHistoryError("");
+    setOlderCursor(null);
+    setOlderHistoryLoading(false);
+    setOlderHistoryError("");
+    historyViewRef.current = "latest";
+    setHistoryView("latest");
     setConnectionError("");
     setLastStaffReadMessageId(null);
     setConnection("connecting");
@@ -171,13 +208,15 @@ export function useChatThread(
     }
 
     function countUnread(incoming: ChatMessage[]): void {
-      if (isVisibleRef.current) return;
+      if (isVisibleRef.current && historyViewRef.current === "latest") return;
       const unread = incoming.filter((message) => !isOwnMessage(message)).length;
       if (unread > 0) setUnreadCount((count) => count + unread);
     }
 
     function markLatestRead(incoming: ChatMessage[], preferredSocket?: WebSocket | null): void {
-      if (!isVisibleRef.current || document.visibilityState !== "visible") return;
+      if (!isVisibleRef.current
+        || historyViewRef.current !== "latest"
+        || document.visibilityState !== "visible") return;
       const latest = [...incoming].reverse().find((message) => !isOwnMessage(message));
       if (!latest || latest.id === lastReadMessageId || latest.id === readInFlightMessageId) return;
       if (preferredSocket?.readyState === WebSocket.OPEN) {
@@ -233,6 +272,7 @@ export function useChatThread(
           cursorRef.current = typeof record.nextSequence === "string"
             ? latestSequence(cursorRef.current, record.nextSequence)
             : cursorRef.current;
+          countUnread(incoming);
           reconnectAttempt = 0;
           setConnection("live");
           setConnectionError("");
@@ -259,6 +299,10 @@ export function useChatThread(
             return;
           }
           const incoming = record.message;
+          if (isOwnMessage(incoming)) {
+            historyViewRef.current = "latest";
+            setHistoryView("latest");
+          }
           cursorRef.current = latestSequence(cursorRef.current, incoming.sequence);
           setMessages((current) => {
             const next = mergeMessages(current, [incoming]);
@@ -295,14 +339,14 @@ export function useChatThread(
       });
     }
 
-    loadCompleteHistory(activeThread, activeAccess, () => active, (loaded) => {
-      messagesRef.current = loaded;
-      setMessages(loaded);
-    })
-      .then(({ cursor, messages: loaded }) => {
+    loadLatestHistory(activeThread, activeAccess)
+      .then((history) => {
         if (!active) return;
-        cursorRef.current = cursor;
-        markLatestRead(loaded);
+        messagesRef.current = history.items;
+        setMessages(history.items);
+        setOlderCursor(history.olderCursor);
+        cursorRef.current = history.nextSequence;
+        markLatestRead(history.items);
         connect();
       })
       .catch((caught: unknown) => {
@@ -318,6 +362,7 @@ export function useChatThread(
     document.addEventListener("visibilitychange", readVisible);
     return () => {
       active = false;
+      if (activeThreadIdRef.current === activeThread.id) activeThreadIdRef.current = null;
       document.removeEventListener("visibilitychange", readVisible);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       rejectAcks("Открыт другой чат");
@@ -328,6 +373,38 @@ export function useChatThread(
   }, [historyRevision, thread, viewerKind]);
 
   const retryHistory = useCallback(() => setHistoryRevision((value) => value + 1), []);
+  const loadOlderMessages = useCallback(async (): Promise<void> => {
+    if (olderLoadInFlight.current || !thread || !olderCursor || !viewerKind) return;
+    const access = accessFor({ kind: viewerKind }, thread);
+    if (!access) return;
+    const activeThreadId = thread.id;
+    olderLoadInFlight.current = true;
+    setOlderHistoryLoading(true);
+    setOlderHistoryError("");
+    try {
+      const history = await loadOlderHistory(thread, access, olderCursor);
+      if (activeThreadIdRef.current !== activeThreadId) return;
+      setMessages((current) => {
+        const next = mergeMessages(history.items, current);
+        messagesRef.current = next;
+        return next;
+      });
+      setOlderCursor(history.olderCursor);
+      historyViewRef.current = "older";
+      setHistoryView("older");
+    } catch (caught) {
+      if (activeThreadIdRef.current === activeThreadId) setOlderHistoryError(errorText(caught));
+    } finally {
+      olderLoadInFlight.current = false;
+      if (activeThreadIdRef.current === activeThreadId) setOlderHistoryLoading(false);
+    }
+  }, [olderCursor, thread, viewerKind]);
+  const showLatestMessages = useCallback(() => {
+    historyViewRef.current = "latest";
+    setHistoryView("latest");
+    setUnreadCount(0);
+    markLatestReadRef.current?.(messagesRef.current, socketRef.current);
+  }, []);
   const resetSendAttempt = useCallback(() => setSendAttemptId(null), []);
   const resetFileAttempt = useCallback(() => { setFileAttempt(null); setFileError(""); }, []);
 
@@ -362,6 +439,8 @@ export function useChatThread(
         cursorRef.current = latestSequence(cursorRef.current, created.sequence);
       }
       setSendAttemptId(null);
+      historyViewRef.current = "latest";
+      setHistoryView("latest");
       return { closed: false, ok: true };
     } catch (caught) {
       setSendError(errorText(caught));
@@ -392,6 +471,8 @@ export function useChatThread(
       });
       cursorRef.current = latestSequence(cursorRef.current, created.sequence);
       setFileAttempt(null);
+      historyViewRef.current = "latest";
+      setHistoryView("latest");
       return true;
     } catch (caught) {
       setFileError(errorText(caught));
@@ -434,10 +515,16 @@ export function useChatThread(
     downloadError,
     fileError,
     filePending,
+    hasOlderMessages: olderCursor !== null,
     historyError,
     historyLoading,
+    loadOlderMessages,
     lastStaffReadMessageId,
     messages,
+    newerMessageCount,
+    olderHistoryError,
+    olderHistoryLoading,
+    renderedMessages,
     resetFileAttempt,
     resetSendAttempt,
     retryHistory,
@@ -445,8 +532,10 @@ export function useChatThread(
     sendError,
     sendMessage,
     sendPending,
+    showLatestMessages,
     threadStatus,
     unreadCount,
     uploadAttachment,
+    viewingLatest: historyView === "latest",
   };
 }

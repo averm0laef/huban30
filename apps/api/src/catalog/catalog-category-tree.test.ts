@@ -11,7 +11,7 @@ function row(overrides: Partial<CategoryTreeRow> & Pick<CategoryTreeRow, "id" | 
     description: null,
     isActive: true,
     parentId: null,
-    productCount: 0,
+    productCount: 1,
     sortOrder: 0,
     ...overrides,
   };
@@ -55,6 +55,23 @@ describe("buildCategoryTree", () => {
     expect(body?.productCount).toBe(10);
     // leaf: just its own count
     expect(wipers?.productCount).toBe(5);
+  });
+
+  it("prunes empty technical branches but keeps an empty parent with populated descendants", () => {
+    const rows: CategoryTreeRow[] = [
+      row({ id: "smoke", name: "Smoke category", productCount: 0, slug: "smoke-category" }),
+      row({ id: "parts", name: "Запчасти", productCount: 0, slug: "zapchasti" }),
+      row({ id: "filters", name: "Фильтры", parentId: "parts", productCount: 2, slug: "filtry" }),
+      row({ id: "empty-child", name: "Техническая", parentId: "parts", productCount: 0, slug: "tehnicheskaya" }),
+    ];
+
+    const tree = buildCategoryTree(rows);
+
+    expect(tree.map((node) => node.id)).toEqual(["parts"]);
+    expect(tree[0]).toMatchObject({
+      children: [{ id: "filters", productCount: 2 }],
+      productCount: 2,
+    });
   });
 
   it("hides an entire subtree when an ancestor is inactive", () => {

@@ -9,11 +9,17 @@ import {
 import { ConfigService } from "@nestjs/config";
 import type { PoolClient } from "pg";
 
-import { CheckoutRequestSchema, type CheckoutRequest } from "@an30/contracts";
+import {
+  CHECKOUT_PERSONAL_DATA_CONSENT_DOCUMENT_PATH,
+  CHECKOUT_PERSONAL_DATA_CONSENT_TEXT,
+  CheckoutRequestSchema,
+  type CheckoutRequest,
+} from "@an30/contracts";
 
 import type { AuthContext } from "../auth/auth-context.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
+import { normalizeConsentUserAgent } from "../security/consent-evidence.js";
 import { CryptoService } from "../security/crypto.service.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
@@ -219,13 +225,18 @@ export class CheckoutService {
         `INSERT INTO app.orders
           (id,public_number,user_id,reservation_id,idempotency_key,status,customer_email,
            customer_phone,customer_name,contact_snapshot,delivery_snapshot,currency,
-           subtotal_kopeks,total_amount_kopeks,customer_note,terms_accepted_at,legal_policy_version)
+           subtotal_kopeks,total_amount_kopeks,customer_note,terms_accepted_at,legal_policy_version,
+           personal_data_consent_at,personal_data_consent_policy_version,
+           personal_data_consent_document_path,personal_data_consent_text,
+           personal_data_consent_ip_address,personal_data_consent_user_agent)
          VALUES ($1,$2,$3,$4,$5,'pending_payment',$6,$7,$8,$9::jsonb,$10::jsonb,
-           'RUB',$11,$11,$12,clock_timestamp(),$13)`,
+           'RUB',$11,$11,$12,clock_timestamp(),$13,clock_timestamp(),$14,$15,$16,$17,$18)`,
         [orderId, publicOrderNumber(orderId), owner.userId ?? null, reservationId,
           `order:${scopedKey}`, request.contact.email, request.contact.phone, request.contact.name,
           JSON.stringify(request.contact), JSON.stringify(request.delivery), subtotalKopeks,
-          request.customerNote, request.legalPolicyVersion],
+          request.customerNote, request.legalPolicyVersion, request.personalDataConsentVersion,
+          CHECKOUT_PERSONAL_DATA_CONSENT_DOCUMENT_PATH, CHECKOUT_PERSONAL_DATA_CONSENT_TEXT,
+          metadata.ipAddress || null, normalizeConsentUserAgent(metadata.userAgent)],
       );
       for (const line of lines) {
         await client.query(

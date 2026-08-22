@@ -33,6 +33,28 @@ describe("API environment", () => {
     expect(environment.COOKIE_SECURE).toBe(false);
   });
 
+  it("pins bounded local malware and media probe settings", () => {
+    const environment = validateEnvironment({
+      ...secrets,
+      CLAMAV_CONNECT_TIMEOUT_MS: "1750",
+      CLAMAV_HOST: "clamav",
+      CLAMAV_PORT: "3310",
+      CLAMAV_SCAN_TIMEOUT_MS: "45000",
+      MEDIA_PROBE_TIMEOUT_MS: "8000",
+    });
+
+    expect(environment.CLAMAV_CONNECT_TIMEOUT_MS).toBe(1_750);
+    expect(environment.CLAMAV_HOST).toBe("clamav");
+    expect(environment.CLAMAV_PORT).toBe(3_310);
+    expect(environment.CLAMAV_SCAN_TIMEOUT_MS).toBe(45_000);
+    expect(environment.FFMPEG_PATH).toBe("ffmpeg");
+    expect(environment.FFPROBE_PATH).toBe("ffprobe");
+    expect(environment.MEDIA_PROBE_TIMEOUT_MS).toBe(8_000);
+
+    expect(() => validateEnvironment({ ...secrets, CLAMAV_SCAN_TIMEOUT_MS: "0" })).toThrow();
+    expect(() => validateEnvironment({ ...secrets, MEDIA_PROBE_TIMEOUT_MS: "60000" })).toThrow();
+  });
+
   it("derives the admin token lookup flag from deployment tier, never from a raw switch", () => {
     const production = validateEnvironment({ ...secrets, DEPLOYMENT_ENVIRONMENT: "production" });
     expect(production.AUTH_ADMIN_TOKEN_LOOKUP).toBe(false);

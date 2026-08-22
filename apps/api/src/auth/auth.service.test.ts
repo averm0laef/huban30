@@ -1,20 +1,36 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
+
+import {
+  REGISTRATION_PERSONAL_DATA_CONSENT_TEXT,
+  REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+} from "@an30/contracts";
 
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { AuditService } from "../security/audit.service.js";
+import { normalizeConsentUserAgent } from "../security/consent-evidence.js";
 import type { CryptoService } from "../security/crypto.service.js";
 import type { PasswordService } from "../security/password.service.js";
 import type { TotpService } from "../security/totp.service.js";
-import { AuthService, assertStrongPassword, canRefreshPendingRegistration } from "./auth.service.js";
+import {
+  AuthService,
+  assertStrongPassword,
+  canRefreshPendingRegistration,
+} from "./auth.service.js";
 import type { SessionService } from "./session.service.js";
 
 const CONFIG_DEFAULTS: Record<string, unknown> = {
   APP_ORIGIN: "https://staging.an30.ru",
   AUTH_ADMIN_TOKEN_LOOKUP: false,
   AUTH_DEBUG_TOKENS: false,
+  LEGAL_DOCUMENTS_APPROVED: true,
 };
 
 function configStub(overrides: Record<string, unknown> = {}): ConfigService {
@@ -38,6 +54,90 @@ describe("auth account state policy", () => {
       .toThrow(BadRequestException);
     expect(() => assertStrongPassword("different-secure-phrase", "client@example.test"))
       .not.toThrow();
+  });
+
+  it("bounds and removes control characters from consent request metadata", () => {
+    expect(normalizeConsentUserAgent(undefined)).toBeNull();
+    expect(normalizeConsentUserAgent("  Browser\u0000Name\n1  ")).toBe("Browser Name 1");
+    expect(normalizeConsentUserAgent("x".repeat(1_100))).toHaveLength(1_024);
+  });
+
+  it("fails closed before hashing or database access when legal documents are not approved", async () => {
+    const database = { transaction: vi.fn() };
+    const passwords = { hash: vi.fn() };
+    const service = new AuthService(
+      configStub({ LEGAL_DOCUMENTS_APPROVED: false }),
+      {} as AuditService,
+      {} as CryptoService,
+      database as unknown as DatabaseService,
+      passwords as unknown as PasswordService,
+      {} as SessionService,
+      {} as TotpService,
+    );
+
+    await expect(service.register({
+      displayName: "Антон Ермолаев",
+      email: "client@example.test",
+      password: "different-secure-phrase",
+      personalDataConsent: true,
+      personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+    }, { ipAddress: "203.0.113.30" })).rejects.toThrow(ServiceUnavailableException);
+    expect(passwords.hash).not.toHaveBeenCalled();
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it("stores immutable registration consent evidence in the account transaction", async () => {
+    const userId = "019bf9ea-0d3e-7def-8c9a-0000000000cc";
+    const clientQuery = vi.fn(async (statement: string, _parameters?: unknown[]) => {
+      if (statement.includes("SELECT id, status::text FROM app.users")) return { rows: [] };
+      if (statement.includes("INSERT INTO app.users")) return { rows: [{ id: userId }] };
+      return { rows: [] };
+    });
+    const database = {
+      transaction: vi.fn(async (work: (client: { query: typeof clientQuery }) => Promise<unknown>) => (
+        work({ query: clientQuery })
+      )),
+    };
+    const audit = { record: vi.fn() };
+    const service = new AuthService(
+      configStub(),
+      audit as unknown as AuditService,
+      {
+        encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
+        opaqueHash: vi.fn().mockReturnValue(Buffer.from("hash")),
+        randomToken: vi.fn().mockReturnValue("verification-token"),
+      } as unknown as CryptoService,
+      database as unknown as DatabaseService,
+      { hash: vi.fn().mockResolvedValue("password-hash") } as unknown as PasswordService,
+      {} as SessionService,
+      {} as TotpService,
+    );
+
+    await service.register({
+      displayName: "Антон Ермолаев",
+      email: "client@example.test",
+      password: "different-secure-phrase",
+      personalDataConsent: true,
+      personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+    }, {
+      ipAddress: "203.0.113.30",
+      userAgent: "Test Browser\u0000 1",
+    });
+
+    const consentCall = clientQuery.mock.calls.find((call) => (
+      String(call[0]).includes("INSERT INTO app.personal_data_consents")
+    ));
+    expect(consentCall?.[1]).toEqual([
+      userId,
+      REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+      REGISTRATION_PERSONAL_DATA_CONSENT_TEXT,
+      "203.0.113.30",
+      "Test Browser  1",
+    ]);
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+      action: "auth.registration.requested",
+      metadata: { personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION },
+    }), expect.anything());
   });
 
   it("does not create a session when the password hash changes after verification", async () => {

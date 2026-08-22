@@ -344,6 +344,42 @@
   background: var(--store-bg);
 }
 
+.historyControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--store-bg) 94%, transparent);
+}
+
+.historyControls button {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-brand);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: var(--store-weight-bold);
+}
+
+.historyControls button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.historyControls span {
+  color: var(--store-muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.historyControls span[role="alert"] { color: var(--store-danger); }
+
 .emptyMessages,
 .statePanel {
   min-height: 260px;

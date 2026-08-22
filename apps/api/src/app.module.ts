@@ -13,6 +13,7 @@ import { CheckoutModule } from "./checkout/checkout.module.js";
 import { validateEnvironment } from "./config.js";
 import { HealthModule } from "./health/health.module.js";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module.js";
+import { OneCExchangeModule } from "./one-c-exchange/one-c-exchange.module.js";
 import { SecurityModule } from "./security/security.module.js";
 import { StaffModule } from "./staff/staff.module.js";
 import { StorefrontModule } from "./storefront/storefront.module.js";
@@ -32,6 +33,7 @@ import { SuppliersModule } from "./suppliers/suppliers.module.js";
     CatalogModule,
     ChatModule,
     CheckoutModule,
+    OneCExchangeModule,
     StaffModule,
     StorefrontModule,
     SuppliersModule,

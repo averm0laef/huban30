@@ -10,6 +10,9 @@ overrides:
   fast-uri@^3.0.0: '3.1.5'
   find-my-way: 9.7.0
   js-yaml: 5.2.2
+  # GHSA-2v37-7h3g-55p8, zero-length custom generator loop.
+  # Next/PostCSS currently resolve nanoid 3.x transitively.
+  nanoid@^3.0.0: 3.3.18
   postcss: 8.5.25
   sharp: 0.35.3
 allowBuilds:

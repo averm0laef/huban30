@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import styles from "../_components/storefront.module.css";
 import { JsonLd } from "../_components/json-ld";
-import { getCategoryTree, searchCatalog, StorefrontApiError } from "../_lib/catalog-api";
+import { getCatalogBrands, getCategoryTree, searchCatalog, StorefrontApiError } from "../_lib/catalog-api";
 import type { CatalogItem } from "../_lib/catalog-api";
 import { breadcrumbJsonLd, pageMetadata } from "../_lib/seo";
 import { CatalogFilterRail } from "./catalog-filter-rail";
 import { CatalogSearchPanel } from "./catalog-search-panel";
-import type { CatalogAvailability, CatalogEmptyState, CatalogSort } from "./catalog-search-panel";
+import type { CatalogEmptyState } from "./catalog-search-panel";
+import {
+  CATALOG_PAGE_SIZE,
+  catalogPageHref,
+  hasActiveCatalogFilters,
+  parseCatalogPageQuery,
+  priceKopeks,
+} from "./catalog-query";
 import { SupplierResults } from "./supplier-results";
 
 export const metadata: Metadata = pageMetadata({
@@ -20,42 +28,64 @@ interface CatalogPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function first(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
 export default async function CatalogPage({ searchParams }: CatalogPageProps) {
   const parameters = await searchParams;
-  const query = first(parameters.q).trim().slice(0, 120);
-  const availabilityValue = first(parameters.availability);
-  const sortValue = first(parameters.sort);
-  const availability: CatalogAvailability = availabilityValue === "in_stock" || availabilityValue === "out_of_stock" ? availabilityValue : "all";
-  const sort: CatalogSort = sortValue === "name" || sortValue === "price_asc" || sortValue === "price_desc" ? sortValue : "relevance";
+  const state = parseCatalogPageQuery(parameters);
 
-  const tree = await getCategoryTree();
+  const [tree, brands] = await Promise.all([
+    getCategoryTree(),
+    getCatalogBrands().catch(() => []),
+  ]);
 
   let items: CatalogItem[] = [];
+  let total = 0;
+  let errorHeading = "Каталог не отвечает";
   let errorMessage: string | null = null;
-  const isSearch = query.length >= 2;
-  if (isSearch) {
+  const isSearch = state.query.length >= 2;
+  const hasFilters = hasActiveCatalogFilters(state);
+  const shouldFetch = state.query.length !== 1 && (isSearch || hasFilters);
+  if (!state.priceRangeValid) {
+    errorHeading = "Проверьте диапазон цены";
+    errorMessage = "Цена «от» не может быть больше цены «до».";
+  } else if (shouldFetch) {
     try {
-      const response = await searchCatalog(query, 48, availability, sort);
+      const response = await searchCatalog({
+        availability: state.availability,
+        brands: state.brands,
+        limit: CATALOG_PAGE_SIZE,
+        offset: (state.page - 1) * CATALOG_PAGE_SIZE,
+        sort: state.sort,
+        ...(state.maxPriceRubles === null ? {} : { maxPriceKopeks: priceKopeks(state.maxPriceRubles) }),
+        ...(state.minPriceRubles === null ? {} : { minPriceKopeks: priceKopeks(state.minPriceRubles) }),
+        ...(state.query ? { query: state.query } : {}),
+      });
       items = response.items;
+      total = response.total;
     } catch (error) {
       errorMessage = error instanceof StorefrontApiError ? error.message : "Не удалось прочитать ответ каталога.";
     }
   }
+  const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
+  if (!errorMessage && total > 0 && state.page > totalPages) {
+    redirect(catalogPageHref("/catalog", state, totalPages));
+  }
 
-  const emptyState: CatalogEmptyState | null = query.length === 1
+  const emptyState: CatalogEmptyState | null = state.query.length === 1
     ? { body: "Введите минимум два символа названия или артикула.", heading: "Нужно ещё немного текста" }
-    : query.length === 0
+    : state.query.length === 0 && !hasFilters
       ? {
-          body: "Мы не показываем демонстрационные товары. Результаты поступят из подтверждённого каталога 1С.",
-          heading: "Начните с поиска",
+          body: "Введите название или артикул либо выберите бренд, наличие и цену в фильтрах.",
+          heading: "Найдите нужную деталь",
         }
       : !errorMessage && items.length === 0
-        ? { body: "Проверьте артикул, уберите фильтр наличия или попробуйте более короткий запрос.", heading: "Ничего не найдено" }
+        ? { body: "Проверьте артикул, снимите часть фильтров или попробуйте более короткий запрос.", heading: "Ничего не найдено" }
         : null;
+  const selectedBrandNames = brands
+    .filter((brand) => state.brands.includes(brand.slug))
+    .map((brand) => brand.name);
+  const ownAvailable = items
+    .filter((item) => item.availableQuantity > 0)
+    .map((item) => ({ brand: item.brand?.name ?? null, sku: item.sku }));
 
   return (
     <div className={styles.page}>
@@ -66,17 +96,28 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
       </header>
 
       <div className={styles.catalogLayout}>
-        <CatalogFilterRail availability={availability} basePath="/catalog" nodes={tree} />
+        <CatalogFilterRail basePath="/catalog" brands={brands} nodes={tree} state={state} />
         <div className={styles.catalogMain}>
           <CatalogSearchPanel
             action="/catalog"
             emptyState={emptyState}
+            errorHeading={errorHeading}
             errorMessage={errorMessage}
             items={items}
-            query={query}
-            sort={sort}
+            pageSize={CATALOG_PAGE_SIZE}
+            state={state}
+            total={total}
           />
-          {isSearch ? <SupplierResults ownEmpty={!errorMessage && items.length === 0} query={query} /> : null}
+          {isSearch && state.page === 1 && state.availability !== "in_stock" ? (
+            <SupplierResults
+              brandNames={selectedBrandNames}
+              ownAvailable={ownAvailable}
+              ownEmpty={!errorMessage && items.length === 0}
+              query={state.query}
+              {...(state.maxPriceRubles === null ? {} : { maxPriceKopeks: priceKopeks(state.maxPriceRubles) })}
+              {...(state.minPriceRubles === null ? {} : { minPriceKopeks: priceKopeks(state.minPriceRubles) })}
+            />
+          ) : null}
         </div>
       </div>
     </div>

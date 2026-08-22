@@ -46,4 +46,31 @@ describe("storefront data hardening migration", () => {
 
     expect(sql.match(/9007199254740991/g)?.length).toBe(13);
   });
+
+  it("keeps checkout consent separate and makes its evidence immutable", async () => {
+    const migration = (await loadMigrations(directory)).find(
+      ({ id }) => id === "0020_checkout_personal_data_consent",
+    );
+    const sql = migration?.sql ?? "";
+
+    expect(sql).toContain("personal_data_consent_at");
+    expect(sql).toContain("personal_data_consent_policy_version");
+    expect(sql).toContain("personal_data_consent_document_path");
+    expect(sql).toContain("personal_data_consent_text");
+    expect(sql).toContain("orders_current_legal_evidence_complete");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION app.preserve_order_legal_acceptance");
+  });
+
+  it("anonymizes expired supplier waitlist contact data", async () => {
+    const migration = (await loadMigrations(directory)).find(
+      ({ id }) => id === "0021_supplier_waitlist_retention",
+    );
+    const sql = migration?.sql ?? "";
+
+    expect(sql).toContain("CREATE FUNCTION app.anonymize_expired_supplier_waitlist_requests");
+    expect(sql).toContain("FOR UPDATE SKIP LOCKED");
+    expect(sql).toContain("supplier_waitlist_requests_retention_idx");
+    expect(sql).toContain("customer_email=NULL");
+    expect(sql).toContain("customer_phone=NULL");
+  });
 });

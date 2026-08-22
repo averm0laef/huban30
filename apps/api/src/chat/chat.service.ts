@@ -7,7 +7,9 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import type { MultipartFile } from "@fastify/multipart";
 import { fileTypeFromBuffer } from "file-type";
@@ -28,15 +30,32 @@ import {
 import type { AuthContext } from "../auth/auth-context.js";
 import { DatabaseService, type DatabaseExecutor } from "../infrastructure/database.service.js";
 import { CryptoService } from "../security/crypto.service.js";
+import {
+  MalwareDetectedError,
+  MalwareScannerService,
+  MalwareScannerUnavailableError,
+} from "../security/malware-scanner.service.js";
+import {
+  InvalidMediaError,
+  MediaValidationService,
+  MediaValidatorUnavailableError,
+} from "../security/media-validation.service.js";
 import { ChatEventBus } from "./chat-event-bus.service.js";
 import type { ChatIdentity, ChatMessageView } from "./chat.types.js";
 
 const UUID = z.uuid();
-const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
-const ALLOWED_ATTACHMENTS = new Map([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"],
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+// ffmpeg runs inside the 1.5 GiB API container. A non-blocking, process-wide
+// admission slot prevents a burst of otherwise rate-limited guest uploads
+// from retaining many 15 MiB buffers and spawning decoders concurrently.
+const MAX_CONCURRENT_ATTACHMENT_PROCESSING = 1;
+const ALLOWED_ATTACHMENTS = new Map<string, { extension: string; maxBytes: number }>([
+  ["image/jpeg", { extension: "jpg", maxBytes: 5 * 1024 * 1024 }],
+  ["image/png", { extension: "png", maxBytes: 5 * 1024 * 1024 }],
+  ["image/webp", { extension: "webp", maxBytes: 5 * 1024 * 1024 }],
+  ["video/mp4", { extension: "mp4", maxBytes: MAX_ATTACHMENT_BYTES }],
+  ["video/quicktime", { extension: "mov", maxBytes: MAX_ATTACHMENT_BYTES }],
+  ["video/webm", { extension: "webm", maxBytes: MAX_ATTACHMENT_BYTES }],
 ]);
 
 interface ThreadRow {
@@ -67,11 +86,16 @@ interface MessageRow {
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+  private activeAttachmentProcessing = 0;
+
   constructor(
     private readonly database: DatabaseService,
     private readonly crypto: CryptoService,
     private readonly events: ChatEventBus,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    private readonly malwareScanner: MalwareScannerService,
+    private readonly mediaValidation: MediaValidationService,
   ) {}
 
   async createForCustomer(body: unknown, auth: AuthContext) {
@@ -136,19 +160,50 @@ export class ChatService {
     return { items: result.rows.map((row) => this.threadView(row)) };
   }
 
-  async history(threadId: string, after: string | undefined, identity: ChatIdentity) {
+  async history(
+    threadId: string,
+    after: string | undefined,
+    identity: ChatIdentity,
+    pagination: { before?: string; limit?: string } = {},
+  ) {
     const thread = await this.authorize(threadId, identity);
+    if (after !== undefined && pagination.before !== undefined) {
+      throw new BadRequestException("Нельзя одновременно использовать after и before");
+    }
+    const limit = this.parseHistoryLimit(pagination.limit);
+    if (pagination.before !== undefined) {
+      const latest = pagination.before === "latest";
+      const before = latest ? null : this.parseCursor(pagination.before);
+      const result = await this.database.query<MessageRow>(
+        `${this.messageSelect()}
+         WHERE message.thread_id=$1
+           AND ($2::bigint IS NULL OR message.sequence_number<$2::bigint)
+           AND message.deleted_at IS NULL
+         ORDER BY message.sequence_number DESC LIMIT $3`,
+        [threadId, before, limit + 1],
+      );
+      const hasOlder = result.rows.length > limit;
+      const rows = result.rows.slice(0, limit).reverse();
+      await this.markDelivered(rows, identity);
+      return {
+        items: rows.map((row) => this.messageView(row)),
+        nextSequence: rows.at(-1)?.sequence_number ?? "0",
+        olderCursor: hasOlder ? rows[0]?.sequence_number ?? null : null,
+        thread: await this.threadAssignmentView(thread),
+      };
+    }
     const cursor = this.parseCursor(after);
     const result = await this.database.query<MessageRow>(
       `${this.messageSelect()}
        WHERE message.thread_id=$1 AND message.sequence_number>$2 AND message.deleted_at IS NULL
-       ORDER BY message.sequence_number LIMIT 100`,
-      [threadId, cursor],
+       ORDER BY message.sequence_number LIMIT $3`,
+      [threadId, cursor, limit],
     );
     await this.markDelivered(result.rows, identity);
     return {
       items: result.rows.map((row) => this.messageView(row)),
       nextSequence: result.rows.at(-1)?.sequence_number ?? cursor,
+      olderCursor: null,
       thread: await this.threadAssignmentView(thread),
     };
   }
@@ -233,26 +288,71 @@ export class ChatService {
     const thread = await this.authorize(threadId, identity);
     if (thread.status === "closed") throw new ConflictException("Чат закрыт");
 
-    let content: Buffer;
+    const releaseProcessingSlot = this.acquireAttachmentProcessingSlot();
     try {
-      content = await file.toBuffer();
-    } catch {
-      throw new BadRequestException("Файл превышает 5 МБ или повреждён");
-    }
+
+      let content: Buffer;
+      try {
+        content = await file.toBuffer();
+      } catch {
+        throw new BadRequestException("Файл превышает 15 МБ или повреждён");
+      }
     if (content.length === 0 || content.length > MAX_ATTACHMENT_BYTES) {
-      throw new BadRequestException("Допустимый размер файла: от 1 байта до 5 МБ");
+      throw new BadRequestException("Допустимый размер файла: от 1 байта до 15 МБ");
     }
     const detected = await fileTypeFromBuffer(content);
-    const extension = detected ? ALLOWED_ATTACHMENTS.get(detected.mime) : undefined;
-    if (!detected || !extension || file.mimetype !== detected.mime) {
-      throw new BadRequestException("Разрешены только JPEG, PNG и WebP с корректной сигнатурой");
+    const attachmentType = detected ? ALLOWED_ATTACHMENTS.get(detected.mime) : undefined;
+    if (!detected || !attachmentType || file.mimetype !== detected.mime) {
+      throw new BadRequestException("Разрешены JPEG, PNG, WebP, MP4, MOV и WebM с корректной сигнатурой");
     }
+    if (content.length > attachmentType.maxBytes) {
+      const limit = detected.mime.startsWith("image/") ? "5 МБ" : "15 МБ";
+      throw new BadRequestException(`Максимальный размер этого файла: ${limit}`);
+    }
+    try {
+      await this.malwareScanner.assertClean(content);
+    } catch (error) {
+      if (error instanceof MalwareDetectedError) {
+        throw new BadRequestException("Файл отклонён проверкой безопасности");
+      }
+      if (error instanceof MalwareScannerUnavailableError) {
+        throw new ServiceUnavailableException("Проверка файлов временно недоступна");
+      }
+      throw error;
+    }
+    try {
+      await this.mediaValidation.assertValid(content, detected.mime);
+    } catch (error) {
+      if (error instanceof InvalidMediaError) {
+        if (error.reason === "duration") {
+          throw new BadRequestException("Видео должно быть не длиннее 2 минут");
+        }
+        if (error.reason === "timeout") {
+          throw new ServiceUnavailableException("Проверка видео заняла слишком много времени. Повторите попытку");
+        }
+        throw new BadRequestException("Файл повреждён или содержит неподдерживаемый медиаконтейнер");
+      }
+      if (error instanceof MediaValidatorUnavailableError) {
+        throw new ServiceUnavailableException("Проверка медиаконтейнера временно недоступна");
+      }
+      throw error;
+    }
+    const { extension } = attachmentType;
     const originalName = this.safeOriginalName(file.filename);
     const sha256 = createHash("sha256").update(content).digest();
     const stored = await this.storage.store(content, extension);
     let removeNewObject = false;
+    let result: MessageRow;
     try {
-      const result = await this.database.transaction(async (client) => {
+      result = await this.database.transaction(async (client) => {
+        const lockedThread = await client.query<{ status: ThreadRow["status"] }>(
+          `SELECT status FROM app.chat_threads
+           WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+          [threadId],
+        );
+        if (lockedThread.rows[0]?.status === "closed" || lockedThread.rowCount === 0) {
+          throw new ConflictException("Чат закрыт");
+        }
         const object = (await client.query<{ id: string; status: string; storage_key: string }>(
           `INSERT INTO app.storage_objects
              (provider,storage_key,original_name,mime_type,byte_size,sha256,status,owner_user_id)
@@ -311,13 +411,23 @@ export class ChatService {
           `${this.messageSelect()} WHERE message.id=$1`, [message.id],
         )).rows[0]!;
       });
-      if (removeNewObject) await this.storage.remove(stored.storageKey);
-      const view = this.messageView(result);
-      await this.events.publish({ payload: { message: view, type: "message" }, threadId });
-      return view;
     } catch (error) {
-      await this.storage.remove(stored.storageKey);
+      await this.removeStoredObject(stored.storageKey);
       throw error;
+    }
+    if (removeNewObject) await this.removeStoredObject(stored.storageKey);
+    const view = this.messageView(result);
+    try {
+      await this.events.publish({ payload: { message: view, type: "message" }, threadId });
+    } catch (error) {
+      // The message and storage reference have already committed. Realtime is
+      // best effort here; deleting the object would corrupt a successful
+      // upload. Cursor history remains the durable recovery path.
+      this.logger.warn(`Chat attachment event publish failed: ${this.errorMessage(error)}`);
+    }
+      return view;
+    } finally {
+      releaseProcessingSlot();
     }
   }
 
@@ -337,14 +447,31 @@ export class ChatService {
        JOIN app.chat_messages AS message ON message.id=attachment.message_id
        JOIN app.storage_objects AS storage ON storage.id=attachment.storage_object_id
        WHERE attachment.id=$1 AND attachment.scan_status='clean'
+         AND message.deleted_at IS NULL
          AND storage.status='available' AND storage.deleted_at IS NULL`,
       [attachmentId],
     )).rows[0];
     if (!attachment) throw new NotFoundException("Вложение не найдено");
     await this.authorize(attachment.thread_id, identity);
-    const content = await this.storage.read(attachment.storage_key);
-    if (content.length !== Number(attachment.byte_size)) throw new NotFoundException("Вложение повреждено");
-    return { content, mimeType: attachment.mime_type, originalName: attachment.original_name };
+    if (!this.storage.open) {
+      throw new ServiceUnavailableException("Хранилище не поддерживает потоковую выдачу");
+    }
+    let opened;
+    try {
+      opened = await this.storage.open(attachment.storage_key);
+    } catch {
+      throw new NotFoundException("Вложение повреждено");
+    }
+    if (opened.byteSize !== Number(attachment.byte_size)) {
+      opened.content.destroy();
+      throw new NotFoundException("Вложение повреждено");
+    }
+    return {
+      byteSize: opened.byteSize,
+      content: opened.content,
+      mimeType: attachment.mime_type,
+      originalName: attachment.original_name,
+    };
   }
 
   async authorize(threadId: string, identity: ChatIdentity): Promise<ThreadRow> {
@@ -577,6 +704,7 @@ export class ChatService {
         JOIN app.storage_objects AS storage ON storage.id=attachment.storage_object_id
         WHERE attachment.message_id=message.id
           AND attachment.scan_status='clean' AND storage.status='available'
+          AND storage.deleted_at IS NULL
       ),'[]'::jsonb) AS attachments
       FROM app.chat_messages AS message`;
   }
@@ -605,6 +733,31 @@ export class ChatService {
     };
   }
 
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message.slice(0, 256) : "unknown error";
+  }
+
+  private acquireAttachmentProcessingSlot(): () => void {
+    if (this.activeAttachmentProcessing >= MAX_CONCURRENT_ATTACHMENT_PROCESSING) {
+      throw new ServiceUnavailableException("Сейчас обрабатывается другой файл. Повторите загрузку через несколько секунд");
+    }
+    this.activeAttachmentProcessing += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.activeAttachmentProcessing = Math.max(0, this.activeAttachmentProcessing - 1);
+    };
+  }
+
+  private async removeStoredObject(storageKey: string): Promise<void> {
+    try {
+      await this.storage.remove(storageKey);
+    } catch (error) {
+      this.logger.error(`Chat attachment cleanup failed: ${this.errorMessage(error)}`);
+    }
+  }
+
   private parseThread(body: unknown) {
     const parsed = ChatThreadCreateSchema.safeParse(body);
     if (!parsed.success) {
@@ -614,9 +767,20 @@ export class ChatService {
   }
 
   private parseCursor(value: string | undefined): string {
-    if (!value) return "0";
+    if (value === undefined) return "0";
     if (!/^(0|[1-9]\d{0,18})$/u.test(value)) throw new BadRequestException("Некорректный курсор");
+    if (BigInt(value) > 9_223_372_036_854_775_807n) {
+      throw new BadRequestException("Некорректный курсор");
+    }
     return value;
+  }
+
+  private parseHistoryLimit(value: string | undefined): number {
+    if (value === undefined) return 100;
+    if (!/^[1-9]\d{0,2}$/u.test(value)) throw new BadRequestException("Некорректный лимит истории");
+    const limit = Number(value);
+    if (limit > 100) throw new BadRequestException("Максимальный лимит истории: 100");
+    return limit;
   }
 
   private validGuestToken(value: string, expected: Buffer): boolean {

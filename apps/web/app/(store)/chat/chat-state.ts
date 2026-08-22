@@ -5,11 +5,17 @@ import {
 } from "../_lib/storefront-api";
 
 export const GUEST_CHAT_STORAGE_KEY = "an30_guest_chats_v1";
-export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+export const CHAT_ATTACHMENT_ACCEPT = "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm";
+export const CHAT_HISTORY_PAGE_SIZE = 50;
+/** The DOM never contains more chat messages than this, even after paging. */
+export const CHAT_RENDERED_MESSAGE_LIMIT = 150;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const THREAD_STATUSES = new Set(["closed", "open", "waiting_customer", "waiting_staff"]);
-const ATTACHMENT_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const IMAGE_ATTACHMENT_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const VIDEO_ATTACHMENT_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const ATTACHMENT_MIME_TYPES = new Set([...IMAGE_ATTACHMENT_MIME_TYPES, ...VIDEO_ATTACHMENT_MIME_TYPES]);
 const MESSAGE_TYPES = new Set(["attachment", "system", "text"]);
 const SENDER_KINDS = new Set(["customer", "guest", "staff", "system"]);
 const SEQUENCE_PATTERN = /^(0|[1-9]\d{0,18})$/u;
@@ -43,6 +49,12 @@ export interface ChatThread {
   orderId: string | null;
   status: "closed" | "open" | "waiting_customer" | "waiting_staff";
   subject: string | null;
+}
+
+export interface ChatHistoryWindow {
+  items: ChatMessage[];
+  nextSequence: string;
+  olderCursor: string | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -183,6 +195,16 @@ export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): 
   });
 }
 
+/** Selects a bounded DOM window while the hook retains cursors/realtime metadata. */
+export function renderedMessageWindow(
+  messages: ChatMessage[],
+  view: "latest" | "older",
+): ChatMessage[] {
+  return view === "latest"
+    ? messages.slice(-CHAT_RENDERED_MESSAGE_LIMIT)
+    : messages.slice(0, CHAT_RENDERED_MESSAGE_LIMIT);
+}
+
 export function reconnectDelay(attempt: number): number {
   return Math.min(8_000, 500 * (2 ** Math.max(0, Math.min(attempt, 8))));
 }
@@ -194,8 +216,11 @@ export function latestSequence(current: string, incoming: string): string {
 }
 
 export function attachmentSignatureError(file: { size: number; type: string }, bytes: Uint8Array): string | null {
-  if (file.size < 1 || file.size > MAX_ATTACHMENT_BYTES) return "Размер изображения должен быть от 1 байта до 5 МБ";
-  if (!ATTACHMENT_MIME_TYPES.has(file.type)) return "Разрешены только JPEG, PNG и WebP";
+  if (!ATTACHMENT_MIME_TYPES.has(file.type)) return "Разрешены JPEG, PNG, WebP, MP4, MOV и WebM";
+  const maxBytes = IMAGE_ATTACHMENT_MIME_TYPES.has(file.type) ? 5 * 1024 * 1024 : MAX_ATTACHMENT_BYTES;
+  if (file.size < 1 || file.size > maxBytes) {
+    return `Размер ${IMAGE_ATTACHMENT_MIME_TYPES.has(file.type) ? "изображения" : "видео"} должен быть от 1 байта до ${maxBytes / 1024 / 1024} МБ`;
+  }
   const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   const png = bytes.length >= 8
     && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
@@ -203,18 +228,38 @@ export function attachmentSignatureError(file: { size: number; type: string }, b
   const webp = bytes.length >= 12
     && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
     && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
-  const detected = jpeg ? "image/jpeg" : png ? "image/png" : webp ? "image/webp" : null;
-  return detected === file.type ? null : "Тип файла не совпадает с содержимым изображения";
+  const isoMedia = bytes.length >= 12
+    && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+  const quicktime = isoMedia
+    && bytes[8] === 0x71 && bytes[9] === 0x74 && bytes[10] === 0x20 && bytes[11] === 0x20;
+  const webm = bytes.length >= 4
+    && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
+  const detected = jpeg ? "image/jpeg"
+    : png ? "image/png"
+      : webp ? "image/webp"
+        : quicktime ? "video/quicktime"
+          : isoMedia ? "video/mp4"
+            : webm ? "video/webm" : null;
+  return detected === file.type ? null : "Тип файла не совпадает с его содержимым";
 }
 
-/** True for the same JPEG/PNG/WebP set the server accepts — the only attachments a thumbnail/lightbox may ever try to decode inline. */
+/** True for the same JPEG/PNG/WebP set the server accepts. */
 export function isPreviewableImage(attachment: ChatAttachment): boolean {
-  return ATTACHMENT_MIME_TYPES.has(attachment.mimeType);
+  return IMAGE_ATTACHMENT_MIME_TYPES.has(attachment.mimeType);
+}
+
+/** True for browser-playable video containers accepted by the server. */
+export function isPreviewableVideo(attachment: ChatAttachment): boolean {
+  return VIDEO_ATTACHMENT_MIME_TYPES.has(attachment.mimeType);
+}
+
+export function isPreviewableMedia(attachment: ChatAttachment): boolean {
+  return isPreviewableImage(attachment) || isPreviewableVideo(attachment);
 }
 
 export function safeDownloadName(value: string): string {
   const name = value.replace(/[\\/\u0000-\u001F\u007F]/gu, "_").trim().slice(0, 180);
-  return !name || name === "." || name === ".." ? "an30-image" : name;
+  return !name || name === "." || name === ".." ? "an30-file" : name;
 }
 
 function threadTimestamp(thread: ChatThread): number {
@@ -430,38 +475,48 @@ export async function chatRequest<T>(
   return payload as T;
 }
 
-/** Pages through `/messages` until the cursor catches up, reporting progress as it goes. */
-export async function loadCompleteHistory(
+export function isChatHistoryWindow(value: unknown): value is ChatHistoryWindow {
+  if (!isRecord(value)
+    || !Array.isArray(value.items)
+    || value.items.some((message) => !isChatMessage(message))
+    || typeof value.nextSequence !== "string"
+    || !SEQUENCE_PATTERN.test(value.nextSequence)
+    || (value.olderCursor !== null
+      && (typeof value.olderCursor !== "string" || !SEQUENCE_PATTERN.test(value.olderCursor)))) {
+    return false;
+  }
+  for (let index = 1; index < value.items.length; index += 1) {
+    if (BigInt(value.items[index - 1]!.sequence) >= BigInt(value.items[index]!.sequence)) return false;
+  }
+  return true;
+}
+
+async function loadHistoryWindow(
   thread: ChatThread,
   access: ChatAccess,
-  isActive: () => boolean,
-  onPage: (messages: ChatMessage[]) => void,
-): Promise<{ cursor: string; messages: ChatMessage[] }> {
-  let cursor = "0";
-  let messages: ChatMessage[] = [];
-  for (let page = 0; page < 101; page += 1) {
-    const history = await chatRequest<{ items: ChatMessage[]; nextSequence: string }>(
-      `${messagePath(thread.id, access)}?after=${encodeURIComponent(cursor)}`,
-      access,
-    );
-    if (!isActive()) return { cursor, messages };
-    if (!Array.isArray(history.items)
-      || history.items.some((message) => !isChatMessage(message))
-      || typeof history.nextSequence !== "string"
-      || !SEQUENCE_PATTERN.test(history.nextSequence)) {
-      throw new Error("Сервер вернул повреждённую страницу истории");
-    }
-    if (page === 100 && history.items.length > 0) {
-      throw new Error("История превышает 10 000 сообщений. Обратитесь в магазин для получения архива");
-    }
-    messages = mergeMessages(messages, history.items);
-    onPage(messages);
-    if (history.items.length < 100 || history.nextSequence === cursor) {
-      return { cursor: history.nextSequence, messages };
-    }
-    cursor = history.nextSequence;
-  }
-  throw new Error("Не удалось определить конец истории сообщений");
+  before: "latest" | string,
+): Promise<ChatHistoryWindow> {
+  const history = await chatRequest<unknown>(
+    `${messagePath(thread.id, access)}?before=${encodeURIComponent(before)}&limit=${CHAT_HISTORY_PAGE_SIZE}`,
+    access,
+  );
+  if (!isChatHistoryWindow(history)) throw new Error("Сервер вернул повреждённую страницу истории");
+  return history;
+}
+
+/** Loads only the newest bounded window. Realtime continues from nextSequence. */
+export function loadLatestHistory(thread: ChatThread, access: ChatAccess): Promise<ChatHistoryWindow> {
+  return loadHistoryWindow(thread, access, "latest");
+}
+
+/** Loads one older page using an exclusive server-issued cursor. */
+export function loadOlderHistory(
+  thread: ChatThread,
+  access: ChatAccess,
+  before: string,
+): Promise<ChatHistoryWindow> {
+  if (!SEQUENCE_PATTERN.test(before)) return Promise.reject(new Error("Некорректный курсор истории"));
+  return loadHistoryWindow(thread, access, before);
 }
 
 /** One-shot REST send, used as the idempotent fallback whenever the socket isn't live. */
@@ -483,14 +538,14 @@ export async function markChatMessageRead(thread: ChatThread, access: ChatAccess
   await chatRequest(readPath(thread.id, messageId, access), access, { method: "POST" });
 }
 
-/** Validates the image signature, then uploads it as a new chat message. */
+/** Validates a photo/video signature, then uploads it as a new chat message. */
 export async function uploadChatAttachment(
   thread: ChatThread,
   access: ChatAccess,
   file: File,
   clientMessageId: string,
 ): Promise<ChatMessage> {
-  const signature = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const signature = new Uint8Array(await file.slice(0, 32).arrayBuffer());
   const validationError = attachmentSignatureError(file, signature);
   if (validationError) throw new Error(validationError);
   const form = new FormData();
@@ -522,6 +577,7 @@ export async function downloadChatAttachmentBlob(
   attachment: ChatAttachment,
   thread: ChatThread,
   access: ChatAccess,
+  signal?: AbortSignal,
 ): Promise<Blob> {
   const headers = new Headers();
   if (access.kind === "guest") headers.set("X-Guest-Chat-Token", access.guestToken);
@@ -529,6 +585,7 @@ export async function downloadChatAttachmentBlob(
     cache: "no-store",
     credentials: "include",
     headers,
+    signal,
   });
   const contentType = response.headers.get("content-type")?.split(";", 1)[0] ?? "";
   if (!response.ok) {

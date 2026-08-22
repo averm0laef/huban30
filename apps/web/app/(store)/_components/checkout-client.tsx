@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
+import { CHECKOUT_PERSONAL_DATA_CONSENT_TEXT } from "@an30/contracts";
+
 import { summariseCart, useCartProducts } from "../_lib/cart-products";
 import { formatRubles } from "../_lib/catalog-format";
 import { checkoutPayload } from "../_lib/checkout";
@@ -163,12 +165,24 @@ export function CheckoutClient({
       deliveryMethod, email: String(form.get("email") ?? ""), name: String(form.get("name") ?? ""),
       phone: String(form.get("phone") ?? ""),
     };
+    const legalAcceptance = {
+      personalDataConsent: form.get("personalDataConsent") === "on",
+      termsAccepted: form.get("termsAccepted") === "on",
+    };
     try {
-      const basePayload = checkoutPayload(baseValue, items, "00000000-0000-4000-8000-000000000000");
+      if (!legalAcceptance.termsAccepted || !legalAcceptance.personalDataConsent) {
+        throw new Error("Примите оферту и отдельно подтвердите согласие на обработку данных");
+      }
+      const basePayload = checkoutPayload(
+        baseValue,
+        items,
+        "00000000-0000-4000-8000-000000000000",
+        legalAcceptance,
+      );
       const { idempotencyKey: ignored, ...fingerprintPayload } = basePayload;
       void ignored;
       const idempotencyKey = await stableIdempotencyKey(window.sessionStorage, "checkout", fingerprintPayload);
-      const body = checkoutPayload(baseValue, items, idempotencyKey);
+      const body = checkoutPayload(baseValue, items, idempotencyKey, legalAcceptance);
       if (!body.items.length) throw new Error("Корзина пуста или содержит некорректные позиции");
       const session = await readSession();
       if (session && session.role !== "customer") throw new Error("Оформление клиента недоступно из учётной записи сотрудника");
@@ -245,7 +259,8 @@ export function CheckoutClient({
               {deliveryMethod === "needs_quote" ? <label className={styles.field}>Адрес доставки<textarea name="address" required minLength={5} maxLength={1000} autoComplete="street-address" /></label> : null}
             </fieldset>
             <fieldset><legend>3. Комментарий</legend><label className={styles.field}>Комментарий к заказу<textarea name="customerNote" maxLength={2000} placeholder="Например, удобное время звонка" /></label></fieldset>
-            <label className={styles.checkboxField}><input name="terms" type="checkbox" required /> Я принимаю <Link href="/terms" target="_blank">условия работы</Link> и ознакомился с <Link href="/privacy" target="_blank">политикой конфиденциальности</Link>.</label>
+            <label className={styles.checkboxField}><input name="termsAccepted" type="checkbox" required /> Я принимаю <Link href="/terms" target="_blank">условия публичной оферты</Link>.</label>
+            <label className={styles.checkboxField}><input name="personalDataConsent" type="checkbox" required /> {CHECKOUT_PERSONAL_DATA_CONSENT_TEXT} <Link href="/checkout-personal-data-consent" target="_blank">Открыть документ</Link>.</label>
             <button className={styles.submitButton} type="submit" disabled={pending || !online}>{pending ? "Проверяем и резервируем..." : "Создать заказ"}</button>
           </form>
           <aside className={styles.checkoutAside} aria-labelledby="checkout-cart-title">

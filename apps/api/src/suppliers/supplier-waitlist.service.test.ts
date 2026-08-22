@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { ServiceUnavailableException } from "@nestjs/common";
+import type { ConfigService } from "@nestjs/config";
+
+import { SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION } from "@an30/contracts";
+
 import type { SupplierProvider, SupplierSearchResult } from "../adapters/provider-contracts.js";
 import type { AuthContext } from "../auth/auth-context.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
@@ -31,7 +36,7 @@ const VALID_CREATE_INPUT = {
   contact: { name: "Иван Петров", phone: "+79261234567" },
   idempotencyKey: "019bf9ea-0d3e-7def-9c9a-000000000001",
   partGuid: "part-guid",
-  policyVersion: "supplier-waitlist-consent-v1",
+  policyVersion: SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION,
   quantity: 2,
   query: "W914/2",
   stockId: "stock-1",
@@ -39,6 +44,16 @@ const VALID_CREATE_INPUT = {
 
 function makeSupplier(result: SupplierSearchResult = SEARCH_RESULT): SupplierProvider {
   return { enabled: true, search: async () => result };
+}
+
+function makeConfig(markupPercent = 30, legalDocumentsApproved = true): ConfigService {
+  return {
+    get: (key: string) => {
+      if (key === "LEGAL_DOCUMENTS_APPROVED") return legalDocumentsApproved;
+      if (key === "SUPPLIER_MARKUP_PERCENT") return markupPercent;
+      return undefined;
+    },
+  } as ConfigService;
 }
 
 const auth: AuthContext = {
@@ -52,7 +67,23 @@ const auth: AuthContext = {
 };
 
 describe("SupplierWaitlistService.create", () => {
-  it("snapshots the server-resolved price and delivery time, never a client-supplied value", async () => {
+  it("fails closed before parsing or sending PII when legal documents are not approved", async () => {
+    const database = { transaction: vi.fn() } as unknown as DatabaseService;
+    const supplier = { enabled: true, search: vi.fn() } as unknown as SupplierProvider;
+    const service = new SupplierWaitlistService(
+      { record: vi.fn() } as unknown as AuditService,
+      database,
+      supplier,
+      makeConfig(30, false),
+    );
+
+    await expect(service.create(VALID_CREATE_INPUT, { ipAddress: "127.0.0.1" }))
+      .rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(supplier.search).not.toHaveBeenCalled();
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it("snapshots the same server-marked-up retail price the search response showed", async () => {
     const insertQuery = vi.fn().mockResolvedValueOnce({
       rows: [{ created_at: new Date("2026-08-03T00:00:00Z"), id: "waitlist-1", status: "new" }],
     }).mockResolvedValueOnce({ rows: [] });
@@ -62,7 +93,7 @@ describe("SupplierWaitlistService.create", () => {
       )),
     } as unknown as DatabaseService;
     const audit = { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier());
+    const service = new SupplierWaitlistService(audit, database, makeSupplier(), makeConfig());
 
     const result = await service.create(VALID_CREATE_INPUT, { ipAddress: "127.0.0.1" });
 
@@ -77,8 +108,9 @@ describe("SupplierWaitlistService.create", () => {
     // brand/partNumber/name/stockId/price/deliveryTime all come from the
     // supplier lookup result above, not from VALID_CREATE_INPUT.
     expect(insertParams).toEqual(expect.arrayContaining([
-      "MANN", "W914/2", "Масляный фильтр", "stock-1", 45_670, "2",
+      "MANN", "W914/2", "Масляный фильтр", "stock-1", 59_400, "2",
     ]));
+    expect(insertParams).not.toContain(45_670);
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: "supplier_waitlist.request.created" }),
       expect.anything(),
@@ -95,28 +127,47 @@ describe("SupplierWaitlistService.create", () => {
       )),
     } as unknown as DatabaseService;
     const audit = { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier());
+    const service = new SupplierWaitlistService(audit, database, makeSupplier(), makeConfig());
 
     await service.create(
       { ...VALID_CREATE_INPUT, partGuid: "cross-guid", stockId: "cross-stock" },
       { ipAddress: "127.0.0.1" },
     );
     const insertParams = insertQuery.mock.calls[0]?.[1] as unknown[];
-    expect(insertParams).toEqual(expect.arrayContaining(["MAHLE", "OC90", "cross-stock", 41_000, "3"]));
+    expect(insertParams).toEqual(expect.arrayContaining(["MAHLE", "OC90", "cross-stock", 53_300, "3"]));
   });
 
   it("rejects when the part is no longer present in a fresh supplier lookup", async () => {
     const database = { transaction: vi.fn() } as unknown as DatabaseService;
     const audit = { record: vi.fn() } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier({ message: "", parts: [], success: true }));
+    const service = new SupplierWaitlistService(
+      audit,
+      database,
+      makeSupplier({ message: "", parts: [], success: true }),
+      makeConfig(),
+    );
 
     await expect(service.create(VALID_CREATE_INPUT, {})).rejects.toThrow(/не найдена/u);
+  });
+
+  it("rejects a supplier-side failure before trusting any attached part rows", async () => {
+    const database = { transaction: vi.fn() } as unknown as DatabaseService;
+    const audit = { record: vi.fn() } as unknown as AuditService;
+    const service = new SupplierWaitlistService(
+      audit,
+      database,
+      makeSupplier({ ...SEARCH_RESULT, message: "Ошибка", success: false }),
+      makeConfig(),
+    );
+
+    await expect(service.create(VALID_CREATE_INPUT, {})).rejects.toMatchObject({ status: 503 });
+    expect(database.transaction).not.toHaveBeenCalled();
   });
 
   it("rejects when the stock line is no longer present on the part", async () => {
     const database = { transaction: vi.fn() } as unknown as DatabaseService;
     const audit = { record: vi.fn() } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier());
+    const service = new SupplierWaitlistService(audit, database, makeSupplier(), makeConfig());
 
     await expect(service.create({ ...VALID_CREATE_INPUT, stockId: "missing-stock" }, {})).rejects.toThrow(/не доступна/u);
   });
@@ -129,7 +180,7 @@ describe("SupplierWaitlistService.create", () => {
       contact: { name: "Иван Петров", phone: "+79261234567" },
       idempotencyKey: VALID_CREATE_INPUT.idempotencyKey,
       partGuid: VALID_CREATE_INPUT.partGuid,
-      policyVersion: "supplier-waitlist-consent-v1",
+      policyVersion: SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION,
       quantity: VALID_CREATE_INPUT.quantity,
       query: VALID_CREATE_INPUT.query,
       source: "rossko",
@@ -151,7 +202,7 @@ describe("SupplierWaitlistService.create", () => {
       )),
     } as unknown as DatabaseService;
     const audit = { record: vi.fn() } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier());
+    const service = new SupplierWaitlistService(audit, database, makeSupplier(), makeConfig());
 
     const result = await service.create(VALID_CREATE_INPUT, {});
     expect(result).toMatchObject({ id: "waitlist-3", replayed: true, status: "new" });
@@ -175,7 +226,7 @@ describe("SupplierWaitlistService.create", () => {
       )),
     } as unknown as DatabaseService;
     const audit = { record: vi.fn() } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier());
+    const service = new SupplierWaitlistService(audit, database, makeSupplier(), makeConfig());
 
     await expect(service.create(VALID_CREATE_INPUT, {})).rejects.toMatchObject({ status: 409 });
   });
@@ -192,7 +243,7 @@ describe("SupplierWaitlistService.update", () => {
       )),
     } as unknown as DatabaseService;
     const audit = { record: vi.fn() } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier());
+    const service = new SupplierWaitlistService(audit, database, makeSupplier(), makeConfig());
 
     await expect(service.update(
       "019bf9ea-0d3e-7def-9c9a-000000000005",
@@ -212,7 +263,7 @@ describe("SupplierWaitlistService.update", () => {
       )),
     } as unknown as DatabaseService;
     const audit = { record: vi.fn() } as unknown as AuditService;
-    const service = new SupplierWaitlistService(audit, database, makeSupplier());
+    const service = new SupplierWaitlistService(audit, database, makeSupplier(), makeConfig());
 
     await expect(service.update(
       "019bf9ea-0d3e-7def-9c9a-000000000005",

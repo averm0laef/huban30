@@ -1,46 +1,82 @@
 /**
- * Pure collapse-decision logic for the mobile header's scroll-collapse rows
- * (see `store-shell.tsx`), kept free of DOM/event concerns so the threshold
- * and safety rules can be unit-tested without mounting a component.
+ * Direction-aware state machine for the sticky storefront header.
  *
- * The mobile header stacks five rows in one blue panel (links, brand,
- * location, search, the expert CTA) — tall enough that the owner asked for
- * it to get out of the way once a visitor starts reading the page. Doing
- * that with pure CSS `position: sticky` would need the search row to be the
- * *last* row in the stack for every row above and below it to hide behind
- * a single sticky offset — but the search row sits in the middle (row 4 of
- * 5) by the owner's own reference layout, and reordering it purely for the
- * scrolled state would desync visual order from DOM/reading order, which
- * is its own WCAG 2.4.3 problem. So this is the one place in the header
- * that genuinely needs a scroll listener instead.
+ * The VIN/article search stays pinned at every viewport width. The rest of
+ * the header hides only after a deliberate downward scroll and returns after
+ * a shorter upward scroll. Separate hide/reveal distances provide hysteresis:
+ * trackpad noise around a direction change cannot repeatedly flip the header.
  *
- * `isHeaderCollapsed` is a plain AND of every condition that must hold
- * before the non-search rows are allowed to hide:
- *  - scrolled past `HEADER_COLLAPSE_SCROLL_THRESHOLD_PX` (a small cushion
- *    so an overscroll bounce at the very top doesn't flicker the header);
- *  - `prefers-reduced-motion` is off — collapsing means real content
- *    moves, not just a transition easing, so (like the carousel's
- *    autoplay) reduced-motion visitors get the full static header instead
- *    of a softer animation;
- *  - focus is not inside the header — a visitor tabbing into "О компании"
- *    or the expert CTA while scrolled must never have the very control
- *    they are on hide out from under them, which both breaks keyboard use
- *    and reads as a focus trap.
+ * DOM events deliberately live in `store-shell.tsx`; keeping this reducer
+ * pure makes the same behaviour testable for both the mobile and desktop CSS
+ * layouts without mounting a browser.
  */
 
-export const HEADER_COLLAPSE_SCROLL_THRESHOLD_PX = 24;
+/** Keep the full header visible while the page is still close to the top. */
+export const HEADER_COLLAPSE_START_PX = 160;
 
-export interface HeaderCollapseFlags {
-  /** `window.scrollY` at the moment of the check. */
+/** Downward travel required before the non-search header content hides. */
+export const HEADER_HIDE_SCROLL_DELTA_PX = 32;
+
+/** Upward travel required before the full header returns. */
+export const HEADER_REVEAL_SCROLL_DELTA_PX = 12;
+
+export interface HeaderCollapseState {
+  /** Whether all header content except the VIN/article search is hidden. */
+  collapsed: boolean;
+  /** Direction anchor: a local minimum while open, a local maximum while hidden. */
+  anchorScrollY: number;
+}
+
+export interface HeaderScrollSample {
+  /** Current `window.scrollY`. Negative Safari overscroll is normalised to 0. */
   scrollY: number;
-  /** Focus is currently inside the header panel (any row). */
-  focusWithin: boolean;
+  /** Focus is inside content that would be hidden (not the pinned search). */
+  focusWithinCollapsibleContent: boolean;
   /** `matchMedia("(prefers-reduced-motion: reduce)").matches`. */
   reducedMotion: boolean;
 }
 
-export function isHeaderCollapsed(flags: HeaderCollapseFlags): boolean {
-  if (flags.reducedMotion) return false;
-  if (flags.focusWithin) return false;
-  return flags.scrollY >= HEADER_COLLAPSE_SCROLL_THRESHOLD_PX;
+function normaliseScrollY(scrollY: number): number {
+  return Math.max(0, Number.isFinite(scrollY) ? scrollY : 0);
+}
+
+/**
+ * Creates an expanded initial state at the actual restored scroll position.
+ * This prevents a back/forward restoration deep in the page from rendering a
+ * collapsed header before the visitor has made a new scroll gesture.
+ */
+export function createHeaderCollapseState(scrollY = 0): HeaderCollapseState {
+  return { anchorScrollY: normaliseScrollY(scrollY), collapsed: false };
+}
+
+export function getNextHeaderCollapseState(
+  state: HeaderCollapseState,
+  sample: HeaderScrollSample,
+): HeaderCollapseState {
+  const scrollY = normaliseScrollY(sample.scrollY);
+
+  // Reduced-motion users keep a stable header. Likewise, a focused control
+  // must never move or disappear beneath the keyboard user. Resetting the
+  // anchor prevents an immediate re-collapse as soon as either guard clears.
+  if (
+    sample.reducedMotion
+    || sample.focusWithinCollapsibleContent
+    || scrollY <= HEADER_COLLAPSE_START_PX
+  ) {
+    return { anchorScrollY: scrollY, collapsed: false };
+  }
+
+  if (state.collapsed) {
+    const anchorScrollY = Math.max(state.anchorScrollY, scrollY);
+    if (anchorScrollY - scrollY >= HEADER_REVEAL_SCROLL_DELTA_PX) {
+      return { anchorScrollY: scrollY, collapsed: false };
+    }
+    return { anchorScrollY, collapsed: true };
+  }
+
+  const anchorScrollY = Math.min(state.anchorScrollY, scrollY);
+  if (scrollY - anchorScrollY >= HEADER_HIDE_SCROLL_DELTA_PX) {
+    return { anchorScrollY: scrollY, collapsed: true };
+  }
+  return { anchorScrollY, collapsed: false };
 }

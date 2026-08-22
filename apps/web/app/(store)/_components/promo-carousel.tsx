@@ -163,7 +163,7 @@ export function PromoCarousel({ slides }: { slides: PromoSlide[] }) {
           ref={trackRef}
         >
           {slides.map((slide, index) => (
-            <Link className={styles.promoSlide} href={slide.href} key={slide.href}>
+            <Link className={styles.promoSlide} href={slide.href} key={slide.src}>
               <Image
                 alt=""
                 fill
@@ -202,16 +202,15 @@ export function PromoCarousel({ slides }: { slides: PromoSlide[] }) {
         ) : null}
       </div>
       {slides.length > 1 ? (
-        <div className={styles.promoDots} role="tablist" aria-label="Слайды">
+        <div className={styles.promoDots} aria-label="Слайды">
           {slides.map((slide, index) => (
             <button
               aria-current={index === active}
               aria-label={`Слайд ${index + 1} из ${slides.length}: ${slide.title}`}
               className={styles.promoDot}
               data-active={index === active}
-              key={slide.href}
+              key={slide.src}
               onClick={() => { registerInteraction(); goTo(index); }}
-              role="tab"
               type="button"
             />
           ))}

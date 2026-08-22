@@ -13,12 +13,17 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module.js";
 import { ChatRealtimeService } from "./chat/chat-realtime.service.js";
 import { DatabaseService } from "./infrastructure/database.service.js";
+import { registerOneCExchangeRawBodyParser } from "./one-c-exchange/one-c-exchange-raw-body-parser.js";
 import { StructuredLogger } from "./security/structured-logger.js";
 import { isPubliclyCacheableApiRequest } from "./security/http-cache-policy.js";
 
+const API_BODY_LIMIT_BYTES = 16 * 1024 * 1024;
+
 async function bootstrap() {
   const adapter = new FastifyAdapter({
-    bodyLimit: 10 * 1024 * 1024,
+    // CommerceML chunks top out at 8 MiB. Chat videos are deliberately
+    // capped at 15 MiB below, with a little multipart framing headroom.
+    bodyLimit: API_BODY_LIMIT_BYTES,
     // Caddy or the internal Next.js server is exactly one trusted hop away.
     // Trusting every hop would let a client spoof the left-most forwarded IP.
     trustProxy: Number(process.env.TRUST_PROXY_HOPS ?? "0"),
@@ -39,8 +44,11 @@ async function bootstrap() {
 
   await app.register(cookie);
   await app.register(multipart, {
-    limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
+    limits: { fileSize: 15 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
   });
+  // CommerceML posts raw chunks, sometimes without Content-Type. The parser
+  // rejects its wildcard fallback before reading any non-1C request body.
+  registerOneCExchangeRawBodyParser(adapter.getInstance(), API_BODY_LIMIT_BYTES);
   await app.register(websocket, { options: { maxPayload: 16 * 1024 } });
   await app.register(helmet, {
     contentSecurityPolicy: false,

@@ -91,6 +91,33 @@
 .sourceCaption { margin: 0; padding: 2px var(--store-space-2xs) var(--store-space-xs); color: var(--store-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
 .sourceDivider { margin-top: var(--store-space-sm); padding-top: var(--store-space-md); border-top: 1px solid var(--store-border); }
 
+.pagination {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto minmax(72px, 1fr);
+  align-items: center;
+  gap: var(--store-space-sm);
+  margin-top: var(--store-space-lg);
+  padding-top: var(--store-space-md);
+  border-top: 1px solid var(--store-border);
+  color: var(--store-muted);
+  font-size: 0.86rem;
+  text-align: center;
+}
+.pagination a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-brand);
+  font-weight: var(--store-weight-bold);
+  text-decoration: none;
+}
+.pagination a:first-child { justify-self: start; }
+.pagination a:last-child { justify-self: end; }
+
 /* ---------------- "Ещё N предложений" disclosure ----------------
    Kept from the previous layout: extra stock lines and analogues fold away
    behind a native <details>, so a part with a dozen offers doesn't turn

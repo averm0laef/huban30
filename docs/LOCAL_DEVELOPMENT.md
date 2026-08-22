@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Команда запускает Next.js на порту 3000, NestJS API на порту 4000 и worker health server на порту 4001. PostgreSQL и Redis должны быть доступны по адресам из окружения.
+Команда запускает Next.js на порту 3000, NestJS API на порту 4000 и worker health server на порту 4001. PostgreSQL, Redis и clamd должны быть доступны по адресам из окружения; `ffprobe` и `ffmpeg` — находиться в `PATH`. Без clamd readiness будет degraded, а загрузка вложений fail-closed вернёт 503.
 
 ## Запуск полного стека Docker
 
@@ -83,3 +83,6 @@ Checkout, TTL-резервы, sandbox-сценарии и production gate опи
 docker compose -f compose.yaml -f compose.dev.yaml exec -T api \
   node dist/cli/checkout-smoke.js
 ```
+
+Проверка фото/видео в чате и эксплуатация ClamAV описаны в
+`docs/CHAT_MEDIA_SECURITY.md`.
