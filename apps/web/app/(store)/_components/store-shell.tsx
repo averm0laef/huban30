@@ -181,15 +181,25 @@ function MessengerIcon({ id }: { id: MessengerLink["id"] }) {
  *  - `.headerMainRow` — brand lockup, the wide rounded search field
  *    (`.headerDesktopSearch`), and the cart/account actions.
  *
- * Mobile (<768px), five rows per the owner's reference walkthrough:
- *  1. `.mobileLinksRow` — "О компании" / "Контакты", left aligned.
- *  2. `.headerMainRow` again, but showing brand + `.mobileHeaderActions`
- *     (just the phone now — see below) instead of the desktop search +
- *     actions.
- *  3. `.mobileLocationRow` — a pin + "Чернышевск" on the left, a link to
- *     the shop's street address on the right.
- *  4. `.mobileSearchRow` — the same pill search field alone on its own row
+ * Mobile (<768px), TWO rows only — cut down from an earlier four-row stack
+ * (secondary links / brand+phone / locality+address / search) that ran
+ * three hard 44px-floored bands deep before any page content appeared.
+ * That stack could no longer be trimmed with padding alone (a previous pass
+ * had already cut every row's padding to 1-4px), so the fix is structural:
+ *  1. `.headerMainRow` — brand on the left, `.mobileHeaderAddress`
+ *     (pin + "Чернышевск, ул. Куйбышева, 118А", truncated to one line) in
+ *     the middle, `.mobileHeaderActions` (the phone) on the right. All
+ *     three share the row's single 44px-tall content band instead of each
+ *     owning its own band.
+ *  2. `.mobileSearchRow` — the same pill search field alone on its own row
  *     ("строка с поиском отдельно").
+ *
+ * The former secondary-links row ("О компании" / "Контакты") is gone from
+ * this panel outright, not just hidden: both destinations already live in
+ * the footer's "Компания" nav (`companyLinks` below, rendered by
+ * `StoreFooter`) and nothing in `MobileNavigation`'s fixed bottom tab bar
+ * depends on this row, so removing it does not strand either link — see
+ * `companyLinks` and `StoreFooter` below.
  *
  * There is no separate "Каталог" button in either desktop row: the
  * reference reaches the catalog from the search field, the category tiles,
@@ -340,23 +350,25 @@ function StoreHeader() {
           </div>
         </div>
 
-        {/* Mobile row 1: two secondary links, left aligned. */}
-        <div className={styles.mobileLinksRow}>
-          <div className={styles.headerRowInner}>
-            <nav className={styles.headerTopLinks} aria-label="Дополнительные ссылки">
-              <Link href="/about">О компании</Link>
-              <Link href="/contacts">Контакты</Link>
-            </nav>
-          </div>
-        </div>
-
         {/* Row 2 everywhere: brand on the left; desktop search + actions,
-            or (mobile) the phone/cart/account icon cluster, on the right. */}
+            or (mobile) address + the phone icon, on the right. The former
+            "О компании"/"Контакты" row and the standalone locality/address
+            row are gone — see the mobile row-count note in the doc comment
+            above `StoreHeader`. */}
         <div className={styles.headerMainRow}>
           <div className={styles.headerRowInner}>
             <Link className={styles.brand} href="/" aria-label={`${SITE_LEGAL_NAME}, на главную`}>
               <BrandLockup className={styles.brandLockup} tone="current" />
             </Link>
+            {/* Mobile-only: the locality + street address, condensed onto
+                one truncated line beside the logo instead of a dedicated
+                row — still a real link to the map, still real information,
+                just no longer spending a whole 44px+ band on it. Hidden
+                ≥768px alongside the other mobile-only row content, where
+                `.headerTopLocation` in row 1 already covers this. */}
+            <a className={styles.mobileHeaderAddress} href={STORE_MAP_URL} target="_blank" rel="noreferrer">
+              <PinIcon /> <span>{STORE_LOCALITY}, {STORE_STREET}</span>
+            </a>
             <div className={styles.headerDesktopSearch} data-header-persistent-search>
               <HeaderSearchForm id="header-search-q" />
             </div>
@@ -377,20 +389,7 @@ function StoreHeader() {
           </div>
         </div>
 
-        {/* Mobile row 3: locality on the left, a link to the street address
-            on the right. */}
-        <div className={styles.mobileLocationRow}>
-          <div className={styles.headerRowInner}>
-            <span className={styles.mobileLocationText}>
-              <PinIcon /> <span>{STORE_LOCALITY}</span>
-            </span>
-            <a className={styles.mobileAddressLink} href={STORE_MAP_URL} target="_blank" rel="noreferrer">
-              {STORE_STREET}
-            </a>
-          </div>
-        </div>
-
-        {/* Mobile row 4: the search field alone, full width. */}
+        {/* Mobile row 2: the search field alone, full width. */}
         <div className={styles.mobileSearchRow} data-header-persistent-search>
           <div className={styles.headerRowInner}>
             <HeaderSearchForm id="header-search-q-mobile" />

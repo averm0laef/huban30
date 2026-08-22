@@ -168,10 +168,13 @@
      below), so cart/account access never has a dead zone between the two.
    - `.headerMainRow` ("row 2", tall): brand lockup, the wide rounded
      search field, and — ≥768px — the cart/account actions, each an icon
-     with a small caption beneath it (`.headerActions`). Below 768px the
-     burger trigger renders instead and row 1 disappears, so this row is
-     the entire header — the pattern the owner already confirmed works on
-     a phone, kept unchanged on purpose. */
+     with a small caption beneath it (`.headerActions`). Below 768px row 1
+     disappears and this row instead shows the brand, a condensed
+     locality+address link (`.mobileHeaderAddress`), and a phone icon
+     (`.mobileHeaderActions`) — see the 767px block further down. Mobile
+     also gets one more row below this, `.mobileSearchRow` (the search
+     field alone) — two rows total on a phone, down from an earlier
+     four-row stack that ate most of the screen before any content. */
 
 .header {
   position: sticky;
@@ -328,11 +331,40 @@
    flex child of `.headerRowInner`, exactly as before this wrapper existed. */
 .headerDesktopSearch { display: none; }
 
-/* Mobile-only row 2 content: brand stays put, this single call button
-   takes the desktop search + actions' place on the right — cart and
-   account moved to the fixed bottom tab bar (`.mobileNav`), so this row
-   has one job. Hidden ≥768px alongside the other mobile-only rows, see the
-   768px block further down. */
+/* Mobile-only row 2 content: brand stays put, `.mobileHeaderAddress` +
+   this call button take the desktop search + actions' place on the right —
+   cart and account moved to the fixed bottom tab bar (`.mobileNav`), so this
+   row only ever has to carry "who/where/call". Hidden ≥768px alongside the
+   other mobile-only row content, see the 768px block further down. */
+
+/* Locality + street address, condensed onto one truncated line instead of
+   its own row (that former `.mobileLocationRow` cost a full 44px-floored
+   band by itself). `flex: 1 1 auto` + `min-width: 0` let it absorb
+   whatever width the brand and phone-icon columns leave behind and clip
+   with an ellipsis rather than wrap or push the row taller — the row's
+   height stays governed by the 44px tap targets on either side of it, not
+   by this text. Still a real link to the map, so the information survives
+   the redesign, just without a row of its own. */
+.mobileHeaderAddress {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--store-header-muted);
+  font-size: 0.74rem;
+  font-weight: var(--store-weight-medium);
+  line-height: 1.25;
+  text-decoration: none;
+  transition: color var(--store-duration-fast) var(--store-ease);
+}
+.mobileHeaderAddress svg { flex: 0 0 auto; }
+.mobileHeaderAddress span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobileHeaderAddress:hover,
+.mobileHeaderAddress:focus-visible { color: var(--store-header-text); }
+
 .mobileHeaderActions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
 .mobileHeaderActions a {
   min-width: 44px;
@@ -435,39 +467,32 @@
 .searchSuggestionAll:hover { background: var(--store-surface-strong); }
 
 /* ---------------- Mobile-only header rows (<768px) ----------------
-   The reference's four stacked rows inside one panel: secondary links,
-   brand + icon cluster (`.headerMainRow`, shared with desktop — see
-   `.mobileHeaderActions` above), locality + address link, and the search
-   field alone (the fifth row, an expert-CTA, was removed outright — see
-   `StoreHeader`'s own docstring in store-shell.tsx). All hidden ≥768px in
-   the 768px block below, where the two-row desktop layout
-   (`.headerTopRow` / `.headerMainRow`) takes over instead.
+   Two stacked rows inside one panel, down from an earlier four (secondary
+   links / brand+phone / locality+address / search) that the owner
+   flagged a third time as "eating most of the phone screen before any
+   content appears". Padding on those four rows had already been trimmed
+   to 1-4px in an earlier pass — the floor was three separate 44px tap
+   targets stacked in three separate rows (3 x 44 = 132px, non-negotiable
+   on its own), so the only way to cut further was structural: merge the
+   secondary-links row and the locality/address row into the brand row
+   instead of giving each its own band. What remains:
+   - `.headerMainRow` (shared with desktop — see `.mobileHeaderAddress` /
+     `.mobileHeaderActions` above): brand, condensed address, phone icon,
+     all sharing one 44px-tall content band.
+   - `.mobileSearchRow`: the search field alone (the second row, an
+     expert-CTA, was removed outright in an earlier pass — see
+     `StoreHeader`'s own docstring in store-shell.tsx).
+   Both hidden ≥768px in the 768px block below, where the two-row desktop
+   layout (`.headerTopRow` / `.headerMainRow`) takes over instead.
 
-   Every row's content is already floored by a real 44px tap target (a nav
-   link, the brand link, the phone/address link, or the 52px search field)
-   — that floor is non-negotiable (WCAG 2.2 AA target size). So "cut the
-   slack" here means the padding *around* that floor, not the floor
-   itself: every `padding-block` below is trimmed to the bare minimum that
-   still reads as a row rather than the target bleeding straight into its
-   neighbour — 1px on the two plain rows (links, location, still backed by
-   their own border-bottom as the real separator), 2px on the brand row,
-   and 4px on the search row — trimmed again from the previous pass'
-   2–3/3/6px per the owner's "ещё воздух над поиском" follow-up: the three
-   rows above the search field are each still governed by a 44px content
-   floor (3 × 44 = 132px, non-negotiable), so this second pass only had the
-   remaining ~17px of discretionary padding/border to cut, not the floor
-   itself. `min-height` on the row itself is dropped to 0 wherever the
-   row's own floor was already below its content's real (target-driven)
-   height, i.e. it was dead weight. */
-
-.mobileLinksRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLinksRow .headerRowInner { min-height: 0; padding-block: max(1px, env(safe-area-inset-top)) 1px; gap: var(--store-space-md); }
-
-.mobileLocationRow { display: block; border-bottom: 1px solid var(--store-header-border); }
-.mobileLocationRow .headerRowInner { min-height: 0; padding-block: 1px; justify-content: space-between; flex-wrap: wrap; row-gap: 1px; }
-.mobileLocationText { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.82rem; line-height: 1.3; }
-.mobileLocationText svg { flex: 0 0 auto; }
-.mobileAddressLink { min-height: 44px; display: inline-flex; align-items: center; color: var(--store-header-text); font-size: 0.8rem; font-weight: var(--store-weight-bold); text-decoration: underline; text-underline-offset: 2px; }
+   Every row's content is still floored by a real 44px tap target (the
+   brand link, the address/phone link, or the 52px search field) — that
+   floor is non-negotiable (WCAG 2.2 AA target size). `padding-block` stays
+   trimmed to the bare minimum that still reads as a row rather than the
+   target bleeding into its neighbour: 2px on the brand row (now carrying
+   the safe-area-inset-top padding that used to live on the removed links
+   row, since this is the panel's actual first row again), 4px on the
+   search row. */
 
 .mobileSearchRow { display: block; }
 .mobileSearchRow .headerRowInner { padding-block: 4px; }
@@ -680,14 +705,10 @@ button.promoControl {
 .quickBlockCta { justify-content: center; padding: 0 22px; border-radius: var(--store-radius-full); background: var(--store-accent); color: var(--store-accent-text); font-size: 0.88rem; transition: filter var(--store-duration-fast) var(--store-ease); }
 .quickBlockCta:hover { filter: brightness(1.06); }
 
-.catalogTeaser { width: var(--store-container); margin: 0 auto; }
-.catalogTeaserEmpty { display: flex; flex-wrap: wrap; align-items: center; gap: var(--store-space-xl); padding: clamp(28px, 4vw, 44px); border: 1px dashed var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
-.catalogTeaserEmptyMedia { flex: 0 0 auto; width: 132px; }
-.catalogTeaserEmptyMedia img { width: 100%; height: auto; }
-.catalogTeaserEmptyBody { flex: 1 1 320px; min-width: 0; display: grid; gap: 10px; }
-.catalogTeaserEmptyBody h3 { margin: 0; color: var(--store-text); font-size: 1.3rem; font-weight: var(--store-weight-black); }
-.catalogTeaserEmptyBody p { max-width: 62ch; margin: 0; color: var(--store-muted); line-height: 1.55; }
-.catalogTeaserActions { display: flex; flex-wrap: wrap; gap: var(--store-space-sm); margin-top: 6px; }
+/* The former `.catalogTeaser*` block is gone: it and `.helpBlock` sat next to
+   each other on the home page making the same "we'll help you find the part"
+   point, so they were merged into one section. Its only rule worth keeping
+   was the action row, which lives on below as `.helpBlockActions`. */
 
 /* Help block — light, full-width primary CTA. */
 .helpBlock { width: var(--store-container); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: clamp(28px, 5vw, 56px); align-items: center; padding: clamp(24px, 4vw, 40px); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
@@ -721,7 +742,7 @@ button.promoControl {
 .helpBlockBody { display: grid; gap: var(--store-space-sm); }
 .helpBlockBody h2 { margin: 0; font-size: clamp(1.4rem, 3vw, 2rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); line-height: 1.15; }
 .helpBlockBody p { margin: 0; color: var(--store-muted); line-height: 1.55; }
-.helpBlockBody .primaryAction { margin-top: 6px; }
+.helpBlockActions { display: flex; flex-wrap: wrap; gap: var(--store-space-sm); margin-top: 6px; }
 
 .page { padding: 34px 0 80px; }
 .pageTitle { margin-bottom: var(--store-space-xl); }
@@ -1240,10 +1261,9 @@ button.promoControl {
   }
   .headerActions { display: flex; }
   .headerDesktopSearch { display: contents; }
-  .mobileLinksRow,
-  .mobileLocationRow,
   .mobileSearchRow,
-  .mobileHeaderActions { display: none; }
+  .mobileHeaderActions,
+  .mobileHeaderAddress { display: none; }
   .headerInset { margin-inline: 0; }
   .brandLockup { height: 40px; }
   .quickBlocks { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
@@ -1314,75 +1334,60 @@ button.promoControl {
 }
 
 @media (max-width: 767px) {
-  /* The generic tablet rule hides secondary links below 1180px. Restore
-     them inside the purpose-built mobile row so its documented navigation
-     is not an empty 3px strip. */
-  .mobileLinksRow .headerTopLinks { display: flex; }
-
-  /* Row 2 here is brand + the compact phone cluster only (the desktop
-     search field is hidden — see `.headerDesktopSearch` — in favour of its
-     own full-width row, `.mobileSearchRow`, further down the panel). The
-     safe-area top padding that used to live on this row moved to
-     `.mobileLinksRow`, now the panel's actual first row. Height cut to
-     match the other rows' hard-trimmed padding, per the file-header
-     comment above `.mobileLinksRow`. */
+  /* Row 2 here is brand + condensed address (`.mobileHeaderAddress`) + the
+     phone icon (the desktop search field is hidden — see
+     `.headerDesktopSearch` — in favour of its own full-width row,
+     `.mobileSearchRow`, further down the panel). This is the panel's
+     actual first row (the former secondary-links row that used to sit
+     above it is gone outright, not merely hidden — see the doc comment
+     above `.mobileSearchRow`), so the safe-area-inset-top padding lives
+     here now. A border-bottom stands in for the divider the removed
+     locality row used to provide before the search field. */
   .headerMainRow .headerRowInner {
     gap: var(--store-space-2xs);
     min-height: 44px;
-    padding-block: 2px;
+    padding-block: max(2px, env(safe-area-inset-top)) 2px;
   }
 
   /* Scroll collapse: `data-collapsed` is set by store-shell.tsx after a
-     deliberate downward gesture (header-scroll-collapse.ts). Every row but
-     the search field shrinks away, leaving just the VIN/article search bar
-     pinned under `.header`'s own `position: sticky`. Each collapsing
-     row becomes a one-track grid (`grid-template-rows: 1fr` at rest) so
-     the collapsed state can animate that track to `0fr` — this tracks the
-     row's real (possibly safe-area-inflated) content height instead of
-     guessing a max-height in pixels, so nothing ever gets clipped
-     mid-transition. `min-height: 0` on the grid item (`.headerRowInner`)
-     is required for it to actually shrink past its content size;
-     `overflow: hidden` there (not on the row itself, which still owns the
-     border) keeps the content from spilling out while it does.
-     Reduced-motion and focus-within visitors never see
+     deliberate downward gesture (header-scroll-collapse.ts). This row
+     shrinks away, leaving just the VIN/article search bar pinned under
+     `.header`'s own `position: sticky`. It becomes a one-track grid
+     (`grid-template-rows: 1fr` at rest) so the collapsed state can animate
+     that track to `0fr` — this tracks the row's real (possibly
+     safe-area-inflated) content height instead of guessing a max-height in
+     pixels, so nothing ever gets clipped mid-transition. `min-height: 0`
+     on the grid item (`.headerRowInner`) is required for it to actually
+     shrink past its content size; `overflow: hidden` there (not on the row
+     itself, which still owns the border) keeps the content from spilling
+     out while it does. Reduced-motion and focus-within visitors never see
      `data-collapsed="true"` at all (see getNextHeaderCollapseState), so
      nothing here needs its own motion guard. */
-  .mobileLinksRow,
-  .headerMainRow,
-  .mobileLocationRow {
+  .headerMainRow {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows var(--store-duration-slow) var(--store-ease);
+    border-bottom: 1px solid var(--store-header-border);
+    transition: grid-template-rows var(--store-duration-slow) var(--store-ease), border-color var(--store-duration-slow) var(--store-ease);
   }
-  .mobileLinksRow > .headerRowInner,
-  .headerMainRow > .headerRowInner,
-  .mobileLocationRow > .headerRowInner {
+  .headerMainRow > .headerRowInner {
     min-height: 0;
     overflow: hidden;
   }
-  .headerInset[data-collapsed="true"] .mobileLinksRow,
-  .headerInset[data-collapsed="true"] .headerMainRow,
-  .headerInset[data-collapsed="true"] .mobileLocationRow {
+  .headerInset[data-collapsed="true"] .headerMainRow {
     grid-template-rows: 0fr;
+    border-bottom-color: transparent;
     /* Flips to hidden only once the collapse animation finishes, so a
        keyboard/AT user tabbing away doesn't lose the row mid-shrink, but
-       expanding again (the un-collapsed rule below has no delay) restores
+       expanding again (the un-collapsed rule above has no delay) restores
        it immediately. Belt-and-braces alongside `overflow: hidden` +
        `min-height: 0` above: a zero-height row already keeps its content
        out of the tab order in every evergreen browser, this just makes it
        explicit and out of the accessibility tree too. */
     visibility: hidden;
-    transition: grid-template-rows var(--store-duration-slow) var(--store-ease), visibility 0s linear var(--store-duration-slow);
-  }
-  .headerInset[data-collapsed="true"] .mobileLinksRow > .headerRowInner,
-  .headerInset[data-collapsed="true"] .headerMainRow > .headerRowInner,
-  .headerInset[data-collapsed="true"] .mobileLocationRow > .headerRowInner {
-    padding-block: 0;
-  }
-  .headerInset[data-collapsed="true"] .mobileLinksRow,
-  .headerInset[data-collapsed="true"] .mobileLocationRow {
-    border-bottom-color: transparent;
     transition: grid-template-rows var(--store-duration-slow) var(--store-ease), visibility 0s linear var(--store-duration-slow), border-color var(--store-duration-slow) var(--store-ease);
+  }
+  .headerInset[data-collapsed="true"] .headerMainRow > .headerRowInner {
+    padding-block: 0;
   }
 
   .searchForm svg { margin-left: var(--store-space-sm); }
@@ -1393,7 +1398,6 @@ button.promoControl {
   .promoSlide { aspect-ratio: 2 / 1; }
   .categorySection,
   .featurePanelInner,
-  .catalogTeaser,
   .helpBlock { padding-inline: 0; }
   .categoryGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--store-space-sm); }
   .categoryTile { padding: var(--store-space-md) var(--store-space-2xs); }
@@ -1401,10 +1405,8 @@ button.promoControl {
   .categoryTileLabel { font-size: 0.76rem; }
   .helpBlock { grid-template-columns: 1fr; }
   .helpBlockMedia { aspect-ratio: 16 / 9; }
-  .main { padding-bottom: calc(52px + env(safe-area-inset-bottom)); }
-  .catalogTeaserEmpty { flex-direction: column; text-align: center; }
-  .catalogTeaserEmptyBody { align-items: center; }
-  .catalogTeaserActions { justify-content: center; }
+  .main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .helpBlockActions { justify-content: center; }
   .page { padding: 28px 0 56px; }
   .catalogForm { grid-template-columns: 1fr; padding: 14px; }
   .catalogForm .field:first-child { grid-column: auto; }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { CatalogTeaser, CategoryGrid, ChooseHelpBlock, FeaturePanel, HomePromo } from "./_components/home-sections";
+import { CatalogHelpBlock, CategoryGrid, FeaturePanel, HomePromo } from "./_components/home-sections";
 import { JsonLd } from "./_components/json-ld";
 import styles from "./_components/storefront.module.css";
 import { organizationJsonLd, pageMetadata } from "./_lib/seo";
@@ -19,8 +19,7 @@ export default function StorefrontPage() {
       <HomePromo />
       <CategoryGrid />
       <FeaturePanel />
-      <CatalogTeaser />
-      <ChooseHelpBlock />
+      <CatalogHelpBlock />
     </div>
   );
 }

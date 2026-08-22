@@ -7,12 +7,40 @@ import { categoryPath, findCategorySlugPath } from "../_lib/catalog-tree";
 import { BrandLockup } from "./brand-mark";
 import { PromoCarousel } from "./promo-carousel";
 import type { PromoSlide } from "./promo-carousel";
-import { HeaderSearchForm } from "./search-box";
 import { computeShopStatusNow } from "./shop-status";
 import { ShopStatusBlock } from "./shop-status-block";
 import styles from "./storefront.module.css";
 
 const STORE_PHONE_HREF = `tel:${STORE_PHONE}`;
+
+/**
+ * Home page section order — follows a local auto-parts buyer's actual
+ * decision path rather than the order features happened to ship in:
+ *
+ *  1. `HomePromo` (hero carousel) — the hook. Four value props, one per
+ *     approved banner photo, each pointing at a *different* destination
+ *     (`/catalog`, `/expert-help`, `/delivery`, `/catalog` again but with
+ *     a distinct reason — see the slide list below) so the banner itself
+ *     never shows the same call to action twice in a row.
+ *  2. `CategoryGrid` — "does this shop even sell what I need?" The real
+ *     category photos answer that before any copy has to.
+ *  3. `FeaturePanel` — objections surface right after browsing: is the
+ *     price real, are they open, do they actually check fit before
+ *     shipping? Answered with the shop's live clock plus two sourced
+ *     facts, not claim tiles — see its own docstring.
+ *  4. `CatalogHelpBlock` — the close, for whoever scrolled this far
+ *     without converting: an honest "catalog is still filling in" note
+ *     paired with the one thing that already works today regardless of
+ *     how many products are imported — a person who replies in about
+ *     10 minutes.
+ *
+ * Before this pass, `/expert-help` had three near-identical entry points,
+ * `/catalog` had four, the VIN/article search form was rendered twice
+ * (header + a `FeaturePanel` quick block), and `CatalogTeaser` /
+ * `ChooseHelpBlock` were two adjacent sections making the same "talk to a
+ * human" point from different angles. Each action now has exactly one
+ * obvious home; see the per-component comments below for specifics.
+ */
 
 const promoSlides: PromoSlide[] = [
   {
@@ -39,8 +67,8 @@ const promoSlides: PromoSlide[] = [
   {
     href: "/catalog",
     src: "/banners/promo-oil.webp",
-    title: "Проверяем совместимость перед продажей",
-    text: "Мы не отправляем деталь, пока не убедимся, что она подходит вашему автомобилю.",
+    title: "Нет на складе — привезём под заказ",
+    text: "Проверяем остатки у поставщиков и называем цену и срок ещё до оформления заказа.",
     cta: "Смотреть каталог",
   },
 ];
@@ -123,25 +151,34 @@ export async function CategoryGrid() {
 }
 
 /**
- * Three blocks that each *do* something, replacing the old 2x3 grid of
- * claim tiles ("Гарантия качества", "Ежедневно 09:00–19:00" next to a thin
- * icon-in-a-circle) — the owner's call: those tiles only asserted facts a
- * visitor had to take on faith, and the pictograms could belong to any
- * shop in any industry. Each block below is either computed from a real
- * clock, a real search, or a real link — nothing here is illustration:
+ * Live status plus two sourced facts, replacing both the old 2x3 grid of
+ * claim tiles ("Гарантия качества" beside a thin icon-in-a-circle — the
+ * owner's rejected pattern) *and* the two quick blocks this panel used to
+ * also carry:
+ *  - a second VIN/article search field. The header already renders
+ *    `HeaderSearchForm` on every page at every width (see
+ *    `.headerDesktopSearch` / `.mobileSearchRow` in storefront.module.css)
+ *    — a duplicate copy directly beneath it taught a visitor nothing new,
+ *    it just doubled the search form as one of the page's repeated
+ *    actions the owner asked to collapse.
+ *  - a second "Спросить эксперта" link. That action now lives once, in
+ *    `CatalogHelpBlock` below, next to the one fact that actually earns
+ *    the click — see that component's docstring.
+ *
+ * What is left is three things, none of them illustration:
  *  1. `ShopStatusBlock` — open/closed right now, computed server-side
  *     (see `computeShopStatusNow` below) and kept fresh client-side (see
  *     shop-status-block.tsx) so an open tab never shows a stale answer.
- *  2. The VIN/article field is the exact same `HeaderSearchForm` the
- *     header uses — one search implementation, not a tile describing one.
- *  3. The expert-help block is a real link to `/expert-help`, with the
- *     one honest wait-time fact the shop has actually committed to.
- * None of the three carries a photograph. A cropped engine bay or a
- * top-down car shot only reads at the size a photo needs to stay honest —
- * shrunk to fit a block this size, both turned into a grey smear, which is
- * worse than no image at all. The status block's plain colour dot proved
- * the point: the fact itself is the content, so the other two blocks were
- * brought in line rather than given a matching illustration.
+ *  2. Price/stock accuracy — the same server re-check already implemented
+ *     at checkout (`checkout-client.tsx`: "Цена, остаток и резерв
+ *     проверяются сервером") and on the product page (`productNote` in
+ *     `catalog/product/[slug]/page.tsx`). Restated here, not invented.
+ *  3. Compatibility — the same fact `/expert-help` and the product page's
+ *     "Спросить специалиста" link already promise: a person checks fit
+ *     before a sale, not an automated lookup.
+ * Neither fact block carries a photograph or a pictogram, for the same
+ * reason the status block's plain colour dot does not: the fact itself is
+ * the content, so nothing here is illustrated on top of it.
  */
 export function FeaturePanel() {
   const initialStatus = computeShopStatusNow();
@@ -149,47 +186,18 @@ export function FeaturePanel() {
   return (
     <section className={styles.featurePanel} aria-labelledby="feature-panel-title">
       <div className={styles.featurePanelInner}>
-        <p className={styles.featurePanelHead} id="feature-panel-title">Магазин прямо сейчас</p>
+        <p className={styles.featurePanelHead} id="feature-panel-title">Как мы работаем</p>
         <div className={styles.quickBlocks}>
           <ShopStatusBlock initialStatus={initialStatus} />
 
           <div className={styles.quickBlock}>
-            <p className={styles.quickBlockTitle}>Знаете VIN или артикул?</p>
-            <div className={styles.quickBlockSearch}>
-              <HeaderSearchForm id="home-quick-search-q" />
-            </div>
-            <p className={styles.quickBlockHint}>VIN указан в СТС, ПТС или на кузове автомобиля. На японских авто вместо VIN используйте номер рамы (frame).</p>
+            <p className={styles.quickBlockTitle}>Цену и остаток не показываем наугад</p>
+            <p className={styles.quickBlockText}>Каталог получает их из 1С, а сервер повторно проверяет цену и остаток перед оформлением заказа — так же, как при оплате.</p>
           </div>
 
           <div className={styles.quickBlock}>
-            <p className={styles.quickBlockTitle}>Не уверены, какая деталь нужна?</p>
-            <p className={styles.quickBlockText}>Менеджер отвечает обычно за 10 минут — в чате или по телефону.</p>
-            <Link className={styles.quickBlockCta} href="/expert-help">Спросить эксперта</Link>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/** Honest empty state: the catalog has zero products today, so we say so. */
-export function CatalogTeaser() {
-  return (
-    <section className={styles.catalogTeaser} aria-labelledby="catalog-teaser-title">
-      <div className={styles.sectionHead}>
-        <h2 id="catalog-teaser-title">Запчасти в интернет-магазине</h2>
-        <p>Ассортимент, цены и остатки формирует 1С. Карточки появляются здесь только с подтверждённой ценой и наличием — без демонстрационных позиций.</p>
-      </div>
-      <div className={styles.catalogTeaserEmpty}>
-        <div className={styles.catalogTeaserEmptyMedia}>
-          <Image src="/parts/404-spark-plug.png" alt="" width={220} height={220} />
-        </div>
-        <div className={styles.catalogTeaserEmptyBody}>
-          <h3>Каталог пока пуст</h3>
-          <p>Мы не показываем товары для примера. Пока список наполняется, найдите деталь по названию или артикулу — сотрудник магазина уточнит наличие и цену по телефону.</p>
-          <div className={styles.catalogTeaserActions}>
-            <Link className={styles.primaryAction} href="/catalog">Найти деталь</Link>
-            <a className={styles.secondaryAction} href={STORE_PHONE_HREF}>Позвонить: {STORE_PHONE_DISPLAY}</a>
+            <p className={styles.quickBlockTitle}>Совместимость проверяет человек</p>
+            <p className={styles.quickBlockText}>Прежде чем продать деталь, сотрудник магазина сверяет её с вашим автомобилем — не по фото и общим характеристикам.</p>
           </div>
         </div>
       </div>
@@ -198,25 +206,40 @@ export function CatalogTeaser() {
 }
 
 /**
- * Light help block with a full-width primary CTA, per the reference pattern.
+ * Merged replacement for the old `CatalogTeaser` + `ChooseHelpBlock` pair —
+ * the owner's own complaint: "может быть соединить как-то два этих блока в
+ * один, а то смотрится топорно". Both blocks made the same point (the
+ * catalog can't finish the sale by itself yet, so talk to a person) from
+ * two directions — one apologetic about the empty catalog, one an
+ * unexplained brand panel repeating an `/expert-help` link already used
+ * twice elsewhere on the page. One honest paragraph plus one real pair of
+ * actions replaces both.
  *
- * The media slot used to hold a stock-photo banner (`banner-catalog.jpg`) —
- * pulled after the owner rejected it as AI slop: garbled fake text on the
- * oil bottles, and shelving in a competitor's red/orange, not ours. Rather
- * than commission or fake another photograph, the slot is now a CSS panel in
- * the shop's own ink-blue and its own logotype (`BrandLockup`, already used
- * on the header and footer) — brand signage instead of invented scenery.
+ * Still says plainly that the catalog is empty today — seeing a populated
+ * catalog it cannot yet show would be exactly the invented-confidence
+ * pattern the owner rejected; it is only honest until the first 1С import
+ * lands (see `one-c-exchange` on the API side). The brand panel stays —
+ * the shop's own logotype (`BrandLockup`, already used on the header and
+ * footer), not a stock photo — because a fully blank media slot here would
+ * read as an unfinished page rather than a deliberate one.
  */
-export function ChooseHelpBlock() {
+export function CatalogHelpBlock() {
   return (
     <section className={styles.helpBlock} aria-labelledby="help-block-title">
       <div className={styles.helpBlockMedia}>
         <BrandLockup className={styles.helpBlockMark} tone="current" />
       </div>
       <div className={styles.helpBlockBody}>
-        <h2 id="help-block-title">Не знаете, какую запчасть выбрать?</h2>
-        <p>Сотрудник магазина уточнит совместимость с вашим автомобилем по названию, артикулу или VIN — по телефону, в чате или очно в {STORE_LOCALITY}.</p>
-        <Link className={`${styles.primaryAction} ${styles.fullWidthAction}`} href="/expert-help">Спросить эксперта</Link>
+        <h2 id="help-block-title">Каталог пока пуст — но помочь можем уже сейчас</h2>
+        <p>
+          Ассортимент, цены и остатки формирует 1С, и карточки с фото добавляются постепенно.
+          Опишите деталь сотруднику магазина — он отвечает обычно за 10 минут, проверит наличие на
+          складе и возможность привезти её под заказ, и подтвердит совместимость с вашим автомобилем.
+        </p>
+        <div className={styles.helpBlockActions}>
+          <Link className={styles.primaryAction} href="/expert-help">Спросить эксперта</Link>
+          <a className={styles.secondaryAction} href={STORE_PHONE_HREF}>Позвонить: {STORE_PHONE_DISPLAY}</a>
+        </div>
       </div>
     </section>
   );
