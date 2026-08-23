@@ -184,7 +184,19 @@ export class RosskoSupplierProvider implements SupplierProvider {
         return { message: "Поставщик временно недоступен", parts: [], success: false };
       }
       const body = await readBoundedResponseBody(response);
-      return parseSearchResponseXml(body);
+      const parsed = parseSearchResponseXml(body);
+      // On a business-level failure, `parsed.message` is either Rossko's own
+      // free-text <message> or (for a malformed/unexpected body) already
+      // one of this codebase's own generic strings — either way, the owner
+      // requires the supplier is never named to a customer, and third-party
+      // text we do not control could start doing exactly that at any time.
+      // Log the real reason for staff, answer the customer with the shop's
+      // own generic wording.
+      if (!parsed.success) {
+        if (parsed.message) this.logger.warn(`Rossko GetSearch reported failure: ${parsed.message}`);
+        return { message: "Поставщик временно недоступен", parts: [], success: false };
+      }
+      return parsed;
     } catch (error) {
       this.logger.warn("Rossko GetSearch call failed", error);
       return { message: "Поставщик временно недоступен", parts: [], success: false };

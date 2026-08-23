@@ -10,6 +10,7 @@ import {
 
 import { applySupplierMarkup } from "./supplier-pricing.js";
 import { extractCrossPairs } from "./supplier-cross-pairs.js";
+import { rankSupplierParts } from "./supplier-ranking.js";
 import { SupplierCrossQueueService } from "./supplier-cross-queue.service.js";
 import {
   SUPPLIER_PROVIDER,
@@ -41,14 +42,22 @@ const MAX_CROSSES_IN_RESPONSE = 8;
 // Every supplier part is tagged "under_order" — never the shop's own
 // "в наличии" shelf-stock shape — so a client cannot render a Rossko result
 // as if it were 1C inventory. See SupplierPartView in @an30/contracts.
-function toPartView(part: SupplierPart, markupPercent: number): SupplierPartView {
+function toPartView(part: SupplierPart, markupPercent: number, query: string): SupplierPartView {
+  // Crosses get the same ranking pass as the top-level parts, for the same
+  // reason: they are truncated to MAX_CROSSES_IN_RESPONSE right below, and
+  // an unranked slice could just as easily cut the analogue with real stock
+  // to keep one that has none. Ranking against the original query is a
+  // no-op for the "exact match" signal here (a cross's partNumber, by
+  // definition, differs from the query), which is fine — it simply leaves
+  // hasOffers and name coherence to do the work among analogues.
+  const rankedCrosses = rankSupplierParts(part.crosses, query);
   return {
     availability: "under_order",
     brand: part.brand,
     // Analogues are one level deep in the response: a cross of a cross is
     // noise for a shopper and multiplies the payload.
-    crosses: part.crosses.slice(0, MAX_CROSSES_IN_RESPONSE).map((cross) => ({
-      ...toPartView(cross, markupPercent),
+    crosses: rankedCrosses.slice(0, MAX_CROSSES_IN_RESPONSE).map((cross) => ({
+      ...toPartView(cross, markupPercent, query),
       crosses: [],
     })),
     guid: part.guid,
@@ -89,10 +98,15 @@ export class SupplierSearchService {
       const pairs = extractCrossPairs(result.parts);
       if (pairs.length > 0) this.crossQueue.enqueue(pairs);
     }
-    const shown = result.parts.slice(0, MAX_PARTS_IN_RESPONSE);
+    // Rank before truncating: MAX_PARTS_IN_RESPONSE must cut the parts this
+    // ranking pushed to the back (no offers, no match), never the best
+    // answer, which is exactly what happened when the cap sliced Rossko's
+    // own — unranked — order (see rankSupplierParts for the measured case).
+    const ranked = rankSupplierParts(result.parts, query.q);
+    const shown = ranked.slice(0, MAX_PARTS_IN_RESPONSE);
     return {
       message: result.message,
-      parts: shown.map((part) => toPartView(part, this.markupPercent)),
+      parts: shown.map((part) => toPartView(part, this.markupPercent, query.q)),
       query: query.q,
       source: "rossko",
       success: result.success,

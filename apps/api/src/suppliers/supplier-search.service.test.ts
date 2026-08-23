@@ -150,4 +150,58 @@ describe("SupplierSearchService", () => {
     // Analogues stay one level deep so the payload cannot fan out.
     expect(result.parts[0]?.crosses[0]?.crosses).toEqual([]);
   });
+
+  it("ranks before truncating, so the response cap cannot discard the one part with real offers and an exact match", async () => {
+    // Thirty zero-offer, non-matching noise parts, all sorted ahead of the
+    // genuine exact match by Rossko's own (unranked) order -- exactly the
+    // shape measured on live staging for "W 914/2", just wide enough that
+    // an unranked slice(0, MAX_PARTS_IN_RESPONSE) would cut the real answer
+    // entirely.
+    const noise = Array.from({ length: 30 }, (_, i) => ({
+      brand: `NOISE${i}`, crosses: [], guid: `noise-${i}`, name: "Шланг радиатора",
+      partNumber: "W9142", stocks: [],
+    }));
+    const genuine = {
+      brand: "Mann", crosses: [], guid: "genuine", name: "Фильтр масляный",
+      partNumber: "W 914/2", stocks: [{ deliveryTime: "2", id: "s1", priceKopeks: 45_670, quantity: 5 }],
+    };
+    const service = new SupplierSearchService(makeSupplier({
+      message: "",
+      parts: [...noise, genuine],
+      success: true,
+    }), makeConfig(), makeCrossQueue());
+
+    const result = await service.search({ q: "W 914/2" });
+
+    expect(result.totalFound).toBe(31);
+    expect(result.parts).toHaveLength(24);
+    expect(result.parts[0]?.guid).toBe("genuine");
+    expect(result.parts.some((part) => part.guid === "genuine")).toBe(true);
+  });
+
+  it("applies the same markup to an analogue's (cross) price as to the primary part's price", async () => {
+    const service = new SupplierSearchService(makeSupplier({
+      message: "OK",
+      parts: [{
+        brand: "MANN",
+        crosses: [{
+          brand: "MAHLE", crosses: [], guid: "cross-1", name: "Аналог",
+          partNumber: "OC90", stocks: [{ deliveryTime: "3", id: "cs1", priceKopeks: 20_000, quantity: 4 }],
+        }],
+        guid: "g1",
+        name: "Масляный фильтр",
+        partNumber: "W914/2",
+        stocks: [{ deliveryTime: "2", id: "s1", priceKopeks: 45_670, quantity: 12 }],
+      }],
+      success: true,
+    }), makeConfig(30), makeCrossQueue());
+
+    const result = await service.search({ q: "W914/2" });
+
+    // 456.70 marked up 30% and rounded up to a whole rouble.
+    expect(result.parts[0]?.stocks[0]?.priceKopeks).toBe(59_400);
+    // 200.00 marked up 30% -- the analogue must not be shown at the
+    // unmarked-up purchase price next to a marked-up primary result.
+    expect(result.parts[0]?.crosses[0]?.stocks[0]?.priceKopeks).toBe(26_000);
+  });
 });
