@@ -29,13 +29,17 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   const { slug } = await params;
   const tree = await getCategoryTree();
   const location = resolveCategoryPath(tree, slug);
-  // The unknown-category check has to happen here, not only in the component
-  // below. `catalog/loading.tsx` opens a Suspense boundary, so by the time the
-  // component runs the shell has already been flushed with a 200 and the
-  // status can no longer change — an unknown category would answer 200 with
-  // "not found" text, which is a soft 404 that search engines index.
-  // `generateMetadata` runs before the stream opens, so notFound() here yields
-  // a real 404.
+  // Where notFound() is called (here vs. the component below) does not
+  // decide the status code — a Suspense boundary anywhere above this segment
+  // does. Next flushes the HTML shell up to the nearest ancestor loading.tsx
+  // as soon as that boundary is ready, committing a 200 before an inner
+  // notFound() can run; the not-found UI then streams in over that already-
+  // sent 200 ("soft 404"). `catalog/loading.tsx` used to live one directory
+  // up and wrapped this route too. It now lives in `catalog/(index)/`, a
+  // route group that scopes it to the `/catalog` index only, so this segment
+  // has no Suspense boundary above it and renders (and can notFound()) as a
+  // single blocking response with the real status. Kept here as well as in
+  // the component below purely as a defensive duplicate.
   if (!location) notFound();
   const { ancestors, node } = location;
   return pageMetadata({

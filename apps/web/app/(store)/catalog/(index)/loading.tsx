@@ -1,4 +1,4 @@
-import styles from "../_components/storefront.module.css";
+import styles from "../../_components/storefront.module.css";
 
 export default function CatalogLoading() {
   return (

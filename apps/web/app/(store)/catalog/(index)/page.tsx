@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import styles from "../_components/storefront.module.css";
-import { JsonLd } from "../_components/json-ld";
-import { getCatalogBrands, getCategoryTree, searchCatalog, StorefrontApiError } from "../_lib/catalog-api";
-import type { CatalogItem } from "../_lib/catalog-api";
-import { breadcrumbJsonLd, pageMetadata } from "../_lib/seo";
-import { CatalogFilterRail } from "./catalog-filter-rail";
-import { CatalogSearchPanel } from "./catalog-search-panel";
-import type { CatalogEmptyState } from "./catalog-search-panel";
+import styles from "../../_components/storefront.module.css";
+import { JsonLd } from "../../_components/json-ld";
+import { getCatalogBrands, getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
+import type { CatalogItem } from "../../_lib/catalog-api";
+import { breadcrumbJsonLd, pageMetadata } from "../../_lib/seo";
+import { CatalogFilterRail } from "../catalog-filter-rail";
+import { CatalogSearchPanel } from "../catalog-search-panel";
+import type { CatalogEmptyState } from "../catalog-search-panel";
 import {
   CATALOG_PAGE_SIZE,
   catalogPageHref,
   hasActiveCatalogFilters,
   parseCatalogPageQuery,
   priceKopeks,
-} from "./catalog-query";
-import { SupplierResults } from "./supplier-results";
+} from "../catalog-query";
+import { SupplierResults } from "../supplier-results";
 
 export const metadata: Metadata = pageMetadata({
   description: "Каталог автозапчастей АН-30: разделы каталога, поиск по названию и артикулу, актуальные цены и остатки из 1С.",

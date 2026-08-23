@@ -23,7 +23,7 @@ import { describe, expect, it } from "vitest";
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 const CUSTOMER_FACING_FILES = [
-  "page.tsx",
+  path.join("(index)", "page.tsx"),
   "catalog-search-panel.tsx",
   "catalog-filter-rail.tsx",
   "supplier-results.tsx",
