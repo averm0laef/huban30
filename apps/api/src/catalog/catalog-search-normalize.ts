@@ -7,8 +7,11 @@
 // apps/api (catalog-public.service.ts, one-c-exchange-slug.ts,
 // commerce-ml.parser.ts, and their tests) did not need to change.
 export {
+  alternateSearchQueries,
   foldHomoglyphs,
   normalizeArticleNumber,
   normalizeBrand,
   normalizeSearchQuery,
+  swapKeyboardLayoutToCyrillic,
+  transliterateLatinToCyrillic,
 } from "@an30/contracts";

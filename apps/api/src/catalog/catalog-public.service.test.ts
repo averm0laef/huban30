@@ -124,6 +124,9 @@ describe("CatalogPublicService", () => {
       200000,
       "in_stock",
       normalizeArticleNumber("фильтр"),
+      // A Cyrillic query needs neither transliteration nor a layout-swap
+      // recovery — see alternateSearchQueries.
+      [],
       "local",
       12,
       24,
@@ -151,6 +154,57 @@ describe("CatalogPublicService", () => {
     expect(nameTiebreak).toBeGreaterThan(fuzzyTier);
     expect(parameters[7]).toBe(normalizeArticleNumber("w914-2"));
     expect(parameters[7]).toBe("W9142");
+  });
+
+  it("recovers a Cyrillic word typed in Latin, both phonetically and via a wrong keyboard layout", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "filtr" });
+    const [, phoneticParameters] = query.mock.calls[0] as [string, unknown[]];
+    // filtr -> "филтр" (transliteration) and "ашдек" (layout swap) — see
+    // packages/contracts/src/catalog-search-normalize.test.ts for how each
+    // is derived. Both are searched, not just one.
+    expect(phoneticParameters[8]).toEqual(["филтр", "ашдек"]);
+
+    query.mockResolvedValueOnce({ rows: [] });
+    // The task's own example: "фильтр" typed with the OS layout left on
+    // English lands as "abkmnh".
+    await service.products({ q: "abkmnh" });
+    const [layoutSql, layoutParameters] = query.mock.calls[1] as [string, unknown[]];
+    expect(layoutParameters[8]).toEqual(["абкмнх", "фильтр"]);
+    // The alt-query branch is folded into the existing WHERE/ORDER BY, not a
+    // second statement — extend the one search path, not a parallel one.
+    expect(layoutSql).toContain("unnest($9::text[])");
+    expect(query.mock.calls).toHaveLength(2);
+  });
+
+  it("does not attempt Latin recovery on a query that is already Cyrillic or is an article-shaped code", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "фильтр" });
+    expect((query.mock.calls[0] as [string, unknown[]])[1][8]).toEqual([]);
+
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "w914-2" });
+    // Only one Latin letter ("w") — too little signal to guess a misspelled
+    // word from, and normalizeArticleNumber already owns this case.
+    expect((query.mock.calls[1] as [string, unknown[]])[1][8]).toEqual([]);
+  });
+
+  it("a two-letter query matches nothing by design, not by omission", async () => {
+    // CatalogProductsQuerySchema accepts a 2-character query (min(2)), but
+    // PUBLIC_PRODUCT_FILTERS' length>=3 guard on the substring/trigram/
+    // full-text/alt-query branches deliberately excludes it: a 2-letter
+    // Cyrillic prefix like "фи" is too generic a signal (near-every "Фильтр
+    // ..." AND "Фитинг ..." AND unrelated name would qualify) to be useful
+    // recall rather than noise, and ILIKE '%фи%' / a raw trigram scan at
+    // that length is exactly the kind of query this codebase already
+    // refuses to run unindexed over 30-40k rows. This is the same threshold
+    // the sku_normalized prefix and cross-equivalent branches do not need
+    // (those are indexed exact/prefix lookups, not fuzzy scans), so it does
+    // not block a short *article* search — only short free-text.
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "фи" });
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("length($1)>=3");
   });
 
   it("widens search to confirmed article-cross equivalents, ranked between an exact and a prefix match", async () => {

@@ -48,6 +48,62 @@ const HOMOGLYPH_CYRILLIC_TO_LATIN: Record<string, string> = {
 const ARTICLE_PUNCTUATION_PATTERN = /[\s.\-/]+/gu;
 const BRAND_PUNCTUATION_PATTERN = /[\s-]+/gu;
 
+// -- Search recovery for a mistyped Russian query (AN30-013 search-gap fix) -
+//
+// Two independent, unrelated ways a customer's search for a Cyrillic word
+// ends up typed in Latin letters:
+//
+//   - Phonetic transliteration: they spell the word out by its sound
+//     ("filtr" for "фильтр") -- common when a site or habit is Latin-first.
+//   - A forgotten keyboard layout: they type the actual Cyrillic word, but
+//     the OS layout is left on English, so every keystroke lands on
+//     whichever Latin letter shares that key's *physical position* on a
+//     standard ЙЦУКЕН layout ("фильтр" -> "abkmnh"; note this has nothing to
+//     do with how the word sounds -- "ф" and "a" share a key, not a sound).
+//
+// Both recover the same way: produce a Cyrillic candidate string and let the
+// caller (CatalogPublicService.products(), the shop's one search path) run
+// it through the exact same substring/trigram/full-text matching it already
+// applies to the raw query -- see alternateSearchQueries and
+// catalog-public.service.ts's PUBLIC_PRODUCT_FILTERS.
+const TRANSLITERATION_DIGRAPHS_LATIN_TO_CYRILLIC: ReadonlyArray<readonly [string, string]> = [
+  // Checked longest-first so "shch" (4) is not shadowed by "sh" (2) matching first.
+  ["shch", "щ"],
+  ["sch", "щ"],
+  ["zh", "ж"],
+  ["kh", "х"],
+  ["ts", "ц"],
+  ["ch", "ч"],
+  ["sh", "ш"],
+  ["yu", "ю"],
+  ["ya", "я"],
+  ["yo", "е"],
+];
+
+const TRANSLITERATION_SINGLE_LATIN_TO_CYRILLIC: Record<string, string> = {
+  a: "а", b: "б", c: "ц", d: "д", e: "е", f: "ф", g: "г", h: "х", i: "и",
+  j: "й", k: "к", l: "л", m: "м", n: "н", o: "о", p: "п", q: "к", r: "р",
+  s: "с", t: "т", u: "у", v: "в", w: "в", x: "кс", y: "й", z: "з",
+};
+
+// Each Latin letter maps to the Cyrillic letter at the same physical key on
+// a standard Windows ЙЦУКЕН layout (a<->ф, b<->и, ... -- e.g. verify against
+// "фильтр": ф,и,л,ь,т,р -> a,b,k,m,n,h -> "abkmnh"). Deliberately letters
+// only: digits and punctuation sit at the same keys on both layouts, so they
+// already pass through a real layout mismatch unchanged and need no mapping.
+const LAYOUT_SWAP_LATIN_TO_CYRILLIC: Record<string, string> = {
+  a: "ф", b: "и", c: "с", d: "в", e: "у", f: "а", g: "п", h: "р", i: "ш",
+  j: "о", k: "л", l: "д", m: "ь", n: "т", o: "щ", p: "з", q: "й", r: "к",
+  s: "ы", t: "е", u: "г", v: "м", w: "ц", x: "ч", y: "н", z: "я",
+};
+
+const HAS_CYRILLIC_LETTER_PATTERN = /[а-яё]/iu;
+const LATIN_LETTERS_PATTERN = /[a-z]/giu;
+// Mirrors the length>=3 gate catalog-public.service.ts already applies to
+// its own substring/trigram fallback: a 1-2 character candidate is too
+// generic to be a useful signal and would just add noise, not recall.
+const MIN_ALTERNATE_QUERY_LENGTH = 3;
+
 /** Trim + collapse internal whitespace. Safe to call on any free-text query. */
 export function normalizeSearchQuery(raw: string): string {
   return raw.trim().replace(/\s+/gu, " ");
@@ -81,4 +137,58 @@ export function normalizeArticleNumber(raw: string): string {
  */
 export function normalizeBrand(raw: string): string {
   return normalizeSearchQuery(raw).toUpperCase().replace(BRAND_PUNCTUATION_PATTERN, "");
+}
+
+/** Phonetic Latin -> Cyrillic transliteration ("filtr" -> "филтр") -- see the module comment above for how this differs from swapKeyboardLayoutToCyrillic. Case-insensitive; anything not a recognised Latin letter (digits, punctuation, already-Cyrillic text) passes through unchanged. */
+export function transliterateLatinToCyrillic(raw: string): string {
+  const input = raw.toLowerCase();
+  let result = "";
+  let index = 0;
+  while (index < input.length) {
+    const digraph = TRANSLITERATION_DIGRAPHS_LATIN_TO_CYRILLIC.find(([latin]) => input.startsWith(latin, index));
+    if (digraph) {
+      result += digraph[1];
+      index += digraph[0].length;
+      continue;
+    }
+    const character = input[index]!;
+    result += TRANSLITERATION_SINGLE_LATIN_TO_CYRILLIC[character] ?? character;
+    index += 1;
+  }
+  return result;
+}
+
+/** Physical-key-position Latin -> Cyrillic swap ("abkmnh" -> "фильтр") -- recovers a Cyrillic word typed with the wrong keyboard layout active. See the module comment above for how this differs from transliterateLatinToCyrillic. Case-insensitive; anything outside LAYOUT_SWAP_LATIN_TO_CYRILLIC (digits, punctuation, already-Cyrillic text) passes through unchanged. */
+export function swapKeyboardLayoutToCyrillic(raw: string): string {
+  return [...raw.toLowerCase()].map((character) => LAYOUT_SWAP_LATIN_TO_CYRILLIC[character] ?? character).join("");
+}
+
+/**
+ * Recovery candidates for a search query that looks like a Cyrillic word
+ * mistyped in Latin -- see the module comment above. Returns 0-2 distinct
+ * Cyrillic strings (transliteration, then layout-swap, in that order) for
+ * the caller to match the same way it already matches the raw query.
+ *
+ * Only attempted when the query has no Cyrillic letters at all and at least
+ * three Latin letters: an already-Cyrillic query needs neither recovery, and
+ * a short or mostly-numeric query (an article number like "W914/2", already
+ * handled by normalizeArticleNumber above) is left alone rather than being
+ * reinterpreted as a misspelled word. A candidate shorter than three
+ * characters, or identical to one already produced, is dropped for the same
+ * low-precision reason -- see MIN_ALTERNATE_QUERY_LENGTH.
+ */
+export function alternateSearchQueries(raw: string): string[] {
+  const trimmed = normalizeSearchQuery(raw);
+  if (HAS_CYRILLIC_LETTER_PATTERN.test(trimmed)) return [];
+  const latinLetterCount = trimmed.match(LATIN_LETTERS_PATTERN)?.length ?? 0;
+  if (latinLetterCount < MIN_ALTERNATE_QUERY_LENGTH) return [];
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const candidate of [transliterateLatinToCyrillic(trimmed), swapKeyboardLayoutToCyrillic(trimmed)]) {
+    if (candidate.length < MIN_ALTERNATE_QUERY_LENGTH || seen.has(candidate)) continue;
+    seen.add(candidate);
+    result.push(candidate);
+  }
+  return result;
 }

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { foldHomoglyphs, normalizeArticleNumber, normalizeBrand, normalizeSearchQuery } from "./catalog-search-normalize.js";
+import {
+  alternateSearchQueries,
+  foldHomoglyphs,
+  normalizeArticleNumber,
+  normalizeBrand,
+  normalizeSearchQuery,
+  swapKeyboardLayoutToCyrillic,
+  transliterateLatinToCyrillic,
+} from "./catalog-search-normalize.js";
 
 // apps/api/src/catalog/catalog-search-normalize.test.ts covers
 // normalizeSearchQuery/foldHomoglyphs/normalizeArticleNumber against the
@@ -57,5 +65,61 @@ describe("normalizeSearchQuery + foldHomoglyphs (re-check at the shared location
       normalizeArticleNumber("СР-914"),
     );
     expect(normalizeArticleNumber("СР-914")).toBe("CP914");
+  });
+});
+
+describe("transliterateLatinToCyrillic", () => {
+  it("phonetically transliterates a Latin spelling of a Cyrillic word", () => {
+    // The task's own example: a customer types "filtr" meaning "фильтр".
+    // The soft sign has no Latin sound, so this recovers as "филтр" -- close
+    // enough for the caller's trigram-similarity fallback to still find it.
+    expect(transliterateLatinToCyrillic("filtr")).toBe("филтр");
+  });
+
+  it("prefers the longest digraph match so 'shch' is not read as 'sh' + 'ch'", () => {
+    expect(transliterateLatinToCyrillic("shchetka")).toBe("щетка");
+  });
+
+  it("leaves digits and punctuation untouched", () => {
+    expect(transliterateLatinToCyrillic("tormoz-2000")).toBe("тормоз-2000");
+  });
+});
+
+describe("swapKeyboardLayoutToCyrillic", () => {
+  it("recovers a Cyrillic word typed with the OS keyboard layout left on English", () => {
+    // The task's own example: "фильтр" typed on a QWERTY-mapped layout comes
+    // out as "abkmnh" -- physical key position, not phonetics.
+    expect(swapKeyboardLayoutToCyrillic("abkmnh")).toBe("фильтр");
+  });
+
+  it("is a different transformation from transliteration for the same input", () => {
+    expect(swapKeyboardLayoutToCyrillic("filtr")).not.toBe(transliterateLatinToCyrillic("filtr"));
+  });
+});
+
+describe("alternateSearchQueries", () => {
+  it("returns both the transliteration and layout-swap candidates for a Latin query", () => {
+    expect(alternateSearchQueries("filtr")).toEqual([
+      transliterateLatinToCyrillic("filtr"),
+      swapKeyboardLayoutToCyrillic("filtr"),
+    ]);
+    expect(alternateSearchQueries("filtr")).toEqual(["филтр", "ашдек"]);
+  });
+
+  it("returns nothing for a query that already contains Cyrillic letters", () => {
+    expect(alternateSearchQueries("фильтр")).toEqual([]);
+  });
+
+  it("returns nothing for a short/mostly-numeric query such as an article number", () => {
+    expect(alternateSearchQueries("w914-2")).toEqual([]);
+    expect(alternateSearchQueries("12")).toEqual([]);
+  });
+
+  it("drops a candidate a digraph collapses below the minimum length, keeping the other", () => {
+    // "sh" -> "ш" alone collapses the transliteration of "sha" to two
+    // characters ("ша"), below MIN_ALTERNATE_QUERY_LENGTH -- only the
+    // layout-swap candidate ("ырф") survives.
+    expect(transliterateLatinToCyrillic("sha").length).toBeLessThan(3);
+    expect(alternateSearchQueries("sha")).toEqual([swapKeyboardLayoutToCyrillic("sha")]);
   });
 });

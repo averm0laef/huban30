@@ -29,6 +29,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OneCCatalogRow } from "@an30/contracts";
 
 import { CatalogCategoryTreeCache } from "../catalog/catalog-category-tree-cache.service.js";
+import {
+  KNOWN_CATALOG_CATEGORIES,
+  UNCATEGORIZED_CATEGORY_LABEL,
+  UNCATEGORIZED_CATEGORY_SLUG,
+} from "../catalog/catalog-known-categories.js";
 import { OneCIntegrationService } from "../catalog/one-c-integration.service.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { RedisService } from "../infrastructure/redis.service.js";
@@ -134,7 +139,10 @@ interface BrandRow {
   deleted_at: Date | null; external_id: string; id: string; is_active: boolean; name: string; slug: string;
 }
 interface CategoryRow {
-  deleted_at: Date | null; description: string | null; external_id: string; id: string;
+  // external_id is null for the seeded fallback categories (they are not
+  // sourced from 1С -- see migration 0024) and for a test-seeded junk group
+  // that stands in for one imported by an earlier, separate run.
+  deleted_at: Date | null; description: string | null; external_id: string | null; id: string;
   is_active: boolean; name: string; parent_id: string | null; slug: string; sort_order: number;
 }
 interface WarehouseRow {
@@ -151,7 +159,7 @@ interface RunRow {
   batch_size: number; body_rows: OneCCatalogRow[]; contains_only_changes: boolean;
   content_checksum: Buffer; cursor_index: number; error_message: string | null; filename: string;
   header_rows: OneCCatalogRow[]; id: string; kind: string; phase: string; rows_rejected: number;
-  rows_touched: number; status: string; tail_rows: OneCCatalogRow[] | null;
+  rows_touched: number; rows_uncategorized: number; status: string; tail_rows: OneCCatalogRow[] | null;
 }
 interface IntegrationRow {
   allowed_networks: string[]; is_enabled: boolean; last_exchange_at: Date | null;
@@ -195,7 +203,7 @@ class FakeCatalogDatabase {
   readonly runs = new Map<string, RunRow>();
   readonly warehouses = new Map<string, WarehouseRow>();
 
-  private byExternalId<T extends { external_id: string }>(map: Map<string, T>, externalId: string): T | undefined {
+  private byExternalId<T extends { external_id: string | null }>(map: Map<string, T>, externalId: string): T | undefined {
     return [...map.values()].find((row) => row.external_id === externalId);
   }
 
@@ -256,18 +264,22 @@ class FakeCatalogDatabase {
         batch_size: batchSize, body_rows: JSON.parse(bodyRowsJson) as OneCCatalogRow[], contains_only_changes: containsOnlyChanges,
         content_checksum: checksum, cursor_index: 0, error_message: null, filename,
         header_rows: JSON.parse(headerRowsJson) as OneCCatalogRow[], id: randomUUID(), kind,
-        phase: "header", rows_rejected: 0, rows_touched: 0, status: "running", tail_rows: null,
+        phase: "header", rows_rejected: 0, rows_touched: 0, rows_uncategorized: 0,
+        status: "running", tail_rows: null,
       };
       void exportedAt;
       this.runs.set(row.id, row);
       return [row];
     }
     if (sql.includes("SET cursor_index = $2, rows_touched = rows_touched + $3")) {
-      const [id, cursorIndex, touched, rejected] = values as [string, number, number, number];
+      const [id, cursorIndex, touched, rejected, uncategorized] = values as [
+        string, number, number, number, number,
+      ];
       const run = this.mustRun(id);
       run.cursor_index = cursorIndex;
       run.rows_touched += touched;
       run.rows_rejected += rejected;
+      run.rows_uncategorized += uncategorized;
       return [];
     }
     if (sql.includes("cursor_index = 0, tail_rows = $3::jsonb")) {
@@ -290,7 +302,10 @@ class FakeCatalogDatabase {
       const run = this.mustRun(id);
       run.phase = "done";
       run.status = "completed";
-      return [{ rows_rejected: run.rows_rejected, rows_touched: run.rows_touched }];
+      return [{
+        rows_rejected: run.rows_rejected, rows_touched: run.rows_touched,
+        rows_uncategorized: run.rows_uncategorized,
+      }];
     }
     if (sql.includes("status = 'failed', error_message = $2")) {
       const [id, reason] = values as [string, string];
@@ -365,9 +380,25 @@ class FakeCatalogDatabase {
       row.deleted_at = isActive ? null : row.deleted_at ?? new Date();
       return [];
     }
+    // applyCategory's own parent-category lookup (category header rows).
     if (sql === "SELECT id FROM app.categories WHERE external_id = $1") {
       const found = this.byExternalId(this.categories, values[0] as string);
       return found ? [{ id: found.id }] : [];
+    }
+    // applyProduct's group lookup -- also needs the group's name, to decide
+    // whether it is a junk catch-all (see isJunkCategoryGroupName).
+    if (sql === "SELECT id, name FROM app.categories WHERE external_id = $1") {
+      const found = this.byExternalId(this.categories, values[0] as string);
+      return found ? [{ id: found.id, name: found.name }] : [];
+    }
+    // Batch fetch for applyProduct's category fallback (loadKnownCategoryIds)
+    // -- one call per chunk, not per row, mirroring migration 0024's seeded
+    // twelve known categories plus "Без категории".
+    if (sql === "SELECT id, slug::text AS slug FROM app.categories WHERE slug::text = ANY($1::text[])") {
+      const slugs = new Set(values[0] as string[]);
+      return [...this.categories.values()]
+        .filter((row) => slugs.has(row.slug))
+        .map((row) => ({ id: row.id, slug: row.slug }));
     }
 
     // -- app.warehouses ---------------------------------------------------------
@@ -556,14 +587,23 @@ async function createHarness() {
 
 type Harness = Awaited<ReturnType<typeof createHarness>>;
 
-async function applyCatalogRowForRegression(harness: Harness, row: OneCCatalogRow) {
+async function applyCatalogRowForRegression(
+  harness: Harness,
+  row: OneCCatalogRow,
+  knownCategories: ReadonlyMap<string, string> = new Map(),
+) {
   const exchange = harness.exchange as unknown as {
     applyRow(
       client: { query: FakeCatalogDatabase["query"] },
       catalogRow: OneCCatalogRow,
-    ): Promise<{ applied: boolean; rejected: boolean }>;
+      categories: ReadonlyMap<string, string>,
+    ): Promise<{ applied: boolean; rejected: boolean; uncategorized: boolean }>;
   };
-  return exchange.applyRow({ query: harness.database.query.bind(harness.database) }, row);
+  return exchange.applyRow(
+    { query: harness.database.query.bind(harness.database) },
+    row,
+    knownCategories,
+  );
 }
 
 async function checkauth(harness: Harness): Promise<{ cookieName: string; cookieValue: string }> {
@@ -729,7 +769,9 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
         name: brand.name, slug: brand.slug, version: 1,
       },
       {
-        description: category.description, entityType: "category", externalId: category.external_id,
+        // Non-null: found by external_id === "cat-brakes" above, so it is
+        // never one of the (external_id: null) seeded fallback categories.
+        description: category.description, entityType: "category", externalId: category.external_id!,
         isActive: false, name: category.name, parentExternalId: null, slug: category.slug,
         sortOrder: category.sort_order, version: 1,
       },
@@ -759,6 +801,7 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
       await expect(applyCatalogRowForRegression(harness, row)).resolves.toEqual({
         applied: false,
         rejected: false,
+        uncategorized: false,
       });
     }
     expect(softDeleted.map((row) => row.deleted_at!.getTime())).toEqual(deletedAtBeforeReplay);
@@ -859,5 +902,142 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
       fakeReply(),
     );
     expect(unknownType).toBe("failure\nПоддерживается только type=catalog");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AN30-013: category assignment for products imported from 1С. A real
+// import against staging showed applyProduct trusting 1С's <Группы> group
+// and nothing else, which left three of four representative products
+// unreachable by browsing -- see one-c-exchange.service.ts's module doc.
+// This gets its own harness (not the shared one above) because it needs
+// migration 0024's seeded fallback categories pre-populated, which the
+// shared harness's own assertions (e.g. `database.categories.size`) must
+// stay unaffected by.
+// ---------------------------------------------------------------------------
+
+function seedKnownCategories(database: FakeCatalogDatabase): void {
+  const seeds = [
+    ...KNOWN_CATALOG_CATEGORIES,
+    { label: UNCATEGORIZED_CATEGORY_LABEL, slug: UNCATEGORIZED_CATEGORY_SLUG },
+  ];
+  for (const category of seeds) {
+    const row: CategoryRow = {
+      deleted_at: null, description: null, external_id: null, id: randomUUID(),
+      is_active: true, name: category.label, parent_id: null, slug: category.slug, sort_order: 9000,
+    };
+    database.categories.set(row.id, row);
+  }
+}
+
+function importXmlForCategoryFallback(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<КоммерческаяИнформация ДатаФормирования="2026-08-10T03:00:00">
+  <Классификатор>
+    <Группы>
+      <Группа>
+        <Ид>cat-brakes</Ид>
+        <Наименование>Тормозная система</Наименование>
+      </Группа>
+      <Группа>
+        <Ид>cat-junk</Ид>
+        <Наименование>Товары</Наименование>
+      </Группа>
+    </Группы>
+  </Классификатор>
+  <Каталог СодержитТолькоИзменения="false">
+    <Товары>
+      <Товар>
+        <Ид>prod-control</Ид>
+        <Артикул>BRK-001</Артикул>
+        <Наименование>Фильтр масляный Bosch</Наименование>
+        <Группы><Ид>cat-brakes</Ид></Группы>
+      </Товар>
+      <Товар>
+        <Ид>prod-nogroup</Ид>
+        <Артикул>ACC-062</Артикул>
+        <Наименование>Аккумулятор Тюмень 62Ач</Наименование>
+      </Товар>
+      <Товар>
+        <Ид>prod-dangling</Ид>
+        <Артикул>FLT-777</Артикул>
+        <Наименование>Щётка стеклоочистителя Bosch 600мм</Наименование>
+        <Группы><Ид>cat-missing</Ид></Группы>
+      </Товар>
+      <Товар>
+        <Ид>prod-junk</Ид>
+        <Артикул>ANF-120</Артикул>
+        <Наименование>Антифриз G12</Наименование>
+        <Группы><Ид>cat-junk</Ид></Группы>
+      </Товар>
+      <Товар>
+        <Ид>prod-unrecognisable</Ид>
+        <Артикул>STK-001</Артикул>
+        <Наименование>Наклейка декоративная на бампер</Наименование>
+      </Товар>
+    </Товары>
+  </Каталог>
+</КоммерческаяИнформация>`;
+}
+
+describe("OneCExchangeService category fallback (AN30-013)", () => {
+  let harness: Harness;
+
+  beforeAll(async () => {
+    harness = await createHarness();
+    seedKnownCategories(harness.database);
+    await driveFullSequence(
+      harness,
+      "import_files/category-fallback/import.xml",
+      importXmlForCategoryFallback(),
+    );
+  });
+
+  afterAll(async () => {
+    await rm(harness.storageRoot, { force: true, recursive: true });
+  });
+
+  function categorySlugFor(externalId: string): string | undefined {
+    const product = [...harness.database.products.values()].find((row) => row.external_id === externalId);
+    const category = product?.category_id
+      ? [...harness.database.categories.values()].find((row) => row.id === product.category_id)
+      : undefined;
+    return category?.slug;
+  }
+
+  it("lets a real, specific 1С group win over what the product's own name would infer", () => {
+    // "Фильтр масляный Bosch" would itself infer to "filtry" (see
+    // catalog-known-categories.test.ts), but this product is filed under
+    // the real, specific "Тормозная система" group -- 1С's own grouping
+    // must win regardless of what the name suggests.
+    const brakes = [...harness.database.categories.values()].find((row) => row.external_id === "cat-brakes")!;
+    expect(categorySlugFor("prod-control")).toBe(brakes.slug);
+    expect(categorySlugFor("prod-control")).not.toBe("filtry");
+  });
+
+  it("falls back to name inference when a product has no <Группы> at all", () => {
+    expect(categorySlugFor("prod-nogroup")).toBe("akkumulyatory");
+  });
+
+  it("falls back to name inference when the group id is dangling (absent from <Классификатор>)", () => {
+    expect(categorySlugFor("prod-dangling")).toBe("shchetki");
+  });
+
+  it("falls back to name inference when the group resolves but its name is a junk catch-all", () => {
+    expect(categorySlugFor("prod-junk")).toBe("antifriz");
+  });
+
+  it('files an unrecognisable name under "Без категории" and counts it in the run summary', () => {
+    expect(categorySlugFor("prod-unrecognisable")).toBe(UNCATEGORIZED_CATEGORY_SLUG);
+    const summary = harness.database.integration.last_exchange_summary as { rowsUncategorized: number };
+    expect(summary.rowsUncategorized).toBe(1);
+  });
+
+  it("flags the dangling group as rejected but not the junk-named one", () => {
+    const run = [...harness.database.runs.values()].find((row) => row.kind === "catalog")!;
+    // Only prod-dangling's bad cross-reference should count; prod-junk's
+    // group *did* resolve, it was just generic -- that is not a 1С data
+    // problem to flag, only a signal to fall through to name inference.
+    expect(run.rows_rejected).toBe(1);
   });
 });

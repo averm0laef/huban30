@@ -15,6 +15,21 @@
 // (so a re-synced, unchanged 30-40k SKU catalog does not bump every
 // source_version and does not spuriously invalidate caches), and a real
 // change increments source_version itself.
+//
+// Category assignment (AN30-013 fix): a real import against staging showed
+// applyProduct trusting 1С's <Группы> group and nothing else, which left
+// three of four representative products unreachable by browsing --
+// "Колодки тормозные передние TRW" had no <Группы> element at all,
+// "Аккумулятор Тюмень 62Ач" was filed under the junk catch-all group
+// «Товары», and "Щётка стеклоочистителя Bosch 600мм" referenced a group id
+// absent from <Классификатор>. Only "Масло моторное 5W-40" (a real, specific
+// «Масла моторные» group) worked. applyProduct now falls back to inferring
+// one of the shop's twelve known categories from the product's own name --
+// see catalog-known-categories.ts for the full rule set -- whenever 1С's
+// group is missing, dangling or a junk catch-all, and files anything that
+// inference cannot confidently place under an explicit "Без категории"
+// bucket (UNCATEGORIZED_CATEGORY_SLUG) rather than guessing. 1С's own
+// grouping always wins when it names a real, specific category.
 import { Injectable } from "@nestjs/common";
 import type { PoolClient } from "pg";
 
@@ -22,6 +37,12 @@ import type { OneCCatalogRow } from "@an30/contracts";
 
 import { CatalogCategoryTreeCache } from "../catalog/catalog-category-tree-cache.service.js";
 import { canonicalJson } from "../catalog/catalog-import.utils.js";
+import {
+  inferCategoryFromProductName,
+  isJunkCategoryGroupName,
+  KNOWN_CATALOG_CATEGORIES,
+  UNCATEGORIZED_CATEGORY_SLUG,
+} from "../catalog/catalog-known-categories.js";
 import { OneCIntegrationService } from "../catalog/one-c-integration.service.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import {
@@ -30,6 +51,12 @@ import {
   parseImportXml,
   parseOffersXml,
 } from "./commerce-ml.parser.js";
+
+/** Every app.categories slug applyProduct's fallback might resolve a product to: the twelve known shop sections plus the explicit "could not tell" bucket. Fetched once per chunk (see loadKnownCategoryIds), never per row. */
+const FALLBACK_CATEGORY_SLUGS: readonly string[] = [
+  ...KNOWN_CATALOG_CATEGORIES.map((category) => category.slug),
+  UNCATEGORIZED_CATEGORY_SLUG,
+];
 
 export type OneCExchangeFileKind = "catalog" | "offers";
 
@@ -75,9 +102,11 @@ const RUN_COLUMNS = `
 interface RowOutcome {
   applied: boolean;
   rejected: boolean;
+  /** True only for a product row whose final category assignment landed in the "Без категории" bucket -- see applyProduct. Always false for every other entity type. */
+  uncategorized: boolean;
 }
 
-const NO_CHANGE: RowOutcome = { applied: false, rejected: false };
+const NO_CHANGE: RowOutcome = { applied: false, rejected: false, uncategorized: false };
 
 @Injectable()
 export class OneCExchangeService {
@@ -237,18 +266,25 @@ export class OneCExchangeService {
   private async applyChunk(run: ExchangeRunRow, slice: OneCCatalogRow[]): Promise<void> {
     const nextCursor = run.cursor_index + slice.length;
     await this.database.transaction(async (client) => {
+      // One lookup for the whole chunk (see loadKnownCategoryIds), not one
+      // per row -- this is what keeps applyProduct's category fallback from
+      // turning a 40,000-row import into 40,000 extra statements.
+      const knownCategories = await this.loadKnownCategoryIds(client);
       let touched = 0;
       let rejected = 0;
+      let uncategorized = 0;
       for (const row of slice) {
-        const outcome = await this.applyRow(client, row);
+        const outcome = await this.applyRow(client, row, knownCategories);
         if (outcome.applied) touched += 1;
         if (outcome.rejected) rejected += 1;
+        if (outcome.uncategorized) uncategorized += 1;
       }
       await client.query(
         `UPDATE app.one_c_exchange_runs
-         SET cursor_index = $2, rows_touched = rows_touched + $3, rows_rejected = rows_rejected + $4
+         SET cursor_index = $2, rows_touched = rows_touched + $3, rows_rejected = rows_rejected + $4,
+             rows_uncategorized = rows_uncategorized + $5
          WHERE id = $1`,
-        [run.id, nextCursor, touched, rejected],
+        [run.id, nextCursor, touched, rejected, uncategorized],
       );
     });
     run.cursor_index = nextCursor;
@@ -273,9 +309,11 @@ export class OneCExchangeService {
   }
 
   private async completeRun(run: ExchangeRunRow): Promise<void> {
-    const totals = (await this.database.query<{ rows_rejected: number; rows_touched: number }>(
+    const totals = (await this.database.query<{
+      rows_rejected: number; rows_touched: number; rows_uncategorized: number;
+    }>(
       `UPDATE app.one_c_exchange_runs SET phase = 'done', status = 'completed'
-       WHERE id = $1 RETURNING rows_touched, rows_rejected`,
+       WHERE id = $1 RETURNING rows_touched, rows_rejected, rows_uncategorized`,
       [run.id],
     )).rows[0];
     await this.integration.recordExchangeResult({
@@ -284,6 +322,12 @@ export class OneCExchangeService {
       kind: run.kind,
       rowsRejected: totals?.rows_rejected ?? 0,
       rowsTouched: totals?.rows_touched ?? 0,
+      // How many products this run could not confidently place in a real
+      // category and filed under "Без категории" instead of guessing -- see
+      // this file's module doc and catalog-known-categories.ts. Surfaced
+      // here (not just in the row count) so the owner sees the number on
+      // the admin settings page instead of discovering the gap later.
+      rowsUncategorized: totals?.rows_uncategorized ?? 0,
     });
   }
 
@@ -331,15 +375,36 @@ export class OneCExchangeService {
       }));
   }
 
-  private async applyRow(client: PoolClient, row: OneCCatalogRow): Promise<RowOutcome> {
+  private async applyRow(
+    client: PoolClient,
+    row: OneCCatalogRow,
+    knownCategories: ReadonlyMap<string, string> = new Map(),
+  ): Promise<RowOutcome> {
     switch (row.entityType) {
       case "brand": return this.applyBrand(client, row);
       case "category": return this.applyCategory(client, row);
       case "warehouse": return this.applyWarehouse(client, row);
-      case "product": return this.applyProduct(client, row);
+      case "product": return this.applyProduct(client, row, knownCategories);
       case "price": return this.applyPrice(client, row);
       case "stock": return this.applyStock(client, row);
     }
+  }
+
+  /**
+   * The app.categories id for each of the twelve known shop sections plus
+   * the "Без категории" bucket (FALLBACK_CATEGORY_SLUGS), fetched once per
+   * chunk rather than once per row -- applyProduct's fallback only ever
+   * needs a slug -> id lookup, and this shape never changes within a single
+   * poll's transaction. For a 40,000-row import at BATCH_SIZE=500 this is
+   * one extra statement per ~500 products (about 80 total for a full
+   * catalog), not one per product -- see this file's module doc.
+   */
+  private async loadKnownCategoryIds(client: PoolClient): Promise<ReadonlyMap<string, string>> {
+    const rows = (await client.query<{ id: string; slug: string }>(
+      "SELECT id, slug::text AS slug FROM app.categories WHERE slug::text = ANY($1::text[])",
+      [FALLBACK_CATEGORY_SLUGS],
+    )).rows;
+    return new Map(rows.map((row) => [row.slug, row.id]));
   }
 
   private async applyBrand(
@@ -358,7 +423,7 @@ export class OneCExchangeService {
          VALUES ($1, $2, $3, $4, 1, CASE WHEN $4 THEN NULL ELSE clock_timestamp() END)`,
         [row.externalId, row.name, row.slug, row.isActive],
       );
-      return { applied: true, rejected: false };
+      return { applied: true, rejected: false, uncategorized: false };
     }
     const deletionStateMatches = row.isActive ? current.deleted_at === null : current.deleted_at !== null;
     if (current.name === row.name && current.slug === row.slug
@@ -369,7 +434,7 @@ export class OneCExchangeService {
               source_version = source_version + 1 WHERE id = $1`,
       [current.id, row.name, row.slug, row.isActive],
     );
-    return { applied: true, rejected: false };
+    return { applied: true, rejected: false, uncategorized: false };
   }
 
   private async applyCategory(
@@ -402,13 +467,13 @@ export class OneCExchangeService {
            CASE WHEN $7 THEN NULL ELSE clock_timestamp() END)`,
         [row.externalId, parentId, row.name, row.slug, row.description, row.sortOrder, row.isActive],
       );
-      return { applied: true, rejected };
+      return { applied: true, rejected, uncategorized: false };
     }
     const unchanged = current.parent_id === parentId && current.name === row.name && current.slug === row.slug
       && current.description === row.description && current.sort_order === row.sortOrder
       && current.is_active === row.isActive
       && (row.isActive ? current.deleted_at === null : current.deleted_at !== null);
-    if (unchanged) return { applied: false, rejected };
+    if (unchanged) return { applied: false, rejected, uncategorized: false };
     await client.query(
       `UPDATE app.categories SET parent_id = $2, name = $3, slug = $4, description = $5, sort_order = $6,
               is_active = $7,
@@ -416,7 +481,7 @@ export class OneCExchangeService {
               source_version = source_version + 1 WHERE id = $1`,
       [current.id, parentId, row.name, row.slug, row.description, row.sortOrder, row.isActive],
     );
-    return { applied: true, rejected };
+    return { applied: true, rejected, uncategorized: false };
   }
 
   private async applyWarehouse(
@@ -435,7 +500,7 @@ export class OneCExchangeService {
          VALUES ($1, $2, $3, $4, 1, CASE WHEN $4 THEN NULL ELSE clock_timestamp() END)`,
         [row.externalId, row.code, row.name, row.isActive],
       );
-      return { applied: true, rejected: false };
+      return { applied: true, rejected: false, uncategorized: false };
     }
     const deletionStateMatches = row.isActive ? current.deleted_at === null : current.deleted_at !== null;
     if (current.code === row.code && current.name === row.name
@@ -446,29 +511,58 @@ export class OneCExchangeService {
               source_version = source_version + 1 WHERE id = $1`,
       [current.id, row.code, row.name, row.isActive],
     );
-    return { applied: true, rejected: false };
+    return { applied: true, rejected: false, uncategorized: false };
   }
 
   private async applyProduct(
     client: PoolClient,
     row: Extract<OneCCatalogRow, { entityType: "product" }>,
+    knownCategories: ReadonlyMap<string, string>,
   ): Promise<RowOutcome> {
     const brandId = row.brandExternalId
       ? (await client.query<{ id: string }>(
           "SELECT id FROM app.brands WHERE external_id = $1", [row.brandExternalId],
         )).rows[0]?.id ?? null
       : null;
-    const categoryId = row.categoryExternalId
-      ? (await client.query<{ id: string }>(
-          "SELECT id FROM app.categories WHERE external_id = $1", [row.categoryExternalId],
-        )).rows[0]?.id ?? null
-      : null;
+
+    // 1С's own grouping always wins when it names a real, specific category
+    // -- only a missing categoryExternalId, one that does not resolve (a
+    // dangling reference, still surfaced via `rejected` exactly as before),
+    // or one that resolves to a junk catch-all name (see
+    // JUNK_CATEGORY_GROUP_NAMES) falls through to inferring a category from
+    // the product's own name. See catalog-known-categories.ts for the full
+    // rule set and one-c-exchange.service.ts's module doc for the measured
+    // real-world cases this fixes.
+    const group = row.categoryExternalId
+      ? (await client.query<{ id: string; name: string }>(
+          "SELECT id, name FROM app.categories WHERE external_id = $1", [row.categoryExternalId],
+        )).rows[0]
+      : undefined;
+    const groupDangling = row.categoryExternalId !== null && group === undefined;
+    const groupUsable = group !== undefined && !isJunkCategoryGroupName(group.name);
+
+    let categoryId: string | null;
+    let uncategorized = false;
+    if (groupUsable) {
+      categoryId = group!.id;
+    } else {
+      const inferredSlug = inferCategoryFromProductName(row.name);
+      const targetSlug = inferredSlug ?? UNCATEGORIZED_CATEGORY_SLUG;
+      categoryId = knownCategories.get(targetSlug) ?? null;
+      // The twelve known categories and the "Без категории" bucket are
+      // seeded once by migration 0024 and never removed by this service, so
+      // this should always resolve. If it somehow does not (e.g. a database
+      // that has not run that migration yet), degrade to an unlinked
+      // product exactly like any other cross-reference problem below,
+      // rather than crashing the whole import over it.
+      uncategorized = inferredSlug === null || categoryId === null;
+    }
+
     // A dangling brand/category reference degrades to an unlinked product
     // rather than dropping it: 40,000 SKUs must not lose one because of a
     // single bad cross-reference elsewhere in the file. Still surfaced via
     // rows_rejected so it is visible in the run's counters, not silent.
-    const rejected = (row.brandExternalId !== null && brandId === null)
-      || (row.categoryExternalId !== null && categoryId === null);
+    const rejected = (row.brandExternalId !== null && brandId === null) || groupDangling;
     const attributesJson = JSON.stringify(row.attributes);
     const current = (await client.query<{
       attributes: Record<string, unknown>; brand_id: string | null; category_id: string | null;
@@ -491,7 +585,7 @@ export class OneCExchangeService {
         [row.externalId, row.sku, row.name, row.slug, brandId, categoryId, row.description,
           attributesJson, row.searchText, row.isActive],
       );
-      return { applied: true, rejected };
+      return { applied: true, rejected, uncategorized };
     }
     const unchanged = current.sku === row.sku && current.name === row.name && current.slug === row.slug
       && current.brand_id === brandId && current.category_id === categoryId
@@ -499,7 +593,7 @@ export class OneCExchangeService {
       && current.is_active === row.isActive
       && (row.isActive ? current.deleted_at === null : current.deleted_at !== null)
       && canonicalJson(current.attributes) === canonicalJson(row.attributes);
-    if (unchanged) return { applied: false, rejected };
+    if (unchanged) return { applied: false, rejected, uncategorized };
     await client.query(
       `UPDATE app.products SET sku = $2, name = $3, slug = $4, brand_id = $5, category_id = $6, description = $7,
               attributes = $8::jsonb, search_text = $9, is_active = $10,
@@ -509,7 +603,7 @@ export class OneCExchangeService {
       [current.id, row.sku, row.name, row.slug, brandId, categoryId, row.description,
         attributesJson, row.searchText, row.isActive],
     );
-    return { applied: true, rejected };
+    return { applied: true, rejected, uncategorized };
   }
 
   private async applyPrice(
@@ -523,7 +617,7 @@ export class OneCExchangeService {
     // price arrives for a product 1C has not (yet) described, skip it rather
     // than fail the whole chunk -- it will apply cleanly once the product
     // exists, on the next full or delta sync.
-    if (!productId) return { applied: false, rejected: true };
+    if (!productId) return { applied: false, rejected: true, uncategorized: false };
     const current = (await client.query<{ amount_kopeks: string; id: string }>(
       `SELECT id, amount_kopeks::text FROM app.product_prices
        WHERE product_id = $1 AND currency = $2 AND valid_to IS NULL FOR UPDATE`,
@@ -539,7 +633,7 @@ export class OneCExchangeService {
        VALUES ($1, $2, $3, $4, '1c', 1)`,
       [productId, row.amountKopeks, row.currency, effectiveAt],
     );
-    return { applied: true, rejected: false };
+    return { applied: true, rejected: false, uncategorized: false };
   }
 
   private async applyStock(
@@ -552,7 +646,7 @@ export class OneCExchangeService {
     const warehouseId = (await client.query<{ id: string }>(
       "SELECT id FROM app.warehouses WHERE external_id = $1", [row.warehouseExternalId],
     )).rows[0]?.id;
-    if (!productId || !warehouseId) return { applied: false, rejected: true };
+    if (!productId || !warehouseId) return { applied: false, rejected: true, uncategorized: false };
     const current = (await client.query<{ quantity_on_hand: number; quantity_reserved: number }>(
       `SELECT quantity_on_hand, quantity_reserved FROM app.inventory_balances
        WHERE product_id = $1 AND warehouse_id = $2 FOR UPDATE`,
@@ -565,7 +659,9 @@ export class OneCExchangeService {
     // shop have drifted apart on this SKU.
     const floored = current !== undefined && row.quantityOnHand < current.quantity_reserved;
     const targetQuantity = current ? Math.max(row.quantityOnHand, current.quantity_reserved) : row.quantityOnHand;
-    if (current && current.quantity_on_hand === targetQuantity) return { applied: false, rejected: floored };
+    if (current && current.quantity_on_hand === targetQuantity) {
+      return { applied: false, rejected: floored, uncategorized: false };
+    }
     if (current) {
       await client.query(
         "UPDATE app.inventory_balances SET quantity_on_hand = $3, source_version = source_version + 1 WHERE product_id = $1 AND warehouse_id = $2",
@@ -587,6 +683,6 @@ export class OneCExchangeService {
         [productId, warehouseId, delta, targetQuantity, current?.quantity_reserved ?? 0],
       );
     }
-    return { applied: true, rejected: floored };
+    return { applied: true, rejected: floored, uncategorized: false };
   }
 }

@@ -47,6 +47,8 @@ export interface OneCExchangeSummary {
   kind: "catalog" | "offers";
   rowsRejected: number;
   rowsTouched: number;
+  /** How many products this run filed under the explicit "Без категории" bucket instead of a real category -- see catalog-known-categories.ts. Always 0 for an "offers" run (price/stock only, no category assignment happens there). */
+  rowsUncategorized: number;
 }
 
 export interface IntegrationRequestEvent {

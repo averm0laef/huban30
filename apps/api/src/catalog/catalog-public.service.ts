@@ -26,7 +26,7 @@ import {
 } from "../security/public-media.js";
 import { buildCategoryTree } from "./catalog-category-tree.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
-import { normalizeArticleNumber } from "./catalog-search-normalize.js";
+import { alternateSearchQueries, normalizeArticleNumber } from "./catalog-search-normalize.js";
 import { VISIBLE_CATEGORIES_CTE, visibleCategoriesWithSubtreeCte } from "./catalog-visibility.sql.js";
 
 const PUBLIC_IMAGE_MIME_TYPES = ["image/avif", "image/jpeg", "image/png", "image/webp"] as const;
@@ -126,6 +126,16 @@ const PUBLIC_PRODUCT_FROM = `FROM app.products AS product
 // search for an OEM number also finds the shop's own product listed only
 // under an aftermarket number, and vice versa. It is a CTE joined into the
 // same statement rather than a second query — see that constant's comment.
+//
+// $9 is alternateSearchQueries($1) (catalog-search-normalize.ts): 0-2 extra
+// Cyrillic candidate strings recovering a query typed in Latin by mistake --
+// a phonetic transliteration ("filtr" -> "филтр") and a keyboard-layout swap
+// ("abkmnh" -> "фильтр"), see that function's doc for why both are needed
+// and why they are computed in TypeScript once per request rather than as
+// SQL. Matched exactly the same three ways ($1 already is above: substring,
+// trigram, full-text) against each candidate via unnest, so this is still
+// one statement, not a second query — same length>=3 low-precision guard
+// applies to each candidate individually (see MIN_ALTERNATE_QUERY_LENGTH).
 const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
   AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
   AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
@@ -139,7 +149,15 @@ const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
     OR (length($1)>=3 AND product.name ILIKE '%' || $2 || '%' ESCAPE '\\')
     OR (length($1)>=3 AND similarity(product.name, $1) > 0.25)
     OR to_tsvector('simple',coalesce(product.search_text,product.name))
-      @@ websearch_to_tsquery('simple',$1))
+      @@ websearch_to_tsquery('simple',$1)
+    OR (length($1)>=3 AND EXISTS (
+      SELECT 1 FROM unnest($9::text[]) AS alt_query
+      WHERE length(alt_query)>=3
+        AND (product.name ILIKE '%' || alt_query || '%' ESCAPE '\\'
+          OR similarity(product.name, alt_query) > 0.25
+          OR to_tsvector('simple',coalesce(product.search_text,product.name))
+            @@ websearch_to_tsquery('simple', alt_query))
+    )))
   AND ($3::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
   AND (cardinality($4::text[])=0 OR brand.slug::text=ANY($4::text[]))
   AND ($5::bigint IS NULL OR price.amount_kopeks >= $5)
@@ -317,6 +335,9 @@ export class CatalogPublicService {
       // Empty (not null) when there is no query, so the SQL side can compare
       // with a plain <>'' guard instead of a three-valued NULL check.
       query.q ? normalizeArticleNumber(query.q) : "",
+      // Escaped the same way $2 is, since these feed the same ILIKE branch —
+      // see PUBLIC_PRODUCT_FILTERS' $9 comment.
+      query.q ? alternateSearchQueries(query.q).map((candidate) => escapeLike(candidate) ?? candidate) : [],
     ];
     const order = this.productOrder(query);
     return withPublicCatalogQuery(() => this.database.transaction(async (client) => {
@@ -340,14 +361,14 @@ export class CatalogPublicService {
            SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
            FROM app.product_images AS image
            JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-           WHERE image.product_id=product.id AND storage.provider=$9
+           WHERE image.product_id=product.id AND storage.provider=$10
              AND storage.status='available' AND storage.deleted_at IS NULL
-             AND storage.mime_type=ANY($12::text[])
+             AND storage.mime_type=ANY($13::text[])
            ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
          ) AS primary_image ON true
          WHERE ${PUBLIC_PRODUCT_FILTERS}
          ORDER BY ${order},product.id
-         LIMIT $10 OFFSET $11`,
+         LIMIT $11 OFFSET $12`,
         [...values, this.storage.name, query.limit, query.offset, [...PUBLIC_IMAGE_MIME_TYPES]],
       );
       const fallbackCount = items.rows.length === 0 && query.offset > 0
@@ -564,7 +585,16 @@ export class CatalogPublicService {
            GREATEST(
              similarity(product.name, $1),
              ts_rank_cd(to_tsvector('simple',coalesce(product.search_text,product.name)),
-               websearch_to_tsquery('simple',$1))
+               websearch_to_tsquery('simple',$1)),
+             -- A Latin-transliteration/layout-swap recovery (see $9's comment
+             -- on PUBLIC_PRODUCT_FILTERS) is exactly as much of a fuzzy,
+             -- last-resort signal as the two above, never a promotion over a
+             -- real article/prefix match — folded into the same GREATEST(),
+             -- not a new tier.
+             COALESCE((
+               SELECT max(similarity(product.name, alt_query))
+               FROM unnest($9::text[]) AS alt_query WHERE length(alt_query)>=3
+             ), 0)
            ) DESC,
            lower(product.name) ASC`
         : "product.updated_at DESC";

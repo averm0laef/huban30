@@ -35,6 +35,7 @@ describe("database migrations", () => {
       "0021_supplier_waitlist_retention",
       "0022_article_crosses_confirmed_by_index",
       "0023_supplier_waitlist_anonymized_name",
+      "0024_one_c_exchange_category_fallback",
     ]);
     expect(migrations.every(({ checksum }) => /^[a-f0-9]{64}$/.test(checksum))).toBe(true);
     expect(migrations[0]?.sql).toContain("CREATE SCHEMA app");

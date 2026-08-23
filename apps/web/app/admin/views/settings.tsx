@@ -23,6 +23,10 @@ interface OneCExchangeSummary {
   kind: "catalog" | "offers";
   rowsRejected: number;
   rowsTouched: number;
+  // Optional: a summary written before this field existed (an older
+  // completed run, still sitting in app.integration_endpoints) will not have
+  // it -- see LastExchangeResult's rendering below.
+  rowsUncategorized?: number;
 }
 
 interface OneCSettings {
@@ -216,6 +220,12 @@ function LastExchangeResult({
           <div><dt>Тип выгрузки</dt><dd>{summary.containsOnlyChanges ? "Только изменения" : "Полная выгрузка"}</dd></div>
           <div><dt>Применено строк</dt><dd>{summary.rowsTouched}</dd></div>
           <div><dt>Отклонено строк</dt><dd>{summary.rowsRejected}</dd></div>
+          {summary.kind === "catalog" ? (
+            <div>
+              <dt>Без категории</dt>
+              <dd>{summary.rowsUncategorized ?? 0}</dd>
+            </div>
+          ) : null}
           <div><dt>Завершён</dt><dd>{formatDate(timestamp)}</dd></div>
         </dl>
       )}
