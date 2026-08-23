@@ -39,12 +39,25 @@ const MAP_EMBED_SRC = `https://yandex.ru/map-widget/v1/?z=16&text=${encodeURICom
  * because the shop cannot lawfully publish an offer without them.
  */
 /**
- * A deliberate release blocker, not sample legal data. The storefront may be
- * reviewed on staging with this marker, but must not accept production orders
- * until the owner has supplied and verified every item listed here.
+ * The seller's registration details, supplied and confirmed by the owner.
+ * Russian consumer law requires an online shop to identify its seller on
+ * every offer, so this string is interpolated into each legal page rather
+ * than restated — one source, so the pages cannot drift apart.
  */
-export const OWNER_DETAILS_PLACEHOLDER =
-  "[БЛОКИРУЕТ PRODUCTION: укажите полное ФИО ИП, ИНН, ОГРНИП, адрес продавца и возврата, email для заказов, претензий и запросов по персональным данным]";
+export const OWNER_LEGAL_DETAILS =
+  "ИП Ермолаева Марина Юрьевна, ОГРНИП 315751300001899, ИНН 753610995917";
+
+/**
+ * The one item the owner has not supplied yet. It stays a deliberate release
+ * blocker: 152-ФЗ requires a written channel for personal-data requests, and
+ * a consumer must be able to send a claim in writing — a phone number alone
+ * does not satisfy either. Everything else on this page is now real.
+ */
+export const OWNER_EMAIL_PLACEHOLDER =
+  "[БЛОКИРУЕТ PRODUCTION: email для заказов, претензий и запросов по персональным данным]";
+
+/** Kept so existing call sites read naturally: full details plus the contact channel. */
+export const OWNER_DETAILS_PLACEHOLDER = `${OWNER_LEGAL_DETAILS}. Email для обращений: ${OWNER_EMAIL_PLACEHOLDER}`;
 
 export const LEGAL_DOCUMENT_DATE = "15 августа 2026 года";
 
