@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -187,6 +190,129 @@ describe("CatalogPublicService", () => {
     // Only one Latin letter ("w") — too little signal to guess a misspelled
     // word from, and normalizeArticleNumber already owns this case.
     expect((query.mock.calls[1] as [string, unknown[]])[1][8]).toEqual([]);
+  });
+
+  it("folds ё to е on the query, in both directions, so a plain-е query and a ё query converge", async () => {
+    // AN30-013 search-gap fix: a product name stored with a ё (1C exports
+    // "Щётка стеклоочистителя ...") was unreachable by the near-universal
+    // plain spelling "щетка", because nothing folded ё to е anywhere on the
+    // search path. foldYo now runs on the query before it becomes $1/$2 —
+    // see catalog-search-normalize.ts's foldYo and this file's module
+    // comment on PUBLIC_PRODUCT_FILTERS.
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "щётка" });
+    const [, yoParameters] = query.mock.calls[0] as [string, unknown[]];
+
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "щетка" });
+    const [, plainParameters] = query.mock.calls[1] as [string, unknown[]];
+
+    // Both spellings produce the *identical* $1/$2 — proof that whichever
+    // way the customer happens to type it, PostgreSQL receives the same
+    // free-text query and so returns the same rows, regardless of which
+    // spelling (if either) the stored product name actually used.
+    expect(yoParameters[0]).toBe("щетка");
+    expect(yoParameters[1]).toBe("щетка");
+    expect(plainParameters[0]).toBe("щетка");
+    expect(plainParameters[1]).toBe("щетка");
+    expect(yoParameters[9]).toEqual(plainParameters[9]);
+
+    // $8 is the *article* parameter and deliberately keeps the ё: it is
+    // matched against product.sku_normalized, which app.normalize_article
+    // (migration 0016) builds without any ё fold, so folding only the query
+    // side would break the agreement the two sides already have. The narrow
+    // consequence — a SKU that literally contains ё is not reachable by its
+    // plain-е spelling — is accepted because article numbers are Latin and
+    // digits in practice; see this service's $8 comment.
+    expect(yoParameters[7]).toBe("ЩЁTKA");
+    expect(plainParameters[7]).toBe("ЩETKA");
+  });
+
+  it("folds Ё (upper-case) too, and folds every alt-query candidate the same way", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "ЁЖ ФИЛЬТР" });
+    const [, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(parameters[0]).toBe("ЕЖ ФИЛЬТР");
+  });
+
+  it("matches ё/е-folded, generated columns rather than the raw name/search_text columns", async () => {
+    // The other half of the fold: folding only the query would still miss a
+    // product whose *stored* name carries the ё (the shop's actual case).
+    // product.name_folded / product.search_text_folded are generated
+    // columns (migration 0025) built through app.fold_yo, the SQL mirror of
+    // foldYo — so both sides of every comparison are folded the same way.
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "щетка" });
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+
+    expect(sql).toContain("product.name_folded ILIKE");
+    expect(sql).toContain("similarity(product.name_folded, $1)");
+    expect(sql).toContain("to_tsvector('simple',product.search_text_folded)");
+    // The raw (unfolded) columns must not be the ones actually matched —
+    // only the display-only final tiebreaker (lower(product.name) ASC, an
+    // existing, unrelated stable-sort clause) legitimately still names the
+    // raw column.
+    expect(sql).not.toContain("product.name ILIKE");
+    expect(sql).not.toContain("coalesce(product.search_text,product.name)");
+  });
+
+  it("adds real Russian stemming as an additive full-text branch, in both the filter and the ranking", async () => {
+    // Gap 2: search only ever matched substrings/trigrams/'simple' lexemes
+    // of the exact text typed, never a Russian word form ("щёток" the
+    // genitive plural vs "щётка"). PostgreSQL's built-in 'russian'
+    // text-search config already ships a real (Snowball) stemmer, so this
+    // reuses the existing to_tsvector/websearch_to_tsquery idiom instead of
+    // taking on a full morphological-analysis dependency.
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "фильтры", sort: "relevance" });
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+
+    // Present in the filter (can add a match)... sliced at the LAST
+    // "ORDER BY", not the first: the primary-image LATERAL join carries an
+    // "ORDER BY image.is_primary" of its own that sits *before* the WHERE
+    // clause, so slicing at the first occurrence cuts the filter away
+    // entirely and the assertion below would pass or fail for the wrong
+    // reason.
+    const filterPart = sql.slice(0, sql.lastIndexOf("ORDER BY"));
+    expect(filterPart).toContain("to_tsvector('russian',product.search_text_folded)");
+    expect(filterPart).toContain("websearch_to_tsquery('russian',$1)");
+    // ...and in the ranking (a stemmed hit still only ever competes as a
+    // last-resort relevance signal, never ahead of an exact/prefix article
+    // match — same GREATEST() as the existing trigram/'simple' terms).
+    const ranking = sql.slice(sql.lastIndexOf("ORDER BY"));
+    const exactArticleTier = ranking.indexOf("product.sku_normalized=$8");
+    const russianTerm = ranking.indexOf("ts_rank_cd(to_tsvector('russian',product.search_text_folded)");
+    expect(russianTerm).toBeGreaterThan(exactArticleTier);
+    expect(ranking).toContain("websearch_to_tsquery('russian',$1)");
+  });
+
+  it("documents a Russian word form the stemmer deliberately does not recover", () => {
+    // "щёток" (genitive plural of "щётка") is the motivating example for
+    // this fix, and real (Snowball) stemming still does not catch it: its
+    // "о" is an epenthetic ("fleeting") vowel Russian inserts because this
+    // form has no case ending of its own ("щётка" -> "щёт"+"о"+"к"), not a
+    // suffix — there is nothing for a suffix-stripping stemmer to strip, so
+    // 'russian' stems "щеток" (ё-folded) to itself, not to "щетк" (what it
+    // gives "щетка"). Recovering this specific, common-in-practice case
+    // would need a real morphological dictionary, which this fix
+    // deliberately does not take on.
+    //
+    // This suite mocks the database client (see the `database` object at
+    // the top of this file) rather than running against a real PostgreSQL,
+    // so the actual stemmer output cannot be asserted here. Instead this
+    // reads migration 0025's own SQL comment and pins the gap it documents,
+    // so the claim above stays traceable to source and cannot silently
+    // drift or be deleted without failing a test.
+    const migrationSql = readFileSync(
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "../../../../packages/database/migrations/0025_catalog_search_yo_and_word_forms.sql",
+      ),
+      "utf8",
+    );
+    expect(migrationSql).toContain('It does NOT fix "щёток" itself');
+    expect(migrationSql).toContain("epenthetic");
+    expect(migrationSql).toContain("no suffix");
   });
 
   it("a two-letter query matches nothing by design, not by omission", async () => {

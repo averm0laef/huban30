@@ -24,6 +24,14 @@
 //     "normalised article + normalised brand" matching key docs/CATALOG_MATCHING.md
 //     specifies for crosses. Deliberately does not resolve brand-name
 //     synonyms (see that doc): that is a manually curated table, not a fold.
+//   - foldYo: mirrors app.fold_yo(text) in migration 0025 (ё/Ё -> е/Е, see
+//     that function's doc) -- the free-text/trigram/full-text side's
+//     equivalent of what the homoglyph table does for articles. Applied to
+//     the query in catalog-public.service.ts; the stored side is folded the
+//     same way by the generated app.products.name_folded/search_text_folded
+//     columns migration 0025 adds, so a query and a stored name that differ
+//     only in ё-vs-е always compare equal regardless of which side (or
+//     neither, or both) actually used ё.
 //
 // The homoglyph table only needs to go one way (Cyrillic -> Latin): both the
 // stored article and the incoming query are folded through the very same
@@ -112,6 +120,25 @@ export function normalizeSearchQuery(raw: string): string {
 /** Cyrillic-lookalike letters folded to their Latin equivalent; anything else passes through unchanged. */
 export function foldHomoglyphs(value: string): string {
   return [...value].map((character) => HOMOGLYPH_CYRILLIC_TO_LATIN[character] ?? character).join("");
+}
+
+/**
+ * Folds ё -> е and Ё -> Е and nothing else -- case of the rest of the string
+ * is untouched, unlike normalizeArticleNumber/normalizeBrand which
+ * upper-case everything. Almost no customer types ё (a separate,
+ * often-unlabeled key on a physical Russian keyboard, and autocorrect on
+ * mobile drops it too), so a product name stored with a ё (as 1C exports it)
+ * was unreachable by the near-universal plain spelling until this fold is
+ * applied to both the query (here, in catalog-public.service.ts) and the
+ * stored text it is compared against.
+ *
+ * Must be kept in sync with app.fold_yo in migration 0025, which applies the
+ * identical fold to build app.products.name_folded and
+ * .search_text_folded -- if the two folds ever disagree, a query folded one
+ * way could still fail to match stored text folded another.
+ */
+export function foldYo(value: string): string {
+  return value.replace(/ё/gu, "е").replace(/Ё/gu, "Е");
 }
 
 /**

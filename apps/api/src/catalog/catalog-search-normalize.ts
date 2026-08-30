@@ -9,6 +9,7 @@
 export {
   alternateSearchQueries,
   foldHomoglyphs,
+  foldYo,
   normalizeArticleNumber,
   normalizeBrand,
   normalizeSearchQuery,

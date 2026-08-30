@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { foldHomoglyphs, normalizeArticleNumber, normalizeSearchQuery } from "./catalog-search-normalize.js";
+import { foldHomoglyphs, foldYo, normalizeArticleNumber, normalizeSearchQuery } from "./catalog-search-normalize.js";
 
 describe("normalizeSearchQuery", () => {
   it("trims and collapses internal whitespace without changing case", () => {
@@ -46,5 +46,11 @@ describe("normalizeArticleNumber", () => {
   it("is idempotent and stable across repeated normalisation", () => {
     const once = normalizeArticleNumber("W 914/2");
     expect(normalizeArticleNumber(once)).toBe(once);
+  });
+});
+
+describe("foldYo", () => {
+  it("folds ё/Ё to е/Е through the re-exported shim, same as the canonical location", () => {
+    expect(foldYo("Щётка")).toBe("Щетка");
   });
 });

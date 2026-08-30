@@ -26,7 +26,7 @@ import {
 } from "../security/public-media.js";
 import { buildCategoryTree } from "./catalog-category-tree.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
-import { alternateSearchQueries, normalizeArticleNumber } from "./catalog-search-normalize.js";
+import { alternateSearchQueries, foldYo, normalizeArticleNumber } from "./catalog-search-normalize.js";
 import { VISIBLE_CATEGORIES_CTE, visibleCategoriesWithSubtreeCte } from "./catalog-visibility.sql.js";
 
 const PUBLIC_IMAGE_MIME_TYPES = ["image/avif", "image/jpeg", "image/png", "image/webp"] as const;
@@ -136,6 +136,24 @@ const PUBLIC_PRODUCT_FROM = `FROM app.products AS product
 // trigram, full-text) against each candidate via unnest, so this is still
 // one statement, not a second query — same length>=3 low-precision guard
 // applies to each candidate individually (see MIN_ALTERNATE_QUERY_LENGTH).
+//
+// $1, $2 and every $9 candidate are already ё/Ё-folded (foldYo, applied in
+// products() below) by the time they reach this statement, and compared
+// against product.name_folded / product.search_text_folded rather than the
+// raw name/search_text columns — two generated columns migration 0025 adds,
+// folded the identical way (app.fold_yo). Almost no customer types ё, so
+// without folding both sides a product name stored with a ё (as 1C exports
+// it) would be unreachable by the near-universal plain spelling — see that
+// migration's comment.
+//
+// The extra to_tsvector('russian', ...) branch below is additive real
+// (Snowball) stemming — PostgreSQL's built-in 'russian' text-search config,
+// no extension needed — recovering *regular* Russian word-form variation
+// ("фильтры" now finds "Фильтр ...") the 'simple' branch above it cannot,
+// since 'simple' never stems. It does not recover every word form: see
+// migration 0025's comment and catalog-public.service.test.ts for
+// "щёток" -> "щётка", a deliberate, documented gap (an epenthetic vowel, not
+// a suffix, so there is nothing for a suffix-stripping stemmer to strip).
 const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
   AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
   AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
@@ -146,16 +164,18 @@ const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
       WHERE cross_equivalents.article=product.sku_normalized
         AND cross_equivalents.brand=app.normalize_brand(brand.name)
     ))
-    OR (length($1)>=3 AND product.name ILIKE '%' || $2 || '%' ESCAPE '\\')
-    OR (length($1)>=3 AND similarity(product.name, $1) > 0.25)
-    OR to_tsvector('simple',coalesce(product.search_text,product.name))
+    OR (length($1)>=3 AND product.name_folded ILIKE '%' || $2 || '%' ESCAPE '\\')
+    OR (length($1)>=3 AND similarity(product.name_folded, $1) > 0.25)
+    OR to_tsvector('simple',product.search_text_folded)
       @@ websearch_to_tsquery('simple',$1)
+    OR to_tsvector('russian',product.search_text_folded)
+      @@ websearch_to_tsquery('russian',$1)
     OR (length($1)>=3 AND EXISTS (
       SELECT 1 FROM unnest($9::text[]) AS alt_query
       WHERE length(alt_query)>=3
-        AND (product.name ILIKE '%' || alt_query || '%' ESCAPE '\\'
-          OR similarity(product.name, alt_query) > 0.25
-          OR to_tsvector('simple',coalesce(product.search_text,product.name))
+        AND (product.name_folded ILIKE '%' || alt_query || '%' ESCAPE '\\'
+          OR similarity(product.name_folded, alt_query) > 0.25
+          OR to_tsvector('simple',product.search_text_folded)
             @@ websearch_to_tsquery('simple', alt_query))
     )))
   AND ($3::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
@@ -324,9 +344,17 @@ export class CatalogPublicService {
       throw new BadRequestException({ error: "invalid_catalog_query", issues: parsed.error.issues });
     }
     const query = parsed.data;
+    // $1/$2 are ё/Ё-folded (foldYo) before they ever reach SQL, matching the
+    // fold app.fold_yo applies when building product.name_folded/
+    // .search_text_folded (migration 0025) — see PUBLIC_PRODUCT_FILTERS' own
+    // comment for why both sides must agree. normalizeArticleNumber ($8
+    // below) is computed from the un-folded query.q on purpose: article
+    // matching has its own, separate Cyrillic/Latin homoglyph fold and does
+    // not need (or want) the ё fold layered on top of it.
+    const foldedQuery = query.q ? foldYo(query.q) : null;
     const values = [
-      query.q ?? null,
-      escapeLike(query.q),
+      foldedQuery,
+      escapeLike(foldedQuery ?? undefined),
       query.category ?? null,
       query.brand,
       query.minPriceKopeks ?? null,
@@ -335,9 +363,13 @@ export class CatalogPublicService {
       // Empty (not null) when there is no query, so the SQL side can compare
       // with a plain <>'' guard instead of a three-valued NULL check.
       query.q ? normalizeArticleNumber(query.q) : "",
-      // Escaped the same way $2 is, since these feed the same ILIKE branch —
+      // Escaped the same way $2 is, and ё/Ё-folded the same way $1 is, since
+      // these feed the same folded-column ILIKE/trigram/full-text branches —
       // see PUBLIC_PRODUCT_FILTERS' $9 comment.
-      query.q ? alternateSearchQueries(query.q).map((candidate) => escapeLike(candidate) ?? candidate) : [],
+      query.q ? alternateSearchQueries(query.q).map((candidate) => {
+        const foldedCandidate = foldYo(candidate);
+        return escapeLike(foldedCandidate) ?? foldedCandidate;
+      }) : [],
     ];
     const order = this.productOrder(query);
     return withPublicCatalogQuery(() => this.database.transaction(async (client) => {
@@ -583,16 +615,23 @@ export class CatalogPublicService {
            )) DESC,
            ($8<>'' AND product.sku_normalized LIKE $8 || '%') DESC,
            GREATEST(
-             similarity(product.name, $1),
-             ts_rank_cd(to_tsvector('simple',coalesce(product.search_text,product.name)),
+             similarity(product.name_folded, $1),
+             ts_rank_cd(to_tsvector('simple',product.search_text_folded),
                websearch_to_tsquery('simple',$1)),
+             -- Real (Snowball) Russian stemming via PostgreSQL's built-in
+             -- 'russian' text-search config — see PUBLIC_PRODUCT_FILTERS'
+             -- comment for what this does and does not recover. Exactly as
+             -- much of a fuzzy, last-resort signal as the other two terms
+             -- here, never a promotion over a real article/prefix match.
+             ts_rank_cd(to_tsvector('russian',product.search_text_folded),
+               websearch_to_tsquery('russian',$1)),
              -- A Latin-transliteration/layout-swap recovery (see $9's comment
              -- on PUBLIC_PRODUCT_FILTERS) is exactly as much of a fuzzy,
-             -- last-resort signal as the two above, never a promotion over a
-             -- real article/prefix match — folded into the same GREATEST(),
-             -- not a new tier.
+             -- last-resort signal as the others above, never a promotion over
+             -- a real article/prefix match — folded into the same
+             -- GREATEST(), not a new tier.
              COALESCE((
-               SELECT max(similarity(product.name, alt_query))
+               SELECT max(similarity(product.name_folded, alt_query))
                FROM unnest($9::text[]) AS alt_query WHERE length(alt_query)>=3
              ), 0)
            ) DESC,

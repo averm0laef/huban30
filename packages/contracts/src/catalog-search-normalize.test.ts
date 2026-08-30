@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   alternateSearchQueries,
   foldHomoglyphs,
+  foldYo,
   normalizeArticleNumber,
   normalizeBrand,
   normalizeSearchQuery,
@@ -121,5 +122,40 @@ describe("alternateSearchQueries", () => {
     // layout-swap candidate ("ырф") survives.
     expect(transliterateLatinToCyrillic("sha").length).toBeLessThan(3);
     expect(alternateSearchQueries("sha")).toEqual([swapKeyboardLayoutToCyrillic("sha")]);
+  });
+});
+
+describe("foldYo", () => {
+  it("folds ё to е -- the AN30 search-gap example", () => {
+    // The task's own example: a product stored as "Щётка стеклоочистителя"
+    // must be reachable by the plain, near-universal spelling "щетка".
+    expect(foldYo("щётка")).toBe("щетка");
+    expect(foldYo("Щётка стеклоочистителя Bosch 600мм")).toBe("Щетка стеклоочистителя Bosch 600мм");
+  });
+
+  it("folds both directions -- a query typed with ё and a query typed without ё converge to the same key", () => {
+    // This is the actual fix, not just the fold in isolation: whichever
+    // side (query or stored name) happens to use ё, both end up comparing
+    // the same folded text -- see catalog-public.service.ts's module
+    // comment on why the query and the generated name_folded/
+    // search_text_folded columns (migration 0025) must run through an
+    // equivalent fold.
+    expect(foldYo("щётка")).toBe(foldYo("щетка"));
+  });
+
+  it("folds the upper-case letter too, independently of the rest of the string's case", () => {
+    expect(foldYo("ЁЖИК")).toBe("ЕЖИК");
+    expect(foldYo("Ёлка")).toBe("Елка");
+  });
+
+  it("leaves text with no ё/Ё untouched, including a plain article number", () => {
+    expect(foldYo("Фильтр масляный")).toBe("Фильтр масляный");
+    expect(foldYo("W 914/2")).toBe("W 914/2");
+    expect(foldYo("")).toBe("");
+  });
+
+  it("is idempotent", () => {
+    const once = foldYo("Щётка");
+    expect(foldYo(once)).toBe(once);
   });
 });
