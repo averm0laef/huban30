@@ -56,7 +56,10 @@ describe("SupplierSearchService", () => {
     const service = new SupplierSearchService(supplier, makeConfig(), crossQueue);
 
     const result = await service.search({ q: "W914/2" });
-    expect(result.source).toBe("rossko");
+    // Nothing the customer receives may name the distributor — the shop sells
+    // this stock as its own, and a JSON field is as readable as page text to
+    // anyone who opens the network tab.
+    expect(JSON.stringify(result).toLowerCase()).not.toContain("rossko");
     expect(result.query).toBe("W914/2");
     expect(result.parts[0]?.availability).toBe("under_order");
     expect(result.parts[0]?.crosses[0]?.availability).toBe("under_order");
@@ -93,7 +96,6 @@ describe("SupplierSearchService", () => {
       message: "Поиск у поставщика отключён",
       parts: [],
       query: "W914/2",
-      source: "rossko",
       success: false,
       totalFound: 0,
       truncated: false,

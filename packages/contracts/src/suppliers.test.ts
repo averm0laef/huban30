@@ -30,7 +30,6 @@ describe("supplier search contracts", () => {
         stocks: [{ deliveryTime: "2", id: "s1", priceKopeks: 45_670, quantity: 12 }],
       }],
       query: "W914/2",
-      source: "rossko",
       success: true,
       totalFound: 1,
       truncated: false,
@@ -39,7 +38,10 @@ describe("supplier search contracts", () => {
     // supplier result from ever being confused with 1C shelf stock — there is
     // no shared "availableQuantity" style field a client could conflate.
     expect(parsed.parts[0]?.availability).toBe("under_order");
-    expect(parsed.source).toBe("rossko");
+    // The response must not name the distributor anywhere: the shop presents
+    // this stock as its own, and a JSON field is as visible as rendered text
+    // to anyone who opens the network tab.
+    expect(JSON.stringify(parsed).toLowerCase()).not.toContain("rossko");
   });
 
   it("accepts a part with nested analogues (crosses) and no stock at all", () => {
@@ -63,7 +65,6 @@ describe("supplier search contracts", () => {
         stocks: [],
       }],
       query: "NOSTOCK",
-      source: "rossko",
       success: true,
       totalFound: 1,
       truncated: false,
@@ -85,7 +86,6 @@ describe("supplier search contracts", () => {
         stocks: [{ deliveryTime: null, id: "s1", priceKopeks: 0, quantity: 1 }],
       }],
       query: "x",
-      source: "rossko",
       success: true,
       totalFound: 1,
       truncated: false,
@@ -133,6 +133,9 @@ describe("supplier waiting list contracts", () => {
       query: "W914/2",
       stockId: "stock-1",
     });
+    // The supplier is filled in server-side rather than sent by the browser:
+    // this is a request the client makes, not a response the customer reads,
+    // so the default keeps the client from ever needing to know the name.
     expect(parsed.source).toBe("rossko");
     expect(parsed).not.toHaveProperty("priceKopeks");
   });

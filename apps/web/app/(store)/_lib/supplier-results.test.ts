@@ -40,7 +40,6 @@ function supplierResponse(overrides: Partial<SupplierSearchResponse> = {}): Supp
     message: "",
     parts: [supplierPart()],
     query: "W914/2",
-    source: "rossko",
     success: true,
     totalFound: 1,
     truncated: false,

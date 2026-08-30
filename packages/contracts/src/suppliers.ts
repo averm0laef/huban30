@@ -83,11 +83,17 @@ export const SupplierCrossPairSchema = z.object({
 }).strict();
 export type SupplierCrossPair = z.infer<typeof SupplierCrossPairSchema>;
 
+/**
+ * Deliberately carries no `source`. The shop presents this stock as its own,
+ * so naming the distributor anywhere a customer can reach it — including a
+ * JSON field never rendered as text — discloses the supplier relationship to
+ * anyone who opens the network tab. The waitlist request below defaults the
+ * source server-side instead, so the client never needs to be told it.
+ */
 export const SupplierSearchResponseSchema = z.object({
   message: z.string().max(2_000),
   parts: z.array(SupplierPartViewSchema).max(500),
   query: z.string().max(120),
-  source: SupplierSourceSchema,
   success: z.boolean(),
   /** How many parts the supplier actually matched, before the response cap. */
   totalFound: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),

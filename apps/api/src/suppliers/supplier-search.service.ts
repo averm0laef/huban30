@@ -108,7 +108,6 @@ export class SupplierSearchService {
       message: result.message,
       parts: shown.map((part) => toPartView(part, this.markupPercent, query.q)),
       query: query.q,
-      source: "rossko",
       success: result.success,
       totalFound: result.parts.length,
       truncated: result.parts.length > shown.length,
