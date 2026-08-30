@@ -11,14 +11,18 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import type { ChatIntake } from "@an30/contracts";
+
 import { errorText, readSession, type SessionView } from "../_lib/storefront-api";
 import { ChatAttachmentMedia } from "./attachment-preview";
+import { ChatIntakeForm } from "./chat-intake-form";
 import {
   CHAT_ATTACHMENT_ACCEPT,
   CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
   STATUS_LABELS,
   chatRequest,
+  chatThreadCreateBody,
   formatDate,
   isChatThread,
   isOwnMessage,
@@ -29,6 +33,7 @@ import {
   upsertThread,
   type ChatThread,
 } from "./chat-state";
+import { ManagerJoinNotice } from "./manager-join-notice";
 import { useChatThread } from "./use-chat-thread";
 import styles from "./chat.module.css";
 
@@ -48,7 +53,6 @@ export function ChatClient() {
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadsError, setThreadsError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [subject, setSubject] = useState("");
   const [createPending, setCreatePending] = useState(false);
   const [createError, setCreateError] = useState("");
   const [storageWarning, setStorageWarning] = useState("");
@@ -68,6 +72,8 @@ export function ChatClient() {
   const viewerKind = viewer.kind === "customer" ? "customer" : viewer.kind === "guest" ? "guest" : null;
 
   const {
+    assignedStaffId,
+    assignedStaffName,
     connection,
     connectionError,
     downloadAttachment,
@@ -92,6 +98,7 @@ export function ChatClient() {
     sendMessage: submitDraft,
     sendPending,
     showLatestMessages,
+    threadStatus,
     uploadAttachment: submitAttachment,
     viewingLatest,
   } = useChatThread(selectedThread, viewerKind, true);
@@ -190,24 +197,15 @@ export function ChatClient() {
     });
   }
 
-  async function createThread(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function createThread(intake: ChatIntake): Promise<void> {
     if (createPending || (viewer.kind !== "guest" && viewer.kind !== "customer")) return;
-    const cleanSubject = subject.trim();
-    if (cleanSubject.length < 2) {
-      setCreateError("Укажите тему минимум из 2 символов");
-      return;
-    }
+    const body = chatThreadCreateBody(intake);
     setCreatePending(true);
     setCreateError("");
     try {
       const created = viewer.kind === "guest"
-        ? await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, {
-          body: { orderId: null, subject: cleanSubject }, method: "POST",
-        })
-        : await chatRequest<ChatThread>("/chat/threads", { kind: "customer" }, {
-          body: { orderId: null, subject: cleanSubject }, method: "POST",
-        });
+        ? await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, { body, method: "POST" })
+        : await chatRequest<ChatThread>("/chat/threads", { kind: "customer" }, { body, method: "POST" });
       if (!isChatThread(created)
         || (viewer.kind === "guest" && (!created.guestToken || created.guestToken.length < 32 || created.guestToken.length > 256))) {
         throw new Error("Сервер не вернул безопасный доступ к новому чату");
@@ -215,7 +213,6 @@ export function ChatClient() {
       const next = upsertThread(threads, created);
       setThreads(next);
       if (viewer.kind === "guest") persistGuestThreads(next);
-      setSubject("");
       setSelectedId(created.id);
     } catch (caught) {
       setCreateError(errorText(caught));
@@ -289,20 +286,9 @@ export function ChatClient() {
       {storageWarning ? <div className={styles.warning} role="alert"><strong>Доступ сохранён только на этой странице</strong><span>{storageWarning}</span></div> : null}
       <div className={styles.workspace}>
         <aside className={styles.sidebar} aria-label="Список чатов">
-          <form className={styles.createForm} onSubmit={(event) => void createThread(event)}>
-            <label htmlFor="chat-subject">Тема нового обращения</label>
-            <input
-              id="chat-subject"
-              maxLength={240}
-              minLength={2}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder="Например, вопрос по заказу"
-              required
-              value={subject}
-            />
-            <button disabled={createPending || !online} type="submit">{createPending ? "Создаём..." : "Начать чат"}</button>
-            {createError ? <p className={styles.inlineError} role="alert">{createError}</p> : null}
-          </form>
+          <div className={styles.createForm}>
+            <ChatIntakeForm disabled={!online} error={createError} onSubmit={(intake) => void createThread(intake)} pending={createPending} />
+          </div>
           {threadsError ? <div className={styles.listError} role="alert"><strong>Список не загружен</strong><span>{threadsError}</span><button type="button" onClick={() => void loadThreads(viewer)}>Повторить</button></div> : null}
           {threadsLoading ? <div className={styles.listState} role="status">Загружаем чаты</div> : null}
           {!threadsLoading && !threadsError && threads.length === 0 ? <div className={styles.listState}>Здесь появятся ваши обращения.</div> : null}
@@ -342,6 +328,12 @@ export function ChatClient() {
                 <div><h2>{selectedThread.subject ?? "Обращение без темы"}</h2><span>{STATUS_LABELS[selectedThread.status]}</span></div>
                 <span className={styles.connection} data-state={connection}>{CONNECTION_LABELS[connection]}</span>
               </header>
+              <ManagerJoinNotice
+                assignedStaffId={assignedStaffId}
+                assignedStaffName={assignedStaffName}
+                messages={messages}
+                status={threadStatus ?? selectedThread.status}
+              />
               {connectionError ? <div className={styles.inlineError} role="alert">{connectionError}</div> : null}
               {historyError ? <div className={styles.historyError} role="alert"><strong>История не загружена</strong><span>{historyError}</span><button type="button" onClick={retryHistory}>Повторить</button></div> : null}
               {historyLoading ? <div className={styles.historyState} role="status">Загружаем историю</div> : (

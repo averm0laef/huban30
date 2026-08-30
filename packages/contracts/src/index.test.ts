@@ -9,7 +9,9 @@ import {
   CatalogProductsQuerySchema,
   CatalogSearchQuerySchema,
   ChatClientEventSchema,
+  ChatIntakeSchema,
   ChatMessageCreateSchema,
+  ChatThreadCreateSchema,
   CHECKOUT_LEGAL_POLICY_VERSION,
   CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
   CheckoutRequestSchema,
@@ -198,6 +200,31 @@ describe("public contracts", () => {
       limit: 20,
       q: "фильтр масляный",
     });
+  });
+
+  it("requires only `intent` on the pre-chat intake questionnaire, so someone without a VIN or article number can still reach a manager", () => {
+    expect(ChatIntakeSchema.safeParse({ intent: "other" }).success).toBe(true);
+    expect(ChatIntakeSchema.parse({ intent: "other" })).toEqual({
+      articleNumber: null,
+      comment: null,
+      intent: "other",
+      vehicle: null,
+    });
+    expect(ChatIntakeSchema.safeParse({}).success).toBe(false);
+    expect(ChatIntakeSchema.safeParse({ intent: "not-a-real-intent" }).success).toBe(false);
+    expect(ChatIntakeSchema.safeParse({
+      articleNumber: "GDB1330", comment: "Срочно нужна деталь", intent: "part", vehicle: "Toyota Camry 2015",
+    }).success).toBe(true);
+  });
+
+  it("rejects a thread-create request with no intake — the questionnaire is a real gate, not a frontend suggestion", () => {
+    const thread = { orderId: null, subject: "Нужна деталь по артикулу: GDB1330" };
+    expect(ChatThreadCreateSchema.safeParse(thread).success).toBe(false);
+    expect(ChatThreadCreateSchema.safeParse({ ...thread, intake: { intent: "part" } }).success).toBe(true);
+    // .strict(): an intake with an unknown field is rejected outright, not silently dropped.
+    expect(ChatThreadCreateSchema.safeParse({
+      ...thread, intake: { intent: "part" }, unexpected: "field",
+    }).success).toBe(false);
   });
 
   it("normalizes strict public catalog filters", () => {

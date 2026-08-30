@@ -18,6 +18,18 @@ import { RateLimitService } from "../security/rate-limit.service.js";
 import { ChatAssistantService } from "./chat-assistant.service.js";
 import { ChatService } from "./chat.service.js";
 
+// Every mime type here has already been through ChatService.uploadAttachment
+// end to end before it is ever written to storage_objects.mime_type: bytes are
+// sniffed with `file-type` (never taken from the client's Content-Type),
+// scanned clean by MalwareScannerService, and then decoded by
+// MediaValidationService (ffprobe container check + a full ffmpeg re-decode)
+// to confirm the payload really is a genuine, playable image in that
+// container — not a polyglot, not SVG/HTML (never in this set), nothing with
+// script execution capability. That is what makes it safe to render inline;
+// everything else (video, and any type that somehow isn't in this set) stays
+// `attachment` so the browser never executes or renders unverified content.
+const INLINE_SAFE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function sendAttachment(
   reply: FastifyReply,
   value: { byteSize: number; content: Readable; mimeType: string; originalName: string },
@@ -31,9 +43,10 @@ function sendAttachment(
     "video/webm": "webm",
   };
   const extension = extensions[value.mimeType] ?? "bin";
+  const disposition = INLINE_SAFE_MIME_TYPES.has(value.mimeType) ? "inline" : "attachment";
   return reply
     .header("Cache-Control", "private, no-store")
-    .header("Content-Disposition", `attachment; filename="an30-attachment.${extension}"`)
+    .header("Content-Disposition", `${disposition}; filename="an30-attachment.${extension}"`)
     .header("Content-Length", String(value.byteSize))
     .header("Content-Type", value.mimeType)
     .header("X-Content-Type-Options", "nosniff")

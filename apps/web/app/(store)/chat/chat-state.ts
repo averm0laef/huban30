@@ -1,4 +1,11 @@
 import {
+  CHAT_INTAKE_INTENT_LABELS,
+  type ChatIntake,
+  type ChatThreadCreate,
+} from "@an30/contracts";
+
+import { computeShopStatusNow } from "../_components/shop-status";
+import {
   API_PREFIX,
   StorefrontApiError,
   apiErrorMessage,
@@ -315,6 +322,31 @@ export function formatDate(value: string | null): string {
   return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
+/**
+ * Derives the new thread's `subject` from the intake answers (see the
+ * `ChatThreadCreateSchema` comment in `@an30/contracts`) — the customer is
+ * never asked to type a title for their own conversation. Prefers the most
+ * specific detail available (an article number pinpoints a part; a vehicle
+ * at least narrows it down) and always falls back to the plain intent
+ * label, so this never produces an empty or sub-2-character subject.
+ */
+export function intakeSubject(intake: ChatIntake): string {
+  const label = CHAT_INTAKE_INTENT_LABELS[intake.intent];
+  const detail = intake.articleNumber ?? intake.vehicle;
+  return detail ? `${label}: ${detail}` : label;
+}
+
+/**
+ * The single place that turns a completed intake form into the exact body
+ * `ChatThreadCreateSchema` expects — used by both the widget and the full
+ * `/chat` page, for both the guest and the authenticated create-thread
+ * endpoints, so the answers a customer typed are always what actually
+ * reaches the new thread (never re-derived or re-typed per call site).
+ */
+export function chatThreadCreateBody(intake: ChatIntake, orderId: string | null = null): ChatThreadCreate {
+  return { intake, orderId, subject: intakeSubject(intake) };
+}
+
 /* ============================================================
    "Manager is joining" countdown
    ------------------------------------------------------------
@@ -340,7 +372,15 @@ export type ManagerJoinState =
   /** Still inside the expected response window. */
   | { kind: "waiting"; remainingMs: number; sinceIso: string }
   /** The expected window passed and nobody is assigned yet. */
-  | { kind: "elapsed"; sinceIso: string };
+  | { kind: "elapsed"; sinceIso: string }
+  /**
+   * The shop is closed right now (see `computeShopStatusNow`), so the
+   * ten-minute promise would be a lie — nobody is on shift to keep it.
+   * `openDetail` is shop-status.ts's own "откроется сегодня в 09:00" /
+   * "откроется завтра в 09:00" phrase, reused verbatim so the storefront
+   * never describes the shop's hours two different ways.
+   */
+  | { kind: "outOfHours"; openDetail: string; sinceIso: string };
 
 /**
  * Timestamp (ISO string) of the customer's oldest message since staff last
@@ -364,7 +404,12 @@ export function unansweredSince(messages: ChatMessage[]): string | null {
   return pendingSince;
 }
 
-/** Derives what the countdown UI should show right now. `now` is injected (not `Date.now()`) so this stays a pure, testable function. */
+/**
+ * Derives what the countdown UI should show right now. `now` is injected
+ * (not `Date.now()`) so this stays a pure, testable function — it is also
+ * the single clock reused for both the countdown math and the shop-hours
+ * check below, so the two can never disagree about "now".
+ */
 export function managerJoinState(input: {
   assignedStaffId: string | null;
   assignedStaffName: string | null;
@@ -376,6 +421,8 @@ export function managerJoinState(input: {
   if (input.assignedStaffId) return { kind: "assigned", staffName: input.assignedStaffName };
   const since = unansweredSince(input.messages);
   if (!since) return { kind: "none" };
+  const shop = computeShopStatusNow(new Date(input.now));
+  if (!shop.open) return { kind: "outOfHours", openDetail: shop.detail, sinceIso: since };
   const elapsedMs = input.now - Date.parse(since);
   if (elapsedMs >= MANAGER_RESPONSE_WINDOW_MS) return { kind: "elapsed", sinceIso: since };
   return { kind: "waiting", remainingMs: MANAGER_RESPONSE_WINDOW_MS - elapsedMs, sinceIso: since };
@@ -395,6 +442,12 @@ export const MANAGER_ELAPSED_HEADLINE = "Менеджеры сейчас зан�
 export const MANAGER_ELAPSED_BODY =
   "Обычное время ответа — 10 минут — уже прошло. Ваше сообщение никуда не делось, и мы ответим прямо в этом чате. Если вопрос срочный, позвоните нам или напишите в мессенджер:";
 export const MANAGER_ASSIGNED_HEADLINE = "Менеджер подключился к чату";
+export const MANAGER_OUT_OF_HOURS_HEADLINE = "Сейчас нерабочее время";
+
+/** `openDetail` comes straight from `ManagerJoinState`'s `outOfHours` case (shop-status.ts's own phrasing). */
+export function managerOutOfHoursBody(openDetail: string): string {
+  return `Магазин ${openDetail}. Ваше сообщение сохранено — менеджер ответит в течение 10 минут после этого.`;
+}
 
 /** Null when the server hasn't reported a name — never guess or invent one. */
 export function managerAssignedNote(staffName: string | null): string | null {

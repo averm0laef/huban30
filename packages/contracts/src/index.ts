@@ -453,7 +453,43 @@ export type OneCImportEnvelope = z.infer<typeof OneCImportEnvelopeSchema>;
 
 const CHAT_TEXT = /^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]*$/u;
 
+/**
+ * The short intake questionnaire a customer answers before a new chat
+ * thread is created (see `ChatThreadCreateSchema` below). Only `intent` is
+ * required -- a customer who doesn't know their VIN, or has no article
+ * number yet, must still be able to reach a manager.
+ */
+export const CHAT_INTAKE_INTENTS = ["part", "advice", "order", "other"] as const;
+export const ChatIntakeIntentSchema = z.enum(CHAT_INTAKE_INTENTS);
+export type ChatIntakeIntent = z.infer<typeof ChatIntakeIntentSchema>;
+
+/** Shared verbatim between the intake form and the opening message the
+ * manager reads, so the two are never worded differently. */
+export const CHAT_INTAKE_INTENT_LABELS: Record<ChatIntakeIntent, string> = {
+  advice: "Помочь подобрать деталь",
+  order: "Вопрос по уже сделанному заказу",
+  other: "Другое",
+  part: "Нужна деталь по артикулу",
+};
+
+export const ChatIntakeSchema = z.object({
+  articleNumber: z.string().trim().max(80).regex(CHAT_TEXT).nullable().default(null),
+  comment: z.string().trim().max(1_000).regex(CHAT_TEXT).nullable().default(null),
+  intent: ChatIntakeIntentSchema,
+  vehicle: z.string().trim().max(160).regex(CHAT_TEXT).nullable().default(null),
+}).strict();
+export type ChatIntake = z.infer<typeof ChatIntakeSchema>;
+
+/**
+ * `subject` is derived by the client from the intake answers (see
+ * `intakeSubject` in the storefront's chat-state.ts) rather than typed by
+ * hand -- the customer is never asked to title their own conversation.
+ * `intake` is required: this is what makes the pre-chat questionnaire a
+ * real gate rather than a frontend-only suggestion, for both the
+ * authenticated and guest thread-creation endpoints.
+ */
 export const ChatThreadCreateSchema = z.object({
+  intake: ChatIntakeSchema,
   orderId: z.uuid().nullable().default(null),
   subject: z.string().trim().min(2).max(240).regex(CHAT_TEXT),
 }).strict();

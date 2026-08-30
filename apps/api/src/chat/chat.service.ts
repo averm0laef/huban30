@@ -17,9 +17,11 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 
 import {
+  CHAT_INTAKE_INTENT_LABELS,
   ChatMessageCreateSchema,
   ChatThreadCreateSchema,
   ROLE_PERMISSIONS,
+  type ChatIntake,
   type Permission,
 } from "@an30/contracts";
 
@@ -107,6 +109,7 @@ export class ChatService {
       );
       if (order.rowCount === 0) throw new NotFoundException("Заказ не найден");
     }
+    const sender = this.sender({ auth, kind: "authenticated" });
     const result = await this.database.transaction(async (client) => {
       const thread = (await client.query<ThreadRow>(
         `INSERT INTO app.chat_threads (customer_user_id,order_id,subject)
@@ -116,6 +119,17 @@ export class ChatService {
       await client.query(
         "INSERT INTO app.chat_participants (thread_id,user_id) VALUES ($1,$2)",
         [thread.id, auth.userId],
+      );
+      // The intake questionnaire answers become the thread's first message
+      // — the manager's opening context, not data collected and dropped —
+      // and, since it is a genuine customer message, it is what starts the
+      // ten-minute reply countdown (see unansweredSince in chat-state.ts).
+      await this.insertMessage(
+        client,
+        thread.id,
+        sender,
+        { body: this.intakeOpeningMessage(input.intake), clientMessageId: randomUUID(), replyToId: null },
+        "text",
       );
       return thread;
     });
@@ -137,12 +151,23 @@ export class ChatService {
       if (order.rowCount === 0) throw new NotFoundException("Заказ не найден");
     }
     const guestToken = this.crypto.randomToken();
-    const thread = (await this.database.query<ThreadRow>(
-      `INSERT INTO app.chat_threads (guest_token_hash,order_id,subject)
-       VALUES ($1,$2,$3) RETURNING *`,
-      [this.crypto.opaqueHash("guest-chat-access", guestToken), input.orderId, input.subject],
-    )).rows[0]!;
-    return { ...this.threadView(thread), guestToken };
+    const result = await this.database.transaction(async (client) => {
+      const thread = (await client.query<ThreadRow>(
+        `INSERT INTO app.chat_threads (guest_token_hash,order_id,subject)
+         VALUES ($1,$2,$3) RETURNING *`,
+        [this.crypto.opaqueHash("guest-chat-access", guestToken), input.orderId, input.subject],
+      )).rows[0]!;
+      // See createForCustomer above: same reasoning, guest sender.
+      await this.insertMessage(
+        client,
+        thread.id,
+        { kind: "guest", userId: null },
+        { body: this.intakeOpeningMessage(input.intake), clientMessageId: randomUUID(), replyToId: null },
+        "text",
+      );
+      return thread;
+    });
+    return { ...this.threadView(result), guestToken };
   }
 
   async list(auth: AuthContext) {
@@ -764,6 +789,17 @@ export class ChatService {
       throw new BadRequestException({ error: "invalid_chat_thread", issues: parsed.error.issues });
     }
     return parsed.data;
+  }
+
+  /** Renders the intake questionnaire as the thread's opening message body. */
+  private intakeOpeningMessage(intake: ChatIntake): string {
+    const lines = [
+      `Что нужно: ${CHAT_INTAKE_INTENT_LABELS[intake.intent]}`,
+      `Автомобиль/VIN: ${intake.vehicle ?? "не указано"}`,
+      `Номер детали: ${intake.articleNumber ?? "не указано"}`,
+    ];
+    if (intake.comment) lines.push(`Комментарий: ${intake.comment}`);
+    return lines.join("\n");
   }
 
   private parseCursor(value: string | undefined): string {

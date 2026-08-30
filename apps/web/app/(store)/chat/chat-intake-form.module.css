@@ -1,0 +1,90 @@
+/* ============================================================
+   Pre-chat intake questionnaire, shared by the floating widget
+   and the full /chat page. Reads only the `--store-*` custom
+   properties already defined on `.storefront` — no new colour or
+   radius scale.
+   ============================================================ */
+
+.form {
+  display: grid;
+  gap: var(--store-space-sm);
+}
+
+.lead {
+  margin: 0;
+  color: var(--store-text);
+  font-weight: var(--store-weight-bold);
+  line-height: 1.4;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field label {
+  color: var(--store-muted);
+  font-size: 0.8rem;
+  font-weight: var(--store-weight-bold);
+  line-height: 1.4;
+}
+
+.form select,
+.form input,
+.form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-text);
+  font: inherit;
+}
+
+.form textarea {
+  min-height: 64px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.form select:disabled,
+.form input:disabled,
+.form textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form select:focus-visible,
+.form input:focus-visible,
+.form textarea:focus-visible,
+.form button:focus-visible {
+  outline: 3px solid var(--store-accent);
+  outline-offset: 2px;
+}
+
+.form > button {
+  min-height: 44px;
+  border: 1px solid var(--store-brand);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-brand);
+  color: #f8faff;
+  cursor: pointer;
+  font-weight: var(--store-weight-bold);
+}
+
+.form > button:hover:not(:disabled) {
+  background: var(--store-brand-strong);
+}
+
+.form > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.fieldError {
+  margin: 0;
+  color: var(--store-danger);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

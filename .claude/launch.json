@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "web-dev",
-      "runtimeExecutable": "/private/tmp/claude-501/-Users-antonermolaev-Downloads-an30-ae72758c-main/15df4f35-c13d-45e8-ba28-eb3745a4745b/scratchpad/bin/pnpm",
-      "runtimeArgs": ["--filter", "@an30/web", "dev"],
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "--filter", "@an30/web", "dev"],
       "port": 3000
     }
   ]

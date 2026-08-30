@@ -49,8 +49,63 @@ describe("chat attachment controllers", () => {
     expect(consume).toHaveBeenCalledWith("chat-attachment-download", USER_ID, 30, 60);
     expect(consume.mock.invocationCallOrder[0]).toBeLessThan(readAttachment.mock.invocationCallOrder[0]!);
     expect(reply.header).toHaveBeenCalledWith("Content-Length", "4");
+    expect(reply.header).toHaveBeenCalledWith("Content-Type", "image/png");
     expect(reply.header).toHaveBeenCalledWith("X-Content-Type-Options", "nosniff");
     expect(reply.send).toHaveBeenCalledWith(content);
+  });
+
+  it("serves a validated image inline so <img> can render it, filename kept for a manual save", async () => {
+    const content = Readable.from(Buffer.from("safe"));
+    const readAttachment = vi.fn().mockResolvedValue({
+      byteSize: 4,
+      content,
+      mimeType: "image/jpeg",
+      originalName: "part.jpg",
+    });
+    const controller = new CustomerChatController(
+      {} as ChatAssistantService,
+      { readAttachment } as unknown as ChatService,
+      { consume: vi.fn().mockResolvedValue(undefined) } as unknown as RateLimitService,
+    );
+    const reply = replyMock();
+
+    await controller.attachment(
+      ATTACHMENT_ID,
+      { authContext: { userId: USER_ID } as AuthContext } as FastifyRequest,
+      reply as unknown as FastifyReply,
+    );
+
+    expect(reply.header).toHaveBeenCalledWith(
+      "Content-Disposition",
+      'inline; filename="an30-attachment.jpg"',
+    );
+  });
+
+  it("keeps a non-image attachment (e.g. video) forced to download, never inline", async () => {
+    const content = Readable.from(Buffer.from("safe"));
+    const readAttachment = vi.fn().mockResolvedValue({
+      byteSize: 4,
+      content,
+      mimeType: "video/mp4",
+      originalName: "part.mp4",
+    });
+    const controller = new CustomerChatController(
+      {} as ChatAssistantService,
+      { readAttachment } as unknown as ChatService,
+      { consume: vi.fn().mockResolvedValue(undefined) } as unknown as RateLimitService,
+    );
+    const reply = replyMock();
+
+    await controller.attachment(
+      ATTACHMENT_ID,
+      { authContext: { userId: USER_ID } as AuthContext } as FastifyRequest,
+      reply as unknown as FastifyReply,
+    );
+
+    expect(reply.header).toHaveBeenCalledWith(
+      "Content-Disposition",
+      'attachment; filename="an30-attachment.mp4"',
+    );
   });
 
   it("does not query or open guest attachments after the IP bucket is exhausted", async () => {

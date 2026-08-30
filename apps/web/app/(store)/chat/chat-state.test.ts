@@ -1,14 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ChatIntake } from "@an30/contracts";
+
 import {
+  MANAGER_RESPONSE_WINDOW_MS,
   accessFor,
   attachmentSignatureError,
+  chatThreadCreateBody,
+  formatCountdown,
+  intakeSubject,
   isChatMessage,
   isChatHistoryWindow,
   isOwnMessage,
   latestSequence,
   loadLatestHistory,
   loadOlderHistory,
+  managerJoinState,
   mergeMessages,
   parseStoredGuestThreads,
   reconnectDelay,
@@ -16,6 +23,7 @@ import {
   safeDownloadName,
   senderLabel,
   serializeGuestThreads,
+  unansweredSince,
   type ChatMessage,
   type ChatThread,
 } from "./chat-state";
@@ -165,5 +173,132 @@ describe("shared chat channel helpers", () => {
     expect(senderLabel("system")).toBe("Система");
     expect(senderLabel("customer")).toBe("Вы");
     expect(senderLabel("guest")).toBe("Вы");
+  });
+});
+
+describe("intake questionnaire", () => {
+  const baseIntake: ChatIntake = { articleNumber: null, comment: null, intent: "part", vehicle: null };
+
+  it("derives the subject from the intent label alone when no detail was given", () => {
+    expect(intakeSubject(baseIntake)).toBe("Нужна деталь по артикулу");
+  });
+
+  it("prefers the article number over the vehicle when both are answered", () => {
+    expect(intakeSubject({ ...baseIntake, articleNumber: "GDB1330", vehicle: "Toyota Camry 2015" }))
+      .toBe("Нужна деталь по артикулу: GDB1330");
+  });
+
+  it("falls back to the vehicle when only that was answered", () => {
+    expect(intakeSubject({ ...baseIntake, intent: "advice", vehicle: "Toyota Camry 2015" }))
+      .toBe("Помочь подобрать деталь: Toyota Camry 2015");
+  });
+
+  it("never produces an empty or sub-2-character subject, even for the shortest intent", () => {
+    for (const intent of ["part", "advice", "order", "other"] as const) {
+      expect(intakeSubject({ ...baseIntake, intent }).length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("carries the customer's own answers, untouched, into the thread-create request body", () => {
+    const answered: ChatIntake = {
+      articleNumber: "GDB1330", comment: "Скрип при торможении", intent: "part", vehicle: "Toyota Camry 2015",
+    };
+    expect(chatThreadCreateBody(answered)).toEqual({
+      intake: answered,
+      orderId: null,
+      subject: intakeSubject(answered),
+    });
+  });
+
+  it("still ships the minimal answer — only intent, nothing else filled in — exactly as given", () => {
+    expect(chatThreadCreateBody(baseIntake)).toEqual({
+      intake: baseIntake,
+      orderId: null,
+      subject: "Нужна деталь по артикулу",
+    });
+  });
+});
+
+describe("manager-join countdown", () => {
+  // 2026-08-02T05:00:00Z is 14:00 in Asia/Chita (STORE_OPEN_HOUR=9,
+  // STORE_CLOSE_HOUR=19) — safely inside the shop's working hours.
+  const OPEN_NOW = Date.parse("2026-08-02T05:00:00.000Z");
+  // 2026-08-02T15:00:00Z is 00:00 in Asia/Chita — well outside working hours.
+  const CLOSED_NOW = Date.parse("2026-08-02T15:00:00.000Z");
+
+  function guestMessage(id: string, sequence: string, createdAt: string): ChatMessage {
+    return { ...message(id, sequence), createdAt, senderKind: "guest" };
+  }
+
+  function staffMessage(id: string, sequence: string, createdAt: string): ChatMessage {
+    return { ...message(id, sequence), createdAt, senderKind: "staff" };
+  }
+
+  it("has nothing to wait for when every customer message is already answered", () => {
+    const messages = [
+      guestMessage("019bf9ea-0d3e-7def-9c9a-000000000101", "101", "2026-08-02T04:00:00.000Z"),
+      staffMessage("019bf9ea-0d3e-7def-9c9a-000000000102", "102", "2026-08-02T04:05:00.000Z"),
+    ];
+    expect(unansweredSince(messages)).toBeNull();
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, messages, now: OPEN_NOW, status: "open" }))
+      .toEqual({ kind: "none" });
+  });
+
+  it("counts down from the oldest unanswered message while the shop is open", () => {
+    const sentAt = "2026-08-02T04:57:00.000Z"; // 3 minutes before OPEN_NOW
+    const messages = [guestMessage("019bf9ea-0d3e-7def-9c9a-000000000103", "103", sentAt)];
+    const state = managerJoinState({ assignedStaffId: null, assignedStaffName: null, messages, now: OPEN_NOW, status: "open" });
+    expect(state).toEqual({ kind: "waiting", remainingMs: MANAGER_RESPONSE_WINDOW_MS - 3 * 60_000, sinceIso: sentAt });
+    if (state.kind === "waiting") expect(formatCountdown(state.remainingMs)).toBe("7:00");
+  });
+
+  it("reports the window as elapsed once ten minutes pass, without inventing an assignment", () => {
+    const sentAt = "2026-08-02T04:49:00.000Z"; // 11 minutes before OPEN_NOW
+    const messages = [guestMessage("019bf9ea-0d3e-7def-9c9a-000000000104", "104", sentAt)];
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, messages, now: OPEN_NOW, status: "open" }))
+      .toEqual({ kind: "elapsed", sinceIso: sentAt });
+  });
+
+  it("never promises the ten-minute window outside working hours, however long the message has waited", () => {
+    const sentAt = "2026-08-02T14:59:00.000Z"; // 1 minute before CLOSED_NOW — would still be "waiting" if it were open
+    const messages = [guestMessage("019bf9ea-0d3e-7def-9c9a-000000000105", "105", sentAt)];
+    const state = managerJoinState({ assignedStaffId: null, assignedStaffName: null, messages, now: CLOSED_NOW, status: "open" });
+    expect(state.kind).toBe("outOfHours");
+    if (state.kind === "outOfHours") {
+      expect(state.sinceIso).toBe(sentAt);
+      expect(state.openDetail).toMatch(/откроется/u);
+    }
+  });
+
+  it("reflects a real server-reported assignment over any countdown math, and a closed thread over everything", () => {
+    const sentAt = "2026-08-02T04:49:00.000Z";
+    const messages = [guestMessage("019bf9ea-0d3e-7def-9c9a-000000000106", "106", sentAt)];
+    expect(managerJoinState({ assignedStaffId: "019bf9ea-0d3e-7def-9c9a-0000000009aa", assignedStaffName: "Ирина", messages, now: OPEN_NOW, status: "open" }))
+      .toEqual({ kind: "assigned", staffName: "Ирина" });
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, messages, now: OPEN_NOW, status: "closed" }))
+      .toEqual({ kind: "closed" });
+  });
+
+  it("stops the countdown the moment staff actually reply, before any formal assignment lands", () => {
+    const messages = [
+      guestMessage("019bf9ea-0d3e-7def-9c9a-000000000107", "107", "2026-08-02T04:55:00.000Z"),
+      staffMessage("019bf9ea-0d3e-7def-9c9a-000000000108", "108", "2026-08-02T04:56:00.000Z"),
+    ];
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, messages, now: OPEN_NOW, status: "open" }))
+      .toEqual({ kind: "none" });
+  });
+
+  it("derives the same remaining time from a server timestamp regardless of when the component happens to mount (survives a reload)", () => {
+    const sentAt = "2026-08-02T04:57:00.000Z";
+    const messages = [guestMessage("019bf9ea-0d3e-7def-9c9a-000000000109", "109", sentAt)];
+    // Two independent computations, as if two separate page loads read the
+    // same server history at different real moments — neither is seeded
+    // from a client-side mount time, so both agree on the same math.
+    const firstLoad = managerJoinState({ assignedStaffId: null, assignedStaffName: null, messages, now: OPEN_NOW, status: "open" });
+    const reloadTwoMinutesLater = managerJoinState({
+      assignedStaffId: null, assignedStaffName: null, messages, now: OPEN_NOW + 2 * 60_000, status: "open",
+    });
+    expect(firstLoad).toEqual({ kind: "waiting", remainingMs: 7 * 60_000, sinceIso: sentAt });
+    expect(reloadTwoMinutesLater).toEqual({ kind: "waiting", remainingMs: 5 * 60_000, sinceIso: sentAt });
   });
 });

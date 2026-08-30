@@ -11,37 +11,31 @@ import {
   type FormEvent,
 } from "react";
 
+import type { ChatIntake } from "@an30/contracts";
+
 import { errorText, readSession } from "../_lib/storefront-api";
 import { ChatAttachmentMedia } from "../chat/attachment-preview";
+import { ChatIntakeForm } from "../chat/chat-intake-form";
 import {
   CHAT_ATTACHMENT_ACCEPT,
   CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
-  attachmentSignatureError,
   chatRequest,
+  chatThreadCreateBody,
   formatDate,
   isChatThread,
   isOwnMessage,
   isPreviewableMedia,
   parseStoredGuestThreads,
-  sendChatMessageRest,
   senderLabel,
   serializeGuestThreads,
   upsertThread,
-  uploadChatAttachment,
   type ChatAccess,
   type ChatThread,
 } from "../chat/chat-state";
+import { ManagerJoinNotice } from "../chat/manager-join-notice";
 import { useChatThread } from "../chat/use-chat-thread";
 import styles from "./chat-widget.module.css";
-
-/** Subject staff sees in their queue for a thread the widget started lazily. */
-const DEFAULT_SUBJECT = "Обращение из чата на сайте";
-
-function conversationSubject(seed: string): string {
-  const summary = seed.replace(/\s+/gu, " ").trim().slice(0, 160);
-  return summary ? `Чат: ${summary}` : DEFAULT_SUBJECT;
-}
 
 type Viewer =
   | { kind: "customer" }
@@ -129,7 +123,6 @@ export function ChatWidget() {
   const [online, setOnline] = useState(true);
   const [draft, setDraft] = useState("");
   const [bootstrapPending, setBootstrapPending] = useState(false);
-  const [attachmentBootstrapPending, setAttachmentBootstrapPending] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
   const [announcement, setAnnouncement] = useState("");
 
@@ -147,6 +140,8 @@ export function ChatWidget() {
   const channelActive = !hidden;
 
   const {
+    assignedStaffId,
+    assignedStaffName,
     connection,
     connectionError,
     downloadAttachment,
@@ -170,6 +165,7 @@ export function ChatWidget() {
     sendMessage: submitDraft,
     sendPending,
     showLatestMessages,
+    threadStatus,
     unreadCount,
     uploadAttachment: submitAttachment,
     viewingLatest,
@@ -285,12 +281,10 @@ export function ChatWidget() {
     launcherRef.current?.focus();
   }, []);
 
-  async function createConversation(seed: string): Promise<{ access: ChatAccess; created: ChatThread }> {
-    const subject = conversationSubject(seed);
+  async function createConversation(intake: ChatIntake): Promise<{ access: ChatAccess; created: ChatThread }> {
+    const body = chatThreadCreateBody(intake);
     if (viewer.kind === "guest") {
-      const created = await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, {
-        body: { orderId: null, subject }, method: "POST",
-      });
+      const created = await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, { body, method: "POST" });
       if (!isChatThread(created) || !created.guestToken || created.guestToken.length < 32 || created.guestToken.length > 256) {
         throw new Error("Сервер не вернул безопасный доступ к новому чату");
       }
@@ -304,23 +298,24 @@ export function ChatWidget() {
       return { access: { guestToken: created.guestToken, kind: "guest" }, created };
     }
     if (viewer.kind === "customer") {
-      const created = await chatRequest<ChatThread>("/chat/threads", { kind: "customer" }, {
-        body: { orderId: null, subject }, method: "POST",
-      });
+      const created = await chatRequest<ChatThread>("/chat/threads", { kind: "customer" }, { body, method: "POST" });
       if (!isChatThread(created)) throw new Error("Сервер не вернул безопасный доступ к новому чату");
       return { access: { kind: "customer" }, created };
     }
     throw new Error("Чат доступен только покупателям");
   }
 
-  async function bootstrapThreadAndSend(body: string): Promise<void> {
+  // The intake questionnaire's answers become the thread's opening message
+  // server-side (see intakeOpeningMessage in chat.service.ts), so creating
+  // the thread is the entire "start a conversation" step — there is no
+  // separate first message to send from here.
+  async function handleIntakeSubmit(intake: ChatIntake): Promise<void> {
+    if (!online || bootstrapPending) return;
     setBootstrapPending(true);
     setBootstrapError("");
     try {
-      const { access, created } = await createConversation(body);
-      await sendChatMessageRest(created, access, body, crypto.randomUUID());
+      const { created } = await createConversation(intake);
       setThread(created);
-      setDraft("");
     } catch (caught) {
       setBootstrapError(errorText(caught));
     } finally {
@@ -330,58 +325,34 @@ export function ChatWidget() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!online || bootstrapPending || attachmentBootstrapPending || sendPending) return;
+    if (!online || !thread || thread.status === "closed" || sendPending) return;
     if (viewer.kind !== "guest" && viewer.kind !== "customer") return;
     const body = draft.trim();
     if (!body || body.length > 4_000) return;
-    if (!thread || thread.status === "closed") {
-      await bootstrapThreadAndSend(body);
-      return;
-    }
     const result = await submitDraft(body);
     if (result.ok) setDraft("");
     if (result.closed) setThread((current) => current ? { ...current, status: "closed" } : current);
   }
 
   async function handleFileChange(file: File | null): Promise<void> {
-    if (!file || !online || (viewer.kind !== "guest" && viewer.kind !== "customer")) return;
-    try {
-      if (thread && thread.status !== "closed") {
-        await submitAttachment(file);
-        return;
-      }
-      setAttachmentBootstrapPending(true);
-      setBootstrapError("");
-      const signature = new Uint8Array(await file.slice(0, 32).arrayBuffer());
-      const validationError = attachmentSignatureError(file, signature);
-      if (validationError) throw new Error(validationError);
-      const { access, created } = await createConversation(`Файл для подбора: ${file.name}`);
-      try {
-        await uploadChatAttachment(created, access, file, crypto.randomUUID());
-      } finally {
-        // Even when the file itself is invalid, keep the new conversation so
-        // the customer can retry without silently creating another thread.
-        setThread(created);
-      }
-    } catch (caught) {
-      setBootstrapError(errorText(caught));
-    } finally {
-      setAttachmentBootstrapPending(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+    if (!file || !online || !thread || thread.status === "closed") return;
+    if (viewer.kind !== "guest" && viewer.kind !== "customer") return;
+    await submitAttachment(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   if (hidden) return null;
 
   const canChat = viewer.kind === "guest" || viewer.kind === "customer";
-  const attachDisabled = filePending || !online || bootstrapPending || attachmentBootstrapPending;
-  const sendDisabled = !draft.trim() || !online || bootstrapPending || attachmentBootstrapPending || sendPending;
+  const hasOpenThread = Boolean(thread) && thread?.status !== "closed";
+  const attachDisabled = !hasOpenThread || filePending || !online;
+  const sendDisabled = !hasOpenThread || !draft.trim() || !online || sendPending;
   const isRetry = Boolean(sendAttemptId) && !sendPending;
   const statusVariant = viewer.kind === "loading" || threadLoading ? "busy"
     : viewer.kind === "error" ? "error"
       : viewer.kind === "staff" ? "muted"
         : !online ? "error"
-          : bootstrapPending || attachmentBootstrapPending ? "busy"
+          : bootstrapPending ? "busy"
             : !thread ? "muted"
               : connection === "live" ? "live"
                 : connection === "error" || connection === "offline" ? "error"
@@ -390,9 +361,8 @@ export function ChatWidget() {
     : viewer.kind === "error" ? "Чат недоступен"
       : viewer.kind === "staff" ? "Только для покупателей"
         : !online ? "Нет сети"
-          : attachmentBootstrapPending ? "Загружаем файл…"
-            : bootstrapPending ? "Отправляем…"
-              : !thread ? "Новое обращение"
+          : bootstrapPending ? "Отправляем…"
+            : !thread ? "Новое обращение"
               : CONNECTION_LABELS[connection];
 
   return (
@@ -538,7 +508,7 @@ export function ChatWidget() {
                     </article>
                   ))}
                   {thread?.status === "closed" ? (
-                    <div className={styles.systemNotice}>Обращение закрыто. Отправьте сообщение, чтобы начать новое.</div>
+                    <div className={styles.systemNotice}>Обращение закрыто. Заполните форму ниже, чтобы начать новое.</div>
                   ) : null}
                   <div ref={messageEndRef} />
                 </div>
@@ -548,61 +518,80 @@ export function ChatWidget() {
         </div>
 
         {canChat ? (
-          <form className={styles.composer} onSubmit={(event) => void handleSubmit(event)}>
-            <label className={styles.visuallyHidden} htmlFor={`${titleId}-message`}>Сообщение магазину</label>
-            <div className={styles.composerRow}>
-              <button
-                type="button"
-                className={styles.iconButton}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={attachDisabled}
-                aria-label="Прикрепить фото или видео"
-              >
-                <AttachImageIcon />
-              </button>
-              <input
-                accept={CHAT_ATTACHMENT_ACCEPT}
-                className={styles.visuallyHidden}
-                id={`${titleId}-file`}
-                onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
-                ref={fileInputRef}
-                tabIndex={-1}
-                type="file"
+          <div className={styles.composer}>
+            {thread && thread.status !== "closed" ? (
+              <>
+                <ManagerJoinNotice
+                  assignedStaffId={assignedStaffId}
+                  assignedStaffName={assignedStaffName}
+                  messages={messages}
+                  status={threadStatus ?? thread.status}
+                />
+                <form onSubmit={(event) => void handleSubmit(event)}>
+                  <label className={styles.visuallyHidden} htmlFor={`${titleId}-message`}>Сообщение магазину</label>
+                  <div className={styles.composerRow}>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={attachDisabled}
+                      aria-label="Прикрепить фото или видео"
+                    >
+                      <AttachImageIcon />
+                    </button>
+                    <input
+                      accept={CHAT_ATTACHMENT_ACCEPT}
+                      className={styles.visuallyHidden}
+                      id={`${titleId}-file`}
+                      onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
+                      ref={fileInputRef}
+                      tabIndex={-1}
+                      type="file"
+                    />
+                    <textarea
+                      className={styles.textarea}
+                      id={`${titleId}-message`}
+                      maxLength={4_000}
+                      onChange={(event) => {
+                        if (event.target.value !== draft) resetSendAttempt();
+                        setDraft(event.target.value);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          event.currentTarget.form?.requestSubmit();
+                        }
+                      }}
+                      placeholder="Введите сообщение..."
+                      ref={textareaRef}
+                      rows={1}
+                      value={draft}
+                    />
+                    <button
+                      aria-label={isRetry ? "Повторить отправку сообщения" : "Отправить сообщение"}
+                      className={styles.sendButton}
+                      data-pending={sendPending || undefined}
+                      disabled={sendDisabled}
+                      type="submit"
+                    >
+                      {isRetry ? <RetryIcon /> : <SendIcon />}
+                    </button>
+                  </div>
+                  {sendError ? <p className={styles.inlineError} role="alert">{sendError}</p> : null}
+                  {fileError ? <p className={styles.inlineError} role="alert">{fileError}</p> : null}
+                  <p className={styles.hint}>Фото до 5 МБ. Видео до 15 МБ и до 2 минут.</p>
+                  {filePending ? <p className={styles.hint} role="status">Загружаем файл…</p> : null}
+                </form>
+              </>
+            ) : (
+              <ChatIntakeForm
+                disabled={!online}
+                error={bootstrapError}
+                onSubmit={(intake) => void handleIntakeSubmit(intake)}
+                pending={bootstrapPending}
               />
-              <textarea
-                className={styles.textarea}
-                id={`${titleId}-message`}
-                maxLength={4_000}
-                onChange={(event) => {
-                  if (event.target.value !== draft) resetSendAttempt();
-                  setDraft(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                placeholder="Введите сообщение..."
-                ref={textareaRef}
-                rows={1}
-                value={draft}
-              />
-              <button
-                aria-label={isRetry ? "Повторить отправку сообщения" : "Отправить сообщение"}
-                className={styles.sendButton}
-                data-pending={sendPending || bootstrapPending || undefined}
-                disabled={sendDisabled}
-                type="submit"
-              >
-                {isRetry ? <RetryIcon /> : <SendIcon />}
-              </button>
-            </div>
-            {sendError || bootstrapError ? <p className={styles.inlineError} role="alert">{sendError || bootstrapError}</p> : null}
-            {fileError ? <p className={styles.inlineError} role="alert">{fileError}</p> : null}
-            <p className={styles.hint}>Фото до 5 МБ. Видео до 15 МБ и до 2 минут.</p>
-            {filePending || attachmentBootstrapPending ? <p className={styles.hint} role="status">Загружаем файл…</p> : null}
-          </form>
+            )}
+          </div>
         ) : null}
       </dialog>
     </>
