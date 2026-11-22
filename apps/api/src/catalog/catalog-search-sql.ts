@@ -66,20 +66,25 @@ export function crossEquivalentsCte(article: string): string {
 )`;
 }
 
+/**
+ * How many characters of the name are the product's own article at its start, as typed («3930 Лампа T4W …») or
+ * written another way as the first word («KJ-1006 Клипса …» for KJ1006); 0 when it does not start with it or one
+ * word only would be left («6409 Подшипник»). Nearly the reading of publicProductName with the article.
+ */
+const LEADING_ARTICLE = `(CASE WHEN position(' ' IN ltrim(substr(product.name,length(split_part(product.name,' ',1))+1)))=0 THEN 0
+  WHEN lower(left(product.name,length(product.sku)+1))=lower(product.sku::text)||' ' THEN length(product.sku)
+  WHEN split_part(product.name,' ',1) ~ '[0-9]' AND app.normalize_article(split_part(product.name,' ',1))=product.sku_normalized
+    THEN length(split_part(product.name,' ',1))
+  ELSE 0 END)`;
+
+/** The ё-folded name without the article it starts with, for «the name starts with the part the customer named». */
+const NAME_FOLDED_AS_SHOWN = `ltrim(substr(product.name_folded,${LEADING_ARTICLE}+1))`;
+
+/** The order «по названию»: the name as the storefront shows it, in the Russian alphabet (migration 0050). */
+export const NAME_ORDER = `lower(ltrim(substr(product.name,${LEADING_ARTICLE}+1))) COLLATE app.russian_names ASC`;
+
 // Brands are compared by identity (app.canonical_brand, migration 0042):
 // 1С may call the brand «MANN» while the cross names «MANN-FILTER».
-/** The name starts with the product's own article («3930 Лампа T4W …»): 5 780 names of the owner's base do. */
-const STARTS_WITH_ARTICLE = "lower(left(product.name,length(product.sku)+1))=lower(product.sku::text)||' '";
-
-/**
- * The order «по названию»: the name as the storefront shows it — without the article it starts with
- * (publicProductName with the article) — in the Russian alphabet (migration 0050).
- */
-/** The ё-folded name without the article it starts with, for «the name starts with the part the customer named». */
-const NAME_FOLDED_AS_SHOWN = `(CASE WHEN ${STARTS_WITH_ARTICLE} THEN substr(product.name_folded,length(product.sku)+2) ELSE product.name_folded END)`;
-
-export const NAME_ORDER = `lower(CASE WHEN ${STARTS_WITH_ARTICLE} THEN substr(product.name,length(product.sku)+2) ELSE product.name END) COLLATE app.russian_names ASC`;
-
 export const CROSS_MATCH = `(product.sku_normalized<>'' AND EXISTS (
   SELECT 1 FROM cross_equivalents
   WHERE cross_equivalents.article=product.sku_normalized

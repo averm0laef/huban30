@@ -2,7 +2,7 @@
 // (packages/contracts/src/product-name.ts) against the name as 1С has it. Prints how many names each rule changes
 // and examples to read by eye; nothing is written.
 // Usage: node scripts/catalog-placement/shown-names.mjs [examples per rule]
-import { publicProductName } from "../../packages/contracts/dist/index.js";
+import { normalizeArticleNumber, publicProductName } from "../../packages/contracts/dist/index.js";
 
 import { loadItems, oneLine } from "./lib.mjs";
 
@@ -20,7 +20,9 @@ for (const item of items) {
   changed += 1;
   const line = `[${item.sku}] ${stored} → ${shown}`;
   const sku = String(item.sku ?? "").trim().toLowerCase();
-  if (sku && stored.toLowerCase().startsWith(`${sku} `) && !shown.toLowerCase().startsWith(`${sku} `)) rules.article.push(line);
+  const first = stored.split(" ", 1)[0];
+  const leadsWithArticle = (sku && stored.toLowerCase().startsWith(`${sku} `)) || (/\d/u.test(first) && normalizeArticleNumber(first) === normalizeArticleNumber(sku));
+  if (leadsWithArticle && shown.split(" ", 1)[0] !== first) rules.article.push(line);
   else if (stored.split(" ").length > shown.split(" ").length) rules.repeat.push(line);
   else rules.capital.push(line);
 }

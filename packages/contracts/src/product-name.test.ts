@@ -89,11 +89,15 @@ describe("the name of a product as a customer sees it", () => {
 
 describe("the name of a product read with its article", () => {
   it.each([
-    // 5 780 names of the owner's base start with the article, which the page already shows on a line of its own.
+    // 8 099 names of the owner's base start with the article, which the page already shows on a line of its own.
     ["3930 Лампа T4W 24V BA9s Osram", "3930", "Лампа T4W 24V BA9s Osram"],
     ["LC-341 Фильтр масляный LYNXauto Union C-341", "LC-341", "Фильтр масляный LYNXauto Union C-341"],
     ["20-22 Хомут силовой 20-22мм", "20-22", "Хомут силовой 20-22мм"],
     ["AF0258W Фильтр воздушный Avantech AVANTECH", "af0258w", "Фильтр воздушный Avantech AVANTECH"],
+    // The same article written another way at the start (2 339 names more).
+    ["KJ-1006 Клипса крепежная MASUMA KJ-1006 17120", "KJ1006", "Клипса крепежная MASUMA KJ-1006 17120"],
+    ["30-45 хомут червячный 30-45мм NORMA", "3045", "Хомут червячный 30-45мм NORMA"],
+    ["1 987 302 533 Лампа накаливания H21W 24V BAY9S Bosch", "1 987 302 533", "Лампа накаливания H21W 24V BAY9S Bosch"],
     // The article said twice at the end.
     ["Набор резиновых колец 404 шт (ЦЕНА ЗА ШТУКУ!!!) DA-00997 DA-00997", "DA00997", "Набор резиновых колец 404 шт (ЦЕНА ЗА ШТУКУ!!!) DA-00997"],
     ["10PK1620 Ремень поликлиновый DONGIL 10PK1620 10PK1620", "10PK1620", "Ремень поликлиновый DONGIL 10PK1620"],
@@ -111,8 +115,9 @@ describe("the name of a product read with its article", () => {
     ["Лампа OSRAM 3930", "3930"],
     // The article is the start of a longer number, not the number itself.
     ["39301 Лампа накаливания", "3930"],
-    // Nothing but codes would be left.
+    // Nothing but codes would be left, or one word that says less than the number: «6409 Подшипник».
     ["3930 24V", "3930"],
+    ["6409 Подшипник", "6409"],
     // A brand or a code in small letters, a name in capitals: as typed.
     ["masuma MFC-112 фильтр", "MFC-112"],
     ["ФИЛЬТР САЛОНА SHAANXI 81.61910.0011 CREATEK CK5655", "CK5655"],

@@ -54,17 +54,20 @@ const SHORTHAND_CAPITALS: ReadonlyMap<string, string> = new Map([
 
 /**
  * `shown` read with the product's article, which the page shows on a line of its own: without the article it starts
- * with (5 780 names of the owner's base) when a word is left after it, without the article said twice at its end,
- * and with a capital letter when 1С has it in small letters («лента изоляционная …», «акб BARS …»). A Latin word in
- * small letters at the start is a brand or a code and is left as typed.
+ * with — as typed or written another way («KJ-1006 …» for KJ1006) — when two words are left after it, without the
+ * article said twice at its end, and with a capital letter when 1С has it in small letters («лента изоляционная …»,
+ * «акб BARS …»). A Latin word in small letters at the start is a brand or a code and is left as typed.
  */
 function readWithArticle(shown: string, sku: string): string {
   const article = sku.trim();
   let name = shown;
-  const rest = name.slice(article.length);
-  if (article && name.slice(0, article.length).toLowerCase() === article.toLowerCase() && /^\s/u.test(rest) && /[a-zа-яё]{3,}/iu.test(rest)) {
-    name = rest.trim();
-  }
+  // The article as typed, or written another way as the first word («KJ-1006 Клипса …» for KJ1006).
+  const firstWord = name.split(" ", 1)[0] ?? "";
+  const lead = article && name.slice(0, article.length).toLowerCase() === article.toLowerCase() ? article.length
+    : /\d/u.test(firstWord) && normalizeArticleNumber(firstWord) === normalizeArticleNumber(article) ? firstWord.length : 0;
+  const rest = name.slice(lead);
+  // At least two words are left, one of them a word: «6409 Подшипник» says more with its number.
+  if (lead > 0 && /^\s/u.test(rest) && /[a-zа-яё]{3,}/iu.test(rest) && rest.trim().includes(" ")) name = rest.trim();
   const words = name.split(" ");
   const last = words.at(-1) ?? "";
   if (words.length > 2 && last === words.at(-2) && /\d/u.test(last) && normalizeArticleNumber(last) === normalizeArticleNumber(article)) words.pop();
