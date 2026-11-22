@@ -196,8 +196,8 @@
 .viewToggle a {
   display: grid;
   place-items: center;
-  width: 41px;
-  min-height: 36px;
+  width: 44px;
+  min-height: 44px;
   border-radius: 9px;
   color: var(--store-muted);
   text-decoration: none;
@@ -248,7 +248,7 @@
   .quickFilter { display: none; }
   .mobileFilter { gap: 4px; padding-inline: 7px; font-size: .79rem; }
   .viewToggle { padding: 2px; }
-  .viewToggle a { width: 40px; min-height: 40px; }
+  .viewToggle a { width: 44px; min-height: 44px; }
 }
 @media (max-width: 400px) {
   /* Fluent's own atomic class sets the icon's display, so the hide needs the

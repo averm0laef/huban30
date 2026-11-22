@@ -25,6 +25,7 @@
   background: var(--store-bg);
 }
 .galleryPhoto > img { object-fit: contain; padding: clamp(14px, 7%, 40px); mix-blend-mode: multiply; }
+.galleryPhoto[data-photo-missing] { aspect-ratio: auto; height: 112px; }
 .galleryPhoto[data-photo-missing] > img { padding: clamp(18px, 10%, 50px); }
 .thumbs { grid-row: 1; grid-column: 1; display: grid; align-content: start; gap: 7px; }
 .thumb {

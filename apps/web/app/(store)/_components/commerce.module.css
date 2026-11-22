@@ -50,11 +50,11 @@
 .orderRow:has([data-photo-missing]) .linePhotoNote { display: block; }
 .lineQuantity { align-self: center; }
 .lineTotal { align-self: center; justify-self: end; font-size: .97rem; line-height: 1.3; text-align: end; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.remove { min-height: 36px; padding: 0; border: 0; background: none; color: var(--store-brand); font-size: .79rem; cursor: pointer; }
+.remove { min-height: 44px; padding: 0; border: 0; background: none; color: var(--store-brand); font-size: .79rem; cursor: pointer; }
 .remove:hover { text-decoration: underline; text-underline-offset: 3px; }
 .quantity {
   display: grid;
-  grid-template-columns: 38px minmax(27px, auto) 38px;
+  grid-template-columns: 44px minmax(27px, auto) 44px;
   align-items: center;
   width: fit-content;
   min-width: 0;
@@ -67,8 +67,8 @@
 .quantity button {
   display: grid;
   min-width: 0;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -84,7 +84,7 @@
 .productCartActions a {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 7px;
   color: var(--store-brand);
   font-size: .8rem;

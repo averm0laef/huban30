@@ -35,7 +35,7 @@
   line-height: 1;
 }
 .avatar[data-size="lg"] { width: 46px; height: 46px; font-size: 0.9rem; }
-.avatar[data-size="sm"] { width: 28px; height: 28px; font-size: 0.62rem; }
+.avatar[data-size="sm"] { width: 28px; height: 28px; font-size: 0.75rem; }
 .avatar[data-tone="muted"] { background: var(--store-surface-strong); color: var(--store-brand); }
 /* The shop is the wheel from the АН-30 logo on brand blue, not initials. */
 .avatarWheel { width: 64%; height: 64%; }
@@ -77,7 +77,7 @@
   font-size: 0.78rem;
 }
 .historyControls button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--store-radius-full);
@@ -173,8 +173,8 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: #8b8fa8;
-  font-size: 0.69rem;
+  color: var(--store-muted);
+  font-size: 0.75rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -211,7 +211,7 @@
 }
 .row[data-own] .fileChip { background: rgb(255 255 255 / 16%); }
 .fileChip strong { font-size: 0.86rem; overflow-wrap: anywhere; }
-.fileChip span { font-size: 0.74rem; opacity: 0.8; }
+.fileChip span { font-size: 0.75rem; opacity: 0.8; }
 
 .toLatest {
   position: sticky;
@@ -220,7 +220,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
   margin-top: 8px;
   padding: 0 14px;
   border: 0;
@@ -314,7 +314,7 @@
   line-height: 1.4;
 }
 .error button {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid currentColor;
   border-radius: var(--store-radius-full);
@@ -378,7 +378,7 @@
   background: var(--store-brand-soft);
   color: var(--store-brand-strong, var(--store-brand));
   font-family: var(--store-font-display);
-  font-size: .72rem;
+  font-size: .75rem;
   font-weight: 800;
   letter-spacing: .02em;
   text-transform: uppercase;
@@ -390,4 +390,4 @@
 .intakeRows dd { margin: 0; font-size: .9rem; font-weight: 650; text-align: right; }
 .intakeRows dd[data-empty] { color: var(--store-muted); font-weight: 500; }
 .intakeComment { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--store-bg); font-size: .9rem; line-height: 1.42; white-space: pre-wrap; }
-.intakeTime { position: absolute; right: 12px; bottom: 6px; color: #8b8fa8; font-size: .69rem; font-variant-numeric: tabular-nums; }
+.intakeTime { position: absolute; right: 12px; bottom: 6px; color: var(--store-muted); font-size: .75rem; font-variant-numeric: tabular-nums; }

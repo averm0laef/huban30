@@ -23,7 +23,7 @@
   justify-self: start;
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
+  min-height: 44px;
   margin-top: 4px;
   padding: 0 16px;
   border-radius: 10px;
@@ -47,7 +47,7 @@
 .single { display: grid; }
 .contents { position: sticky; top: 96px; display: grid; gap: 2px; padding: 16px; border-radius: var(--store-radius); background: var(--store-surface); font-size: .88rem; }
 .contents strong { padding: 0 10px 8px; color: var(--store-muted); font-size: .75rem; letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
-.contents a { padding: 8px 10px; border-radius: 10px; color: var(--store-text); line-height: 1.35; text-decoration: none; }
+.contents a { display: flex; align-items: center; min-height: 44px; padding: 8px 10px; border-radius: 10px; color: var(--store-text); line-height: 1.35; text-decoration: none; }
 .contents a:hover { background: var(--store-brand-soft); color: var(--store-brand); }
 
 .cards { display: grid; gap: 14px; min-width: 0; }
@@ -111,7 +111,7 @@
 .messengers { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--store-border); }
 .messengers > span { color: var(--store-muted); font-size: .82rem; }
 .messengers ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.messengers a { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; border-radius: 10px; background: var(--store-bg); color: var(--store-text); font-size: .88rem; font-weight: 600; text-decoration: none; }
+.messengers a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--store-bg); color: var(--store-text); font-size: .88rem; font-weight: 600; text-decoration: none; }
 .messengers a:hover { background: var(--store-brand-soft); color: var(--store-brand); }
 .messengers svg { color: var(--store-brand); }
 .contactGrid .map { min-height: 100%; }
