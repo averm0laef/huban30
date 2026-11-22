@@ -58,6 +58,7 @@ import { EXPERT_HELP_VIN_STORAGE_KEY } from "../_lib/vin";
 import { ExpertHelpQueryLink } from "../catalog/expert-help-query-link";
 import styles from "./parts-finder.module.css";
 import { CarCatalog } from "./car-catalog";
+import { numberMakers } from "./number-makers";
 import { OfferRow } from "./offer-row";
 import { VehiclePicker } from "./vehicle-picker";
 
@@ -253,6 +254,54 @@ function PartCard({ part }: { part: FinderPart }) {
       </div>
       {showAnalogs ? <AnalogsPanel article={part.article} brand={part.brand} description={part.description} manufacturerId={part.manufacturer_id} /> : null}
     </article>
+  );
+}
+
+/**
+ * A number typed in the search: when it belongs to several makers' products («3930» — a lamp of OSRAM and an oil of
+ * LIQUI MOLY), the customer first says whose part is meant (number-makers.ts); then the part and its analogs are
+ * those of that maker. Nothing paid is asked.
+ */
+function NumberAnswer({ article, shop }: { article: string; shop: ShopOffer[] }) {
+  const makers = numberMakers(shop);
+  // undefined — not chosen yet; "all" — every offer of the number.
+  const [chosen, setChosen] = useState<string | null | "all" | undefined>(undefined);
+  if (makers.length > 0 && chosen === undefined) {
+    return (
+      <div className={styles.makerChoice}>
+        <p className={styles.stepTitle}>Номер {article} есть у нескольких производителей. Чья деталь вам нужна?</p>
+        <ul>
+          {makers.map((maker) => (
+            <li key={maker.brand ?? "-"}>
+              <button className={styles.makerOption} onClick={() => setChosen(maker.brand)} type="button">
+                <strong>{maker.brand ?? "Производитель не указан"}</strong>
+                <span>{maker.example}</span>
+                <small>
+                  {maker.fromKopeks === null ? "Цена по запросу" : `от ${formatRubles(maker.fromKopeks)}`}
+                  {" · "}
+                  <span className={maker.inStock ? styles.makerInStock : undefined}>{maker.inStock ? "в наличии" : "под заказ"}</span>
+                </small>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button className={quietButton} onClick={() => setChosen("all")} type="button"><Grid20Regular aria-hidden="true" />Показать все предложения</button>
+      </div>
+    );
+  }
+  const maker = chosen === "all" ? null : makers.find((item) => item.brand === chosen) ?? null;
+  const part: FinderPart = maker ? { article, ...(maker.brand ? { brand: maker.brand } : {}), shop: maker.offers } : { article, shop };
+  return (
+    <>
+      {makers.length > 0 ? (
+        <button className={`${quietButton} ${styles.makerBack}`} onClick={() => setChosen(undefined)} type="button">
+          <ArrowCounterclockwise20Regular aria-hidden="true" />Другой производитель
+        </button>
+      ) : null}
+      <div className={styles.partList}>
+        <PartCard part={part} />
+      </div>
+    </>
   );
 }
 
@@ -778,9 +827,7 @@ function ResultView({ articleExtra, onAlternative, onConfirm, onEdit, onPick, on
             ))}
           </p>
         ) : null}
-        <div className={styles.partList}>
-          <PartCard part={{ article: data.article, shop: data.shop ?? [] }} />
-        </div>
+        <NumberAnswer article={data.article} key={data.article} shop={data.shop ?? []} />
         <SupplierOffers supplier={articleExtra.supplier} />
       </div>
     );
