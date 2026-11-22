@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-07",
+  "git_head": "c62359fc3e163664f31ea47e777ef9841575ac94",
+  "working_tree": "dirty; audit covers current on-disk files including user changes",
+  "files": {
+    "apps/api/src/staff/staff.controller.ts": "97fc498cc730baaed6673c43553766e864475ea5f3849f116c56621ae9db6952",
+    "apps/api/src/staff/staff.service.ts": "3477a6c6096a54886d3529c5dfc0f35085a8069bd609c712e7b0c7f826f548b5",
+    "packages/contracts/src/index.ts": "75714f5eadc6e6c9d20c9ff8afb56bea805fa190bb86f28a8c80da030661815b",
+    "apps/api/src/one-c-exchange/one-c-exchange.controller.ts": "ff431bdf56fc21a5c63e739f788e6813067de18cbc70d9d4e422063fc0541f0b",
+    "apps/api/src/one-c-exchange/one-c-exchange-session.service.ts": "f55c420b7c25430492250f38b5bfb3b4888ad487dd793ade5b400c0701624c86",
+    "apps/api/src/catalog/one-c-integration.service.ts": "e028ce2cd96c484123a7d84d63901b24ac7e4b6ee710b41f66ae6f9716f9a3b7",
+    "apps/api/src/chat/chat.service.ts": "cfba778d02a0b7d276d864e6a5d57eb1cc1ca23694e988e13b8665c44aef46af",
+    "apps/api/src/chat/chat-realtime.service.ts": "a6af589786e9accb3d98f20798cf85583f1c9fa6b94e8842c5c9ff7548ed568d",
+    "apps/api/src/main.ts": "99220dc246652da2cd5f0d1c81fdb3f66de84474b5f9e9c9f339d153036e5e60",
+    "apps/api/src/checkout/checkout.service.ts": "ce75db3b27ceba312d9dc6af19171978b015fcde35a4405d924f4d0046131dbc",
+    "packages/database/migrations/0020_checkout_personal_data_consent.sql": "bd84c2e486b0615c6e29e73afcd73a8e002f58aa357b26c2fb4016af2c216935",
+    "packages/database/migrations/0026_checkout_manager_requests.sql": "a23d85a3d4930b56c7b565c797e8446f25f2e95a6253d98e255e837a52782a22",
+    "apps/api/package.json": "6c62047c292a4841d56814984c94826c9e7611bc91858b3c0b2f784e096983d5",
+    "apps/web/package.json": "e4d600302bbc3fc8e13cbb596cd4e60ede46bcd899b57ea41d49330eb70908de",
+    "apps/worker/package.json": "fb79a00fd0620981cc47a6f46347b390e6502d86c0c81d47c37af8d151df9bb1",
+    "pnpm-lock.yaml": "4d69fe16a61f8ba3094b2b933d2a645381caa5c01c749bebf1655d9e0b6ddce6",
+    "compose.yaml": "badfbda26df149fa3c3d74c721c568839929bde46d2f6262d7690843d1c6d981",
+    "infra/caddy/Caddyfile": "2abff010c2b48702706b8004f777fc04116aa36bcf2394924b0f403b6094d82f"
+  }
+}

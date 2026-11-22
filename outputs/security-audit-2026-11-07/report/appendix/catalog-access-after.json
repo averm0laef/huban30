@@ -1,0 +1,11 @@
+{
+  "case": "SEC-01_post_fix_staff_catalog_access",
+  "customerLoginStatus": 201,
+  "customerRole": "customer",
+  "customerCatalogStatus": 403,
+  "managerLoginStatus": 201,
+  "managerRole": "manager",
+  "managerMfaStatus": 201,
+  "managerCatalogStatus": 200,
+  "managerSeesSyntheticInactiveItem": true
+}

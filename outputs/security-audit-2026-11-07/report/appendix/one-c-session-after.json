@@ -1,0 +1,30 @@
+{
+  "case": "SEC-02_post_fix_session_policy",
+  "passed": true,
+  "tests": [
+    {
+      "change": "disable",
+      "issuedStatus": 200,
+      "validSessionStatus": 200,
+      "changedPolicyStatus": 401
+    },
+    {
+      "change": "password",
+      "issuedStatus": 200,
+      "validSessionStatus": 200,
+      "changedPolicyStatus": 401
+    },
+    {
+      "change": "network",
+      "issuedStatus": 200,
+      "validSessionStatus": 200,
+      "changedPolicyStatus": 401
+    },
+    {
+      "change": "disable-reenable",
+      "issuedStatus": 200,
+      "validSessionStatus": 200,
+      "changedPolicyStatus": 401
+    }
+  ]
+}

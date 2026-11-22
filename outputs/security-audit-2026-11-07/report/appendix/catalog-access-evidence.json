@@ -1,0 +1,25 @@
+{
+  "case": "customer_access_to_staff_catalog",
+  "customerRole": "customer",
+  "loginStatus": 201,
+  "staffCatalogStatus": 200,
+  "returnedInactiveItems": [
+    {
+      "availableQuantity": 0,
+      "categoryName": null,
+      "currency": null,
+      "externalId": "internal-hidden-1794067574025",
+      "id": "2ad3be35-49e8-4599-a76c-5b0eb2d17c12",
+      "isActive": false,
+      "isDemo": false,
+      "name": "Synthetic unpublished catalog audit item",
+      "priceKopeks": null,
+      "sku": "HIDDEN-AUDIT-1794067574025",
+      "sourceVersion": 17,
+      "updatedAt": "2026-11-07T16:06:14.026Z"
+    }
+  ],
+  "publicCatalogSameItemStatus": 404,
+  "unauthenticatedStaffCatalogStatus": 401,
+  "productId": "2ad3be35-49e8-4599-a76c-5b0eb2d17c12"
+}

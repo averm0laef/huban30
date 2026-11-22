@@ -1,0 +1,6 @@
+Statement preparation only; no data changes.
+PREPARE an30_audit_status AS UPDATE app.chat_threads SET assigned_staff_id=$2,status=$3,closed_at=CASE WHEN $3='closed' THEN COALESCE(closed_at,clock_timestamp()) ELSE NULL END,version=version+1 WHERE id=$1 AND version=$4;
+ERROR:  inconsistent types deduced for parameter $3
+LINE 1: ... app.chat_threads SET assigned_staff_id=$2,status=$3,closed_...
+                                                             ^
+DETAIL:  text versus app.chat_thread_status

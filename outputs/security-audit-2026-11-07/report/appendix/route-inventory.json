@@ -1,0 +1,358 @@
+[
+  {
+    "path": "/api/v1/auth/register",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/email/verify",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/login",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/session",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/auth/logout",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/password/forgot",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/password/reset",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/totp/setup",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/totp/confirm",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/totp/verify",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/admin/pending-token",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/auth/staff/invitations",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/auth/staff/invitations/accept",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/catalog/imports/{batchId}/apply",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/catalog/imports/{batchId}/rollback",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/catalog/imports",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/imports/{batchId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/1c/settings",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/1c/settings",
+    "method": "PUT"
+  },
+  {
+    "path": "/api/v1/catalog/1c/requests",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/categories",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/categories/tree",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/brands",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/products",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/products/{idOrSlug}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/featured",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/media/{imageId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/catalog/search",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/integrations/1c/imports",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/threads",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/threads",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/chat/threads/{threadId}/messages",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/chat/threads/{threadId}/messages",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/threads/{threadId}/read/{messageId}",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/threads/{threadId}/attachments",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/attachments/{attachmentId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/chat/guest/threads",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/guest/threads/{threadId}/messages",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/chat/guest/threads/{threadId}/messages",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/guest/threads/{threadId}/read/{messageId}",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/guest/threads/{threadId}/attachments",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/chat/guest/attachments/{attachmentId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/checkout",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/checkout/guest",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/orders",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/orders/{orderId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/orders/{orderId}/status",
+    "method": "PATCH"
+  },
+  {
+    "path": "/api/v1/orders/guest/{orderId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/integrations/1c/exchange",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/integrations/1c/exchange",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/staff/summary",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/orders",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/chats",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/requests",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/requests/{requestId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/requests/{requestId}",
+    "method": "PATCH"
+  },
+  {
+    "path": "/api/v1/staff/chats/{threadId}",
+    "method": "PATCH"
+  },
+  {
+    "path": "/api/v1/staff/catalog",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/invoices",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/invoices",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/staff/invoices/{invoiceId}",
+    "method": "PATCH"
+  },
+  {
+    "path": "/api/v1/staff/team",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/reports",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/audit",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/account",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/account",
+    "method": "PATCH"
+  },
+  {
+    "path": "/api/v1/account/password",
+    "method": "PUT"
+  },
+  {
+    "path": "/api/v1/account/wishlist",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/account/wishlist",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/account/wishlist/{productId}",
+    "method": "DELETE"
+  },
+  {
+    "path": "/api/v1/account/history",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/account/history",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/account/history",
+    "method": "DELETE"
+  },
+  {
+    "path": "/api/v1/account/addresses",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/account/addresses",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/account/addresses/{addressId}",
+    "method": "PATCH"
+  },
+  {
+    "path": "/api/v1/account/addresses/{addressId}",
+    "method": "DELETE"
+  },
+  {
+    "path": "/api/v1/contact-requests",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/public/settings",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/public/content/{slug}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/public/banners",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/public/media/{objectId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/supplier-waitlist",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/supplier-waitlist/{requestId}",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/staff/supplier-waitlist/{requestId}",
+    "method": "PATCH"
+  },
+  {
+    "path": "/api/v1/suppliers/search",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/suppliers/waitlist",
+    "method": "POST"
+  },
+  {
+    "path": "/api/v1/health/live",
+    "method": "GET"
+  },
+  {
+    "path": "/api/v1/health/ready",
+    "method": "GET"
+  }
+]

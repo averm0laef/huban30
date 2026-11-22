@@ -1,0 +1,27 @@
+{
+  "finding": "One-C exchange sessions survive integration disable",
+  "severity": "medium",
+  "scope": "isolated temporary local API, PostgreSQL, Redis; synthetic credentials and tiny upload",
+  "executed": true,
+  "evidence": [
+    {"step":"obtainSessionByHttp","status":200,"accepted":true},
+    {"step":"disabledFreshAuth","status":401,"body":"failure"},
+    {"step":"disabledExistingCookieUpload","status":201,"body":"success","ttl":7200}
+  ],
+  "locations": [
+    "apps/api/src/one-c-exchange/one-c-exchange.controller.ts:113",
+    "apps/api/src/one-c-exchange/one-c-exchange-session.service.ts:39",
+    "apps/api/src/catalog/one-c-integration.service.ts:119"
+  ],
+  "cleanup": "Test integration row removed to restore original absence; Redis session and uploaded file removed. Request-log records remain in disposable audit database.",
+  "functional_blocker": {
+    "title": "Checkout legal version v3 rejected by database constraints",
+    "contract": "packages/contracts/src/index.ts:116",
+    "sink": "apps/api/src/checkout/checkout.service.ts:177",
+    "constraints": [
+      "packages/database/migrations/0020_checkout_personal_data_consent.sql:13",
+      "packages/database/migrations/0020_checkout_personal_data_consent.sql:37"
+    ],
+    "observed_by_root": "Checkout smoke after all 26 migrations returned HTTP 500: orders_legal_acceptance_pair"
+  }
+}

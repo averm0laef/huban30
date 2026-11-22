@@ -1,0 +1,2371 @@
+{
+  "advisories": {
+    "1158514": {
+      "findings": [
+        {
+          "version": "5.10.0",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify",
+            "apps__api>fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158514,
+      "title": "fastify vulnerable to schema validation bypass via root primitive coercion mismatch",
+      "module_name": "fastify",
+      "vulnerable_versions": "<5.12.1",
+      "patched_versions": ">=5.12.1",
+      "severity": "moderate",
+      "cwe": "CWE-20",
+      "github_advisory_id": "GHSA-w2qp-rph6-63g4",
+      "url": "https://github.com/advisories/GHSA-w2qp-rph6-63g4"
+    },
+    "1158519": {
+      "findings": [
+        {
+          "version": "5.10.0",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify",
+            "apps__api>fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158519,
+      "title": "fastify vulnerable to X-Forwarded-* spoofing under trustProxy hop-count",
+      "module_name": "fastify",
+      "vulnerable_versions": ">=5.8.3 <5.12.1",
+      "patched_versions": ">=5.12.1",
+      "severity": "moderate",
+      "cwe": "CWE-348",
+      "github_advisory_id": "GHSA-3m5p-2c4r-xxw2",
+      "url": "https://github.com/advisories/GHSA-3m5p-2c4r-xxw2"
+    },
+    "1158520": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158520,
+      "title": "fast-uri vulnerable to host confusion via skipped IDN canonicalization on scheme-relative references",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.1 <4.1.3",
+      "patched_versions": ">=4.1.3",
+      "severity": "high",
+      "cwe": "CWE-436",
+      "github_advisory_id": "GHSA-5jgf-p345-68v8",
+      "url": "https://github.com/advisories/GHSA-5jgf-p345-68v8"
+    },
+    "1158521": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158521,
+      "title": "fast-uri vulnerable to host confusion via skipped IDN canonicalization on scheme-relative references",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.1.3 <3.1.6",
+      "patched_versions": ">=3.1.6",
+      "severity": "high",
+      "cwe": "CWE-436",
+      "github_advisory_id": "GHSA-5jgf-p345-68v8",
+      "url": "https://github.com/advisories/GHSA-5jgf-p345-68v8"
+    },
+    "1158523": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158523,
+      "title": "fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.1.3",
+      "patched_versions": ">=4.1.3",
+      "severity": "high",
+      "cwe": "CWE-20, CWE-918",
+      "github_advisory_id": "GHSA-f65p-4m7j-42xc",
+      "url": "https://github.com/advisories/GHSA-f65p-4m7j-42xc"
+    },
+    "1158524": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158524,
+      "title": "fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.6",
+      "patched_versions": ">=3.1.6",
+      "severity": "high",
+      "cwe": "CWE-20, CWE-918",
+      "github_advisory_id": "GHSA-f65p-4m7j-42xc",
+      "url": "https://github.com/advisories/GHSA-f65p-4m7j-42xc"
+    },
+    "1158526": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158526,
+      "title": "fast-uri vulnerable to server-side request forgery via repeated hostname percent-decoding",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.1.3",
+      "patched_versions": ">=4.1.3",
+      "severity": "high",
+      "cwe": "CWE-174, CWE-918",
+      "github_advisory_id": "GHSA-fph4-wmhf-6fwf",
+      "url": "https://github.com/advisories/GHSA-fph4-wmhf-6fwf"
+    },
+    "1158527": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158527,
+      "title": "fast-uri vulnerable to server-side request forgery via repeated hostname percent-decoding",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.1.2 <3.1.6",
+      "patched_versions": ">=3.1.6",
+      "severity": "high",
+      "cwe": "CWE-174, CWE-918",
+      "github_advisory_id": "GHSA-fph4-wmhf-6fwf",
+      "url": "https://github.com/advisories/GHSA-fph4-wmhf-6fwf"
+    },
+    "1158529": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158529,
+      "title": "fast-uri vulnerable to host confusion via percent-encoded scheme normalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.1.3",
+      "patched_versions": ">=4.1.3",
+      "severity": "high",
+      "cwe": "CWE-177",
+      "github_advisory_id": "GHSA-jqff-g426-hqxp",
+      "url": "https://github.com/advisories/GHSA-jqff-g426-hqxp"
+    },
+    "1158530": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1158530,
+      "title": "fast-uri vulnerable to host confusion via percent-encoded scheme normalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.6",
+      "patched_versions": ">=3.1.6",
+      "severity": "high",
+      "cwe": "CWE-177",
+      "github_advisory_id": "GHSA-jqff-g426-hqxp",
+      "url": "https://github.com/advisories/GHSA-jqff-g426-hqxp"
+    },
+    "1193676": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193676,
+      "title": "Next.js: Unauthenticated Remote Code Execution on windows-hosted servers",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <16.3.3",
+      "patched_versions": ">=16.3.3",
+      "severity": "critical",
+      "cwe": "CWE-22",
+      "github_advisory_id": "GHSA-p293-qw3h-jr36",
+      "url": "https://github.com/advisories/GHSA-p293-qw3h-jr36"
+    },
+    "1193683": {
+      "findings": [
+        {
+          "version": "4.1.10",
+          "paths": [
+            "apps__api>vitest",
+            "apps__web>vitest",
+            "apps__worker>vitest",
+            "packages__contracts>vitest",
+            "packages__database>vitest"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193683,
+      "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+      "module_name": "vitest",
+      "vulnerable_versions": ">=2.1.0 <4.1.11",
+      "patched_versions": ">=4.1.11",
+      "severity": "moderate",
+      "cwe": "CWE-22",
+      "github_advisory_id": "GHSA-82fw-gwwq-j7x9",
+      "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9"
+    },
+    "1193684": {
+      "findings": [
+        {
+          "version": "4.1.10",
+          "paths": [
+            "apps__api>vitest>@vitest/mocker",
+            "apps__web>vitest>@vitest/mocker",
+            "apps__worker>vitest>@vitest/mocker",
+            "packages__contracts>vitest>@vitest/mocker",
+            "packages__database>vitest>@vitest/mocker"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193684,
+      "title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+      "module_name": "@vitest/mocker",
+      "vulnerable_versions": ">=2.1.0 <4.1.11",
+      "patched_versions": ">=4.1.11",
+      "severity": "moderate",
+      "cwe": "CWE-22",
+      "github_advisory_id": "GHSA-82fw-gwwq-j7x9",
+      "url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9"
+    },
+    "1193725": {
+      "findings": [
+        {
+          "version": "0.35.3",
+          "paths": [
+            "apps__web>next>sharp"
+          ],
+          "dev": false,
+          "optional": true,
+          "bundled": false
+        }
+      ],
+      "id": 1193725,
+      "title": "sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545",
+      "module_name": "sharp",
+      "vulnerable_versions": "<0.35.4",
+      "patched_versions": ">=0.35.4",
+      "severity": "high",
+      "cwe": "CWE-122",
+      "github_advisory_id": "GHSA-rgj7-g3m4-5g8c",
+      "url": "https://github.com/advisories/GHSA-rgj7-g3m4-5g8c"
+    },
+    "1193732": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193732,
+      "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <16.3.3",
+      "patched_versions": ">=16.3.3",
+      "severity": "critical",
+      "cwe": "CWE-1395",
+      "github_advisory_id": "GHSA-2xp9-vwfh-vxw4",
+      "url": "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4"
+    },
+    "1193741": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193741,
+      "title": "Nodemailer: resolveContent() on a MailMessage bypasses disableFileAccess/disableUrlAccess when called with the legacy signature",
+      "module_name": "nodemailer",
+      "vulnerable_versions": "<=9.1.0",
+      "patched_versions": ">=9.1.1",
+      "severity": "moderate",
+      "cwe": "CWE-73, CWE-918",
+      "github_advisory_id": "GHSA-8m3c-c648-2xjj",
+      "url": "https://github.com/advisories/GHSA-8m3c-c648-2xjj"
+    },
+    "1193770": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193770,
+      "title": "Nodemailer: IDN/Punycode domain allow-list bypass leads to email delivery to an attacker-controlled domain",
+      "module_name": "nodemailer",
+      "vulnerable_versions": "<9.1.0",
+      "patched_versions": ">=9.1.0",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-wmmp-3585-3rmp",
+      "url": "https://github.com/advisories/GHSA-wmmp-3585-3rmp"
+    },
+    "1193778": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193778,
+      "title": "Nodemailer: Quadratic (O(n²)) time complexity in addressparser allows remote denial of service via a crafted address list",
+      "module_name": "nodemailer",
+      "vulnerable_versions": "<9.1.0",
+      "patched_versions": ">=9.1.0",
+      "severity": "high",
+      "cwe": "CWE-400, CWE-407",
+      "github_advisory_id": "GHSA-2x7j-588g-ccc2",
+      "url": "https://github.com/advisories/GHSA-2x7j-588g-ccc2"
+    },
+    "1193779": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1193779,
+      "title": "Nodemailer: Recipient-domain validation bypass via RFC 5322 comment mis-parsing leads to email delivery to an attacker-controlled domain",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=6.9.16 <9.1.0",
+      "patched_versions": ">=9.1.0",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-cc9r-2j5m-2m83",
+      "url": "https://github.com/advisories/GHSA-cc9r-2j5m-2m83"
+    },
+    "1239931": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1239931,
+      "title": "Nodemailer: Process-global DNS cache reuses TLS `servername` across transports, enabling cross-tenant SMTP credential disclosure",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=5.0.0 <10.0.2",
+      "patched_versions": ">=10.0.2",
+      "severity": "moderate",
+      "cwe": "CWE-295",
+      "github_advisory_id": "GHSA-6vj9-mwq6-2f5v",
+      "url": "https://github.com/advisories/GHSA-6vj9-mwq6-2f5v"
+    },
+    "1239942": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1239942,
+      "title": "fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.1.4",
+      "patched_versions": ">=4.1.4",
+      "severity": "high",
+      "cwe": "CWE-116",
+      "github_advisory_id": "GHSA-qw65-cvwx-89v3",
+      "url": "https://github.com/advisories/GHSA-qw65-cvwx-89v3"
+    },
+    "1239943": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1239943,
+      "title": "fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.7",
+      "patched_versions": ">=3.1.7",
+      "severity": "high",
+      "cwe": "CWE-116",
+      "github_advisory_id": "GHSA-qw65-cvwx-89v3",
+      "url": "https://github.com/advisories/GHSA-qw65-cvwx-89v3"
+    },
+    "1239991": {
+      "findings": [
+        {
+          "version": "5.2.2",
+          "paths": [
+            "apps__api>@nestjs/swagger>js-yaml",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>cosmiconfig>js-yaml"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1239991,
+      "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+      "module_name": "js-yaml",
+      "vulnerable_versions": ">=5.0.0 <=5.4.0",
+      "patched_versions": ">=5.4.1",
+      "severity": "moderate",
+      "cwe": "CWE-400, CWE-407",
+      "github_advisory_id": "GHSA-r3ph-w7gj-g6xm",
+      "url": "https://github.com/advisories/GHSA-r3ph-w7gj-g6xm"
+    },
+    "1240033": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240033,
+      "title": "Nodemailer: Nested structured recipient arrays bypass the parser depth limit and cause stack exhaustion DoS",
+      "module_name": "nodemailer",
+      "vulnerable_versions": "<10.0.2",
+      "patched_versions": ">=10.0.2",
+      "severity": "moderate",
+      "cwe": "CWE-674",
+      "github_advisory_id": "GHSA-8vvx-rff5-p5rq",
+      "url": "https://github.com/advisories/GHSA-8vvx-rff5-p5rq"
+    },
+    "1240090": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240090,
+      "title": "fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.1.5",
+      "patched_versions": ">=4.1.5",
+      "severity": "moderate",
+      "cwe": "CWE-178",
+      "github_advisory_id": "GHSA-hrr3-gc8f-f4qj",
+      "url": "https://github.com/advisories/GHSA-hrr3-gc8f-f4qj"
+    },
+    "1240091": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240091,
+      "title": "fast-uri vulnerable to inconsistent host case normalization via percent-encoded octets",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.8",
+      "patched_versions": ">=3.1.8",
+      "severity": "moderate",
+      "cwe": "CWE-178",
+      "github_advisory_id": "GHSA-hrr3-gc8f-f4qj",
+      "url": "https://github.com/advisories/GHSA-hrr3-gc8f-f4qj"
+    },
+    "1240100": {
+      "findings": [
+        {
+          "version": "1.1.18",
+          "paths": [
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240100,
+      "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": "<1.1.21",
+      "patched_versions": ">=1.1.21",
+      "severity": "moderate",
+      "cwe": "CWE-400, CWE-407",
+      "github_advisory_id": "GHSA-q2hr-2g5m-vwhr",
+      "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr"
+    },
+    "1240103": {
+      "findings": [
+        {
+          "version": "5.0.9",
+          "paths": [
+            ".>@eslint/js>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>@eslint/js>eslint>minimatch>brace-expansion",
+            ".>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-react-hooks>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-react-hooks>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-react-refresh>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-react-refresh>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>eslint>minimatch>brace-expansion",
+            "apps__api>@nestjs/cli>glob>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240103,
+      "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": ">=4.0.0 <5.0.12",
+      "patched_versions": ">=5.0.12",
+      "severity": "moderate",
+      "cwe": "CWE-400, CWE-407",
+      "github_advisory_id": "GHSA-q2hr-2g5m-vwhr",
+      "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr"
+    },
+    "1240104": {
+      "findings": [
+        {
+          "version": "1.1.18",
+          "paths": [
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240104,
+      "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": "<1.1.20",
+      "patched_versions": ">=1.1.20",
+      "severity": "high",
+      "cwe": "CWE-400, CWE-674",
+      "github_advisory_id": "GHSA-qhr7-859c-m2p7",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7"
+    },
+    "1240107": {
+      "findings": [
+        {
+          "version": "5.0.9",
+          "paths": [
+            ".>@eslint/js>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>@eslint/js>eslint>minimatch>brace-expansion",
+            ".>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-react-hooks>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-react-hooks>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-react-refresh>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-react-refresh>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>eslint>minimatch>brace-expansion",
+            "apps__api>@nestjs/cli>glob>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240107,
+      "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": ">=4.0.0 <5.0.11",
+      "patched_versions": ">=5.0.11",
+      "severity": "high",
+      "cwe": "CWE-400, CWE-674",
+      "github_advisory_id": "GHSA-qhr7-859c-m2p7",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7"
+    },
+    "1240108": {
+      "findings": [
+        {
+          "version": "1.1.18",
+          "paths": [
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240108,
+      "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": "<1.1.19",
+      "patched_versions": ">=1.1.19",
+      "severity": "high",
+      "cwe": "CWE-400, CWE-674",
+      "github_advisory_id": "GHSA-6j4f-fj2g-mc7p",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p"
+    },
+    "1240111": {
+      "findings": [
+        {
+          "version": "5.0.9",
+          "paths": [
+            ".>@eslint/js>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>@eslint/js>eslint>minimatch>brace-expansion",
+            ".>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-react-hooks>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-react-hooks>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-react-refresh>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-react-refresh>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>typescript-eslint>eslint>@eslint/config-array>minimatch>brace-expansion",
+            ".>typescript-eslint>eslint>minimatch>brace-expansion",
+            "apps__api>@nestjs/cli>glob>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240111,
+      "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": ">=4.0.0 <5.0.10",
+      "patched_versions": ">=5.0.10",
+      "severity": "high",
+      "cwe": "CWE-400, CWE-674",
+      "github_advisory_id": "GHSA-6j4f-fj2g-mc7p",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p"
+    },
+    "1240114": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240114,
+      "title": "Nodemailer: Quadratic backtracking in the addressparser free-text fallback allows remote denial of service",
+      "module_name": "nodemailer",
+      "vulnerable_versions": "<=10.0.5",
+      "patched_versions": ">=10.0.6",
+      "severity": "high",
+      "cwe": "CWE-407, CWE-1333",
+      "github_advisory_id": "GHSA-v53p-9fqp-m79j",
+      "url": "https://github.com/advisories/GHSA-v53p-9fqp-m79j"
+    },
+    "1240609": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240609,
+      "title": "Next.js: Remote Code Execution in next/og ImageResponse",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.2.0 <16.3.6",
+      "patched_versions": ">=16.3.6",
+      "severity": "critical",
+      "cwe": "CWE-1395",
+      "github_advisory_id": "GHSA-vcvr-r3jv-pc5j",
+      "url": "https://github.com/advisories/GHSA-vcvr-r3jv-pc5j"
+    },
+    "1240613": {
+      "findings": [
+        {
+          "version": "11.1.28",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240613,
+      "title": "@nestjs/platform-fastify: Path-scoped middleware bypass via absolute-form request targets",
+      "module_name": "@nestjs/platform-fastify",
+      "vulnerable_versions": "<11.2.4",
+      "patched_versions": ">=11.2.4",
+      "severity": "high",
+      "cwe": "CWE-288, CWE-436",
+      "github_advisory_id": "GHSA-9c5c-9qcx-q35q",
+      "url": "https://github.com/advisories/GHSA-9c5c-9qcx-q35q"
+    },
+    "1240639": {
+      "findings": [
+        {
+          "version": "5.10.0",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify",
+            "apps__api>fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240639,
+      "title": "fastify vulnerable to Denial of Service via unhandled exception on HTTP/2 trailer responses",
+      "module_name": "fastify",
+      "vulnerable_versions": "<5.12.5",
+      "patched_versions": ">=5.12.5",
+      "severity": "moderate",
+      "cwe": "CWE-248",
+      "github_advisory_id": "GHSA-4mh8-r7rc-xpvc",
+      "url": "https://github.com/advisories/GHSA-4mh8-r7rc-xpvc"
+    },
+    "1240641": {
+      "findings": [
+        {
+          "version": "5.10.0",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify",
+            "apps__api>fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240641,
+      "title": "fastify vulnerable to request body replacement via an async validation result collision",
+      "module_name": "fastify",
+      "vulnerable_versions": "<5.12.2",
+      "patched_versions": ">=5.12.2",
+      "severity": "high",
+      "cwe": "CWE-20",
+      "github_advisory_id": "GHSA-667r-xxjv-c9mm",
+      "url": "https://github.com/advisories/GHSA-667r-xxjv-c9mm"
+    },
+    "1240642": {
+      "findings": [
+        {
+          "version": "5.10.0",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify",
+            "apps__api>fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240642,
+      "title": "fastify vulnerable to authentication bypass via malformed URLs reaching encapsulated not-found handlers",
+      "module_name": "fastify",
+      "vulnerable_versions": ">=4.0.0 <5.12.2",
+      "patched_versions": ">=5.12.2",
+      "severity": "high",
+      "cwe": "CWE-288",
+      "github_advisory_id": "GHSA-p68q-wchp-6fh7",
+      "url": "https://github.com/advisories/GHSA-p68q-wchp-6fh7"
+    },
+    "1240643": {
+      "findings": [
+        {
+          "version": "5.10.0",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify",
+            "apps__api>fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240643,
+      "title": "fastify vulnerable to request validation bypass via skipped boolean false schemas",
+      "module_name": "fastify",
+      "vulnerable_versions": "<5.12.2",
+      "patched_versions": ">=5.12.2",
+      "severity": "high",
+      "cwe": "CWE-20",
+      "github_advisory_id": "GHSA-hwr6-493r-vm6h",
+      "url": "https://github.com/advisories/GHSA-hwr6-493r-vm6h"
+    },
+    "1240644": {
+      "findings": [
+        {
+          "version": "5.10.0",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify",
+            "apps__api>fastify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240644,
+      "title": "fastify vulnerable to header validation bypass via incomplete schema case normalization",
+      "module_name": "fastify",
+      "vulnerable_versions": "<5.12.2",
+      "patched_versions": ">=5.12.2",
+      "severity": "high",
+      "cwe": "CWE-178",
+      "github_advisory_id": "GHSA-9q9j-q6p8-xq58",
+      "url": "https://github.com/advisories/GHSA-9q9j-q6p8-xq58"
+    },
+    "1240981": {
+      "findings": [
+        {
+          "version": "3.2.0",
+          "paths": [
+            "apps__api>@fastify/multipart>@fastify/busboy"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240981,
+      "title": "@fastify/busboy vulnerable to Denial of Service via oversized multipart boundary",
+      "module_name": "@fastify/busboy",
+      "vulnerable_versions": ">=3.1.0 <3.2.1",
+      "patched_versions": ">=3.2.1",
+      "severity": "high",
+      "cwe": "CWE-835, CWE-1322",
+      "github_advisory_id": "GHSA-xjh9-v7x6-24jw",
+      "url": "https://github.com/advisories/GHSA-xjh9-v7x6-24jw"
+    },
+    "1240982": {
+      "findings": [
+        {
+          "version": "3.2.0",
+          "paths": [
+            "apps__api>@fastify/multipart>@fastify/busboy"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1240982,
+      "title": "@fastify/busboy vulnerable to Denial of Service via prototype-named multipart part header",
+      "module_name": "@fastify/busboy",
+      "vulnerable_versions": ">=1.0.0 <3.2.1",
+      "patched_versions": ">=3.2.1",
+      "severity": "high",
+      "cwe": "CWE-754",
+      "github_advisory_id": "GHSA-x8mw-p69m-v3mx",
+      "url": "https://github.com/advisories/GHSA-x8mw-p69m-v3mx"
+    },
+    "1241209": {
+      "findings": [
+        {
+          "version": "1.2.1",
+          "paths": [
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>postcss>source-map-js",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>postcss>source-map-js",
+            "apps__api>vitest>@vitest/mocker>vite>postcss>source-map-js",
+            "apps__api>vitest>vite>postcss>source-map-js",
+            "apps__web>next>postcss>source-map-js",
+            "apps__web>vitest>@vitest/mocker>vite>postcss>source-map-js",
+            "apps__web>vitest>vite>postcss>source-map-js",
+            "apps__worker>vitest>@vitest/mocker>vite>postcss>source-map-js",
+            "apps__worker>vitest>vite>postcss>source-map-js",
+            "packages__contracts>vitest>@vitest/mocker>vite>postcss>source-map-js",
+            "packages__contracts>vitest>vite>postcss>source-map-js",
+            "packages__database>vitest>@vitest/mocker>vite>postcss>source-map-js",
+            "packages__database>vitest>vite>postcss>source-map-js"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241209,
+      "title": "source-map-js allows event-loop denial of service through indexed source-map section offsets",
+      "module_name": "source-map-js",
+      "vulnerable_versions": ">=1.0.0 <1.2.2",
+      "patched_versions": ">=1.2.2",
+      "severity": "high",
+      "cwe": "CWE-1284",
+      "github_advisory_id": "GHSA-68fv-2mgg-jv7q",
+      "url": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q"
+    },
+    "1241276": {
+      "findings": [
+        {
+          "version": "3.2.0",
+          "paths": [
+            "apps__api>@fastify/multipart>@fastify/busboy"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241276,
+      "title": "@fastify/busboy vulnerable to CRLF injection via multipart Content-Disposition filename and name",
+      "module_name": "@fastify/busboy",
+      "vulnerable_versions": "<3.2.2",
+      "patched_versions": ">=3.2.2",
+      "severity": "moderate",
+      "cwe": "CWE-93",
+      "github_advisory_id": "GHSA-gxm5-99cw-xjw9",
+      "url": "https://github.com/advisories/GHSA-gxm5-99cw-xjw9"
+    },
+    "1241331": {
+      "findings": [
+        {
+          "version": "0.35.3",
+          "paths": [
+            "apps__web>next>sharp"
+          ],
+          "dev": false,
+          "optional": true,
+          "bundled": false
+        }
+      ],
+      "id": 1241331,
+      "title": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+      "module_name": "sharp",
+      "vulnerable_versions": "<0.35.5",
+      "patched_versions": ">=0.35.5",
+      "severity": "high",
+      "cwe": "CWE-416, CWE-1395",
+      "github_advisory_id": "GHSA-wq5f-xc86-pv6w",
+      "url": "https://github.com/advisories/GHSA-wq5f-xc86-pv6w"
+    },
+    "1241490": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241490,
+      "title": "Next.js has cache poisoning of SSG and ISR pages in self-hosted applications",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <16.3.8",
+      "patched_versions": ">=16.3.8",
+      "severity": "moderate",
+      "cwe": "CWE-524",
+      "github_advisory_id": "GHSA-4jqv-mc3x-m676",
+      "url": "https://github.com/advisories/GHSA-4jqv-mc3x-m676"
+    },
+    "1241492": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241492,
+      "title": "Next.js has information disclosure in development server's Model Context Protocol endpoint",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <16.3.8",
+      "patched_versions": ">=16.3.8",
+      "severity": "low",
+      "cwe": "CWE-346",
+      "github_advisory_id": "GHSA-39w2-rjm5-chcv",
+      "url": "https://github.com/advisories/GHSA-39w2-rjm5-chcv"
+    },
+    "1241493": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241493,
+      "title": "Next.js has information disclosure in App Router metadata image routes via dynamicParams bypass",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <16.3.8",
+      "patched_versions": ">=16.3.8",
+      "severity": "moderate",
+      "cwe": "CWE-346",
+      "github_advisory_id": "GHSA-f87g-xv8r-7p7x",
+      "url": "https://github.com/advisories/GHSA-f87g-xv8r-7p7x"
+    },
+    "1241495": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241495,
+      "title": "Next.js has cache poisoning in SSG/ISR rendering that leads to cross-user content substitution and persistent denial of service",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <16.3.8",
+      "patched_versions": ">=16.3.8",
+      "severity": "moderate",
+      "cwe": "CWE-524",
+      "github_advisory_id": "GHSA-mcj8-r9mp-w47p",
+      "url": "https://github.com/advisories/GHSA-mcj8-r9mp-w47p"
+    },
+    "1241496": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241496,
+      "title": "Next.js has Server-Side Request Forgery in Image Optimization",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <16.3.8",
+      "patched_versions": ">=16.3.8",
+      "severity": "high",
+      "cwe": "CWE-918",
+      "github_advisory_id": "GHSA-cjq9-62q9-8jv4",
+      "url": "https://github.com/advisories/GHSA-cjq9-62q9-8jv4"
+    },
+    "1242623": {
+      "findings": [
+        {
+          "version": "7.3.6",
+          "paths": [
+            "apps__api>vitest>@vitest/mocker>vite",
+            "apps__api>vitest>vite",
+            "apps__web>vitest>@vitest/mocker>vite",
+            "apps__web>vitest>vite",
+            "apps__worker>vitest>@vitest/mocker>vite",
+            "apps__worker>vitest>vite",
+            "packages__contracts>vitest>@vitest/mocker>vite",
+            "packages__contracts>vitest>vite",
+            "packages__database>vitest>@vitest/mocker>vite",
+            "packages__database>vitest>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242623,
+      "title": "launch-editor: escapeCmdArgs() omits % escaping on Windows",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.6",
+      "patched_versions": ">=7.3.7",
+      "severity": "moderate",
+      "cwe": "CWE-78",
+      "github_advisory_id": "GHSA-698v-4r3x-3vcv",
+      "url": "https://github.com/advisories/GHSA-698v-4r3x-3vcv"
+    },
+    "1242652": {
+      "findings": [
+        {
+          "version": "7.3.6",
+          "paths": [
+            "apps__api>vitest>@vitest/mocker>vite",
+            "apps__api>vitest>vite",
+            "apps__web>vitest>@vitest/mocker>vite",
+            "apps__web>vitest>vite",
+            "apps__worker>vitest>@vitest/mocker>vite",
+            "apps__worker>vitest>vite",
+            "packages__contracts>vitest>@vitest/mocker>vite",
+            "packages__contracts>vitest>vite",
+            "packages__database>vitest>@vitest/mocker>vite",
+            "packages__database>vitest>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242652,
+      "title": "launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.6",
+      "patched_versions": ">=7.3.7",
+      "severity": "moderate",
+      "cwe": "CWE-88",
+      "github_advisory_id": "GHSA-r825-w8mm-5pxw",
+      "url": "https://github.com/advisories/GHSA-r825-w8mm-5pxw"
+    },
+    "1242659": {
+      "findings": [
+        {
+          "version": "7.3.6",
+          "paths": [
+            "apps__api>vitest>@vitest/mocker>vite",
+            "apps__api>vitest>vite",
+            "apps__web>vitest>@vitest/mocker>vite",
+            "apps__web>vitest>vite",
+            "apps__worker>vitest>@vitest/mocker>vite",
+            "apps__worker>vitest>vite",
+            "packages__contracts>vitest>@vitest/mocker>vite",
+            "packages__contracts>vitest>vite",
+            "packages__database>vitest>@vitest/mocker>vite",
+            "packages__database>vitest>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242659,
+      "title": "launch-editor: `fs.existsSync()` existence check can be bypassed on Windows",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.6",
+      "patched_versions": ">=7.3.7",
+      "severity": "high",
+      "cwe": "CWE-77",
+      "github_advisory_id": "GHSA-587h-7wmj-h5pm",
+      "url": "https://github.com/advisories/GHSA-587h-7wmj-h5pm"
+    },
+    "1242725": {
+      "findings": [
+        {
+          "version": "7.3.6",
+          "paths": [
+            "apps__api>vitest>@vitest/mocker>vite",
+            "apps__api>vitest>vite",
+            "apps__web>vitest>@vitest/mocker>vite",
+            "apps__web>vitest>vite",
+            "apps__worker>vitest>@vitest/mocker>vite",
+            "apps__worker>vitest>vite",
+            "packages__contracts>vitest>@vitest/mocker>vite",
+            "packages__contracts>vitest>vite",
+            "packages__database>vitest>@vitest/mocker>vite",
+            "packages__database>vitest>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242725,
+      "title": "Vite: Cross origin script execution through Vite custom middleware",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.6",
+      "patched_versions": ">=7.3.7",
+      "severity": "low",
+      "cwe": "CWE-80",
+      "github_advisory_id": "GHSA-9jrq-w75r-8gcw",
+      "url": "https://github.com/advisories/GHSA-9jrq-w75r-8gcw"
+    },
+    "1242731": {
+      "findings": [
+        {
+          "version": "7.3.6",
+          "paths": [
+            "apps__api>vitest>@vitest/mocker>vite",
+            "apps__api>vitest>vite",
+            "apps__web>vitest>@vitest/mocker>vite",
+            "apps__web>vitest>vite",
+            "apps__worker>vitest>@vitest/mocker>vite",
+            "apps__worker>vitest>vite",
+            "packages__contracts>vitest>@vitest/mocker>vite",
+            "packages__contracts>vitest>vite",
+            "packages__database>vitest>@vitest/mocker>vite",
+            "packages__database>vitest>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242731,
+      "title": "Vite: Files outside `server.fs.allow` could be served when project paths match system paths on non-Windows machine",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.6",
+      "patched_versions": ">=7.3.7",
+      "severity": "moderate",
+      "cwe": "CWE-22, CWE-284",
+      "github_advisory_id": "GHSA-rq7h-c2jc-7f22",
+      "url": "https://github.com/advisories/GHSA-rq7h-c2jc-7f22"
+    },
+    "1242767": {
+      "findings": [
+        {
+          "version": "4.1.10",
+          "paths": [
+            "apps__api>vitest>@vitest/mocker",
+            "apps__web>vitest>@vitest/mocker",
+            "apps__worker>vitest>@vitest/mocker",
+            "packages__contracts>vitest>@vitest/mocker",
+            "packages__database>vitest>@vitest/mocker"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242767,
+      "title": "Vitest: Code injection via unauthenticated manual mock registration",
+      "module_name": "@vitest/mocker",
+      "vulnerable_versions": ">=2.1.0-beta.7 <4.1.12",
+      "patched_versions": ">=4.1.12",
+      "severity": "moderate",
+      "cwe": "CWE-94, CWE-116, CWE-306",
+      "github_advisory_id": "GHSA-qxg6-89mg-rqv8",
+      "url": "https://github.com/advisories/GHSA-qxg6-89mg-rqv8"
+    },
+    "1242816": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242816,
+      "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <=16.4.0",
+      "patched_versions": ">=16.4.1",
+      "severity": "critical",
+      "cwe": "CWE-1395",
+      "github_advisory_id": "GHSA-2464-fhr4-w9xw",
+      "url": "https://github.com/advisories/GHSA-2464-fhr4-w9xw"
+    },
+    "1242818": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242818,
+      "title": "Next.js: Denial of Service in App Router using Server Actions",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <=16.4.0",
+      "patched_versions": ">=16.4.1",
+      "severity": "high",
+      "cwe": "CWE-770",
+      "github_advisory_id": "GHSA-p3m5-59mp-jv5r",
+      "url": "https://github.com/advisories/GHSA-p3m5-59mp-jv5r"
+    },
+    "1242826": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242826,
+      "title": "Nodemailer: Quadratic (O(n^2)) DKIM header unfolding lets a large folded header cause remote denial of service during signing",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=3.0.0 <=10.0.9",
+      "patched_versions": ">=10.0.10",
+      "severity": "moderate",
+      "cwe": "CWE-400, CWE-407",
+      "github_advisory_id": "GHSA-39m8-27wv-hr27",
+      "url": "https://github.com/advisories/GHSA-39m8-27wv-hr27"
+    },
+    "1242859": {
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            "apps__web>next"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1242859,
+      "title": "Next.js: Unauthenticated Remote Code Execution in `use cache` functions returning typed arrays",
+      "module_name": "next",
+      "vulnerable_versions": ">=16.0.0 <=16.4.0",
+      "patched_versions": ">=16.4.1",
+      "severity": "critical",
+      "cwe": "CWE-502",
+      "github_advisory_id": "GHSA-673q-mjm6-r5xr",
+      "url": "https://github.com/advisories/GHSA-673q-mjm6-r5xr"
+    },
+    "1243066": {
+      "findings": [
+        {
+          "version": "3.25.76",
+          "paths": [
+            ".>eslint-plugin-react-hooks>zod",
+            ".>eslint-plugin-react-hooks>zod-validation-error>zod"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "4.4.3",
+          "paths": [
+            "apps__api>zod",
+            "apps__worker>zod",
+            "packages__contracts>zod",
+            "packages__database>zod"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243066,
+      "title": "Zod can exhaust memory while validating oversized constrained collections",
+      "module_name": "zod",
+      "vulnerable_versions": "<4.6.6",
+      "patched_versions": ">=4.6.6",
+      "severity": "high",
+      "cwe": "CWE-770",
+      "github_advisory_id": "GHSA-mrhx-c7xc-m3w5",
+      "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5"
+    },
+    "1243091": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243091,
+      "title": "Nodemailer: A nested comment ends early in addressparser, releasing the rest of the comment as a recipient",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=3.0.0 <10.1.4",
+      "patched_versions": ">=10.1.4",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-8c8m-p3m8-cjg8",
+      "url": "https://github.com/advisories/GHSA-8c8m-p3m8-cjg8"
+    },
+    "1243092": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243092,
+      "title": "Nodemailer: A \";\" inside a quoted string or comment ends an address group early in addressparser, turning display text into a recipient",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=3.0.0 <10.1.4",
+      "patched_versions": ">=10.1.4",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-m943-m63m-w62w",
+      "url": "https://github.com/advisories/GHSA-m943-m63m-w62w"
+    },
+    "1243093": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243093,
+      "title": "Nodemailer: A \">\" inside a quoted local part ends an angle-addr early in addressparser, delivering to a domain the header does not name",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=3.0.0 <10.1.4",
+      "patched_versions": ">=10.1.4",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-85x2-q946-cp5h",
+      "url": "https://github.com/advisories/GHSA-85x2-q946-cp5h"
+    },
+    "1243097": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243097,
+      "title": "fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.2.3",
+      "patched_versions": ">=4.2.3",
+      "severity": "moderate",
+      "cwe": "CWE-172, CWE-180",
+      "github_advisory_id": "GHSA-w74x-v6f9-j3xg",
+      "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg"
+    },
+    "1243098": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243098,
+      "title": "fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.9",
+      "patched_versions": ">=3.1.9",
+      "severity": "moderate",
+      "cwe": "CWE-172, CWE-180",
+      "github_advisory_id": "GHSA-w74x-v6f9-j3xg",
+      "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg"
+    },
+    "1243100": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243100,
+      "title": "fast-uri vulnerable to improper path equivalence in relative reference normalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.2.3",
+      "patched_versions": ">=4.2.3",
+      "severity": "low",
+      "cwe": "CWE-41",
+      "github_advisory_id": "GHSA-xhq7-xmqj-769h",
+      "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h"
+    },
+    "1243101": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243101,
+      "title": "fast-uri vulnerable to improper path equivalence in relative reference normalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.9",
+      "patched_versions": ">=3.1.9",
+      "severity": "low",
+      "cwe": "CWE-41",
+      "github_advisory_id": "GHSA-xhq7-xmqj-769h",
+      "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h"
+    },
+    "1243103": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243103,
+      "title": "fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.1 <4.2.3",
+      "patched_versions": ">=4.2.3",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-wjr9-j795-jxcr",
+      "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr"
+    },
+    "1243104": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243104,
+      "title": "fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.1.3 <3.1.9",
+      "patched_versions": ">=3.1.9",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-wjr9-j795-jxcr",
+      "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr"
+    },
+    "1243106": {
+      "findings": [
+        {
+          "version": "4.1.2",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>fast-uri",
+            "apps__api>fastify>fast-json-stringify>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243106,
+      "title": "fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=4.0.0 <4.2.3",
+      "patched_versions": ">=4.2.3",
+      "severity": "low",
+      "cwe": "CWE-41, CWE-116",
+      "github_advisory_id": "GHSA-333x-w4r6-6crp",
+      "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp"
+    },
+    "1243107": {
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>@nestjs/platform-fastify>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>@fastify/ajv-compiler>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>@fastify/fast-json-stringify-compiler>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv>fast-uri",
+            "apps__api>fastify>fast-json-stringify>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@angular-devkit/schematics-cli>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv>fast-uri",
+            "apps__api>@nestjs/cli>@nestjs/schematics>@angular-devkit/schematics>@angular-devkit/core>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>schema-utils>ajv-keywords>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-formats>ajv>fast-uri",
+            "apps__api>@nestjs/cli>webpack>terser-webpack-plugin>schema-utils>ajv-keywords>ajv>fast-uri"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243107,
+      "title": "fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references",
+      "module_name": "fast-uri",
+      "vulnerable_versions": ">=3.0.0 <3.1.9",
+      "patched_versions": ">=3.1.9",
+      "severity": "low",
+      "cwe": "CWE-41, CWE-116",
+      "github_advisory_id": "GHSA-333x-w4r6-6crp",
+      "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp"
+    },
+    "1243442": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243442,
+      "title": "Nodemailer: Quadratic backtracking in SMTP AUTH mechanism detection regexes allows pre-auth remote denial of service",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=3.0.0 <=10.0.12",
+      "patched_versions": ">=10.0.13",
+      "severity": "moderate",
+      "cwe": "CWE-1333",
+      "github_advisory_id": "GHSA-4ffr-jq9g-5ffx",
+      "url": "https://github.com/advisories/GHSA-4ffr-jq9g-5ffx"
+    },
+    "1243443": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243443,
+      "title": "Nodemailer: RFC 5322 comment inside an angle-bracket address is never stripped",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=3.0.0 <=10.0.12",
+      "patched_versions": ">=10.0.13",
+      "severity": "moderate",
+      "cwe": "CWE-20, CWE-436",
+      "github_advisory_id": "GHSA-g73g-hqqh-jr95",
+      "url": "https://github.com/advisories/GHSA-g73g-hqqh-jr95"
+    },
+    "1243444": {
+      "findings": [
+        {
+          "version": "9.0.1",
+          "paths": [
+            "apps__worker>nodemailer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243444,
+      "title": "Nodemailer: Quadratic (O(n^2)) SMTP client reply parsing lets a malicious server or MITM cause a pre-auth remote denial of service",
+      "module_name": "nodemailer",
+      "vulnerable_versions": ">=3.0.0 <=10.0.9",
+      "patched_versions": ">=10.0.10",
+      "severity": "moderate",
+      "cwe": "CWE-400, CWE-407",
+      "github_advisory_id": "GHSA-4g23-2xm8-66gc",
+      "url": "https://github.com/advisories/GHSA-4g23-2xm8-66gc"
+    },
+    "1243505": {
+      "findings": [
+        {
+          "version": "4.3.1",
+          "paths": [
+            "apps__api>@nestjs/cli>fork-ts-checker-webpack-plugin>deepmerge"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1243505,
+      "title": "deepmerge mergeObject() allows prototype poisoning of returned objects",
+      "module_name": "deepmerge",
+      "vulnerable_versions": ">=4.2.0 <=4.3.1",
+      "patched_versions": ">=4.3.2",
+      "severity": "low",
+      "cwe": "CWE-1321",
+      "github_advisory_id": "GHSA-gcqx-w48m-w2h4",
+      "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4"
+    },
+    "1244013": {
+      "findings": [
+        {
+          "version": "13.0.6",
+          "paths": [
+            "apps__api>@nestjs/cli>glob"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1244013,
+      "title": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+      "module_name": "glob",
+      "vulnerable_versions": ">=9.0.0 <=14.0.1",
+      "patched_versions": ">=14.0.2",
+      "severity": "moderate",
+      "cwe": "CWE-400",
+      "github_advisory_id": "GHSA-3g3m-2fjr-6pw4",
+      "url": "https://github.com/advisories/GHSA-3g3m-2fjr-6pw4"
+    },
+    "1244623": {
+      "findings": [
+        {
+          "version": "10.2.6",
+          "paths": [
+            ".>@eslint/js>eslint>@eslint/config-array>minimatch",
+            ".>@eslint/js>eslint>minimatch",
+            ".>eslint>@eslint/config-array>minimatch",
+            ".>eslint>minimatch",
+            ".>eslint-plugin-react-hooks>eslint>@eslint/config-array>minimatch",
+            ".>eslint-plugin-react-hooks>eslint>minimatch",
+            ".>eslint-plugin-react-refresh>eslint>@eslint/config-array>minimatch",
+            ".>eslint-plugin-react-refresh>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/eslint-plugin>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/parser>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/typescript-estree>minimatch",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>typescript-eslint>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>@typescript-eslint/utils>eslint>minimatch",
+            ".>typescript-eslint>eslint>@eslint/config-array>minimatch",
+            ".>typescript-eslint>eslint>minimatch",
+            "apps__api>@nestjs/cli>glob>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1244623,
+      "title": "minimatch has potential denial of service via globparts amplification",
+      "module_name": "minimatch",
+      "vulnerable_versions": ">=7.0.0 <11.0.1",
+      "patched_versions": ">=11.0.1",
+      "severity": "moderate",
+      "cwe": "CWE-405",
+      "github_advisory_id": "GHSA-g3hv-75wg-m249",
+      "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249"
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 7,
+      "moderate": 36,
+      "high": 30,
+      "critical": 5
+    },
+    "dependencies": 282,
+    "devDependencies": 336,
+    "optionalDependencies": 101,
+    "totalDependencies": 666
+  }
+}

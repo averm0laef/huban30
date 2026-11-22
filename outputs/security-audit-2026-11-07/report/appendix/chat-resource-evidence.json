@@ -1,0 +1,43 @@
+{
+  "scope": "Isolated calls against compiled current application classes. No network attack or source edits.",
+  "ws": {
+    "stdout": [
+      {
+        "stage": "first-rate-check-stalled",
+        "framesEmitted": 8,
+        "rateChecksStarted": 1,
+        "closed": 0
+      },
+      {
+        "stage": "rate-limit-rejected",
+        "rateChecksStarted": 8,
+        "errors429": 8,
+        "closed": 0
+      },
+      {
+        "stage": "closed-queued-frame-still-consumed",
+        "rateChecksStarted": 9,
+        "closed": 1
+      }
+    ],
+    "caveat": "N=8 plus one post-close frame, fake socket and rate limiter; resource control risk demonstrated, actual memory exhaustion/DoS not demonstrated."
+  },
+  "upload": {
+    "stdout": [
+      {
+        "firstUploadAwaitingBody": true,
+        "secondUnrelatedUpload": {
+          "status": 503,
+          "message": "Сейчас обрабатывается другой файл. Повторите загрузку через несколько секунд"
+        },
+        "defaultRequestTimeoutMs": 0
+      },
+      {
+        "cleanup": {
+          "status": 400
+        }
+      }
+    ],
+    "caveat": "Authorization and raw file.toBuffer are stubs; controlled pending promise proves slot held while body pending. Actual raw slow multipart request and production Caddy/proxy buffering/timeouts path not tested."
+  }
+}
