@@ -66,6 +66,30 @@ const COMMON_PASSWORDS = new Set([
   "пароль123456",
 ]);
 
+const MIN_DISTINCT_PASSWORD_CHARACTERS = 5;
+
+// Keyboard rows and alphabets joined in typing order: a password that only
+// walks along one of them (in either direction) is a pattern, not a phrase.
+const PASSWORD_WALKS = [
+  "01234567890",
+  "abcdefghijklmnopqrstuvwxyz",
+  "qwertyuiopasdfghjklzxcvbnm",
+  "абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+  "йцукенгшщзхъфывапролджэячсмитьбю",
+];
+
+function isKeyboardWalk(lower: string): boolean {
+  const characters = [...lower];
+  return PASSWORD_WALKS.some((walk) => {
+    const reversed = [...walk].reverse().join("");
+    return [walk, reversed].some((line) => characters.every((character, index) => {
+      if (index === 0) return line.includes(character);
+      const previous = characters[index - 1]!;
+      return character === previous || line.includes(previous + character);
+    }));
+  });
+}
+
 export function assertStrongPassword(password: string, email?: string): void {
   const lower = password.toLocaleLowerCase("ru-RU");
   const localPart = email?.split("@")[0]?.toLocaleLowerCase("ru-RU");
@@ -73,9 +97,13 @@ export function assertStrongPassword(password: string, email?: string): void {
     password.length < 12
     || password.length > 128
     || COMMON_PASSWORDS.has(lower)
+    || new Set(lower.replace(/\s/gu, "")).size < MIN_DISTINCT_PASSWORD_CHARACTERS
+    || isKeyboardWalk(lower)
     || (localPart && localPart.length >= 4 && lower.includes(localPart))
   ) {
-    throw new BadRequestException("Используйте уникальную парольную фразу длиной от 12 символов");
+    throw new BadRequestException(
+      "Используйте уникальную парольную фразу длиной от 12 символов: без повторов одного символа и клавиш подряд",
+    );
   }
 }
 

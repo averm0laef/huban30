@@ -90,6 +90,25 @@ describe("auth account state policy", () => {
       .not.toThrow();
   });
 
+  it("rejects passwords that are long but trivially guessable", () => {
+    for (const password of [
+      "aaaaaaaaaaaa",
+      "111111111111",
+      "            ",
+      "abab abab abab",
+      "qwertyuiopas",
+      "QWERTYUIOPASDF",
+      "abcdefghijkl",
+      "098765432109",
+      "йцукенгшщзхъ",
+    ]) {
+      expect(() => assertStrongPassword(password), password).toThrow(BadRequestException);
+    }
+    for (const password of ["long password phrase", "Синий трамвай 42", "correct horse battery"]) {
+      expect(() => assertStrongPassword(password), password).not.toThrow();
+    }
+  });
+
   it("bounds and removes control characters from consent request metadata", () => {
     expect(normalizeConsentUserAgent(undefined)).toBeNull();
     expect(normalizeConsentUserAgent("  Browser\u0000Name\n1  ")).toBe("Browser Name 1");
