@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AddToCartButton } from "../_components/cart-actions";
-import { Clock20Regular, VehicleCar20Regular } from "../_components/home-icons";
+import { ChevronLeft20Regular, ChevronRight20Regular, Clock20Regular, VehicleCar20Regular } from "../_components/home-icons";
 import buttons from "../_components/store-button.module.css";
 import styles from "../_components/storefront.module.css";
 import { formatRubles } from "../_lib/catalog-api";
@@ -12,7 +12,7 @@ import { catalogCategoryPhoto } from "../_lib/store-categories";
 import { isValidVin } from "../_lib/vin";
 import { CatalogResultRow, RowBadge } from "./catalog-result-row";
 import layoutStyles from "./catalog-layout.module.css";
-import { catalogPageHref, clearCatalogFiltersHref, type CatalogPageQuery } from "./catalog-query";
+import { CATALOG_LAST_PAGE, catalogPageHref, catalogPageNumbers, clearCatalogFiltersHref, type CatalogPageQuery } from "./catalog-query";
 import resultsStyles from "./catalog-results.module.css";
 import { CATALOG_SEARCH_FORM_ID } from "./catalog-search-form";
 import { CatalogFilterTrigger, CatalogSortSelect, Checkmark20Regular, Grid20Regular, TextBulletList20Regular } from "./catalog-toolbar-controls";
@@ -52,7 +52,9 @@ export function CatalogSearchPanel({
 }: CatalogSearchPanelProps) {
   const isSearch = state.query.trim().length >= 2;
   const isVin = isValidVin(state.query.trim());
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // A list opens up to its last reachable page: «Дальше» past it used to start the list again from page 1.
+  const totalPages = Math.min(CATALOG_LAST_PAGE, Math.max(1, Math.ceil(total / pageSize)));
+  const currentPage = Math.min(state.page, totalPages);
   const showPagination = !errorMessage && total > pageSize;
   const serviceLinks = isSearch && !isVin ? searchServiceLinks(state.query) : [];
   const categoryLinks = emptyState && isSearch ? suggestedCatalogSections(state.query) : [];
@@ -141,13 +143,27 @@ export function CatalogSearchPanel({
       </section>
       {showPagination ? (
         <nav aria-label="Страницы каталога" className={resultsStyles.pagination}>
-          {state.page > 1 ? (
-            <Link href={catalogPageHref(action, state, state.page - 1)} rel="prev">Назад</Link>
-          ) : <span aria-hidden="true" />}
-          <span>Страница {Math.min(state.page, totalPages)} из {totalPages}</span>
-          {state.page < totalPages ? (
-            <Link href={catalogPageHref(action, state, state.page + 1)} rel="next">Дальше</Link>
-          ) : <span aria-hidden="true" />}
+          {currentPage > 1 ? (
+            <Link className={`${buttons.button} ${buttons.quiet} ${resultsStyles.pagePrev}`} href={catalogPageHref(action, state, currentPage - 1)} rel="prev">
+              <ChevronLeft20Regular aria-hidden="true" /> Назад
+            </Link>
+          ) : <span aria-hidden="true" className={resultsStyles.pagePrev} />}
+          <ol className={resultsStyles.pageNumbers}>
+            {catalogPageNumbers(currentPage, totalPages).map((number, index) => (number === null ? (
+              <li aria-hidden="true" className={resultsStyles.pageGap} key={`gap-${index}`}>…</li>
+            ) : (
+              <li key={number}>
+                {number === currentPage
+                  ? <span aria-current="page" aria-label={`Страница ${number}, текущая`} className={resultsStyles.pageNumber}>{number}</span>
+                  : <Link aria-label={`Страница ${number}`} className={resultsStyles.pageNumber} href={catalogPageHref(action, state, number)}>{number}</Link>}
+              </li>
+            )))}
+          </ol>
+          {currentPage < totalPages ? (
+            <Link className={`${buttons.button} ${buttons.soft} ${resultsStyles.pageNext}`} href={catalogPageHref(action, state, currentPage + 1)} rel="next">
+              Дальше <ChevronRight20Regular aria-hidden="true" />
+            </Link>
+          ) : <span aria-hidden="true" className={resultsStyles.pageNext} />}
         </nav>
       ) : null}
     </>

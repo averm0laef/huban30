@@ -1,6 +1,7 @@
 "use client";
 
 export {
+  ChevronLeft20Regular,
   ChevronRight20Regular,
   Clock20Regular,
   Box24Regular,

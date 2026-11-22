@@ -5,7 +5,9 @@ export type CatalogSort = "name" | "price_asc" | "price_desc" | "relevance";
 export type CatalogView = "grid" | "list";
 
 export const CATALOG_PAGE_SIZE = 24;
-const MAX_PAGE = 201;
+/** The last page a list can be opened at: the catalogue API gives the first 4 824 items of a list (offset ≤ 4 800). */
+export const CATALOG_LAST_PAGE = 201;
+const MAX_PAGE = CATALOG_LAST_PAGE;
 const MAX_PRICE_RUBLES = Math.floor(Number.MAX_SAFE_INTEGER / 100);
 const PUBLIC_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
@@ -72,6 +74,20 @@ export function priceKopeks(rubles: number): number;
 export function priceKopeks(rubles: null): undefined;
 export function priceKopeks(rubles: number | null): number | undefined {
   return rubles === null ? undefined : rubles * 100;
+}
+
+/**
+ * The page numbers under a list: every page of a short list; of a long one the first, the last, the current page
+ * with its neighbours, and `null` where pages are left out. Never more than seven places, so it fits a phone, and
+ * a gap never hides a single page.
+ */
+export function catalogPageNumbers(current: number, last: number): Array<number | null> {
+  const page = Math.min(Math.max(1, current), Math.max(1, last));
+  const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_unused, index) => from + index);
+  if (last <= 7) return range(1, Math.max(1, last));
+  if (page <= 4) return [...range(1, Math.max(4, page + 1)), null, last];
+  if (page >= last - 3) return [1, null, ...range(Math.min(last - 3, page - 1), last)];
+  return [1, null, page - 1, page, page + 1, null, last];
 }
 
 export function hasActiveCatalogFilters(state: CatalogPageQuery): boolean {

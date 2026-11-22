@@ -144,32 +144,46 @@
 .sourceCaption { margin: 0; padding: 2px var(--store-space-2xs) var(--store-space-xs); color: var(--store-muted); font-size: .75rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
 .sourceDivider { margin-top: var(--store-space-sm); padding-top: var(--store-space-md); border-top: 1px solid var(--store-border); }
 
+/* Pages of a list: «Назад», the page numbers, «Дальше» — the shop's own buttons (store-button.module.css) and
+   44 px squares for the numbers. On a phone the numbers take a row of their own above the two buttons. */
 .pagination {
   display: grid;
-  grid-template-columns: minmax(72px, 1fr) auto minmax(72px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--store-space-sm);
   margin-top: var(--store-space-lg);
   padding-top: var(--store-space-md);
   border-top: 1px solid var(--store-border);
-  color: var(--store-muted);
-  font-size: 0.86rem;
-  text-align: center;
 }
-.pagination a {
+.pagePrev { justify-self: start; }
+.pageNext { justify-self: end; }
+.pageNumbers { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.pageNumbers li { display: flex; }
+.pagination .pageNumber {
+  min-width: 44px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0 6px;
   border: 1px solid var(--store-border);
   border-radius: var(--store-radius-sm);
   background: var(--store-surface);
-  color: var(--store-brand);
-  font-weight: var(--store-weight-bold);
+  color: var(--store-text);
+  font-family: var(--store-font-display);
+  font-size: .88rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   text-decoration: none;
 }
-.pagination a:first-child { justify-self: start; }
-.pagination a:last-child { justify-self: end; }
+.pagination a.pageNumber:hover { border-color: var(--store-brand); color: var(--store-brand); }
+.pagination .pageNumber[aria-current="page"] { border-color: var(--store-brand); background: var(--store-brand); color: var(--store-on-brand); }
+.pageGap { min-width: 20px; justify-content: center; align-items: center; color: var(--store-muted); }
+@media (max-width: 640px) {
+  .pagination { grid-template-columns: 1fr 1fr; }
+  .pageNumbers { grid-column: 1 / -1; gap: 2px; }
+  .pageGap { min-width: 12px; }
+}
 
 /* ---------------- "Ещё N предложений" disclosure ----------------
    Kept from the previous layout: extra stock lines and analogues fold away

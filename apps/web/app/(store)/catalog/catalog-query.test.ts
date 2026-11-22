@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CATALOG_LAST_PAGE,
   catalogPageHref,
+  catalogPageNumbers,
   clearCatalogFiltersHref,
   hasActiveCatalogFilters,
   missedSearchText,
@@ -107,5 +109,48 @@ describe("a search inside a section that has nothing for it", () => {
     expect(missedSearchText({ missed: ["первое", "второе"] })).toBe("первое");
     expect(missedSearchText({ missed: "я".repeat(500) })).toHaveLength(120);
     expect(missedSearchText({})).toBe("");
+  });
+});
+
+describe("the page numbers under a list", () => {
+  it("names every page of a short list", () => {
+    expect(catalogPageNumbers(1, 1)).toEqual([1]);
+    expect(catalogPageNumbers(3, 7)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("keeps the first, the last and the neighbours of the current page of a long list", () => {
+    expect(catalogPageNumbers(1, 20)).toEqual([1, 2, 3, 4, null, 20]);
+    expect(catalogPageNumbers(10, 20)).toEqual([1, null, 9, 10, 11, null, 20]);
+    expect(catalogPageNumbers(20, 20)).toEqual([1, null, 17, 18, 19, 20]);
+  });
+
+  it("does not hide a single page behind a gap", () => {
+    expect(catalogPageNumbers(4, 20)).toEqual([1, 2, 3, 4, 5, null, 20]);
+    expect(catalogPageNumbers(17, 20)).toEqual([1, null, 16, 17, 18, 19, 20]);
+  });
+
+  it("is never longer than seven places, so it fits a phone", () => {
+    for (let last = 1; last <= 60; last += 1) {
+      for (let page = 1; page <= last; page += 1) {
+        const numbers = catalogPageNumbers(page, last);
+        expect(numbers.length).toBeLessThanOrEqual(7);
+        expect(numbers).toContain(page);
+        expect(numbers[0]).toBe(1);
+        expect(numbers.at(-1)).toBe(last);
+      }
+    }
+  });
+
+  it("stays inside the list when the address names a page beyond it", () => {
+    expect(catalogPageNumbers(99, 5)).toEqual([1, 2, 3, 4, 5]);
+    expect(catalogPageNumbers(0, 5)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  // The catalogue API gives the first 4 824 items of a list (offset up to 4 800); the root of the owner's catalogue
+  // has 1 781 pages. «Дальше» past the last reachable page used to open page 1 again.
+  it("knows the last page a list can be opened at", () => {
+    expect(CATALOG_LAST_PAGE).toBe(201);
+    expect(parseCatalogPageQuery({ page: String(CATALOG_LAST_PAGE) }).page).toBe(CATALOG_LAST_PAGE);
+    expect(parseCatalogPageQuery({ page: String(CATALOG_LAST_PAGE + 1) }).page).toBe(1);
   });
 });
