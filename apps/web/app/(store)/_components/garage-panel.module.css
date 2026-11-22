@@ -1,0 +1,21 @@
+.list { display: grid; gap: 10px; margin: 0 0 16px; padding: 0; list-style: none; }
+.car { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 14px; padding: 14px 16px; border: 1px solid var(--store-border); border-radius: 16px; background: var(--store-surface); }
+.car[data-main] { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); }
+.icon { width: 44px; height: 44px; padding: 10px; border-radius: 12px; background: var(--store-brand-soft); color: var(--store-brand); }
+.body { display: grid; gap: 2px; min-width: 0; }
+.body strong { font-family: var(--store-font-display); font-size: 1.05rem; overflow-wrap: anywhere; }
+.body span { color: var(--store-muted); font-size: .9rem; overflow-wrap: anywhere; }
+.mainBadge { display: inline-flex; align-items: center; gap: 4px; color: var(--store-brand-strong); font-size: .82rem; font-weight: 650; }
+.mainBadge svg { width: 16px; height: 16px; color: var(--store-accent); }
+.actions { display: flex; align-items: center; gap: 6px; }
+.remove { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 0; border-radius: 50%; background: transparent; color: var(--store-muted); cursor: pointer; }
+.remove:hover { background: var(--store-bg); color: var(--store-danger); }
+.remove:disabled { opacity: .5; cursor: default; }
+.add { justify-self: start; }
+.picker { margin-top: 8px; }
+.muted { margin: 0; color: var(--store-muted); }
+.error { margin: 0 0 12px; color: var(--store-danger); }
+@media (max-width: 640px) {
+  .car { grid-template-columns: auto minmax(0, 1fr); }
+  .actions { grid-column: 1 / -1; justify-content: space-between; }
+}

@@ -1,0 +1,42 @@
+/* The chosen car's parts catalogue on /podbor: sections, then parts. */
+.catalog { display: grid; gap: 16px; padding: clamp(16px, 2.4vw, 24px); border: 1px solid var(--store-border); border-radius: 20px; background: var(--store-surface); }
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; }
+.head h2 { margin: 0; font-family: var(--store-font-display); font-size: clamp(1.15rem, 2vw, 1.4rem); line-height: 1.25; }
+.head h2:focus { outline: none; }
+.kicker { margin: 0 0 2px; color: var(--store-brand); font-size: .82rem; font-weight: 700; }
+
+.matches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 8px; }
+.match { display: grid; gap: 2px; min-height: 56px; padding: 10px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease); }
+.match:hover { border-color: var(--store-brand); background: var(--store-surface); }
+.match:active { background: var(--store-brand-soft); }
+.match strong { font-size: .95rem; overflow-wrap: anywhere; }
+.match small { color: var(--store-muted); font-size: .8rem; }
+
+.tree { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); align-items: start; gap: 8px; }
+.group { border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); }
+.group[open] { background: var(--store-surface); }
+.group > summary { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px 0 14px; font-weight: 650; list-style: none; cursor: pointer; }
+.group > summary::-webkit-details-marker { display: none; }
+.group > summary span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.group > summary small { color: var(--store-muted); font-size: .78rem; font-weight: 500; }
+.group > summary svg { flex: none; color: var(--store-muted); transition: transform var(--store-duration-fast) var(--store-ease); }
+.group[open] > summary svg { transform: rotate(180deg); }
+.group > summary:hover { color: var(--store-brand); }
+.groupBody { display: grid; gap: 4px; padding: 0 8px 8px; }
+.groupBody .group { border-color: transparent; background: transparent; }
+.groupBody .group > summary { min-height: 44px; padding-left: 10px; font-weight: 550; }
+.leaf { display: block; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--store-text); font: inherit; font-size: .92rem; text-align: left; cursor: pointer; overflow-wrap: anywhere; transition: background-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.leaf:hover { background: var(--store-brand-soft); color: var(--store-brand-strong); }
+.tree > .leaf { border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); padding-inline: 14px; font-weight: 650; }
+
+.empty { display: grid; justify-items: start; gap: 6px; padding: 14px 16px; border: 1px dashed var(--store-border); border-radius: 12px; background: var(--store-bg); }
+.empty p { margin: 0; color: var(--store-muted); font-size: .9rem; line-height: 1.5; }
+
+.partHead { display: flex; align-items: flex-start; gap: 12px; }
+.partImage { flex: none; width: 64px; height: 64px; border: 1px solid var(--store-border); border-radius: 10px; background: #fff; object-fit: contain; }
+.partIdentity { min-width: 0; }
+.criteria, .oems { margin: 4px 0 0; color: var(--store-muted); font-size: .82rem; line-height: 1.45; overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: reduce) {
+  .match, .leaf, .group > summary svg { transition: none; }
+}

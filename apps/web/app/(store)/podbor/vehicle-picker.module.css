@@ -1,0 +1,84 @@
+/* «Выбрать автомобиль» — same store tokens and 44 px targets as the rest of /podbor. */
+
+.picker { display: grid; gap: 14px; min-width: 0; padding: clamp(14px, 2vw, 20px); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); color: var(--store-text); }
+.picker { scroll-margin-top: 140px; }
+.search { display: flex; align-items: center; min-width: 0; height: 48px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); transition: border-color var(--store-duration-fast) var(--store-ease); }
+.search:focus-within { border-color: var(--store-brand); box-shadow: 0 0 0 2px var(--store-brand-soft); }
+.search > svg { flex: none; margin-left: 14px; color: var(--store-muted); }
+.search input { flex: 1; min-width: 0; height: 100%; padding: 0 12px; border: 0; background: transparent; color: var(--store-text); font: inherit; font-size: 1rem; outline: none; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.steps { min-width: 0; }
+.steps ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: .86rem; }
+.steps li { display: inline-flex; align-items: center; gap: 4px; color: var(--store-muted); }
+.steps li[aria-current="step"] span { color: var(--store-brand); font-weight: 700; }
+/* A finished step is a button back to it: 36px with a pointer, 44px for a finger. */
+.steps button { min-height: 36px; padding: 0 12px; border: 0; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand-strong); font: inherit; font-weight: 650; cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease); }
+.steps button:hover { background: color-mix(in srgb, var(--store-brand) 14%, var(--store-surface)); }
+.steps button:active { background: color-mix(in srgb, var(--store-brand) 20%, var(--store-surface)); }
+.close { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--store-muted); cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.close:hover { background: var(--store-bg); color: var(--store-text); }
+.close:active { background: var(--store-brand-soft); color: var(--store-brand); }
+@media (pointer: coarse), (max-width: 767px) {
+  .steps button { min-height: 44px; }
+}
+
+/* «Не знаю двигатель»: a button of its own width, full width on a phone. */
+.skipEngine { justify-self: start; }
+@media (max-width: 520px) {
+  .skipEngine { justify-self: stretch; }
+}
+.title { overflow-wrap: anywhere; margin: 0; color: var(--store-text); font-family: var(--store-font-display); font-size: 1.05rem; line-height: 1.3; }
+.title:focus { outline: none; }
+.groupLabel { margin: 4px 0 0; color: var(--store-muted); font-size: .8rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+
+.suggestBox { position: relative; }
+.suggestList { position: absolute; z-index: 5; inset: calc(100% + 4px) 0 auto; display: grid; margin: 0; padding: 6px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); box-shadow: var(--store-shadow-md, 0 12px 28px rgb(0 0 0 / 12%)); list-style: none; }
+.suggestList li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+.suggestList li[aria-selected="true"], .suggestList li:hover { background: var(--store-brand-soft); color: var(--store-brand-strong); }
+.suggestList small { color: var(--store-muted); font-size: .8rem; white-space: nowrap; }
+
+.popular { display: flex; flex-wrap: wrap; gap: 8px; }
+.popular .makeButton { min-height: 44px; padding: 0 16px; border: 1px solid var(--store-border); border-radius: var(--store-radius-full); background: var(--store-bg); color: var(--store-text); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.popular .makeButton:hover { border-color: var(--store-brand); color: var(--store-brand); }
+.popular .makeButton:active { background: var(--store-brand-soft); }
+
+.letters { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 12px 20px; }
+.letterGroup { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 8px; }
+.letter { padding-top: 10px; color: var(--store-brand); font-family: var(--store-font-display); font-weight: 800; }
+.letterGroup > div { display: grid; }
+.letterGroup .makeLink { min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--store-text); font-size: .92rem; text-align: left; cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.letterGroup .makeLink:hover { background: var(--store-bg); color: var(--store-brand); }
+.letterGroup .makeLink:active { background: var(--store-brand-soft); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 8px; }
+.choice { display: grid; gap: 2px; min-height: 56px; padding: 10px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease); }
+.choice strong { font-size: .95rem; }
+.choice small { color: var(--store-muted); font-size: .8rem; }
+.choice:hover { border-color: var(--store-brand); box-shadow: 0 8px 20px rgb(24 0 224 / 8%); }
+.choice:active { background: var(--store-brand-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .steps button, .close, .popular .makeButton, .letterGroup .makeLink, .choice { transition: none; }
+}
+
+/* Generations of one model: years first (what people know), then the body code. */
+.generations { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; }
+.generation { display: grid; gap: 2px; min-height: 64px; padding: 10px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease); }
+.generation:hover { border-color: var(--store-brand); background: var(--store-surface); }
+.generation:active { background: var(--store-brand-soft); }
+.generationYears { color: var(--store-brand); font-family: var(--store-font-display); font-size: 1rem; font-weight: 800; }
+.generation strong { font-size: .92rem; overflow-wrap: anywhere; }
+.generation small { color: var(--store-muted); font-size: .82rem; }
+@media (prefers-reduced-motion: reduce) { .generation { transition: none; } }
+
+/* Models of a make: a letter index instead of a two-hundred-card scroll. */
+.letterBar { display: flex; flex-wrap: wrap; gap: 6px; }
+.letterBar button { min-width: 44px; min-height: 44px; padding: 0 12px; border: 1px solid var(--store-border); border-radius: 10px; background: var(--store-surface); color: var(--store-text); font: inherit; font-family: var(--store-font-display); font-size: .88rem; font-weight: 700; cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease), border-color var(--store-duration-fast) var(--store-ease); }
+.letterBar button:hover { border-color: var(--store-brand); }
+.letterBar button[aria-pressed="true"] { border-color: var(--store-brand); background: var(--store-brand); color: var(--store-on-brand); }
+.modelGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 8px; }
+@media (max-width: 560px) {
+  .modelGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modelGrid .choice { padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .letterBar button { transition: none; } }

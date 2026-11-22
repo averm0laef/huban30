@@ -1,0 +1,397 @@
+/* «Подбор по автомобилю» — same tokens, radii and button shapes as the
+   catalog (catalog-layout / catalog-results modules), nothing page-specific
+   in colour or type. Action buttons come from store-button.module.css
+   (primary / soft / quiet); this module only places them.
+   Control rules here are written with two classes (`.tabs .tab`): a single
+   class (0,1,0) loses its font and transition to the storefront resets
+   `.storefront button { font: inherit }` (0,1,1) and renders as body text. */
+
+.page {
+  width: var(--store-container);
+  display: grid;
+  gap: 20px;
+  margin-inline: auto;
+  padding-block: clamp(20px, 3vw, 42px) clamp(44px, 6vw, 68px);
+}
+.heading h1 { margin: 0; font-size: clamp(1.4rem, 1rem + 2.2vw, 2.6rem); line-height: 1.12; letter-spacing: var(--store-tracking-tight); }
+.heading p { max-width: 680px; margin: 10px 0 0; color: var(--store-muted); line-height: 1.55; }
+
+.panel { display: grid; gap: 16px; min-height: 180px; padding: clamp(14px, 2vw, 24px); border-radius: var(--store-radius); background: var(--store-surface); }
+.mode { display: grid; gap: 14px; min-width: 0; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.tabs { display: inline-flex; width: fit-content; max-width: 100%; gap: 2px; padding: 4px; border-radius: 14px; background: var(--store-bg); }
+.tabs .tab {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--store-muted);
+  font-family: var(--store-font-display);
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.tabs .tab[aria-selected="true"] { background: var(--store-surface); color: var(--store-brand); box-shadow: var(--store-shadow-xs); }
+.tab:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+
+.form {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 56px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
+}
+.form:focus-within { border-color: var(--store-brand); box-shadow: 0 0 0 2px var(--store-brand-soft); }
+.form > svg { flex: none; margin-left: 16px; color: var(--store-muted); }
+.form input { flex: 1; min-width: 0; height: 100%; padding: 0 12px; border: 0; background: transparent; color: var(--store-text); font: inherit; font-size: 1rem; outline: none; }
+.form button {
+  flex: none;
+  height: 44px;
+  margin-right: 6px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  font-family: var(--store-font-display);
+  font-weight: 700;
+  cursor: pointer;
+}
+.form button:hover:not(:disabled) { background: var(--store-brand-strong); }
+.form button:disabled { opacity: .55; cursor: not-allowed; }
+
+.hint { margin: -4px 0 0; color: var(--store-muted); font-size: .84rem; line-height: 1.5; }
+.examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--store-muted); font-size: .84rem; }
+.examples button,
+.options .option {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 44px;
+  justify-content: center;
+  padding: 6px 14px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-full);
+  background: var(--store-surface);
+  color: var(--store-text);
+  font: inherit;
+  font-size: .86rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--store-duration-fast) var(--store-ease), background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.options .option { border-radius: 12px; min-height: 44px; font-weight: 600; }
+.option small { color: var(--store-muted); font-size: .76rem; font-weight: 500; }
+.examples button:hover,
+.options .option:hover { border-color: var(--store-brand); color: var(--store-brand); }
+.examples button:active,
+.options .option:active { background: var(--store-brand-soft); }
+.options .option[aria-pressed="true"] { border-color: var(--store-brand); background: var(--store-brand); color: var(--store-on-brand); }
+.examples button:focus-visible,
+.option:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+.options { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.vehicleChip { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: fit-content; max-width: 100%; padding: 0 0 0 12px; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand-strong); font-size: .86rem; }
+.vehicleChip label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; cursor: pointer; }
+.vehicleChip input { flex: none; accent-color: var(--store-brand); }
+.vehicleChip button { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.vehicleChip button:hover { background: var(--store-surface); }
+
+.status { margin: 0; color: var(--store-muted); font-size: .9rem; }
+.muted { margin: 0; color: var(--store-muted); font-size: .86rem; line-height: 1.5; }
+.errorBox,
+.notice { margin: 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--store-accent) 50%, var(--store-border)); border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-accent) 9%, var(--store-surface)); color: var(--store-text); font-size: .9rem; line-height: 1.5; }
+.errorBox { border-color: color-mix(in srgb, var(--store-danger) 40%, var(--store-border)); background: color-mix(in srgb, var(--store-danger) 6%, var(--store-surface)); }
+
+.step { display: grid; gap: 10px; padding: 16px; border-radius: 14px; background: var(--store-bg); }
+.stepTitle { margin: 0; font-family: var(--store-font-display); font-size: 1.02rem; font-weight: 750; }
+.confirmLine { margin: 0; font-size: 1rem; }
+.resultsContext { margin: 0; font-family: var(--store-font-display); font-size: 1.05rem; font-weight: 750; overflow-wrap: anywhere; }
+
+.results { display: grid; gap: 18px; }
+.resultsHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.resultsHead > button { flex: none; }
+.groupTitle { margin: 0 0 10px; color: var(--store-muted); font-size: .76rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.partList { display: grid; gap: 12px; }
+
+.part { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); transition: border-color var(--store-duration-base) var(--store-ease); }
+.part:hover { border-color: color-mix(in srgb, var(--store-brand) 28%, var(--store-border)); }
+.partHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.partArticle { margin: 0; font-family: var(--store-font-display); font-size: 1.15rem; font-weight: 800; letter-spacing: .01em; overflow-wrap: anywhere; }
+.partMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 0; color: var(--store-muted); font-size: .88rem; }
+.partDescription { margin: 4px 0 0; color: var(--store-text); font-size: .9rem; line-height: 1.45; }
+.partSource { flex: none; color: var(--store-muted); font-size: .76rem; text-align: right; }
+.oemBadge,
+.analogBadge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand-strong); font-size: .75rem; font-weight: var(--store-weight-black); letter-spacing: .03em; text-transform: uppercase; }
+.analogBadge { margin-left: 6px; background: color-mix(in srgb, var(--store-accent) 24%, var(--store-surface)); color: var(--store-accent-text); }
+.notInShop { margin: 0; color: var(--store-muted); font-size: .88rem; }
+.partActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Rows of one list share their columns (subgrid): prices and action buttons line up
+   whatever the label is — «В корзину», «Узнать срок» or «Проверить применимость».
+   Without subgrid support each row keeps its own three columns. */
+.offers { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(150px, auto); gap: 8px 16px; }
+.offer { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(150px, auto); grid-template-columns: subgrid; align-items: center; gap: 8px 16px; padding: 10px 12px; border-radius: 12px; background: var(--store-bg); }
+.offerIdentity { display: grid; gap: 2px; min-width: 0; }
+.offerIdentity a { color: var(--store-text); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.offerIdentity a:hover { color: var(--store-brand); }
+.offerIdentity small { color: var(--store-muted); font-size: .78rem; }
+.offerPrice { display: grid; justify-items: end; gap: 2px; font-variant-numeric: tabular-nums; }
+.offerPrice strong { font-family: var(--store-font-display); font-size: 1.02rem; font-weight: 800; }
+.offerPrice small { color: var(--store-muted); font-size: .76rem; font-weight: 600; }
+.offerPrice small[data-in-stock] { color: var(--store-success); }
+.offerAction { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; gap: 6px; }
+.offerAction > * { width: 100%; }
+.analogBadge[data-possible] { background: var(--store-bg); color: var(--store-muted); border: 1px dashed var(--store-border); }
+
+/* «В корзину» in an offer row lines up with the soft buttons beside it. */
+.offer .offerAction :global(.storefront-add-cart) { margin: 0; font-size: .88rem; }
+/* A button that is a grid item keeps its own width instead of stretching into a bar. */
+.selfStart { justify-self: start; }
+.alternatives { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.analogs { display: grid; gap: 10px; padding: 14px; border-radius: 14px; background: var(--store-bg); }
+.analogs .offer { background: var(--store-surface); }
+.analogsTitle { margin: 0; font-family: var(--store-font-display); font-size: .95rem; font-weight: 750; }
+.crossGroups { display: grid; gap: 12px; }
+.crossGroup h4 { margin: 0 0 6px; font-size: .86rem; }
+.crossGroup ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.crossGroup li { display: grid; gap: 6px; padding: 8px 10px; border-radius: 10px; background: var(--store-surface); }
+.crossIdentity { font-size: .9rem; }
+
+.vehicleCard { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--store-border); border-radius: var(--store-radius); }
+.vehicleTitle { margin: 0; font-family: var(--store-font-display); font-size: 1.3rem; font-weight: 800; }
+.vehicleRows { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; margin: 0; }
+.vehicleRows div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--store-border); font-size: .9rem; }
+.vehicleRows dt { color: var(--store-muted); }
+.vehicleRows dd { margin: 0; font-weight: 600; text-align: right; }
+
+.emptyState { display: grid; gap: 12px; padding: 18px; border: 1px dashed var(--store-border); border-radius: var(--store-radius); }
+.emptyState p { margin: 0; line-height: 1.5; }
+.unavailable { display: grid; gap: 10px; justify-items: start; padding: clamp(8px, 2vw, 16px); }
+.unavailable h2 { margin: 0; font-size: 1.25rem; }
+.unavailable p { max-width: 620px; margin: 0; color: var(--store-muted); line-height: 1.55; }
+.unavailableActions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .results,
+  .step,
+  .vehicleCard,
+  .analogs { animation: finder-settle 260ms var(--store-ease) both; }
+}
+@keyframes finder-settle { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 670px) {
+  .tabs { width: 100%; }
+  .tab { flex: 1; padding: 0 10px; font-size: .82rem; }
+  .form { height: 52px; }
+  .form > svg { display: none; }
+  .form button { padding: 0 14px; }
+  .partHeader { flex-direction: column; }
+  .partSource { text-align: left; }
+  .offers { grid-template-columns: minmax(0, 1fr) auto; }
+  .offer { grid-template-columns: minmax(0, 1fr) auto; grid-template-columns: subgrid; }
+  .offerAction { grid-column: 1 / -1; }
+  .resultsHead { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 520px) {
+  .partActions > *,
+  .unavailableActions > * { flex: 1 1 100%; }
+  .selfStart { justify-self: stretch; }
+}
+
+/* ================= Design boards «Подбор по авто» ================= */
+.breadcrumbs { display: flex; flex-wrap: wrap; gap: 4px 8px; color: var(--store-muted); font-size: .82rem; }
+.breadcrumbs a { color: inherit; text-decoration: none; }
+.breadcrumbs a:hover { color: var(--store-brand); }
+.breadcrumbs [aria-current] { color: var(--store-text); }
+.finder { display: grid; gap: 18px; min-width: 0; }
+
+/* Hero: ink-indigo block, car on the right, input + yellow action. */
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 400px);
+  align-items: center;
+  gap: 20px;
+  overflow: hidden;
+  padding: clamp(22px, 3vw, 38px) clamp(18px, 3vw, 40px) clamp(20px, 2.6vw, 30px);
+  border-radius: 26px;
+  background: var(--store-header-bg);
+  color: #fff;
+}
+.heroBody { position: relative; z-index: 1; display: grid; gap: 16px; min-width: 0; }
+.hero h1 { margin: 0; font-size: clamp(1.6rem, 1rem + 2.6vw, 2.7rem); font-weight: 800; line-height: 1.08; letter-spacing: -.02em; color: #fff; }
+.heroLead { max-width: 580px; margin: 0; color: #c9c6ff; font-size: clamp(.95rem, .9rem + .3vw, 1.08rem); line-height: 1.5; }
+.heroCar { width: 100%; height: auto; justify-self: end; filter: drop-shadow(0 18px 24px rgb(0 0 0 / 28%)); }
+.hero .tabs { background: rgb(255 255 255 / 10%); }
+.hero .tab { color: #fff; }
+.hero .tab:hover { background: rgb(255 255 255 / 10%); }
+.hero .tab[aria-selected="true"] { background: #fff; color: var(--store-brand); box-shadow: none; }
+.hero .mode { gap: 12px; }
+.hero .form { max-width: 760px; height: 62px; border: 0; background: #fff; }
+.hero .form:focus-within { box-shadow: 0 0 0 3px rgb(245 196 0 / 55%); }
+.hero .form input { font-size: 1.05rem; }
+.hero .form button { height: 48px; padding: 0 26px; background: var(--store-accent); color: var(--store-header-bg); font-weight: 800; font-size: 1rem; transition: background-color var(--store-duration-fast) var(--store-ease); }
+.hero .form button:hover:not(:disabled) { background: var(--store-accent-hover); }
+.hero .form button:active:not(:disabled) { background: color-mix(in srgb, var(--store-accent) 86%, var(--store-header-bg)); }
+.hero .examples { color: #9e9ad8; }
+.hero .examples button { border-color: transparent; background: rgb(255 255 255 / 10%); color: #fff; }
+.hero .examples button:hover { border-color: rgb(255 255 255 / 40%); color: #fff; }
+.hero .examples button:active { background: rgb(255 255 255 / 20%); }
+.hero .hint { color: #b9b6e8; margin: 0; }
+.pickerRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--store-muted); font-size: .9rem; }
+.pickerRow .pickerToggle {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px 0 14px;
+  border: 1px solid var(--store-border); border-radius: var(--store-radius-full); background: var(--store-surface);
+  color: var(--store-brand); font-family: var(--store-font-display); font-size: .88rem; font-weight: 700; text-align: left; cursor: pointer;
+  transition: background-color var(--store-duration-fast) var(--store-ease), border-color var(--store-duration-fast) var(--store-ease);
+}
+.pickerRow .pickerToggle > svg { flex: none; }
+.pickerRow .pickerToggle:hover { border-color: var(--store-brand); }
+.hero .pickerRow { color: #b9b6e8; }
+.hero .pickerRow .pickerToggle { border-color: rgb(255 255 255 / 35%); background: transparent; color: #fff; }
+.hero .pickerRow .pickerToggle:hover { border-color: #fff; background: rgb(255 255 255 / 10%); }
+.hero .pickerRow .pickerToggle:active { background: rgb(255 255 255 / 20%); }
+.hero .vehicleChip { background: rgb(255 255 255 / 12%); color: #fff; }
+.hero .vehicleChip button:hover { background: rgb(255 255 255 / 15%); }
+.hero .vehicleChip button:active { background: rgb(255 255 255 / 25%); }
+/* On the ink-indigo hero the storefront's brand ring disappears: use the accent one. */
+.hero :is(.tab, .pickerToggle, .examples button, .vehicleChip button, .vehicleChip input):focus-visible { outline-color: var(--store-accent); }
+
+.stepsRow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.stepsRow li { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; align-items: center; padding: 16px 18px; border-radius: 18px; background: var(--store-surface); }
+.stepsRow li[data-current] { box-shadow: inset 0 0 0 2px var(--store-brand); }
+.stepsRow span { grid-row: 1 / 3; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: var(--store-bg); color: var(--store-muted); font-family: var(--store-font-display); font-weight: 800; }
+.stepsRow li[data-current] span { background: var(--store-brand-soft); color: var(--store-brand); }
+.stepsRow strong { font-size: .95rem; }
+.stepsRow small { color: var(--store-muted); font-size: .84rem; }
+.body { display: grid; gap: 14px; }
+
+/* Step: what is already recognised as chips, then option cards. */
+.step { padding: clamp(16px, 2vw, 24px); border-radius: 22px; background: var(--store-surface); }
+.stepHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.knownChips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.knownChip { padding: 6px 12px; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand); font-size: .86rem; font-weight: 700; }
+.pendingChip { padding: 5px 12px; border: 1.5px dashed var(--store-border-strong, #c4c7d8); border-radius: var(--store-radius-full); color: var(--store-muted); font-size: .86rem; }
+.stepTitle { font-size: clamp(1.05rem, 1rem + .4vw, 1.3rem); }
+.optionGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+.optionCard {
+  display: grid;
+  gap: 3px;
+  min-height: 64px;
+  padding: 12px 16px;
+  border: 1.5px solid var(--store-border);
+  border-radius: 14px;
+  background: var(--store-surface);
+  color: var(--store-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
+}
+.optionCard strong { font-size: .95rem; transition: color var(--store-duration-fast) var(--store-ease); }
+.optionCard small { color: var(--store-muted); font-size: .82rem; }
+.optionCard:hover { border-color: var(--store-brand); box-shadow: 0 8px 20px rgb(24 0 224 / 8%); }
+.optionCard:hover strong { color: var(--store-brand); }
+.optionCard:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+
+/* Results: list + aside with the car and specialist help. */
+.resultsLayout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 18px; }
+.resultsAside { position: sticky; top: 110px; display: grid; gap: 12px; }
+.carCard { display: grid; gap: 6px; padding: 16px; border-radius: 20px; background: var(--store-surface); }
+.carCard img { width: 100%; height: auto; }
+.carCard strong { font-family: var(--store-font-display); font-size: 1.1rem; }
+.carCard > span { color: var(--store-muted); font-size: .88rem; }
+/* Narrower side padding keeps «Сохранить как мой автомобиль» on one line in the 320px aside. */
+.carCard .carSave { margin-top: 4px; padding-inline: 8px; }
+.carSaved { margin-top: 4px; color: var(--store-success) !important; font-weight: 600; }
+/* Rows: title, text, action. Beside a taller car card the text row takes the spare height, the action keeps its 44px. */
+.helpCard { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 18px; border-radius: 20px; background: var(--store-header-bg); color: #fff; }
+.helpCard span { color: #c9c6ff; font-size: .9rem; line-height: 1.45; }
+.helpCard .helpCardAction {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin-top: 4px; padding: 8px 16px;
+  border-radius: var(--store-radius-sm); background: var(--store-accent); color: var(--store-header-bg);
+  font-family: var(--store-font-display); font-size: .88rem; font-weight: 800; line-height: 1.25; text-align: center; text-decoration: none;
+  transition: background-color var(--store-duration-fast) var(--store-ease);
+}
+.helpCard .helpCardAction > svg { flex: none; }
+.helpCard .helpCardAction:hover { background: var(--store-accent-hover); }
+.helpCard .helpCardAction:active { background: color-mix(in srgb, var(--store-accent) 86%, var(--store-header-bg)); }
+.helpCard .helpCardAction:focus-visible { outline-color: var(--store-accent); }
+.results .part { border: 0; border-radius: 20px; }
+
+@media (max-width: 1000px) {
+  /* Tablet: the car keeps a third of the hero, so the tabs and the search form are not squeezed. */
+  .hero { grid-template-columns: minmax(0, 1fr) minmax(180px, 32%); }
+  .resultsLayout { grid-template-columns: minmax(0, 1fr); }
+  .resultsAside { position: static; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+@media (max-width: 767px) {
+  .finder { gap: 14px; }
+  .hero { grid-template-columns: minmax(0, 1fr); padding: 22px 16px 18px; border-radius: 24px; }
+  .heroCar { position: absolute; top: 14px; right: -46px; width: 200px; opacity: .9; pointer-events: none; }
+  .hero h1 { max-width: 68%; font-size: 1.6rem; }
+  .heroLead { max-width: 100%; font-size: .92rem; }
+  /* `auto` columns: the longer label gets the room it needs, so both stay on one line at 375px. */
+  .hero .tabs { display: grid; grid-template-columns: auto auto; width: 100%; }
+  .hero .tab { padding: 0 6px; font-size: .8rem; line-height: 1.2; }
+  .hero .form { height: auto; flex-wrap: wrap; padding: 6px; gap: 6px; }
+  .hero .form input { flex: 1 1 100%; height: 48px; padding: 0 10px; }
+  .hero .form button { flex: 1 1 100%; margin: 0; height: 48px; }
+  .stepsRow { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .stepsRow li { padding: 12px 14px; }
+  .optionGrid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabs .tab,
+  .examples button,
+  .options .option,
+  .optionCard,
+  .optionCard strong,
+  .pickerRow .pickerToggle,
+  .hero .form button,
+  .helpCard .helpCardAction { transition: none; }
+}
+.body:focus { outline: none; }
+.body { scroll-margin-top: 120px; }
+/* The article line and its «аналог» badge wrap as one row with even gaps. */
+.offerIdentity small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.offerIdentity small .analogBadge { margin-left: 0; }
+
+/* «Ваш автомобиль»: what the search is being done for, always in sight. */
+.garage { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px 14px; max-width: 760px; padding: 14px 16px; border: 1px solid var(--store-border); border-radius: 16px; background: var(--store-surface); color: var(--store-text); }
+.garage[data-off] { opacity: .78; }
+.garageIcon { width: 44px; height: 44px; padding: 10px; border-radius: 12px; background: var(--store-brand-soft); color: var(--store-brand); }
+.garageBody { display: grid; gap: 4px; min-width: 0; }
+.garageKicker { color: var(--store-muted); font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.garageName { font-family: var(--store-font-display); font-size: 1.15rem; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+.garageFacts { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 2px 0 0; }
+.garageFacts div { display: flex; gap: 6px; min-width: 0; font-size: .88rem; }
+.garageFacts dt { color: var(--store-muted); }
+.garageFacts dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.garageFacts dd[data-missing] { color: var(--store-muted); font-weight: 500; }
+.garageUse { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; width: fit-content; font-size: .9rem; cursor: pointer; }
+.garageUse input { width: 18px; height: 18px; flex: none; accent-color: var(--store-brand); }
+.garageActions { display: flex; align-items: center; gap: 6px; }
+.garageRemove { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 0; border-radius: 50%; background: transparent; color: var(--store-muted); cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease); }
+.garageRemove:hover { background: var(--store-bg); color: var(--store-text); }
+@media (max-width: 560px) {
+  .garage { grid-template-columns: auto minmax(0, 1fr); }
+  .garageActions { grid-column: 1 / -1; justify-content: space-between; }
+}
+@media (prefers-reduced-motion: reduce) { .garageRemove { transition: none; } }
+
+.garageLinks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+/* Cars a VIN may be: the visitor confirms one. */
+.vinCars { display: grid; gap: 8px; justify-items: start; }
+.vinCarList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 8px; width: 100%; max-width: 760px; }
+.vinCar { display: grid; gap: 2px; min-height: 56px; padding: 10px 14px; border: 0; border-radius: 12px; background: var(--store-surface); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; }
+.vinCar:hover strong { color: var(--store-brand); }
+.vinCar small { color: var(--store-muted); font-size: .82rem; }
