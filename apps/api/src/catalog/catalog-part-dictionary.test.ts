@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { STOREFRONT_TAXONOMY } from "@an30/contracts";
 
-import { expandAbbreviations, partDictionaryMatch, partDictionarySlugs, partHeadNoun, partSectionFromGroupName } from "./catalog-part-dictionary.js";
+import { expandAbbreviations, partDictionaryMatch, partDictionarySlugs, partHeadNoun, partSectionFromGroupName, partTypeKey } from "./catalog-part-dictionary.js";
 
 const TREE = new Set(STOREFRONT_TAXONOMY.flatMap((section) => [section.slug, ...section.children.map((child) => child.slug)]));
 
@@ -22,6 +22,27 @@ describe("the shop's part dictionary", () => {
     expect(partHeadNoun("Фаркоп Bosal 1234")).toBe("фаркоп");
     expect(partHeadNoun("Универсальный")).toBe("универсальный");
     expect(partHeadNoun("04465-20540")).toBeNull();
+  });
+
+  it("names the kind of part a name is about, whatever the word's form", () => {
+    expect(partTypeKey("Колодки тормозные передние")).toBe(partTypeKey("Колодка тормозная задняя"));
+    expect(partTypeKey("Лампа OSRAM 3930")).toBe(partTypeKey("3930 Лампа T4W 24V BA9s Osram"));
+    expect(partTypeKey("элемент масляного фильтра 7405-1012040 бумага")).toBe(partTypeKey("Элемент масляного фильтра 7405-1012040 м/сетка"));
+    expect(partTypeKey("Фильтр масляный LYNXauto")).toBe(partTypeKey("Фильтра масляные"));
+  });
+
+  it("takes the two words 1С uses for one part as one kind (names from the owner's base sharing a number)", () => {
+    expect(partTypeKey("Помпа водяная N-51 TD27, TD25, TD23, QD32")).toBe(partTypeKey("N-51 Насос водяного охлаждения TD23/TD25/TD27"));
+    expect(partTypeKey("Пробка бензобака KENT 80 мм хром")).toBe(partTypeKey("Крышка топливного бака KENT 80мм"));
+    expect(partTypeKey("мембрана диафрагма 100-3519150 тип 20")).toBe(partTypeKey("Диафрагма камеры тормозной тип 20"));
+    expect(partTypeKey("Гофра 203x60.5")).toBe(partTypeKey("Труба гофрированная с внутр. плетением 60.5X203"));
+  });
+
+  it("tells different kinds of part apart", () => {
+    expect(partTypeKey("Хомут силовой 20-22мм")).not.toBe(partTypeKey("Ключ рожковый 20*22"));
+    expect(partTypeKey("Краска-аэрозоль LUCKY золотая")).not.toBe(partTypeKey("LC-341 Фильтр масляный LYNXauto"));
+    expect(partTypeKey("Лампа OSRAM 3930")).not.toBe(partTypeKey("3930 10W-40 SL/CF OPTIMAL (полусинт.мотор.масло) Liqui Moly"));
+    expect(partTypeKey("04465-20540")).toBeNull();
   });
 
   it("spells out 1С shorthand", () => {

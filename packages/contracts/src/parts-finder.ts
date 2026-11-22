@@ -56,6 +56,10 @@ export type PartsFinderCrossesRequest = z.infer<typeof PartsFinderCrossesRequest
 export const PartsFinderShopAnalogsRequestSchema = z.object({
   article: z.string().trim().min(1).max(64).regex(SAFE_SINGLE_LINE),
   brand: z.string().trim().min(1).max(100).regex(SAFE_SINGLE_LINE).optional(),
+  /** What the part is called (a parts catalogue's description): another maker's product of the number must be that kind of part. */
+  name: z.string().trim().min(1).max(200).regex(SAFE_SINGLE_LINE).optional(),
+  /** The product card asking: the API reads the product's own brand, section and name. */
+  productId: z.string().uuid().optional(),
 });
 export type PartsFinderShopAnalogsRequest = z.infer<typeof PartsFinderShopAnalogsRequestSchema>;
 

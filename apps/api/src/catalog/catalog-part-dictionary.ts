@@ -1593,6 +1593,27 @@ export function partHeadNoun(name: string): string | null {
   return findHead(tokens(name))?.token ?? null;
 }
 
+/** Two words 1С uses for one part, found among products of the owner's base that share a number (23.11.2026). */
+const SAME_KIND: ReadonlyMap<string, string> = new Map([
+  ["помп", "насос"],
+  ["пробк", "крышк"],
+  ["мембран", "диафрагм"],
+  ["гофр", "труба"],
+]);
+
+/**
+ * The kind of part a name is about, the same for every form of its noun: the dictionary entry's own stem
+ * («Колодки …», «Колодка …»), else the head noun without its ending («Лампа», «Лампы»). Two products sharing a
+ * number are one part only when this agrees (parts-finder/same-part-number.ts). Null when the name has no noun.
+ */
+export function partTypeKey(name: string): string | null {
+  const head = findHead(tokens(name));
+  if (!head) return null;
+  const stem = head.entry?.[0][0];
+  const key = stem ? stem.replace(/\$$/u, "") : head.token.replace(/[аяоеиыуюйь]+$/u, "") || head.token;
+  return SAME_KIND.get(key) ?? key;
+}
+
 /** The section or subsection the shop's part dictionary names for a product name, or null. */
 /**
  * Soviet motorcycles and mopeds the shop sells parts for. A name that starts with the make is a part for it,

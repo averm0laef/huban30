@@ -94,17 +94,19 @@ function errorMessage(caught: unknown): string {
 
 /* ---------------- Analogues: our base first, then the paid catalogue ---------------- */
 
-function AnalogsPanel({ article, brand, manufacturerId }: { article: string; brand?: string; manufacturerId?: number }) {
+function AnalogsPanel({ article, brand, description, manufacturerId }: { article: string; brand?: string; description?: string; manufacturerId?: number }) {
   const [shop, setShop] = useState<Load<ShopAnalogsResult>>({ status: "loading" });
   const [crosses, setCrosses] = useState<Load<CrossesResult>>({ status: "idle" });
 
   useEffect(() => {
     let active = true;
-    finderRequest<ShopAnalogsResult>("shop-analogs", { article, ...(brand ? { brand } : {}) })
+    // The catalogue's description says what the part is: our product of the number without a maker must be that kind.
+    const name = description?.replace(/[\u0000-\u001F\u007F]+/gu, " ").trim().slice(0, 200);
+    finderRequest<ShopAnalogsResult>("shop-analogs", { article, ...(brand ? { brand } : {}), ...(name ? { name } : {}) })
       .then((data) => { if (active) setShop({ data, status: "ready" }); })
       .catch((caught: unknown) => { if (active) setShop({ message: errorMessage(caught), status: "error" }); });
     return () => { active = false; };
-  }, [article, brand]);
+  }, [article, brand, description]);
 
   const loadCrosses = useCallback((chosenId?: number) => {
     setCrosses({ status: "loading" });
@@ -249,7 +251,7 @@ function PartCard({ part }: { part: FinderPart }) {
           </ExpertHelpQueryLink>
         ) : null}
       </div>
-      {showAnalogs ? <AnalogsPanel article={part.article} brand={part.brand} manufacturerId={part.manufacturer_id} /> : null}
+      {showAnalogs ? <AnalogsPanel article={part.article} brand={part.brand} description={part.description} manufacturerId={part.manufacturer_id} /> : null}
     </article>
   );
 }

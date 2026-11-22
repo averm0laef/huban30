@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { SupplierSearchResponse } from "@an30/contracts";
+import { normalizeBrand, type SupplierSearchResponse } from "@an30/contracts";
 
 import type { SupplierProvider } from "../adapters/provider-contracts.js";
 import type { CatalogSearchLogService } from "../catalog/catalog-search-log.service.js";
@@ -17,6 +17,7 @@ import { PartsFinderService, looksLikeVehicleId, rankByShop } from "./parts-find
 interface Row {
   available_quantity: string; brand_name: string | null; name: string; price_kopeks: string | null; product_id: string;
   req_article: string; req_brand: string; sku: string; slug: string; via: number;
+  offered_root?: string | null;
 }
 
 function row(reqArticle: string, reqBrand: string, productId: string, extra: Partial<Row> = {}): Row {
@@ -24,6 +25,17 @@ function row(reqArticle: string, reqBrand: string, productId: string, extra: Par
     available_quantity: "2", brand_name: "Toyota", name: `Товар ${productId}`, price_kopeks: "89000", product_id: productId,
     req_article: reqArticle, req_brand: reqBrand, sku: reqArticle, slug: `tovar-${productId}`, via: 0, ...extra,
   };
+}
+
+/** The rows as SHOP_OFFERS_SQL returns them: tied to the request's index, with the sides sameNumberIsSamePart reads. */
+function asSqlRows(rows: Row[], values: unknown[]) {
+  const requests = JSON.parse(String(values[0] ?? "[]")) as Array<{ article: string; brand: string; idx: number }>;
+  return rows.flatMap(({ req_article, req_brand, ...rest }) => requests
+    .filter((request) => request.article === req_article && request.brand === req_brand)
+    .map((request) => ({
+      asked_brand: req_brand || null, asked_known: false, asked_name: null, asked_root: null,
+      offered_brand: rest.brand_name ? normalizeBrand(rest.brand_name) : null, offered_root: null, req_idx: request.idx, ...rest,
+    })));
 }
 
 const PROBOX = {
@@ -62,7 +74,9 @@ function setup(options: {
   supplierEnabled?: boolean;
 } = {}) {
   const pages = Array.isArray(options.rows?.[0]) ? [...options.rows as Row[][]] : null;
-  const query = vi.fn(async (_sql: string, _values: unknown[]) => ({ rows: pages ? pages.shift() ?? [] : (options.rows as Row[] | undefined) ?? [] }));
+  const query = vi.fn(async (_sql: string, values: unknown[]) => ({
+    rows: asSqlRows(pages ? pages.shift() ?? [] : (options.rows as Row[] | undefined) ?? [], values),
+  }));
   const engine = {
     crosses: vi.fn(options.engine?.crosses ?? (async () => ({}))),
     dailyLimit: 1000,
@@ -223,6 +237,25 @@ describe("crosses", () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect((result.groups as Record<string, Array<{ article: string }>>).analogs!.map((item) => item.article)).toEqual(["OC 90", "AB100"]);
     expect(result.part).toMatchObject({ shop: [] });
+  });
+});
+
+describe("shop analogs", () => {
+  it("asks about the product of the card, and about the kind of part a catalogue's row names", async () => {
+    const { query, service } = setup({ rows: [] });
+    const productId = "7a1c3c2e-6f0d-4c3a-9d1b-0f2b8f7e6a11";
+    await service.shopAnalogs({ article: "3930", brand: "OSRAM", productId });
+    expect(JSON.parse(String(query.mock.calls[0]![1][0]))).toEqual([{ article: "3930", brand: "OSRAM", idx: 0, product_id: productId }]);
+    const card = {
+      article: "W 75/3", status: "found", part: { article: "W 75/3", brand: "MANN-FILTER", description: "Фильтр масляный", manufacturer_id: 7 },
+      groups: { analogs: [{ article: "OC 90", brand: "Mahle", description: "Фильтр масляный", manufacturer_id: 11 }] },
+    };
+    // Our filter carries the number but 1С names no maker: the catalogue's description says it is the same kind of part.
+    const unbranded = row("OC90", "MAHLE", "p-unbranded", { brand_name: null, name: "Фильтр масляный OC 90", offered_root: "filtry" });
+    const second = setup({ engine: { crosses: async () => card }, rows: [unbranded] });
+    const result = await second.service.crosses({ article: "W 75/3" });
+    expect((result.groups as Record<string, Array<{ shop: unknown[] }>>).analogs![0]!.shop).toHaveLength(1);
+    expect(second.query).toHaveBeenCalledTimes(1);
   });
 });
 

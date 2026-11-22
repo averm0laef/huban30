@@ -65,7 +65,12 @@ function isPart(value: unknown): value is PartRecord {
 }
 
 function partRequest(part: PartRecord): ShopOfferRequest {
-  return { article: part.article, brand: typeof part.brand === "string" ? part.brand : null };
+  return {
+    article: part.article,
+    brand: typeof part.brand === "string" ? part.brand : null,
+    // FAPI's description of the part («Фильтр масляный»): our product of the number without a maker must be that kind of part.
+    name: typeof part.description === "string" ? part.description : null,
+  };
 }
 
 function parse<Schema extends z.ZodType>(schema: Schema, body: unknown): z.infer<Schema> {

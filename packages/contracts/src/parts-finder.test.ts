@@ -54,6 +54,14 @@ describe("parts finder contracts", () => {
     expect(PartsFinderShopAnalogsRequestSchema.safeParse({ article: "" }).success).toBe(false);
   });
 
+  it("lets a product card name itself and a catalogue part say what it is when asking for analogs", () => {
+    const productId = "7a1c3c2e-6f0d-4c3a-9d1b-0f2b8f7e6a11";
+    expect(PartsFinderShopAnalogsRequestSchema.parse({ article: "3930", name: " Лампа накаливания ", productId }))
+      .toEqual({ article: "3930", name: "Лампа накаливания", productId });
+    expect(PartsFinderShopAnalogsRequestSchema.safeParse({ article: "3930", productId: "1; DROP TABLE" }).success).toBe(false);
+    expect(PartsFinderShopAnalogsRequestSchema.safeParse({ article: "3930", name: "x".repeat(201) }).success).toBe(false);
+  });
+
   it("keeps unknown service fields in responses and validates shop offers", () => {
     const search = PartsFinderSearchResponseSchema.parse({
       parts: [{ article: "04152-40060", brand: "Toyota", shop: [offer], source_url: "https://example.test" }],

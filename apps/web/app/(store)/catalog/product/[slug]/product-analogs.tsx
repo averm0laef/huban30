@@ -10,8 +10,9 @@ import { finderRequest, type ShopAnalogsResult, type ShopOffer } from "../../../
 import styles from "./product-analogs.module.css";
 
 /**
- * Other products of the shop for the same part: the same normalised article
- * from another base and the shop's own confirmed crosses. Free — no FAPI call;
+ * Other products of the shop for the same part: a second card of the same
+ * part (same number and maker, or the same kind of part in the same section
+ * when 1С names no maker) and the shop's own confirmed crosses. Free — no FAPI call;
  * supplier offers and paid crosses stay on /podbor behind a button.
  */
 export function ProductAnalogs({ article, brand, productId }: { article: string; brand: string | null; productId: string }) {
@@ -19,7 +20,9 @@ export function ProductAnalogs({ article, brand, productId }: { article: string;
 
   useEffect(() => {
     let alive = true;
-    finderRequest<ShopAnalogsResult>("shop-analogs", { article, ...(brand ? { brand } : {}) })
+    // The card names its product: the API reads the product's own brand and section, and another
+    // maker's product that only shares the number is not shown as an analog.
+    finderRequest<ShopAnalogsResult>("shop-analogs", { article, productId, ...(brand ? { brand } : {}) })
       .then((result) => { if (alive) setOffers(result.offers.filter((offer) => offer.productId !== productId)); })
       .catch(() => { if (alive) setOffers([]); });
     return () => { alive = false; };
