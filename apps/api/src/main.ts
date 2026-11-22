@@ -17,6 +17,7 @@ import { DatabaseService } from "./infrastructure/database.service.js";
 import { registerOneCExchangeRawBodyParser } from "./one-c-exchange/one-c-exchange-raw-body-parser.js";
 import { StructuredLogger } from "./security/structured-logger.js";
 import { isPubliclyCacheableApiRequest } from "./security/http-cache-policy.js";
+import { registerNulCharacterRejection } from "./security/nul-bytes.js";
 import { RateLimitService } from "./security/rate-limit.service.js";
 import { trustedProxyRanges } from "./security/trusted-proxy.js";
 
@@ -60,6 +61,7 @@ async function bootstrap() {
   });
   const rateLimit = app.get(RateLimitService);
   registerHubWebhookProtection(adapter.getInstance(), rateLimit);
+  registerNulCharacterRejection(adapter.getInstance());
   adapter.getInstance().addHook("onSend", (request, reply, payload, done) => {
     if (!isPubliclyCacheableApiRequest(request.method, request.url)) {
       reply.header("Cache-Control", "private, no-store");
