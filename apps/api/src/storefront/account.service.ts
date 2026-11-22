@@ -374,6 +374,49 @@ export class AccountService {
     const body = parseBody(AddressCreateSchema, input);
     return this.database.transaction(async (client) => {
       await client.query("SELECT id FROM app.users WHERE id=$1 FOR UPDATE", [auth.userId]);
+      // A double click or a retried request sends the same address again: the
+      // customer asked for one address, so the saved one is the answer.
+      const existing = (await client.query<AddressRow>(
+        `${this.addressSelect()}
+         WHERE address.user_id=$1 AND address.deleted_at IS NULL
+           AND address.label=$2 AND address.recipient_name=$3 AND address.phone=$4
+           AND address.postal_code IS NOT DISTINCT FROM $5
+           AND address.region=$6 AND address.city=$7 AND address.street=$8 AND address.house=$9
+           AND address.apartment IS NOT DISTINCT FROM $10
+           AND address.delivery_note IS NOT DISTINCT FROM $11
+         ORDER BY address.is_default DESC,address.created_at,address.id LIMIT 1
+         FOR UPDATE`,
+        [
+          auth.userId,
+          body.label,
+          body.recipientName,
+          body.phone,
+          body.postalCode ?? null,
+          body.region,
+          body.city,
+          body.street,
+          body.house,
+          body.apartment ?? null,
+          body.deliveryNote ?? null,
+        ],
+      )).rows[0];
+      if (existing) {
+        if (!body.isDefault || existing.is_default) return this.addressView(existing);
+        // Saved before as an ordinary address, sent again as the main one.
+        await client.query(
+          "UPDATE app.customer_addresses SET is_default=false WHERE user_id=$1 AND deleted_at IS NULL",
+          [auth.userId],
+        );
+        const promoted = (await client.query<AddressRow>(
+          `UPDATE app.customer_addresses SET is_default=true,updated_at=clock_timestamp()
+           WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL
+           RETURNING id,label,recipient_name,phone,postal_code,region,city,street,house,
+                     apartment,delivery_note,is_default,created_at,updated_at`,
+          [existing.id, auth.userId],
+        )).rows[0];
+        if (!promoted) throw new Error("Address promotion did not return a row");
+        return this.addressView(promoted);
+      }
       const addressCount = Number((await client.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM app.customer_addresses
          WHERE user_id=$1 AND deleted_at IS NULL`,

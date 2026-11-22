@@ -59,6 +59,30 @@ export class GarageService {
     return this.database.transaction(async (client) => {
       // One customer adding from two tabs: counted and inserted under one lock.
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`garage:${auth.userId}`]);
+      const source = vehicle.tecdoc ? "tecdoc" : vehicle.catalog ? "catalog" : "manual";
+      const identity = [
+        auth.userId, vehicle.title, vehicle.details || null, source,
+        vehicle.tecdoc?.mfaId ?? null, vehicle.tecdoc?.msId ?? null, vehicle.tecdoc?.genId ?? null,
+        vehicle.catalog?.modelId ?? null, vehicle.catalog?.modificationId ?? null,
+      ];
+      // A double click or a retried request adds the same car again: the garage keeps one.
+      const same = (await client.query<VehicleRow>(
+        `SELECT ${COLUMNS} FROM app.customer_vehicles
+         WHERE user_id=$1 AND title=$2 AND details IS NOT DISTINCT FROM $3 AND source=$4
+           AND tecdoc_mfa_id IS NOT DISTINCT FROM $5 AND tecdoc_ms_id IS NOT DISTINCT FROM $6
+           AND tecdoc_gen_id IS NOT DISTINCT FROM $7 AND catalog_model_id IS NOT DISTINCT FROM $8
+           AND catalog_modification_id IS NOT DISTINCT FROM $9
+         ORDER BY is_primary DESC,created_at,id LIMIT 1`,
+        identity,
+      )).rows[0];
+      if (same) {
+        if (same.is_primary || vehicle.primary !== true) return view(same);
+        await client.query("UPDATE app.customer_vehicles SET is_primary=false WHERE user_id=$1 AND is_primary", [auth.userId]);
+        const promoted = await client.query<VehicleRow>(
+          `UPDATE app.customer_vehicles SET is_primary=true,updated_at=clock_timestamp() WHERE id=$1 AND user_id=$2 RETURNING ${COLUMNS}`, [same.id, auth.userId],
+        );
+        return view(promoted.rows[0]!);
+      }
       const existing = await client.query<{ count: string; has_primary: boolean }>(
         "SELECT count(*)::text AS count,COALESCE(bool_or(is_primary),false) AS has_primary FROM app.customer_vehicles WHERE user_id=$1", [auth.userId],
       );
@@ -69,11 +93,7 @@ export class GarageService {
         `INSERT INTO app.customer_vehicles
            (user_id,title,details,source,tecdoc_mfa_id,tecdoc_ms_id,tecdoc_gen_id,catalog_model_id,catalog_modification_id,is_primary)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${COLUMNS}`,
-        [
-          auth.userId, vehicle.title, vehicle.details || null, vehicle.tecdoc ? "tecdoc" : vehicle.catalog ? "catalog" : "manual",
-          vehicle.tecdoc?.mfaId ?? null, vehicle.tecdoc?.msId ?? null, vehicle.tecdoc?.genId ?? null,
-          vehicle.catalog?.modelId ?? null, vehicle.catalog?.modificationId ?? null, primary,
-        ],
+        [...identity, primary],
       );
       return view(inserted.rows[0]!);
     });

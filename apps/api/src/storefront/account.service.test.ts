@@ -160,6 +160,72 @@ describe("AccountService ownership boundaries", () => {
     expect(clientQuery.mock.calls[1]?.[1]).toEqual([ADDRESS_ID, USER_ID]);
     expect(clientQuery.mock.calls[2]?.[1]?.slice(0, 2)).toEqual([ADDRESS_ID, USER_ID]);
   });
+
+  it("answers a repeated address submission with the address already saved", async () => {
+    const row = {
+      apartment: null,
+      city: "Чита",
+      created_at: new Date("2026-08-02T00:00:00.000Z"),
+      delivery_note: null,
+      house: "30",
+      id: ADDRESS_ID,
+      is_default: true,
+      label: "Дом",
+      phone: "+79141234567",
+      postal_code: null,
+      recipient_name: "Антон Ермолаев",
+      region: "Забайкальский край",
+      street: "Ленина",
+      updated_at: new Date("2026-08-02T00:00:00.000Z"),
+    };
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: USER_ID }] })
+      .mockResolvedValueOnce({ rows: [row] });
+    const database = {
+      transaction: vi.fn(async (work: (client: { query: typeof clientQuery }) => Promise<unknown>) => (
+        work({ query: clientQuery })
+      )),
+    };
+    const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    const service = new AccountService(
+      audit as unknown as AuditService,
+      database as unknown as DatabaseService,
+      {} as PasswordService,
+      { name: "local" } as StorageProvider,
+    );
+
+    await expect(service.createAddress(
+      {
+        city: "Чита", house: "30", label: "Дом", phone: "+79141234567",
+        recipientName: "Антон Ермолаев", region: "Забайкальский край", street: "Ленина",
+      },
+      auth,
+      { ipAddress: "127.0.0.1" },
+    )).resolves.toMatchObject({ id: ADDRESS_ID, label: "Дом" });
+
+    // The user row is locked first, so concurrent copies queue behind the one that saved.
+    expect(clientQuery.mock.calls[0]?.[0]).toContain("FOR UPDATE");
+    expect(clientQuery.mock.calls[1]?.[1]?.[0]).toBe(USER_ID);
+    expect(clientQuery).toHaveBeenCalledTimes(2);
+
+    // Sent again as the main address: the saved one becomes the main one, still no second row.
+    clientQuery
+      .mockResolvedValueOnce({ rows: [{ id: USER_ID }] })
+      .mockResolvedValueOnce({ rows: [{ ...row, is_default: false }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [row] });
+    await expect(service.createAddress(
+      {
+        city: "Чита", house: "30", isDefault: true, label: "Дом", phone: "+79141234567",
+        recipientName: "Антон Ермолаев", region: "Забайкальский край", street: "Ленина",
+      },
+      auth,
+      { ipAddress: "127.0.0.1" },
+    )).resolves.toMatchObject({ id: ADDRESS_ID, isDefault: true });
+    expect(clientQuery.mock.calls[5]?.[1]).toEqual([ADDRESS_ID, USER_ID]);
+    expect(clientQuery.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO"))).toBe(false);
+    expect(audit.record).not.toHaveBeenCalled();
+  });
 });
 
 describe("AccountService avatar", () => {
