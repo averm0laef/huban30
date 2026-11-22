@@ -69,6 +69,23 @@ describe("subscribeToStoredCart", () => {
     expect(seen.at(-1)).toEqual([]);
   });
 
+  it("keeps a cart this tab could not save instead of the older stored one", () => {
+    const tab = fakeTab(null);
+    const seen: unknown[] = [];
+    let saved = false;
+    subscribeToStoredCart(tab.target, tab.storage, (items) => seen.push(items), () => saved);
+
+    // Reading works, writing does not: storage is empty while the tab holds a cart.
+    tab.emit("focus");
+    tab.emit("pageshow");
+    tab.emit("storage", { key: "an30_cart_v1" });
+    expect(seen).toEqual([]);
+
+    saved = true;
+    tab.emit("focus");
+    expect(seen).toEqual([[]]);
+  });
+
   it("ignores other keys and re-reads when the tab comes back", () => {
     const tab = fakeTab(null);
     const seen: unknown[] = [];
