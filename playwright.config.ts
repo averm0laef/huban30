@@ -18,6 +18,12 @@ export default defineConfig({
   ],
   webServer: {
     command: "pnpm --filter @an30/web dev",
+    // These approvals describe synthetic local test fixtures only.
+    env: {
+      APP_BASE_URL: "http://localhost:3000",
+      ENABLE_PUBLIC_CHECKOUT: "true",
+      LEGAL_DOCUMENTS_APPROVED: "true",
+    },
     url: "http://127.0.0.1:3000/api/health/live",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
