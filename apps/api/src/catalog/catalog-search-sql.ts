@@ -137,6 +137,12 @@ function searchHits(p: SqlParameters, input: CatalogSearchInput, matchAny: boole
       branches.push(idsWhere(`product.sku_normalized LIKE ${p.add(`%${escapeLike(input.identity.article)}%`)}`));
     }
     branches.push(idsWhere(CROSS_FILTER, true));
+    // The number written in the name, in either alphabet (see codeWrittenInName).
+    if (input.identity.articleOnly) {
+      for (const spelling of codeWrittenInName(input.identity.article)) {
+        branches.push(idsWhere(`product.search_text_folded ILIKE ${p.add(`%${escapeLike(spelling)}%`)}`));
+      }
+    }
   }
   const words = input.plan.words.map((_word, index) => anyOf(wordConditions(p, input.plan, index + 1).map((condition) => idsWhere(condition))));
   if (words.length > 0) branches.push(`SELECT id FROM (${words.join(matchAny ? "\n    UNION " : "\n    INTERSECT ")}) AS word_hits`);
@@ -171,6 +177,24 @@ export function catalogSearchCte(p: SqlParameters, input: CatalogSearchInput, vi
   return { article, sql: `${visibleWithSubtree(category)}, ${crossEquivalentsCte(article)}` };
 }
 
+const LATIN_TO_CYRILLIC_LOOKALIKE: Readonly<Record<string, string>> = {
+  A: "а", B: "в", C: "с", E: "е", H: "н", K: "к", M: "м", O: "о", P: "р", T: "т", X: "х", Y: "у",
+};
+
+/**
+ * How a part number may stand in a product's NAME. The owner's base writes the shop's own code before the name —
+ * «(КС171) Фильтр топливный…» — and other makers' numbers after it, in Cyrillic look-alikes as often as in Latin.
+ * A query shaped like a number was looked up among articles and crosses only, so «КС171» found nothing. The code is
+ * matched exactly as written (both alphabets), never by closeness: a neighbouring number is another part. Short or
+ * digits-only codes are left to the article: «2024» stands in too many names by chance.
+ */
+export function codeWrittenInName(article: string): string[] {
+  if (article.length < 4 || !(/[A-Z]/u.test(article) || article.length >= 6)) return [];
+  const latin = article.toLowerCase();
+  const cyrillic = [...article].map((letter) => (/[0-9]/u.test(letter) ? letter : LATIN_TO_CYRILLIC_LOOKALIKE[letter] ?? null));
+  return cyrillic.includes(null) ? [latin] : [...new Set([latin, cyrillic.join("")])];
+}
+
 /** WHERE clause for one pass (strict, or the any-word retry). */
 export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput, matchAny: boolean): string {
   const { query, identity } = input;
@@ -193,6 +217,7 @@ export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput,
       ? "false"
       : `(product.sku_normalized LIKE ${p.add(`${escapeLike(identity.article)}%`)}
     ${identity.article.length >= 4 ? `OR product.sku_normalized LIKE ${p.add(`%${escapeLike(identity.article)}%`)}` : ""}
+    ${codeWrittenInName(identity.article).map((spelling) => `OR product.search_text_folded ILIKE ${p.add(`%${escapeLike(spelling)}%`)}`).join("\n    ")}
     OR ${CROSS_FILTER})`);
   }
   if (identity.brandKeys.length > 0) filters.push(`app.normalize_brand(brand.name)=ANY(${p.add(identity.brandKeys)}::text[])`);

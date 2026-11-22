@@ -50,6 +50,8 @@ export interface SearchTokenPlan {
 }
 
 const MAX_WORDS = 8;
+/** Prepositions and conjunctions of an everyday query. */
+const LITTLE_WORDS = new Set(["на", "для", "от", "по", "под", "из", "за", "до", "при", "или", "ко", "во", "со", "об"]);
 const MAX_ALTERNATIVES_PER_WORD = 8;
 
 // Measurement units: customer spellings -> canonical unit and the regex
@@ -117,6 +119,8 @@ const WORD_SYNONYMS: ReadonlyArray<{ words: readonly string[]; texts: readonly s
   { words: ["салонник", "салонника", "салонники"], texts: ["фильтр салон", "салонный фильтр"], lead: "фильтр" },
   { words: ["топливник", "топливника", "топливники"], texts: ["фильтр топл", "топливный фильтр"], lead: "фильтр" },
   { words: ["вд40", "вд-40", "вд", "вэдэшка", "вэдэшку", "вэдэшки", "ведешка"], texts: ["wd-40", "wd40", "wd 40"], lead: "wd" },
+  // The base writes «Велопокрышка», «Велокамера», «Камера велосипедная»; the customer types «покрышка велосипед».
+  { words: ["велосипед", "велосипеда", "велосипеду", "велосипедов", "велосипедная", "велосипедный", "велосипедные", "велосипедной", "велосипедную", "велик", "велика", "велики", "велос"], texts: ["вело"], lead: "вело" },
   { words: ["секретка", "секретки", "секретку", "секреток"], texts: ["секрет"], lead: "секрет" },
   { words: ["вонючка", "вонючки", "вонючку", "пахучка", "пахучки", "пахучку"], texts: ["ароматизатор", "освежител"], lead: "ароматизатор" },
   // «Ключ балонный» is typed with one «л» in 49 names of the base and with two in 26.
@@ -234,11 +238,14 @@ function wordAlternatives(word: string): { alternatives: Array<Omit<SearchTokenA
 /** Split a free-text query into words with every way each word may match. */
 export function searchTokenPlan(raw: string): SearchTokenPlan {
   const prepared = joinBrandPhrases(joinMeasurements(foldYo(normalizeSearchQuery(raw).toLowerCase())));
-  const words = [...new Set(prepared
+  const typed = [...new Set(prepared
     .split(/[\s,;:!?()«»"]+/u)
     .map((word) => word.replace(/^[.\-/]+|[.\-/]+$/gu, ""))
-    .filter((word) => word.length >= 2))]
-    .slice(0, MAX_WORDS);
+    .filter((word) => word.length >= 2))];
+  // «покрышка на велик», «масло для тойоты»: the little words say nothing about the product, and required as words
+  // they made the whole query find nothing. They stay only when the query has nothing else.
+  const meaningful = typed.filter((word) => !LITTLE_WORDS.has(word));
+  const words = (meaningful.length > 0 ? meaningful : typed).slice(0, MAX_WORDS);
   const alternatives: SearchTokenAlternative[] = [];
   const leads: string[] = [];
   words.forEach((word, index) => {

@@ -46,6 +46,11 @@ const INACTIVE_BRANDS = new Set(["Снятый бренд"]);
 export const CORE_PRODUCTS: FixtureProduct[] = [
   // Filters
   { key: "mann-w914-2", sku: "W 914/2", name: "Фильтр масляный MANN-FILTER W 914/2", brand: "MANN-FILTER", category: "sf-filtry", rubles: 450, stock: 12 },
+  // The owner's base puts the shop's own code in brackets before the name, in Cyrillic or in Latin look-alikes.
+  { key: "kc171-cyrillic", sku: "8200414SX", name: "(КС171) Фильтр топливный d108 h168 IVECO Cursor 82-00414-SX", brand: null, category: "sf-filtry", rubles: 1450, stock: 2 },
+  { key: "kc117-latin", sku: "PP861/3", name: "(KC117) Фильтр топливный MAN Scania Iveco Fiat Ducato 8220434SX", brand: null, category: "sf-filtry", rubles: 950, stock: 2 },
+  { key: "velo-tyre", sku: "00-00051234", name: "Велопокрышка 47-203 Л-356 без кам.", brand: null, category: "sf-podveska", rubles: 600, stock: 3 },
+  { key: "velo-tube", sku: "00-00051235", name: "Камера велосипедная AV 35 37/54-559", brand: null, category: "sf-podveska", rubles: 250, stock: 5 },
   { key: "mann-w712-75", sku: "W 712/75", name: "Фильтр масляный W 712/75", brand: "MANN-FILTER", category: "sf-filtry", rubles: 520, stock: 0 },
   { key: "mann-w712-95", sku: "W 712/95", name: "Фильтр масляный W 712/95", brand: "MANN-FILTER", category: "sf-filtry", rubles: 540, stock: 3 },
   { key: "mann-hu7008z", sku: "HU 7008 z", name: "Фильтр масляный (картридж) HU 7008 z", brand: "MANN-FILTER", category: "sf-filtry", rubles: 890, stock: 4 },

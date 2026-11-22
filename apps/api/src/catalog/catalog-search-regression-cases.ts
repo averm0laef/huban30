@@ -33,6 +33,22 @@ const HIDDEN = ["hidden-inactive", "hidden-deleted", "hidden-category", "hidden-
 
 export const SEARCH_REGRESSION_CASES: SearchCase[] = [
   // Article in any spelling.
+  // The shop's own code written in the name («(КС171) Фильтр топливный…»), typed in either alphabet. A query shaped
+  // like a part number used to be looked up among articles and crosses only, and found nothing.
+  { group: "code-in-name", q: "КС171", expect: { first: "kc171-cyrillic", excludes: ["kc117-latin"] } },
+  { group: "code-in-name", q: "KC171", expect: { first: "kc171-cyrillic", excludes: ["kc117-latin"] } },
+  { group: "code-in-name", q: "кс171", expect: { first: "kc171-cyrillic" } },
+  { group: "code-in-name", q: "КС 171", expect: { first: "kc171-cyrillic" } },
+  { group: "code-in-name", q: "KC117", expect: { first: "kc117-latin", excludes: ["kc171-cyrillic"] } },
+  { group: "code-in-name", q: "КС117", expect: { first: "kc117-latin" } },
+  // The article of another maker written at the end of the name, with its dashes or without.
+  { group: "code-in-name", q: "8220434SX", expect: { first: "kc117-latin" } },
+  { group: "code-in-name", q: "82-00414-SX", expect: { first: "kc171-cyrillic" } },
+  // «Велопокрышка» is what the base calls it; the customer types two words.
+  { group: "everyday", q: "покрышка велосипед", expect: { first: "velo-tyre" } },
+  { group: "everyday", q: "покрышка на велик", expect: { first: "velo-tyre" } },
+  { group: "everyday", q: "велосипедная покрышка", expect: { first: "velo-tyre" } },
+  { group: "everyday", q: "камера велосипед", expect: { first: "velo-tube" } },
   { group: "article", q: "W914/2", expect: { first: "mann-w914-2", top: ["unigom-w9142"], topN: 2 } },
   { group: "article", q: "w 914/2", expect: { first: "mann-w914-2" } },
   { group: "article", q: "W9142", expect: { top: ["mann-w914-2", "unigom-w9142"], topN: 2 } },
