@@ -348,8 +348,8 @@
 
 .headerMessengers { display: flex; align-items: center; gap: 2px; }
 .headerMessengerLink {
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -409,7 +409,7 @@
   border-radius: var(--store-radius-full);
   background: var(--store-brand-soft);
   color: var(--store-brand-strong);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: var(--store-weight-black);
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -1291,7 +1291,7 @@ button.promoControl {
 .categoryChipSection { margin-top: 4px; }
 .categoryChipGrid { display: grid; gap: 2px; }
 .categoryChip {
-  min-height: 40px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1472,7 +1472,7 @@ button.promoControl {
 .productHelp { display: grid; gap: 4px; padding: var(--store-space-md); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
 .productHelp > strong { font-size: 0.96rem; }
 .productHelp > span { color: var(--store-muted); font-size: 0.88rem; line-height: 1.4; }
-.productHelp .secondaryAction { justify-self: start; min-height: 42px; margin-top: 2px; }
+.productHelp .secondaryAction { justify-self: start; min-height: 44px; margin-top: 2px; }
 .breadcrumbStep { display: inline-flex; gap: var(--store-space-xs); }
 .productGallery { min-width: 0; display: grid; gap: var(--store-space-sm); }
 .productThumbs { display: flex; flex-wrap: wrap; gap: var(--store-space-xs); }
@@ -1556,7 +1556,7 @@ button.promoControl {
 .formPanel > h2 { margin: 0; font-size: clamp(1.45rem, 3vw, 2rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .formPanel > p { color: var(--store-muted); line-height: 1.55; }
 .segmentedNav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 0 0 var(--store-space-xl); padding: 3px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); }
-.segmentedNav a { min-height: 40px; display: grid; place-items: center; padding: 4px 8px; border-radius: 8px; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-bold); text-align: center; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.segmentedNav a { min-height: 44px; display: grid; place-items: center; padding: 4px 8px; border-radius: 8px; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-bold); text-align: center; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
 .segmentedNav a:hover { color: var(--store-text); }
 .segmentedNav a[aria-current="page"] { background: var(--store-surface-strong); color: var(--store-text); box-shadow: var(--store-shadow-xs); }
 .stackForm { display: grid; gap: var(--store-space-md); }
@@ -1627,7 +1627,7 @@ button.promoControl {
 .accountPanelHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px var(--store-space-md); margin-bottom: var(--store-space-lg); }
 .accountPanelHead h2 { margin: 0; font-size: clamp(1.4rem, 2.4vw, 1.75rem); letter-spacing: var(--store-tracking-tight); }
 .accountPanelHead p { margin: 0; color: var(--store-muted); font-size: 0.9rem; }
-.accountPanelHead .secondaryAction { min-height: 42px; border-radius: var(--store-radius-full); }
+.accountPanelHead .secondaryAction { min-height: 44px; border-radius: var(--store-radius-full); }
 
 .accountEmpty { display: grid; justify-items: center; gap: 10px; padding: clamp(28px, 5vw, 48px) var(--store-space-md); border: 1px dashed var(--store-border); border-radius: var(--store-radius); background: var(--store-bg); text-align: center; }
 .accountEmpty h3 { margin: 0; font-size: 1.12rem; }
@@ -1692,7 +1692,7 @@ button.promoControl {
 .accountProductActions :global(.storefront-add-cart) { margin-top: 0; }
 .accountProductHelp { display: inline-flex; min-height: 44px; align-items: center; padding: 0 6px; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; text-underline-offset: 3px; }
 .accountTextButton,
-.accountTextButtonDanger { min-height: 40px; padding: 0 6px; border: 0; background: none; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; cursor: pointer; }
+.accountTextButtonDanger { min-height: 44px; padding: 0 6px; border: 0; background: none; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; cursor: pointer; }
 .accountTextButtonDanger { color: var(--store-danger); }
 .accountTextButton:hover,
 .accountTextButtonDanger:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -1739,7 +1739,7 @@ button.promoControl {
 .profileHeading p:last-child,
 .orderHeading p:last-child { margin: 10px 0 0; color: var(--store-muted); }
 .profileNav { position: sticky; top: 154px; z-index: 2; display: flex; gap: 6px; margin: var(--store-space-xl) 0 40px; padding: 7px; overflow-x: auto; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); box-shadow: var(--store-shadow-xs); }
-.profileNav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 13px; border-radius: 8px; color: var(--store-text); font-size: 0.88rem; font-weight: var(--store-weight-bold); white-space: nowrap; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
+.profileNav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 13px; border-radius: 8px; color: var(--store-text); font-size: 0.88rem; font-weight: var(--store-weight-bold); white-space: nowrap; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .profileNav a:hover { background: var(--store-surface-strong); }
 .profileSection,
 .detailSection { padding: 0 0 42px; margin: 0 0 42px; border-bottom: 1px solid var(--store-border); scroll-margin-top: 164px; }
@@ -1774,7 +1774,7 @@ button.promoControl {
 .addressList p { margin: 7px 0 0; color: var(--store-muted); line-height: 1.45; }
 .addressList article > div:last-child { display: flex; align-items: flex-start; gap: var(--store-space-xs); }
 .addressList button,
-.compactProductActions button { min-height: 38px; padding: 0 11px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.compactProductActions button { min-height: 44px; padding: 0 11px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
 .addressList button:hover,
 .compactProductActions button:hover { border-color: var(--store-brand); color: var(--store-brand); }
 .compactProductList article { min-height: 82px; display: flex; justify-content: space-between; align-items: center; gap: var(--store-space-lg); padding: 14px 4px; border-bottom: 1px solid var(--store-border); }
@@ -2100,7 +2100,7 @@ button.promoControl {
   .headerActions :global(.storefront-account-label),
   .headerActions :global(.storefront-vehicle-label) { font-size: 0; }
   .headerActions :global(.storefront-vehicle-button) { width: auto; }
-  .headerActions :global(.storefront-cart-count) { font-size: 0.66rem; }
+  .headerActions :global(.storefront-cart-count) { font-size: 0.75rem; }
   /* Icon-only on narrow tablets; the visible word stays in the
      accessibility tree, only its glyphs shrink to zero. */
   .headerCatalogButton { gap: 0; padding: 0 14px; }
@@ -2182,7 +2182,7 @@ button.promoControl {
     align-items: center;
     gap: 6px;
     width: fit-content;
-    min-height: 36px;
+    min-height: 44px;
     margin: 8px 0 0;
     padding: 0 14px 0 10px;
     border-radius: var(--store-radius-full);
@@ -2370,7 +2370,7 @@ button.promoControl {
   font-weight: 660;
 }
 .searchRecentHead button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 4px;
   border: 0;
   background: none;
@@ -2387,7 +2387,7 @@ button.promoControl {
   display: flex;
   gap: 8px;
   align-items: center;
-  min-height: 42px;
+  min-height: 44px;
   padding: 7px 8px;
   border-radius: var(--store-radius-sm);
   color: var(--store-text);
@@ -2410,7 +2410,7 @@ button.promoControl {
 .searchChip {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: var(--store-radius-full);
   background: var(--store-bg);

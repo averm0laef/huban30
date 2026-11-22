@@ -114,10 +114,10 @@
 .sectionSearch:focus-within { border-color: var(--store-brand); outline: 2px solid color-mix(in srgb, var(--store-brand) 30%, transparent); }
 .sectionSearch > svg { flex: none; }
 /* 16px keeps iOS from zooming the page when the field is focused. */
-.toolbar .sectionSearch input { flex: 1 1 auto; min-width: 0; height: 42px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--store-text); font-size: 16px; }
+.toolbar .sectionSearch input { flex: 1 1 auto; min-width: 0; height: 44px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--store-text); font-size: 16px; }
 .toolbar .sectionSearch button {
   flex: none;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border: 0;
   border-radius: 8px;
@@ -138,7 +138,7 @@
 .sortSelect select {
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding-inline-start: 38px;
   padding-inline-end: 35px;
   border: 1px solid transparent;
@@ -214,7 +214,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 5px 14px;
   border-radius: var(--store-radius-full);
   background: var(--store-surface);
