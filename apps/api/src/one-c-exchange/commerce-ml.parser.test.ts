@@ -634,3 +634,41 @@ describe("parseOffersXml split 2.08+ files", () => {
     expect(prices.bodyRows).toEqual([{ amountKopeks: 1000, currency: "RUB", entityType: "price", productExternalId: "p-1", version: 1 }]);
   });
 });
+
+// The owner's base names no manufacturer at all; the brand filter of the catalogue was empty for 42 723 items.
+describe("the brand of a product whose manufacturer 1С does not name", () => {
+  const xmlOf = (goods: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<КоммерческаяИнформация ВерсияСхемы="2.08" ДатаФормирования="2026-11-23T10:00:00">
+  <Классификатор><Ид>c</Ид><Наименование>Классификатор</Наименование></Классификатор>
+  <Каталог СодержитТолькоИзменения="false"><Ид>cat</Ид><Товары>${goods}</Товары></Каталог>
+</КоммерческаяИнформация>`;
+  const brandOf = (goods: string, id: string) => {
+    // Brand rows go ahead of the products, among the header rows.
+    const parsed = parseImportXml(xmlOf(goods));
+    const rows = [...parsed.headerRows, ...parsed.bodyRows];
+    const product = rows.find((row) => row.entityType === "product" && row.externalId === id);
+    const brandId = product?.entityType === "product" ? product.brandExternalId : undefined;
+    const brand = rows.find((row) => row.entityType === "brand" && row.externalId === brandId);
+    return brand?.entityType === "brand" ? brand.name : null;
+  };
+
+  it("is the maker written in the name", () => {
+    expect(brandOf("<Товар><Ид>p1</Ид><Артикул>SL-1767</Артикул><Наименование>SL-1767 Втулка амортизатора зад прав/лев SUFIX</Наименование></Товар>", "p1")).toBe("SUFIX");
+  });
+
+  it("is what 1С names, when it does name a manufacturer", () => {
+    expect(brandOf("<Товар><Ид>p2</Ид><Артикул>A1</Артикул><Наименование>Колодка тормозная HOFER</Наименование><Изготовитель><Ид>m</Ид><Наименование>ATE</Наименование></Изготовитель></Товар>", "p2")).toBe("ATE");
+  });
+
+  it("is not the make of the car the part is for", () => {
+    expect(brandOf("<Товар><Ид>p3</Ид><Артикул>A2</Артикул><Наименование>Фильтр масляный Toyota Corolla 1.6</Наименование></Товар>", "p3")).toBeNull();
+  });
+
+  it("is one brand row for all the products of one maker", () => {
+    const rows = parseImportXml(xmlOf(
+      "<Товар><Ид>p4</Ид><Артикул>B1</Артикул><Наименование>Сальник NOK 90311-38034</Наименование></Товар>"
+      + "<Товар><Ид>p5</Ид><Артикул>B2</Артикул><Наименование>Сальник коленвала NOK 90311-99999</Наименование></Товар>",
+    )).headerRows;
+    expect(rows.filter((row) => row.entityType === "brand").map((row) => row.name)).toEqual(["NOK"]);
+  });
+});

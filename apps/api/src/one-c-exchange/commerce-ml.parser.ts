@@ -18,6 +18,7 @@ import { findChild, findChildren, localName, parseXmlDocument, XmlParseError, ty
 import { buildBrandExternalId, buildSlug, shortId } from "./one-c-exchange-slug.js";
 
 import { publicProductName, type OneCCatalogRow } from "@an30/contracts";
+import { partMakerInName } from "../catalog/catalog-part-makers.js";
 
 export class CommerceMlParseError extends Error {}
 
@@ -359,10 +360,11 @@ function parseProduct(productNode: XmlNode, properties: CommerceMlPropertyDictio
   // Brand precedence: the standard <Изготовитель>, then a brand-like
   // property (Производитель/Бренд/Торговая марка), then a "Производитель"
   // requisite that some configurations use instead.
+  // Last of all, the maker written in the name itself: the owner's base names no manufacturer anywhere else.
   const manufacturerRaw = parseManufacturer(productNode)
     ?? parsedProperties.brandName
     ?? parseProductRequisite(productNode, "Производитель")
-    ?? null;
+    ?? (name ? partMakerInName(name) : null);
   const manufacturer = manufacturerRaw ? normalizeSearchQuery(manufacturerRaw).slice(0, 200) || null : null;
   const imagePaths = parseImagePaths(productNode);
   // The article, the name as typed, the cars it fits — and the words the name is read by when it is typed with
