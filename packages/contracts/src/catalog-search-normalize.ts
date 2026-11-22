@@ -103,7 +103,19 @@ const LAYOUT_SWAP_LATIN_TO_CYRILLIC: Record<string, string> = {
   a: "ф", b: "и", c: "с", d: "в", e: "у", f: "а", g: "п", h: "р", i: "ш",
   j: "о", k: "л", l: "д", m: "ь", n: "т", o: "щ", p: "з", q: "й", r: "к",
   s: "ы", t: "е", u: "г", v: "м", w: "ц", x: "ч", y: "н", z: "я",
+  // Russian letters that live on punctuation keys of the same physical
+  // keyboard: without these, ";blrjcnm" (жидкость) or "o`nrb" (щётки) lose a
+  // letter and stop matching anything.
+  "[": "х", "]": "ъ", ";": "ж", "'": "э", ",": "б", ".": "ю", "`": "ё",
 };
+
+// The reverse direction: a Latin brand typed with the layout left on
+// Russian ("ьфтт" -> "mann", "ищыср" -> "bosch").
+const LAYOUT_SWAP_CYRILLIC_TO_LATIN: Record<string, string> = Object.fromEntries(
+  Object.entries(LAYOUT_SWAP_LATIN_TO_CYRILLIC)
+    .filter(([latin]) => /^[a-z]$/u.test(latin))
+    .map(([latin, cyrillic]) => [cyrillic, latin]),
+);
 
 const HAS_CYRILLIC_LETTER_PATTERN = /[а-яё]/iu;
 const LATIN_LETTERS_PATTERN = /[a-z]/giu;
@@ -206,7 +218,15 @@ export function swapKeyboardLayoutToCyrillic(raw: string): string {
  */
 export function alternateSearchQueries(raw: string): string[] {
   const trimmed = normalizeSearchQuery(raw);
-  if (HAS_CYRILLIC_LETTER_PATTERN.test(trimmed)) return [];
+  if (HAS_CYRILLIC_LETTER_PATTERN.test(trimmed)) {
+    // Cyrillic with no Latin at all may be a Latin brand typed on the
+    // Russian layout ("ьфтт" -> "mann"); offer that one candidate.
+    if (/[a-z]/iu.test(trimmed)) return [];
+    const cyrillicLetterCount = trimmed.match(/[а-яё]/giu)?.length ?? 0;
+    if (cyrillicLetterCount < MIN_ALTERNATE_QUERY_LENGTH) return [];
+    const latin = swapKeyboardLayoutToLatin(trimmed);
+    return /[a-z]{3}/u.test(latin) ? [latin] : [];
+  }
   const latinLetterCount = trimmed.match(LATIN_LETTERS_PATTERN)?.length ?? 0;
   if (latinLetterCount < MIN_ALTERNATE_QUERY_LENGTH) return [];
 
@@ -218,4 +238,27 @@ export function alternateSearchQueries(raw: string): string[] {
     result.push(candidate);
   }
   return result;
+}
+
+/** Cyrillic -> Latin at the same physical key ("ьфтт" -> "mann"); letters only. */
+export function swapKeyboardLayoutToLatin(raw: string): string {
+  return [...raw.toLowerCase()].map((character) => LAYOUT_SWAP_CYRILLIC_TO_LATIN[character] ?? character).join("");
+}
+
+const MAX_SEARCH_TOKENS = 8;
+
+/**
+ * Splits a free-text query into lower-cased, ё-folded words for
+ * word-by-word matching: every word must appear somewhere in the product
+ * (name, article or brand), in any order, as a substring (so a word still
+ * being typed — "фильт" — already matches) or, for words of 4+ letters, as
+ * a close spelling (a typo such as "фильр"). Article punctuation stays inside
+ * its word ("w914/2"), single characters are dropped as noise.
+ */
+export function searchTokens(raw: string): string[] {
+  const words = foldYo(normalizeSearchQuery(raw).toLowerCase())
+    .split(/[\s,;:!?()«»"]+/u)
+    .map((word) => word.replace(/^[.\-/]+|[.\-/]+$/gu, ""))
+    .filter((word) => word.length >= 2);
+  return [...new Set(words)].slice(0, MAX_SEARCH_TOKENS);
 }

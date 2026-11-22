@@ -18,7 +18,6 @@ import {
   MoneySchema,
   OneCImportEnvelopeSchema,
   OrderStatusSchema,
-  PaymentStatusSchema,
   REGISTRATION_PERSONAL_DATA_CONSENT_TEXT,
   REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
   ROLE_PERMISSIONS,
@@ -41,8 +40,8 @@ describe("public contracts", () => {
   it("accepts only declared roles and states", () => {
     expect(RoleSchema.safeParse("manager").success).toBe(true);
     expect(RoleSchema.safeParse("super_admin").success).toBe(false);
-    expect(OrderStatusSchema.safeParse("pending_payment").success).toBe(true);
-    expect(PaymentStatusSchema.safeParse("partially_refunded").success).toBe(true);
+    expect(OrderStatusSchema.safeParse("awaiting_confirmation").success).toBe(true);
+    expect(OrderStatusSchema.safeParse("pending_payment").success).toBe(false);
   });
 
   it("stores money as non-negative integer kopeks", () => {
@@ -60,11 +59,12 @@ describe("public contracts", () => {
       legalPolicyVersion: CHECKOUT_LEGAL_POLICY_VERSION,
       personalDataConsent: true,
       personalDataConsentVersion: CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
-      sandboxScenario: "success",
       termsAccepted: true,
     };
 
     expect(CheckoutRequestSchema.parse(request).customerNote).toBeNull();
+    expect(CheckoutRequestSchema.safeParse({ ...request, sandboxScenario: "success" }).success)
+      .toBe(false);
     expect(CheckoutRequestSchema.safeParse({
       ...request,
       contact: { ...request.contact, phone: "89141234567" },

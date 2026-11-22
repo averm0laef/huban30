@@ -3,8 +3,12 @@ import { z } from "zod";
 import { SupplierCrossPairSchema } from "./suppliers.js";
 
 export * from "./assistant.js";
+export * from "./client-hub.js";
+export * from "./customer-avatars.js";
+export * from "./catalog-enrichment.js";
 export * from "./catalog-search-normalize.js";
 export * from "./one-c-exchange.js";
+export * from "./parts-finder.js";
 export * from "./suppliers.js";
 
 const SAFE_SINGLE_LINE = /^[^\u0000-\u001F\u007F]+$/u;
@@ -22,7 +26,6 @@ export const PERMISSIONS = [
   "orders:update:any",
   "requests:read:any",
   "requests:update:any",
-  "payments:refund",
   "chat:use:self",
   "chat:manage:any",
   "catalog:read",
@@ -35,6 +38,8 @@ export const PERMISSIONS = [
   "settings:manage",
   "audit:read",
   "auth:tokens:read",
+  "content:manage",
+  "inbox:manage",
 ] as const;
 export const PermissionSchema = z.enum(PERMISSIONS);
 export type Permission = z.infer<typeof PermissionSchema>;
@@ -49,26 +54,28 @@ export const ROLE_PERMISSIONS = {
     "catalog:read",
   ],
   manager: [
+    "content:manage",
+    "inbox:manage",
     "account:read:self",
     "account:update:self",
     "orders:read:any",
     "orders:update:any",
     "requests:read:any",
     "requests:update:any",
-    "payments:refund",
     "chat:manage:any",
     "catalog:read",
     "catalog:write",
     "catalog:import",
   ],
   director: [
+    "content:manage",
+    "inbox:manage",
     "account:read:self",
     "account:update:self",
     "orders:read:any",
     "orders:update:any",
     "requests:read:any",
     "requests:update:any",
-    "payments:refund",
     "chat:manage:any",
     "catalog:read",
     "catalog:write",
@@ -95,40 +102,28 @@ export const ADMIN_PENDING_TOKEN_PURPOSES = [
 export const AdminPendingTokenPurposeSchema = z.enum(ADMIN_PENDING_TOKEN_PURPOSES);
 export type AdminPendingTokenPurpose = z.infer<typeof AdminPendingTokenPurposeSchema>;
 
+// Checkout creates a заявка (manager request), not a payment: "Пока без
+// оплаты! просто создания заявок для менеджеров!" -- there is no payment
+// gateway and no reservation held by a timer. A заявка starts at
+// awaiting_confirmation and a manager moves it forward by phone.
 export const ORDER_STATUSES = [
-  "pending_payment",
-  "paid",
+  "awaiting_confirmation",
   "processing",
   "awaiting_delivery_terms",
   "ready",
   "completed",
   "cancelled",
-  "refunded",
 ] as const;
 export const OrderStatusSchema = z.enum(ORDER_STATUSES);
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
-export const PAYMENT_STATUSES = [
-  "pending",
-  "authorized",
-  "succeeded",
-  "failed",
-  "cancelled",
-  "partially_refunded",
-  "refunded",
-] as const;
-export const PaymentStatusSchema = z.enum(PAYMENT_STATUSES);
-export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
-
 export const MoneySchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export type Money = z.infer<typeof MoneySchema>;
 
-export const CHECKOUT_SANDBOX_SCENARIOS = ["success", "decline", "timeout", "cancel"] as const;
-export const CheckoutSandboxScenarioSchema = z.enum(CHECKOUT_SANDBOX_SCENARIOS);
-export type CheckoutSandboxScenario = z.infer<typeof CheckoutSandboxScenarioSchema>;
-
 const CheckoutIdempotencyKeySchema = z.uuid();
-export const CHECKOUT_LEGAL_POLICY_VERSION = "checkout-terms-2026-08-15-v2" as const;
+// v3: the offer no longer describes a paid, timer-reserved checkout --
+// checkout creates a заявка (manager request); see docs/CHECKOUT_AND_PAYMENTS.md.
+export const CHECKOUT_LEGAL_POLICY_VERSION = "checkout-terms-2026-08-30-v3" as const;
 export const CHECKOUT_PERSONAL_DATA_CONSENT_VERSION =
   "checkout-personal-data-2026-08-15-v1" as const;
 export const CHECKOUT_PERSONAL_DATA_CONSENT_DOCUMENT_PATH =
@@ -185,7 +180,6 @@ export const CheckoutRequestSchema = z.object({
   legalPolicyVersion: z.literal(CHECKOUT_LEGAL_POLICY_VERSION),
   personalDataConsent: z.literal(true, { error: "personal data consent is required" }),
   personalDataConsentVersion: z.literal(CHECKOUT_PERSONAL_DATA_CONSENT_VERSION),
-  sandboxScenario: CheckoutSandboxScenarioSchema.optional(),
   termsAccepted: z.literal(true, { error: "terms acceptance is required" }),
 }).strict().superRefine((value, context) => {
   const seen = new Set<string>();
@@ -201,20 +195,6 @@ export const CheckoutRequestSchema = z.object({
   }
 });
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
-
-export const RefundRequestSchema = z.object({
-  amountKopeks: MoneySchema.refine((value) => value > 0, "refund amount must be positive"),
-  idempotencyKey: CheckoutIdempotencyKeySchema,
-  reason: z.string().trim().min(3).max(1_000),
-}).strict();
-export type RefundRequest = z.infer<typeof RefundRequestSchema>;
-
-export const DeliveryPaymentRequestSchema = z.object({
-  amountKopeks: MoneySchema.refine((value) => value > 0, "delivery amount must be positive"),
-  idempotencyKey: CheckoutIdempotencyKeySchema,
-  sandboxScenario: CheckoutSandboxScenarioSchema,
-}).strict();
-export type DeliveryPaymentRequest = z.infer<typeof DeliveryPaymentRequestSchema>;
 
 export const OrderStatusUpdateSchema = z.object({
   reason: z.string().trim().min(3).max(1_000),
@@ -291,6 +271,13 @@ export const StaffChatUpdateSchema = z.object({
   { message: "assignment or status is required" },
 );
 export type StaffChatUpdate = z.infer<typeof StaffChatUpdateSchema>;
+
+/** Soft delete of a chat by a director or administrator, with a reason for the audit log. */
+export const StaffChatDeleteSchema = z.object({
+  reason: z.string().trim().min(3).max(500).regex(SAFE_SINGLE_LINE),
+  version: z.number().int().positive(),
+}).strict();
+export type StaffChatDelete = z.infer<typeof StaffChatDeleteSchema>;
 
 export const StaffCatalogQuerySchema = StaffPageQuerySchema.extend({
   availability: z.enum(["all", "available", "out_of_stock", "low_stock"]).default("all"),
@@ -480,6 +467,41 @@ export const ChatIntakeSchema = z.object({
 }).strict();
 export type ChatIntake = z.infer<typeof ChatIntakeSchema>;
 
+const INTAKE_UNANSWERED = "не указано";
+const INTAKE_PREFIXES = { article: "Номер детали: ", comment: "Комментарий: ", intent: "Что нужно: ", vehicle: "Автомобиль/VIN: " } as const;
+
+/** The thread's opening message: what the manager reads and the chat draws as a questionnaire card. */
+export function formatChatIntakeMessage(intake: ChatIntake): string {
+  const lines = [
+    `${INTAKE_PREFIXES.intent}${CHAT_INTAKE_INTENT_LABELS[intake.intent]}`,
+    `${INTAKE_PREFIXES.vehicle}${intake.vehicle ?? INTAKE_UNANSWERED}`,
+    `${INTAKE_PREFIXES.article}${intake.articleNumber ?? INTAKE_UNANSWERED}`,
+  ];
+  if (intake.comment) lines.push(`${INTAKE_PREFIXES.comment}${intake.comment}`);
+  return lines.join("\n");
+}
+
+export interface ParsedChatIntake { article: string | null; comment: string | null; intent: string; vehicle: string | null }
+
+/** Reads an opening message written by formatChatIntakeMessage back; null for any other message. */
+export function parseChatIntakeMessage(body: string | null | undefined): ParsedChatIntake | null {
+  if (!body) return null;
+  const [intentLine, vehicleLine, articleLine, ...rest] = body.split("\n");
+  if (!intentLine?.startsWith(INTAKE_PREFIXES.intent) || !vehicleLine?.startsWith(INTAKE_PREFIXES.vehicle)
+    || !articleLine?.startsWith(INTAKE_PREFIXES.article)) return null;
+  const intent = intentLine.slice(INTAKE_PREFIXES.intent.length);
+  if (!Object.values(CHAT_INTAKE_INTENT_LABELS).includes(intent)) return null;
+  const answer = (line: string, prefix: string) => {
+    const value = line.slice(prefix.length).trim();
+    return value && value !== INTAKE_UNANSWERED ? value : null;
+  };
+  const comment = rest.length > 0 && rest[0]!.startsWith(INTAKE_PREFIXES.comment)
+    ? [rest[0]!.slice(INTAKE_PREFIXES.comment.length), ...rest.slice(1)].join("\n").trim() || null
+    : null;
+  if (rest.length > 0 && comment === null) return null;
+  return { article: answer(articleLine, INTAKE_PREFIXES.article), comment, intent, vehicle: answer(vehicleLine, INTAKE_PREFIXES.vehicle) };
+}
+
 /**
  * `subject` is derived by the client from the intake answers (see
  * `intakeSubject` in the storefront's chat-state.ts) rather than typed by
@@ -632,6 +654,9 @@ export type CatalogProductSummary = z.infer<typeof CatalogProductSummarySchema>;
 export const CatalogProductsResponseSchema = z.object({
   items: z.array(CatalogProductSummarySchema).max(48),
   limit: z.number().int().min(1).max(48),
+  // "any": nothing matched every word of the query, so the page shows items
+  // matching at least one word — the storefront says so above the list.
+  matchMode: z.enum(["all", "any"]).optional(),
   offset: z.number().int().nonnegative().max(4_800),
   total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
 }).strict();
@@ -704,3 +729,5 @@ export const WorkerJobSchema = z.discriminatedUnion("name", [
   }),
 ]);
 export type WorkerJob = z.infer<typeof WorkerJobSchema>;
+export * from "./storefront-taxonomy.js";
+export * from "./product-name.js";

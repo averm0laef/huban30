@@ -7,7 +7,9 @@ import {
   normalizeArticleNumber,
   normalizeBrand,
   normalizeSearchQuery,
+  searchTokens,
   swapKeyboardLayoutToCyrillic,
+  swapKeyboardLayoutToLatin,
   transliterateLatinToCyrillic,
 } from "./catalog-search-normalize.js";
 
@@ -108,7 +110,10 @@ describe("alternateSearchQueries", () => {
   });
 
   it("returns nothing for a query that already contains Cyrillic letters", () => {
-    expect(alternateSearchQueries("фильтр")).toEqual([]);
+    // A real Russian word has no plausible Latin brand behind it on the
+    // other layout ("фильтр" -> "abkmnh" is still offered, harmlessly), but
+    // mixed-script queries are left alone.
+    expect(alternateSearchQueries("фильтр w914")).toEqual([]);
   });
 
   it("returns nothing for a short/mostly-numeric query such as an article number", () => {
@@ -157,5 +162,23 @@ describe("foldYo", () => {
   it("is idempotent", () => {
     const once = foldYo("Щётка");
     expect(foldYo(once)).toBe(once);
+  });
+});
+
+describe("keyboard layout and token helpers", () => {
+  it("recovers letters on punctuation keys of the Russian layout", () => {
+    expect(alternateSearchQueries(";blrjcnm")).toContain("жидкость");
+    expect(alternateSearchQueries("o`nrb")).toContain("щётки");
+  });
+
+  it("recovers a Latin brand typed on the Russian layout", () => {
+    expect(alternateSearchQueries("ьфтт")).toEqual(["mann"]);
+    expect(swapKeyboardLayoutToLatin("ищыср")).toBe("bosch");
+  });
+
+  it("splits a query into folded lower-case words, keeping article punctuation", () => {
+    expect(searchTokens("  Масляный   ФИЛЬТР  w914/2 ")).toEqual(["масляный", "фильтр", "w914/2"]);
+    expect(searchTokens("щётки, дворники")).toEqual(["щетки", "дворники"]);
+    expect(searchTokens("a б фильтр фильтр")).toEqual(["фильтр"]);
   });
 });
