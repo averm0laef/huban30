@@ -52,6 +52,13 @@
 		}
 	}
 
+	# What a visitor reads when the limiter turns a request away (an empty page says nothing). The limiter's own
+	# Retry-After header stays on the answer.
+	handle_errors 429 {
+		header Content-Type "text/plain; charset=utf-8"
+		respond "Слишком много запросов с вашего адреса. Подождите несколько секунд и обновите страницу." 429
+	}
+
 	# Optional password on the whole site (a closed test stand before launch).
 	# Off unless SITE_PASSWORD_ENABLED=true. The 1С exchange keeps its own
 	# login, password and IP allow-list in the same Authorization header, and
