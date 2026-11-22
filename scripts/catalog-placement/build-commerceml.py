@@ -2,7 +2,7 @@
 export, to rehearse the exchange at full volume on a scratch database. The list export carries no groups, no brands and
 no pictures, so the rehearsal checks volume, articles shared by several items, prices and stock — not the group tree.
 Usage: python3 scripts/catalog-placement/build-commerceml.py [export.json]"""
-import json, pathlib, sys
+import datetime, json, os, pathlib, sys
 from xml.sax.saxutils import escape
 here = pathlib.Path(__file__).resolve().parents[2] / "local-data" / "1c"      # the owner's data stays outside Git
 exports = sorted(here.glob("nomenklatura-*.json"))
@@ -24,7 +24,9 @@ for i in items:
     offers.append(f"<Предложение><Ид>{escape(i['code'])}</Ид>"
                   + (f"<Цены><Цена><ИдТипаЦены>t-sell</ИдТипаЦены><ЦенаЗаЕдиницу>{price:.2f}</ЦенаЗаЕдиницу><Валюта>RUB</Валюта></Цена></Цены>" if price else "")
                   + f"<Количество>{stock if stock is not None else 0}</Количество></Предложение>")
-head = '<?xml version="1.0" encoding="UTF-8"?>\n<КоммерческаяИнформация ВерсияСхемы="2.08" ДатаФормирования="2026-11-22T12:00:00">\n'
+# The site takes a file it has already loaded for done (by its checksum): a new date makes the same export a new file.
+stamp = os.environ.get("AN30_EXPORT_DATE") or datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+head = f'<?xml version="1.0" encoding="UTF-8"?>\n<КоммерческаяИнформация ВерсияСхемы="2.08" ДатаФормирования="{stamp}">\n'
 (here / "rehearsal-import.xml").write_text(head + '<Классификатор><Ид>c</Ид><Наименование>Классификатор</Наименование></Классификатор>\n<Каталог СодержитТолькоИзменения="false"><Ид>cat</Ид><Товары>\n' + "\n".join(goods) + "\n</Товары></Каталог></КоммерческаяИнформация>\n")
 (here / "rehearsal-offers.xml").write_text(head + '<ПакетПредложений СодержитТолькоИзменения="false"><Ид>cat</Ид><ТипыЦен><ТипЦены><Ид>t-sell</Ид><Наименование>Оптовая цена</Наименование></ТипЦены></ТипыЦен><Предложения>\n' + "\n".join(offers) + "\n</Предложения></ПакетПредложений></КоммерческаяИнформация>\n")
 print("goods:", len(goods), "| offers:", len(offers))
