@@ -474,7 +474,10 @@ export class CatalogPublicService {
       [parsed.data],
     );
     const row = result.rows[0];
-    if (!row) throw new NotFoundException("Товар не найден");
+    if (!row) {
+      const movedTo = byId ? null : await this.currentSlug(parsed.data);
+      throw new NotFoundException(movedTo ? { message: "Товар не найден", movedTo, statusCode: 404 } : "Товар не найден");
+    }
     const images = await this.database.query<ProductImageRow>(
       `SELECT image.id,image.alt_text,image.sort_order,image.is_primary,
               storage.mime_type,storage.byte_size::text
@@ -494,6 +497,26 @@ export class CatalogPublicService {
       images: imageViews,
       primaryImage: imageViews[0] ?? null,
     };
+  }
+
+  /**
+   * The address of today of a product that had `slug` before a rename in 1С (migration 0051), when the product is
+   * still for sale; the storefront answers the old address with a permanent redirect.
+   */
+  private async currentSlug(slug: string): Promise<string | null> {
+    const result = await this.database.query<{ slug: string }>(
+      `${VISIBLE_CATEGORIES_CTE}
+       SELECT product.slug::text AS slug
+       FROM app.product_slug_history AS history
+       JOIN app.products AS product ON product.id=history.product_id
+       LEFT JOIN app.brands AS brand ON brand.id=product.brand_id
+       LEFT JOIN app.categories AS category ON category.id=product.category_id
+       WHERE history.slug=$1 AND product.is_active AND product.deleted_at IS NULL
+         AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+         AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))`,
+      [slug],
+    );
+    return result.rows[0]?.slug ?? null;
   }
 
   /**

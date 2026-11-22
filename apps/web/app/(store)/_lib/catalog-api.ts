@@ -82,6 +82,7 @@ async function getJson(path: string): Promise<unknown> {
     throw new StorefrontApiError("Каталог временно недоступен. Попробуйте ещё раз позже.", 503);
   }
   if (!response.ok) {
+    const movedTo = response.status === 404 ? await movedProductSlug(response) : null;
     throw new StorefrontApiError(
       response.status === 429
         ? "Слишком много запросов. Подождите минуту и обновите страницу."
@@ -89,9 +90,21 @@ async function getJson(path: string): Promise<unknown> {
           ? "Товар не найден."
           : "Каталог временно недоступен. Попробуйте ещё раз позже.",
       response.status,
+      movedTo,
     );
   }
   return response.json();
+}
+
+/** The address of today the API names in the 404 of a renamed product's former address (CatalogPublicService.product). */
+async function movedProductSlug(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.json();
+    const movedTo = body && typeof body === "object" && "movedTo" in body ? body.movedTo : null;
+    return typeof movedTo === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(movedTo) && movedTo.length <= 180 ? movedTo : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface CatalogSearchOptions {
@@ -163,7 +176,8 @@ export const findCatalogItem = cache(async (slug: string): Promise<CatalogProduc
   try {
     return parseProduct(await getJson(`/catalog/products/${encodeURIComponent(normalized)}`));
   } catch (error) {
-    if (error instanceof StorefrontApiError && error.status === 404) return null;
+    // A renamed product's former address goes on to the page, which leads it to the address of today.
+    if (error instanceof StorefrontApiError && error.status === 404 && !error.movedTo) return null;
     throw error;
   }
 });

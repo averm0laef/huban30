@@ -62,6 +62,7 @@ describe("database migrations", () => {
       "0048_hidden_shelf",
       "0049_hoses_fittings_and_heaters",
       "0050_russian_name_order",
+      "0051_product_slug_history",
     ]);
     expect(migrations.every(({ checksum }) => /^[a-f0-9]{64}$/.test(checksum))).toBe(true);
     expect(migrations[0]?.sql).toContain("CREATE SCHEMA app");

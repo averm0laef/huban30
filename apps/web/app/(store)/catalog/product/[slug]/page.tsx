@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
 import { STORE_HOURS, STORE_LOCALITY, STORE_STREET } from "../../../../site-config";
 import { ProductBuyButton } from "../../../_components/cart-actions";
@@ -35,6 +35,7 @@ function productDescription(name: string, sku: string, brandName: string | null)
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   const load = await loadProduct(slug, findCatalogItem);
+  if (load.kind === "moved") permanentRedirect(`/catalog/product/${load.slug}`);
   if (load.kind === "busy") return privatePageMetadata("Слишком много запросов", catalogFailureText(429).message);
   if (load.kind === "missing") return privatePageMetadata("Товар не найден", "Запрошенный товар отсутствует в каталоге АН-30.");
   const { product } = load;
@@ -67,6 +68,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
   const load = await loadProduct(slug, findCatalogItem);
   if (load.kind === "missing") notFound();
+  // A former address of a product renamed in 1С: links a search engine or a customer kept still work.
+  if (load.kind === "moved") permanentRedirect(`/catalog/product/${load.slug}`);
   if (load.kind === "busy") return <ProductBusy slug={slug} />;
   const { product } = load;
   const available = product.availableQuantity > 0;

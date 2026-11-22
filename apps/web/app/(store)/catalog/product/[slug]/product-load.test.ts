@@ -15,6 +15,11 @@ describe("what the product page shows for what the catalogue answered", () => {
     expect(await loadProduct("lampa", async () => { throw new StorefrontApiError("Слишком много запросов.", 429); })).toEqual({ kind: "busy" });
   });
 
+  it("a former address of a product renamed in 1С leads to its address of today", async () => {
+    const moved = async () => { throw new StorefrontApiError("Товар не найден.", 404, "lampa-t4w-24v"); };
+    expect(await loadProduct("lampa-t4w", moved)).toEqual({ kind: "moved", slug: "lampa-t4w-24v" });
+  });
+
   it("any other failure still goes to the error page", async () => {
     await expect(loadProduct("lampa", async () => { throw new StorefrontApiError("Каталог временно недоступен.", 503); })).rejects.toThrow("недоступен");
   });
