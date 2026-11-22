@@ -74,7 +74,13 @@ function scopeLabel(run: ExchangeRun): string {
   if (run.status === "failed" && run.rowsInFile === 0) return "Файл не удалось прочитать";
   if (run.containsOnlyChanges) return "Только изменения";
   const label = fileLabel(run);
-  if (label === "Товары и разделы") return "Полная выгрузка: товары, которых нет в файле, скрываются с сайта";
+  if (label === "Товары и разделы") {
+    // What the file did with the products it does not name stands in the first column: it is the one a narrow
+    // screen shows without scrolling the table.
+    if (run.hidingSkipped) return "Полная выгрузка, но в файле меньше половины товаров сайта: товары, которых в нём нет, остались на витрине";
+    if (run.productsHidden > 0) return `Полная выгрузка, снято с витрины: ${run.productsHidden} (их больше нет в выгрузке)`;
+    return "Полная выгрузка: товары, которых нет в файле, скрываются с сайта";
+  }
   if (label === "Цены") return "Полная выгрузка цен";
   return "Полная выгрузка: остатки товаров, которых нет в файле, обнуляются";
 }
@@ -129,10 +135,6 @@ export function OneCExchangeRuns({ source }: { source: OneCSource }) {
               : "все записи приняты"}
             {row.original.kind === "catalog" && row.original.rowsUncategorized > 0
               ? ` · ${row.original.rowsUncategorized} без категории` : ""}
-            {row.original.productsHidden > 0
-              ? ` · снято с витрины: ${row.original.productsHidden} (их больше нет в выгрузке)` : ""}
-            {row.original.hidingSkipped
-              ? " · в файле меньше половины товаров сайта: товары, которых в нём нет, остались на витрине" : ""}
             {row.original.imagesAttached + row.original.imagesSkipped > 0
               ? ` · фото: ${row.original.imagesAttached} добавлено, ${row.original.imagesSkipped} пропущено` : ""}
             {row.original.kind === "offers"
