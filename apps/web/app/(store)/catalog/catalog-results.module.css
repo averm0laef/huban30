@@ -181,7 +181,8 @@
 .pageGap { min-width: 20px; justify-content: center; align-items: center; color: var(--store-muted); }
 @media (max-width: 640px) {
   .pagination { grid-template-columns: 1fr 1fr; }
-  .pageNumbers { grid-column: 1 / -1; gap: 2px; }
+  /* The numbers first, on a row of their own; «Назад» and «Дальше» side by side under them. */
+  .pageNumbers { grid-column: 1 / -1; order: -1; gap: 2px; }
   .pageGap { min-width: 12px; }
 }
 
