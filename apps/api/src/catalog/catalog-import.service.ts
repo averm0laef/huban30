@@ -129,6 +129,16 @@ export class CatalogImportService {
       });
     }
     const envelope = parsedEnvelope.data;
+    // This legacy JSON transport is the primary base only. The secondary
+    // accepts CommerceML on its dedicated route; its internal namespace must
+    // not be writable through primary credentials or a staged JSON batch.
+    const identityFields=["externalId","productExternalId","brandExternalId","categoryExternalId","parentExternalId","warehouseExternalId"];
+    for(const row of envelope.rows) if(row && typeof row === "object") {
+      const value=row as Record<string,unknown>;
+      if(identityFields.some(key=>typeof value[key] === "string" && (value[key] as string).toLowerCase().startsWith("1c-secondary:"))) {
+        throw new BadRequestException("Выгрузка содержит идентификаторы другой базы 1С. Используйте её отдельный адрес CommerceML.");
+      }
+    }
     const checksum = sha256(envelope);
 
     return this.database.transaction(async (client) => {
@@ -357,10 +367,8 @@ export class CatalogImportService {
         case "brand": return [{ key: `brand:slug:${row.slug}`, row: decision }];
         case "category": return [{ key: `category:slug:${row.slug}`, row: decision }];
         case "warehouse": return [{ key: `warehouse:code:${row.code.toLowerCase()}`, row: decision }];
-        case "product": return [
-          { key: `product:slug:${row.slug}`, row: decision },
-          { key: `product:sku:${row.sku.toLowerCase()}`, row: decision },
-        ];
+        // An article is not a product's identity: one belt size is the article of belts by ten brands.
+        case "product": return [{ key: `product:slug:${row.slug}`, row: decision }];
         default: return [];
       }
     }));
@@ -372,7 +380,7 @@ export class CatalogImportService {
         const owner = current.uniqueOwners.get(key);
         const externalId = "externalId" in row ? row.externalId : undefined;
         if (owner && owner !== externalId) {
-          decision.errors.push({ code: "unique_value_owned", message: "Slug, SKU или код уже занят другой сущностью" });
+          decision.errors.push({ code: "unique_value_owned", message: "Slug или код уже занят другой сущностью" });
         }
       }
       const existing = this.currentFor(row, current);
@@ -507,7 +515,6 @@ export class CatalogImportService {
       warehouses: new Set<string>(),
     };
     const slugs = { brands: new Set<string>(), categories: new Set<string>(), products: new Set<string>() };
-    const productSkus = new Set<string>();
     const warehouseCodes = new Set<string>();
     for (const row of rows) {
       if (row.entityType === "brand") { ids.brands.add(row.externalId); slugs.brands.add(row.slug); }
@@ -519,7 +526,7 @@ export class CatalogImportService {
         ids.warehouses.add(row.externalId); warehouseCodes.add(row.code);
       }
       if (row.entityType === "product") {
-        ids.products.add(row.externalId); slugs.products.add(row.slug); productSkus.add(row.sku);
+        ids.products.add(row.externalId); slugs.products.add(row.slug);
         if (row.brandExternalId) ids.brands.add(row.brandExternalId);
         if (row.categoryExternalId) ids.categories.add(row.categoryExternalId);
       }
@@ -648,19 +655,16 @@ export class CatalogImportService {
                     WHERE slug = ANY($1::citext[])`, [[...slugs.categories]]),
       client.query(`SELECT external_id, slug::text AS value FROM app.products
                     WHERE slug = ANY($1::citext[])`, [[...slugs.products]]),
-      client.query(`SELECT external_id, sku::text AS value FROM app.products
-                    WHERE sku = ANY($1::citext[])`, [[...productSkus]]),
       client.query(`SELECT external_id, code::text AS value FROM app.warehouses
                     WHERE code = ANY($1::citext[])`, [[...warehouseCodes]]),
     ];
-    const [brandSlugs, categorySlugs, productSlugs, productSkuRows, warehouseCodeRows] = await Promise.all(uniqueQueries);
-    if (!brandSlugs || !categorySlugs || !productSlugs || !productSkuRows || !warehouseCodeRows) {
+    const [brandSlugs, categorySlugs, productSlugs, warehouseCodeRows] = await Promise.all(uniqueQueries);
+    if (!brandSlugs || !categorySlugs || !productSlugs || !warehouseCodeRows) {
       throw new Error("Unique catalog validation queries returned an incomplete result");
     }
     for (const row of brandSlugs.rows) uniqueOwners.set(`brand:slug:${row.value}`, row.external_id);
     for (const row of categorySlugs.rows) uniqueOwners.set(`category:slug:${row.value}`, row.external_id);
     for (const row of productSlugs.rows) uniqueOwners.set(`product:slug:${row.value}`, row.external_id);
-    for (const row of productSkuRows.rows) uniqueOwners.set(`product:sku:${row.value.toLowerCase()}`, row.external_id);
     for (const row of warehouseCodeRows.rows) uniqueOwners.set(`warehouse:code:${row.value.toLowerCase()}`, row.external_id);
 
     return { brands, categories, categoryParents, prices, products, stocks, uniqueOwners, warehouses };
@@ -682,7 +686,7 @@ export class CatalogImportService {
       case "brand": return [`brand:slug:${row.slug}`];
       case "category": return [`category:slug:${row.slug}`];
       case "warehouse": return [`warehouse:code:${row.code.toLowerCase()}`];
-      case "product": return [`product:slug:${row.slug}`, `product:sku:${row.sku.toLowerCase()}`];
+      case "product": return [`product:slug:${row.slug}`];
       default: return [];
     }
   }

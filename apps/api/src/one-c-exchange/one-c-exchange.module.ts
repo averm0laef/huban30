@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { CatalogModule } from "../catalog/catalog.module.js";
+import { OneCExchangeImagesService } from "./one-c-exchange-images.service.js";
 import { OneCExchangeSessionService } from "./one-c-exchange-session.service.js";
 import { OneCExchangeTempStorageService } from "./one-c-exchange-temp-storage.service.js";
 import { OneCExchangeController } from "./one-c-exchange.controller.js";
@@ -15,6 +16,6 @@ import { OneCExchangeService } from "./one-c-exchange.service.js";
 @Module({
   controllers: [OneCExchangeController],
   imports: [CatalogModule],
-  providers: [OneCExchangeService, OneCExchangeSessionService, OneCExchangeTempStorageService],
+  providers: [OneCExchangeImagesService, OneCExchangeService, OneCExchangeSessionService, OneCExchangeTempStorageService],
 })
 export class OneCExchangeModule {}

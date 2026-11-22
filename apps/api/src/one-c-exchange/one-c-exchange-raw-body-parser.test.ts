@@ -3,18 +3,20 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   ONE_C_EXCHANGE_HTTP_PATH,
+  ONE_C_FILE_CHUNK_LIMIT_BYTES,
   registerOneCExchangeRawBodyParser,
 } from "./one-c-exchange-raw-body-parser.js";
 
 const servers: FastifyInstance[] = [];
 
-async function createServer(bodyLimitBytes = 64): Promise<FastifyInstance> {
-  const server = fastify({ bodyLimit: 1024 });
-  registerOneCExchangeRawBodyParser(server, bodyLimitBytes);
+async function createServer(): Promise<FastifyInstance> {
+  const server = fastify({ bodyLimit: ONE_C_FILE_CHUNK_LIMIT_BYTES * 2 });
+  registerOneCExchangeRawBodyParser(server);
   server.post(ONE_C_EXCHANGE_HTTP_PATH, async (request) => ({
     body: request.body instanceof Buffer ? request.body.toString("utf8") : null,
     contentType: request.headers["content-type"] ?? null,
   }));
+  server.post(`${ONE_C_EXCHANGE_HTTP_PATH}/secondary`, async () => ({ accepted: true }));
   server.post("/api/v1/other", async (request) => ({ body: request.body }));
   await server.ready();
   servers.push(server);
@@ -61,7 +63,7 @@ describe("1C exchange raw body parser", () => {
   });
 
   it("leaves specific parsers intact and bounds unknown 1C bodies", async () => {
-    const server = await createServer(8);
+    const server = await createServer();
     const json = await server.inject({
       headers: { "content-type": "application/json" },
       method: "POST",
@@ -71,12 +73,23 @@ describe("1C exchange raw body parser", () => {
     const oversized = await server.inject({
       headers: { "content-type": "application/octet-stream" },
       method: "POST",
-      payload: Buffer.alloc(9),
+      payload: Buffer.alloc(ONE_C_FILE_CHUNK_LIMIT_BYTES + 1),
       url: ONE_C_EXCHANGE_HTTP_PATH,
     });
 
     expect(json.statusCode).toBe(200);
     expect(json.json()).toEqual({ body: { accepted: true } });
     expect(oversized.statusCode).toBe(413);
+  });
+
+  it("applies the chunk limit on the secondary source with a built-in content parser", async () => {
+    const server = await createServer();
+    const response = await server.inject({
+      headers: { "content-type": "text/plain" },
+      method: "POST",
+      payload: "x".repeat(ONE_C_FILE_CHUNK_LIMIT_BYTES + 1),
+      url: `${ONE_C_EXCHANGE_HTTP_PATH}/secondary`,
+    });
+    expect(response.statusCode).toBe(413);
   });
 });

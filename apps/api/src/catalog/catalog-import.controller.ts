@@ -1,11 +1,20 @@
-import { Body, Controller, Get, HttpCode, HttpException, Param, Post, Put, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpException, Param, Post, Put, Query, Req, Res } from "@nestjs/common";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { Public, RequirePermissions, SkipCsrf } from "../auth/auth.decorators.js";
 import { CatalogImportService } from "./catalog-import.service.js";
 import { CatalogApplyService } from "./catalog-apply.service.js";
 import { sha256 } from "./catalog-import.utils.js";
+import { CatalogRecategorizeService } from "./catalog-recategorize.service.js";
 import { OneCIntegrationService } from "./one-c-integration.service.js";
+import { BadRequestException } from "@nestjs/common";
+import { ONE_C_SOURCES, type OneCSource } from "../one-c-exchange/one-c-source.js";
+
+function sourceKey(input:string|undefined):OneCSource {
+  const source=input ?? "one_c";
+  if(!(ONE_C_SOURCES as readonly string[]).includes(source)) throw new BadRequestException("Неизвестная база 1С");
+  return source as OneCSource;
+}
 
 function userAgent(request: FastifyRequest): string | undefined {
   const value = request.headers["user-agent"];
@@ -18,7 +27,70 @@ export class CatalogImportController {
     private readonly applyService: CatalogApplyService,
     private readonly imports: CatalogImportService,
     private readonly oneC: OneCIntegrationService,
+    private readonly recategorize: CatalogRecategorizeService,
   ) {}
+
+  // 1С groups → storefront sections (one public tree; see migration 0036).
+  @RequirePermissions("catalog:import")
+  @Get("1c/groups")
+  oneCGroups() {
+    return this.recategorize.listGroups();
+  }
+
+  @RequirePermissions("catalog:import")
+  @Put("1c/groups")
+  mapOneCGroup(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.recategorize.setGroupMapping(body, request.authContext!, request.ip);
+  }
+
+  @RequirePermissions("catalog:import")
+  @Get("uncategorized")
+  uncategorized(@Query() query: unknown) {
+    return this.recategorize.listUncategorized(query);
+  }
+
+  @RequirePermissions("catalog:import")
+  @Post("recategorize")
+  @HttpCode(200)
+  recategorizeAll() {
+    return this.recategorize.recategorizeAll();
+  }
+
+  /** What «Без категории» mostly consists of, by the word the names lead with. */
+  @RequirePermissions("catalog:import")
+  @Get("uncategorized/summary")
+  uncategorizedSummary() {
+    return this.recategorize.uncategorizedSummary();
+  }
+
+  // Staff sorting rules: «название начинается со слова …» → раздел.
+  @RequirePermissions("catalog:import")
+  @Get("placement-rules")
+  placementRules() {
+    return this.recategorize.listRules();
+  }
+
+  @RequirePermissions("catalog:import")
+  @Post("placement-rules")
+  @HttpCode(200)
+  addPlacementRule(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.recategorize.addRule(body, request.authContext!, request.ip);
+  }
+
+  @RequirePermissions("catalog:import")
+  @Delete("placement-rules/:ruleId")
+  @HttpCode(200)
+  removePlacementRule(@Param("ruleId") ruleId: string, @Req() request: FastifyRequest) {
+    return this.recategorize.removeRule(ruleId, request.authContext!, request.ip);
+  }
+
+  /** One product's section chosen by hand; it stays through imports and re-sorting. */
+  @RequirePermissions("catalog:import")
+  @Put("products/:productId/category")
+  @HttpCode(200)
+  setProductCategory(@Param("productId") productId: string, @Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.recategorize.setProductCategory(productId, body, request.authContext!, request.ip);
+  }
 
   @RequirePermissions("catalog:import")
   @Post("imports/:batchId/apply")
@@ -52,25 +124,38 @@ export class CatalogImportController {
 
   @RequirePermissions("settings:manage")
   @Get("1c/settings")
-  settings() {
-    return this.oneC.getSettings();
+  settings(@Query("source") source?:string) {
+    return this.oneC.getSettings(sourceKey(source));
   }
 
   @RequirePermissions("settings:manage")
   @Put("1c/settings")
-  updateSettings(@Body() body: unknown, @Req() request: FastifyRequest) {
+  updateSettings(@Body() body: unknown, @Req() request: FastifyRequest,@Query("source") source?:string) {
     return this.oneC.updateSettings(
       body,
       request.authContext!,
       request.ip,
       userAgent(request),
+      sourceKey(source),
     );
   }
 
   @RequirePermissions("settings:manage")
   @Get("1c/requests")
-  requestLog(@Query() query: unknown) {
-    return this.oneC.listRequests(query);
+  requestLog(@Query() query: Record<string,unknown>) {
+    const {source,...filters}=query;
+    return this.oneC.listRequests(filters,sourceKey(typeof source === "string" ? source:undefined));
+  }
+
+  @RequirePermissions("settings:manage") @Get("1c/sources") sources() { return this.oneC.getSources(); }
+
+  // Standard «Обмен с сайтом» runs apply without a staff preview step, so
+  // catalog staff (not only admins) need to see whether they succeeded.
+  @RequirePermissions("catalog:import")
+  @Get("1c/exchange-runs")
+  exchangeRuns(@Query() query: Record<string, unknown>) {
+    const { source, ...filters } = query;
+    return this.oneC.listExchangeRuns(filters, sourceKey(typeof source === "string" ? source : undefined));
   }
 }
 

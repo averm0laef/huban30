@@ -21,6 +21,7 @@ async function main(): Promise<void> {
   const cookies = new Map<string, string>();
   const totp = new TotpService();
   let workspaceThreadId: string | undefined;
+  const workspaceSubject = `Проверка персонала ${Date.now()}`;
 
   const request = async (
     path: string,
@@ -95,7 +96,7 @@ async function main(): Promise<void> {
 
     const guestThread = await post(
       "/chat/guest/threads",
-      { subject: "Проверка рабочего места персонала" },
+      { intake: { intent: "other", comment: "Проверка рабочего места персонала" }, subject: workspaceSubject },
       201,
     );
     workspaceThreadId = String(guestThread.id ?? "");
@@ -144,28 +145,35 @@ async function main(): Promise<void> {
     await get("/staff/audit?limit=5", 403);
     await get("/catalog/1c/settings", 403);
 
+    const workspaceChats = await get(`/staff/chats?limit=5&q=${encodeURIComponent(workspaceSubject)}`, 200);
+    const workspaceChat = (workspaceChats.items as JsonResponse[] | undefined)
+      ?.find((thread) => thread.id === workspaceThreadId);
+    const initialVersion = Number(workspaceChat?.version);
+    if (!Number.isSafeInteger(initialVersion) || initialVersion < 1) {
+      throw new Error("Workspace chat version is missing");
+    }
     const assigned = await patch(`/staff/chats/${workspaceThreadId}`, {
       assignedStaffId: managerUserId,
       reason: "Менеджер взял обращение",
-      version: 1,
+      version: initialVersion,
     }, 200, csrf);
-    if (assigned.assignedStaffId !== managerUserId || assigned.version !== 2) {
+    if (assigned.assignedStaffId !== managerUserId || assigned.version !== initialVersion + 1) {
       throw new Error("Manager self-assignment did not increment the version");
     }
     await patch(`/staff/chats/${workspaceThreadId}`, {
       assignedStaffId: ownerUserId,
       reason: "Запрещённое назначение другому сотруднику",
-      version: 2,
+      version: initialVersion + 1,
     }, 403, csrf);
     await patch(`/staff/chats/${workspaceThreadId}`, {
       assignedStaffId: managerUserId,
       reason: "Устаревшее изменение",
-      version: 1,
+      version: initialVersion,
     }, 409, csrf);
     const closed = await patch(`/staff/chats/${workspaceThreadId}`, {
       reason: "Обращение закрыто после проверки",
       status: "closed",
-      version: 2,
+      version: initialVersion + 1,
     }, 200, csrf);
     await patch(`/staff/chats/${workspaceThreadId}`, {
       reason: "Менеджер не должен открывать закрытый чат",

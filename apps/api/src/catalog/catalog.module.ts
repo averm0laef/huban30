@@ -8,10 +8,15 @@ import { CatalogSearchController } from "./catalog-search.controller.js";
 import { CatalogSearchService } from "./catalog-search.service.js";
 import { CatalogApplyService } from "./catalog-apply.service.js";
 import { CatalogImportService } from "./catalog-import.service.js";
+import { CatalogRecategorizeService } from "./catalog-recategorize.service.js";
 import { OneCIntegrationService } from "./one-c-integration.service.js";
+import { CatalogEnrichmentController } from "./catalog-enrichment.controller.js";
+import { CatalogEnrichmentService } from "./catalog-enrichment.service.js";
+import { CatalogSearchLogService } from "./catalog-search-log.service.js";
 
 @Module({
   controllers: [
+    CatalogEnrichmentController,
     CatalogImportController,
     CatalogPublicController,
     CatalogSearchController,
@@ -28,11 +33,14 @@ import { OneCIntegrationService } from "./one-c-integration.service.js";
   // up a second, disconnected copy of either.
   exports: [CatalogCategoryTreeCache, CatalogSearchService, OneCIntegrationService],
   providers: [
+    CatalogEnrichmentService,
     CatalogApplyService,
     CatalogCategoryTreeCache,
     CatalogImportService,
     CatalogPublicService,
+    CatalogRecategorizeService,
     CatalogSearchService,
+    CatalogSearchLogService,
     OneCIntegrationService,
   ],
 })

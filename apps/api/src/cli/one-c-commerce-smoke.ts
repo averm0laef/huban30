@@ -6,6 +6,7 @@ import { Client } from "pg";
 
 import { validateEnvironment } from "../config.js";
 import { EXCHANGE_WAREHOUSE_EXTERNAL_ID } from "../one-c-exchange/commerce-ml.parser.js";
+import { readOneCExchangeOptions } from "../one-c-exchange/one-c-exchange-options.js";
 import { buildBrandExternalId } from "../one-c-exchange/one-c-exchange-slug.js";
 import { OneCExchangeTempStorageService } from "../one-c-exchange/one-c-exchange-temp-storage.service.js";
 import { PasswordService } from "../security/password.service.js";
@@ -264,9 +265,13 @@ async function main(): Promise<void> {
        WHERE product.external_id=$1 AND product.is_active AND product.deleted_at IS NULL`,
       [external.product, EXCHANGE_WAREHOUSE_EXTERNAL_ID],
     )).rows[0];
+    // <Описание> reaches the site only when this base is set to publish it (one-c-exchange-options.ts).
+    const expectedDescription = readOneCExchangeOptions(originalIntegration?.settings).publishDescriptions
+      ? "Temporary staging CommerceML smoke product"
+      : null;
     if (
       landed?.sku !== external.sku
-      || landed.description !== "Temporary staging CommerceML smoke product"
+      || landed.description !== expectedDescription
       || landed.amount_kopeks !== "123456"
       || landed.quantity_on_hand !== 9
     ) {

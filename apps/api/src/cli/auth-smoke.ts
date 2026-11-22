@@ -108,7 +108,7 @@ async function main(): Promise<void> {
     }, 202);
     const verificationToken = String(registration.body.developmentToken ?? "");
     if (!verificationToken) throw new Error("Development verification token is missing");
-    const verification = await post("/auth/email/verify", { token: verificationToken }, 201);
+    const verification = await post("/auth/email/verify", { token: verificationToken, password: originalPassword }, 201);
     createdUserId = String(verification.body.userId ?? "");
 
     for (let attempt = 0; attempt < 5; attempt += 1) {

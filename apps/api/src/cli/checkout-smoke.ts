@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { NestFactory } from "@nestjs/core";
 import { Client } from "pg";
@@ -12,23 +12,26 @@ import {
 import type { AuthContext } from "../auth/auth-context.js";
 import { AppModule } from "../app.module.js";
 import { OrderService } from "../checkout/order.service.js";
-import { PaymentService } from "../checkout/payment.service.js";
 import { validateEnvironment } from "../config.js";
 
 interface JsonObject {
   [key: string]: unknown;
 }
 
+/**
+ * Checkout now creates a заявка (manager request), not a payment: see
+ * docs/CHECKOUT_AND_PAYMENTS.md. This smoke test exercises the same
+ * server-side guarantees the old payment-flow version did -- server-read
+ * price and stock, idempotent replay, guest order access, concurrent
+ * last-unit handling -- minus everything that only existed to drive the
+ * removed sandbox payment provider.
+ */
 async function main(): Promise<void> {
   const environment = validateEnvironment(process.env);
   if (!environment.AUTH_DEBUG_TOKENS
     || environment.DEPLOYMENT_ENVIRONMENT !== "development"
-    || environment.PAYMENTS_PROVIDER !== "sandbox"
     || !environment.ENABLE_PUBLIC_CHECKOUT) {
-    throw new Error("Checkout smoke is restricted to local sandbox checkout");
-  }
-  if (!environment.SANDBOX_PAYMENT_WEBHOOK_SECRET) {
-    throw new Error("Sandbox webhook secret is missing");
+    throw new Error("Checkout smoke is restricted to a local development checkout");
   }
 
   const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -43,6 +46,7 @@ async function main(): Promise<void> {
     competition: randomUUID(),
     multiWarehouse: randomUUID(),
     regular: randomUUID(),
+    scarce: randomUUID(),
   };
   const database = new Client({ connectionString: environment.DATABASE_URL });
   await database.connect();
@@ -90,17 +94,8 @@ async function main(): Promise<void> {
   const guestCheckout = (body: unknown, expectedStatus = 201) => (
     post("/checkout/guest", body, expectedStatus)
   );
-  const complete = (checkout: JsonObject, expectedStatus = 200) => {
-    const payment = checkout.payment as JsonObject;
-    return post(
-      String(payment.confirmationUrl).replace("/api/v1", ""),
-      { confirmationToken: payment.confirmationToken },
-      expectedStatus,
-    );
-  };
   const checkoutBody = (
     productId: string,
-    scenario: "cancel" | "decline" | "success" | "timeout",
     idempotencyKey = randomUUID(),
     quantity = 1,
   ) => ({
@@ -115,7 +110,6 @@ async function main(): Promise<void> {
     legalPolicyVersion: CHECKOUT_LEGAL_POLICY_VERSION,
     personalDataConsent: true,
     personalDataConsentVersion: CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
-    sandboxScenario: scenario,
     termsAccepted: true,
   });
 
@@ -160,7 +154,8 @@ async function main(): Promise<void> {
         `INSERT INTO app.inventory_balances
           (product_id,warehouse_id,quantity_on_hand,quantity_reserved)
          VALUES ($1,$2,$3,0)`,
-        [productId, warehouseId, kind === "competition" ? 1 : kind === "multiWarehouse" ? 5 : 20],
+        [productId, warehouseId,
+          kind === "competition" ? 1 : kind === "multiWarehouse" ? 5 : kind === "scarce" ? 2 : 20],
       );
       if (kind === "multiWarehouse") {
         await database.query(
@@ -175,7 +170,6 @@ async function main(): Promise<void> {
 
     application = await NestFactory.createApplicationContext(AppModule, { logger: false });
     const orders = application.get(OrderService);
-    const payments = application.get(PaymentService);
 
     const registration = await post("/auth/register", {
       displayName: "Checkout Smoke Customer",
@@ -186,40 +180,56 @@ async function main(): Promise<void> {
     }, 202);
     const verificationToken = String(registration.developmentToken ?? "");
     if (!verificationToken) throw new Error("Customer verification token is missing");
-    const verification = await post("/auth/email/verify", { token: verificationToken }, 201);
+    const verification = await post("/auth/email/verify", { token: verificationToken, password: customerPassword }, 201);
     customerUserId = String(verification.userId ?? "");
     const login = await post("/auth/login", {
       email: customerEmail,
       password: customerPassword,
     }, 201, {}, customerCookies);
     const csrfToken = String(login.csrfToken ?? "");
+
+    // A signed-in customer's checkout produces a заявка a manager can see --
+    // no payment, no reservation -- and the order is immediately readable
+    // through the customer's own session.
     const customerCheckout = await post(
       "/checkout",
-      checkoutBody(productIds.regular, "cancel"),
+      checkoutBody(productIds.regular),
       201,
       { "x-csrf-token": csrfToken },
       customerCookies,
     );
-    await request(
-      `/orders/${String((customerCheckout.order as JsonObject).id)}`,
-      { method: "GET" },
-      200,
-      customerCookies,
-    );
-    await complete(customerCheckout);
+    if ((customerCheckout.order as JsonObject).status !== "awaiting_confirmation") {
+      throw new Error("Customer checkout did not land in awaiting_confirmation");
+    }
+    const customerOrderId = String((customerCheckout.order as JsonObject).id);
+    const readBack = await request(`/orders/${customerOrderId}`, { method: "GET" }, 200, customerCookies);
+    if (readBack.status !== "awaiting_confirmation") throw new Error("Заявка is not visible to its owner");
 
+    // Price is re-read server-side: the request never carries a price, and a
+    // client that tries to smuggle one through an order line is rejected
+    // outright by the strict item schema rather than silently ignored.
+    await post("/checkout", {
+      ...checkoutBody(productIds.regular),
+      items: [{ productId: productIds.regular, quantity: 1, unitPriceKopeks: 1 }],
+    }, 400, { "x-csrf-token": csrfToken }, customerCookies);
+    const expectedSubtotal = 10_000;
+    if ((customerCheckout.order as JsonObject).subtotalKopeks !== expectedSubtotal) {
+      throw new Error("Order subtotal did not come from the server-side price");
+    }
+
+    // Guest checkout: idempotent replay returns the same заявка and guest
+    // access credential, a conflicting payload under the same key is
+    // rejected, and the guest order is only readable with the right token.
     const successKey = randomUUID();
-    const successRequest = checkoutBody(productIds.regular, "success", successKey, 2);
+    const successRequest = checkoutBody(productIds.regular, successKey, 2);
     const successCheckout = await guestCheckout(successRequest);
     const replay = await guestCheckout(successRequest);
     if (replay.idempotentReplay !== true
       || String((replay.order as JsonObject).id) !== String((successCheckout.order as JsonObject).id)) {
-      throw new Error("Checkout replay was not idempotent");
+      throw new Error("Checkout replay was not idempotent -- a double submit created a second order");
     }
-    if (replay.guestAccessToken !== successCheckout.guestAccessToken
-      || (replay.payment as JsonObject).confirmationToken
-        !== (successCheckout.payment as JsonObject).confirmationToken) {
-      throw new Error("Checkout replay did not reproduce its guest and payment credentials");
+    if (replay.guestAccessToken !== successCheckout.guestAccessToken) {
+      throw new Error("Checkout replay did not reproduce its guest access credential");
     }
     await guestCheckout({ ...successRequest, items: [{ productId: productIds.regular, quantity: 3 }] }, 409);
     const successOrderId = String((successCheckout.order as JsonObject).id);
@@ -227,55 +237,14 @@ async function main(): Promise<void> {
       headers: { "x-guest-order-token": "wrong-guest-token-that-is-long-enough-for-check" },
       method: "GET",
     }, 404);
-    await request(`/orders/guest/${successOrderId}`, {
+    const guestOrder = await request(`/orders/guest/${successOrderId}`, {
       headers: { "x-guest-order-token": String(successCheckout.guestAccessToken) },
       method: "GET",
     }, 200);
+    if (guestOrder.status !== "awaiting_confirmation") throw new Error("Guest заявка is not readable by its owner");
 
-    const multiWarehouse = await guestCheckout(
-      checkoutBody(productIds.multiWarehouse, "cancel", randomUUID(), 8),
-    );
-    const multiReservationId = String((multiWarehouse.reservation as JsonObject).id);
-    const allocations = await database.query<{ count: string; quantity: string }>(
-      `SELECT count(*)::text AS count,sum(quantity)::text AS quantity
-       FROM app.stock_reservation_items WHERE reservation_id=$1`,
-      [multiReservationId],
-    );
-    if (allocations.rows[0]?.count !== "2" || allocations.rows[0]?.quantity !== "8") {
-      throw new Error("Multi-warehouse reservation was not split deterministically");
-    }
-    await complete(multiWarehouse);
-    await post("/payments/webhooks/sandbox", {
-      amountKopeks: 20_000,
-      externalEventId: `invalid-signature-${suffix}`,
-      externalPaymentId: String((successCheckout.payment as JsonObject).externalPaymentId),
-      status: "succeeded",
-    }, 401, { "x-an30-sandbox-signature": "invalid-signature" });
-    const validWebhook = {
-      amountKopeks: 20_000,
-      externalEventId: `valid-webhook-${suffix}`,
-      externalPaymentId: String((successCheckout.payment as JsonObject).externalPaymentId),
-      status: "succeeded",
-    } as const;
-    const webhookSignature = createHmac("sha256", environment.SANDBOX_PAYMENT_WEBHOOK_SECRET)
-      .update(JSON.stringify(validWebhook), "utf8")
-      .digest("base64url");
-    const succeeded = await post(
-      "/payments/webhooks/sandbox", validWebhook, 200,
-      { "x-an30-sandbox-signature": webhookSignature },
-    );
-    if (succeeded.status !== "succeeded") throw new Error("Sandbox success did not succeed");
-    const repeatedWebhook = await post(
-      "/payments/webhooks/sandbox", validWebhook, 200,
-      { "x-an30-sandbox-signature": webhookSignature },
-    );
-    if (repeatedWebhook.idempotentReplay !== true) throw new Error("Repeated webhook was not idempotent");
-    const alternateEvent = await complete(successCheckout);
-    if (alternateEvent.status !== "succeeded") throw new Error("Second success event changed payment state");
-    const alternateReplay = await complete(successCheckout);
-    if (alternateReplay.idempotentReplay !== true) throw new Error("Confirmation replay was not idempotent");
-
-    const paymentId = String((successCheckout.payment as JsonObject).id);
+    // A manager confirms the заявка by moving it forward; the transition is
+    // audited and the order stays visible throughout.
     const fakeAdmin: AuthContext = {
       csrfTokenHash: Buffer.alloc(32),
       email: `checkout-admin-${suffix}@example.invalid`,
@@ -285,137 +254,49 @@ async function main(): Promise<void> {
       sessionId: randomUUID(),
       userId: adminUserId,
     };
-    const partialKey = randomUUID();
-    const partial = await payments.refund(paymentId, {
-      amountKopeks: 5_000,
-      idempotencyKey: partialKey,
-      reason: "Checkout smoke partial refund",
+    const confirmed = await orders.updateStatus(successOrderId, {
+      reason: "Manager confirmed by phone",
+      status: "processing",
+      version: Number(guestOrder.version),
     }, fakeAdmin, {});
-    if (partial.paymentStatus !== "partially_refunded") throw new Error("Partial refund failed");
-    const partialReplay = await payments.refund(paymentId, {
-      amountKopeks: 5_000,
-      idempotencyKey: partialKey,
-      reason: "Checkout smoke partial refund",
-    }, fakeAdmin, {});
-    if (partialReplay.idempotentReplay !== true) throw new Error("Refund replay was not idempotent");
-    const fullRefundKey = randomUUID();
-    const full = await payments.refund(paymentId, {
-      amountKopeks: 15_000,
-      idempotencyKey: fullRefundKey,
-      reason: "Checkout smoke final refund",
-    }, fakeAdmin, {});
-    if (full.paymentStatus !== "refunded") throw new Error("Full refund failed");
-    const fullReplay = await payments.refund(paymentId, {
-      amountKopeks: 15_000,
-      idempotencyKey: fullRefundKey,
-      reason: "Checkout smoke final refund",
-    }, fakeAdmin, {});
-    if (fullReplay.idempotentReplay !== true) throw new Error("Full refund replay was not idempotent");
+    if (confirmed.status !== "processing") throw new Error("Manager confirmation did not move the заявка forward");
 
-    const deliveryCheckout = await guestCheckout(checkoutBody(productIds.regular, "success"));
-    const deliveryGoodsResult = await complete(deliveryCheckout);
-    if (deliveryGoodsResult.status !== "succeeded") throw new Error("Delivery order goods payment failed");
-    const deliveryOrderId = String((deliveryCheckout.order as JsonObject).id);
-    const deliveryGuestToken = String(deliveryCheckout.guestAccessToken);
-    const paidDeliveryOrder = await request(`/orders/guest/${deliveryOrderId}`, {
-      headers: { "x-guest-order-token": deliveryGuestToken }, method: "GET",
-    }, 200);
-    const awaiting = await orders.updateStatus(deliveryOrderId, {
-      reason: "Delivery terms require a separate payment",
-      status: "awaiting_delivery_terms",
-      version: Number(paidDeliveryOrder.version),
-    }, fakeAdmin, {});
-    if (awaiting.status !== "awaiting_delivery_terms") throw new Error("Delivery state transition failed");
-    const deliveryPaymentKey = randomUUID();
-    const deliveryPaymentRequest = {
-      amountKopeks: 3_000,
-      idempotencyKey: deliveryPaymentKey,
-      sandboxScenario: "success",
-    } as const;
-    const deliveryPayment = await orders.createDeliveryPayment(
-      deliveryOrderId, deliveryPaymentRequest, fakeAdmin, {},
-    );
-    const deliveryReplay = await orders.createDeliveryPayment(
-      deliveryOrderId, deliveryPaymentRequest, fakeAdmin, {},
-    );
-    if (deliveryReplay.idempotentReplay !== true) throw new Error("Delivery payment replay failed");
-    const deliveryPaymentResult = await complete({ payment: deliveryPayment });
-    if (deliveryPaymentResult.status !== "succeeded") throw new Error("Separate delivery payment failed");
-    const deliveryOrder = await request(`/orders/guest/${deliveryOrderId}`, {
-      headers: { "x-guest-order-token": deliveryGuestToken }, method: "GET",
-    }, 200);
-    if (deliveryOrder.totalAmountKopeks !== 13_000 || deliveryOrder.paidAmountKopeks !== 13_000) {
-      throw new Error("Separate delivery amount was not reflected in the order");
+    // Stock is split across two warehouses; the server must sum availability
+    // across both rather than checking only one.
+    const multiWarehouse = await guestCheckout(checkoutBody(productIds.multiWarehouse, randomUUID(), 8));
+    if ((multiWarehouse.order as JsonObject).status !== "awaiting_confirmation") {
+      throw new Error("Multi-warehouse заявка was not created");
     }
+    await guestCheckout(checkoutBody(productIds.scarce, randomUUID(), 3), 409);
 
+    // No payment means no reservation to hold the last unit either: two
+    // concurrent заявки for the same last unit both succeed, and it is the
+    // manager -- not the software -- who resolves the conflict on the call.
+    // This is a deliberate trade-off, not an oversight: see checkout.service.ts.
     const competition = await Promise.all([
       fetch(`${apiBase}/checkout/guest`, {
-        body: JSON.stringify(checkoutBody(productIds.competition, "cancel")),
+        body: JSON.stringify(checkoutBody(productIds.competition)),
         headers: { "content-type": "application/json", origin: environment.APP_ORIGIN },
         method: "POST",
       }),
       fetch(`${apiBase}/checkout/guest`, {
-        body: JSON.stringify(checkoutBody(productIds.competition, "cancel")),
+        body: JSON.stringify(checkoutBody(productIds.competition)),
         headers: { "content-type": "application/json", origin: environment.APP_ORIGIN },
         method: "POST",
       }),
     ]);
     const competitionStatuses = competition.map((response) => response.status).sort();
-    if (competitionStatuses[0] !== 201 || competitionStatuses[1] !== 409) {
-      throw new Error(`Last-unit competition returned ${competitionStatuses.join(",")}`);
+    if (competitionStatuses[0] !== 201 || competitionStatuses[1] !== 201) {
+      throw new Error(`Unheld last-unit заявки returned ${competitionStatuses.join(",")}, expected both to succeed`);
     }
-    const winnerResponse = competition.find((response) => response.status === 201)!;
-    const winner = await parse(winnerResponse);
-    await complete(winner);
 
-    const declined = await guestCheckout(checkoutBody(productIds.regular, "decline"));
-    const declinedResult = await complete(declined);
-    if (declinedResult.status !== "failed") throw new Error("Sandbox decline did not fail");
-
-    const timedOut = await guestCheckout(checkoutBody(productIds.regular, "timeout"));
-    const timeoutResult = await complete(timedOut);
-    if (timeoutResult.timedOut !== true || timeoutResult.status !== "pending") {
-      throw new Error("Sandbox timeout did not remain pending");
-    }
-    const timeoutReservationId = String((timedOut.reservation as JsonObject).id);
-    await database.query(
-      `UPDATE app.stock_reservations
-       SET created_at=clock_timestamp()-interval '2 hours',
-           expires_at=clock_timestamp()-interval '1 second'
-       WHERE id=$1`,
-      [timeoutReservationId],
+    // No app.payments row is ever created: the table itself no longer
+    // exists, so this is enforced by the schema rather than tested here.
+    const paymentTable = await database.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM information_schema.tables
+       WHERE table_schema='app' AND table_name='payments'`,
     );
-    const expired = await database.query<{ count: number }>(
-      "SELECT app.expire_stock_reservations(100) AS count",
-    );
-    if ((expired.rows[0]?.count ?? 0) < 1) throw new Error("Expired reservation was not released");
-
-    const invariant = (await database.query<{
-      active_competition: string;
-      active_timeout: string;
-      competition_on_hand: number;
-      competition_reserved: number;
-      regular_reserved: number;
-    }>(
-      `SELECT
-         (SELECT count(*)::text FROM app.stock_reservations
-          WHERE id=$1 AND status='active') AS active_timeout,
-         (SELECT count(*)::text FROM app.stock_reservations AS reservation
-          JOIN app.stock_reservation_items AS item ON item.reservation_id=reservation.id
-          WHERE item.product_id=$2 AND reservation.status='active') AS active_competition,
-         competition.quantity_on_hand AS competition_on_hand,
-         competition.quantity_reserved AS competition_reserved,
-         regular.quantity_reserved AS regular_reserved
-       FROM app.inventory_balances AS competition
-       JOIN app.inventory_balances AS regular ON regular.warehouse_id=competition.warehouse_id
-       WHERE competition.product_id=$2 AND regular.product_id=$3`,
-      [timeoutReservationId, productIds.competition, productIds.regular],
-    )).rows[0];
-    if (!invariant || invariant.active_timeout !== "0" || invariant.active_competition !== "0"
-      || invariant.competition_on_hand !== 1 || invariant.competition_reserved !== 0
-      || invariant.regular_reserved !== 0) {
-      throw new Error(`Inventory invariant failed: ${JSON.stringify(invariant)}`);
-    }
+    if (paymentTable.rows[0]?.count !== "0") throw new Error("app.payments still exists");
   } catch (error) {
     smokeError = error;
   }
@@ -423,6 +304,11 @@ async function main(): Promise<void> {
   let cleanupError: unknown;
   try {
     await database.query("BEGIN");
+    // Orders, order items and order status history are append-only by
+    // design (see the *_immutable / *_append_only triggers in
+    // 0001_initial_schema.sql) -- exactly like the payment-flow version of
+    // this script, the заявки created here are intentionally left in place
+    // rather than deleted.
     await database.query(
       `UPDATE app.products SET is_active=false,deleted_at=clock_timestamp()
        WHERE id=ANY($1::uuid[])`,
@@ -462,7 +348,7 @@ async function main(): Promise<void> {
   await database.end();
   if (smokeError) throw smokeError;
   if (cleanupError) throw cleanupError;
-  process.stdout.write(JSON.stringify({ event: "checkout.smoke.passed", tests: 36 }) + "\n");
+  process.stdout.write(JSON.stringify({ event: "checkout.smoke.passed", tests: 16 }) + "\n");
 }
 
 main().catch((error: unknown) => {

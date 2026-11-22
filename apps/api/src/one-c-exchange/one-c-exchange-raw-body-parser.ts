@@ -1,11 +1,10 @@
 import { errorCodes, type FastifyInstance, type FastifyRequest } from "fastify";
 
 export const ONE_C_EXCHANGE_HTTP_PATH = "/api/v1/integrations/1c/exchange";
+export const ONE_C_FILE_CHUNK_LIMIT_BYTES = 8 * 1024 * 1024;
 
-function isOneCExchangeUpload(request: FastifyRequest): boolean {
-  return request.method === "POST"
-    && (request.url === ONE_C_EXCHANGE_HTTP_PATH
-      || request.url.startsWith(`${ONE_C_EXCHANGE_HTTP_PATH}?`));
+function isOneCExchangeUpload(method: string, pathname: string | undefined): boolean {
+  return method === "POST" && (pathname === ONE_C_EXCHANGE_HTTP_PATH || pathname === `${ONE_C_EXCHANGE_HTTP_PATH}/secondary`);
 }
 
 async function readBoundedBody(
@@ -43,15 +42,19 @@ async function readBoundedBody(
  */
 export function registerOneCExchangeRawBodyParser(
   server: FastifyInstance,
-  bodyLimitBytes: number,
 ): void {
+  server.addHook("onRoute", (route) => {
+    if (typeof route.method === "string" && isOneCExchangeUpload(route.method, route.url)) {
+      route.bodyLimit = ONE_C_FILE_CHUNK_LIMIT_BYTES;
+    }
+  });
   server.addContentTypeParser("*", async (
     request: FastifyRequest,
     payload: FastifyRequest["raw"],
   ) => {
-    if (!isOneCExchangeUpload(request)) {
+    if (!isOneCExchangeUpload(request.method, request.routeOptions.url)) {
       throw new errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE();
     }
-    return readBoundedBody(request, payload, bodyLimitBytes);
+    return readBoundedBody(request, payload, ONE_C_FILE_CHUNK_LIMIT_BYTES);
   });
 }

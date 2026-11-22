@@ -24,16 +24,17 @@ import path from "node:path";
 
 import type { ConfigService } from "@nestjs/config";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import type { OneCCatalogRow } from "@an30/contracts";
+import { STOREFRONT_TAXONOMY, type OneCCatalogRow } from "@an30/contracts";
 
 import { CatalogCategoryTreeCache } from "../catalog/catalog-category-tree-cache.service.js";
 import {
-  KNOWN_CATALOG_CATEGORIES,
   UNCATEGORIZED_CATEGORY_LABEL,
   UNCATEGORIZED_CATEGORY_SLUG,
+  STOREFRONT_CATEGORY_SLUGS,
 } from "../catalog/catalog-known-categories.js";
+import { loadPlacementContext, type PlacementContext } from "../catalog/catalog-recategorize.service.js";
 import { OneCIntegrationService } from "../catalog/one-c-integration.service.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { RedisService } from "../infrastructure/redis.service.js";
@@ -151,7 +152,11 @@ interface WarehouseRow {
 interface ProductRow {
   attributes: Record<string, unknown>; brand_id: string | null; category_id: string | null;
   deleted_at: Date | null; description: string | null; external_id: string; id: string;
-  is_active: boolean; name: string; search_text: string | null; sku: string; slug: string;
+  is_active: boolean; name: string; one_c_group_external_id?: string | null; search_text: string | null; sku: string; slug: string;
+}
+interface GroupRow {
+  category_id: string | null; group_external_id: string; group_name: string; is_active: boolean;
+  parent_group_external_id: string | null; source_key: string;
 }
 interface PriceRow { amount_kopeks: number; currency: string; id: string; product_id: string; valid_to: Date | null }
 interface BalanceRow { product_id: string; quantity_on_hand: number; quantity_reserved: number; warehouse_id: string }
@@ -162,6 +167,7 @@ interface RunRow {
   rows_touched: number; rows_uncategorized: number; status: string; tail_rows: OneCCatalogRow[] | null;
 }
 interface IntegrationRow {
+  auth_revision: string;
   allowed_networks: string[]; is_enabled: boolean; last_exchange_at: Date | null;
   last_exchange_summary: Record<string, unknown>; secret_hash: Buffer | null; updated_at: Date;
   username: string | null;
@@ -192,11 +198,15 @@ class FakeCatalogDatabase {
   readonly balances = new Map<string, BalanceRow>();
   readonly brands = new Map<string, BrandRow>();
   readonly categories = new Map<string, CategoryRow>();
+  /** app.one_c_group_mappings, keyed "source:groupExternalId". */
+  readonly groups = new Map<string, GroupRow>();
   readonly integration: IntegrationRow = {
+    auth_revision: "1",
     allowed_networks: [], is_enabled: false, last_exchange_at: null,
     last_exchange_summary: {}, secret_hash: null, updated_at: new Date(), username: null,
   };
   readonly inventoryEvents: Array<Record<string, unknown>> = [];
+  propertyDictionary: Record<string, unknown> = {};
   readonly prices = new Map<string, PriceRow>();
   readonly products = new Map<string, ProductRow>();
   readonly requestLog: Array<Record<string, unknown>> = [];
@@ -207,10 +217,10 @@ class FakeCatalogDatabase {
     return [...map.values()].find((row) => row.external_id === externalId);
   }
 
-  async query<Row extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<{ rows: Row[] }> {
+  async query<Row extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<{ rowCount: number; rows: Row[] }> {
     const sql = normalize(text);
     const rows = this.dispatch(sql, values);
-    return { rows: rows as Row[] };
+    return { rowCount: rows.length, rows: rows as Row[] };
   }
 
   async transaction<T>(work: (client: { query: FakeCatalogDatabase["query"] }) => Promise<T>): Promise<T> {
@@ -225,6 +235,13 @@ class FakeCatalogDatabase {
   // actually needs it.
   private dispatch(sql: string, values: unknown[]): unknown[] {
     // -- app.integration_endpoints -----------------------------------------
+    if (sql.startsWith("SELECT one_c_property_dictionary, settings FROM app.integration_endpoints")) {
+      return [{ one_c_property_dictionary: this.propertyDictionary, settings: {} }];
+    }
+    if (sql.startsWith("UPDATE app.integration_endpoints SET one_c_property_dictionary")) {
+      this.propertyDictionary = JSON.parse(values[0] as string) as Record<string, unknown>;
+      return [];
+    }
     if (sql.includes("FROM app.integration_endpoints") && sql.includes("ip_allowed")) {
       const ip = values[0] as string;
       const ipAllowed = this.integration.allowed_networks.some((cidr) => cidrContains(cidr, ip));
@@ -307,6 +324,12 @@ class FakeCatalogDatabase {
         rows_uncategorized: run.rows_uncategorized,
       }];
     }
+    if (sql.includes("SET status = 'running', error_message = NULL")) {
+      const run = this.mustRun(values[0] as string);
+      run.status = "running";
+      run.error_message = null;
+      return [];
+    }
     if (sql.includes("status = 'failed', error_message = $2")) {
       const [id, reason] = values as [string, string];
       const run = this.mustRun(id);
@@ -317,14 +340,15 @@ class FakeCatalogDatabase {
 
     // -- tail-row computation (products with stale, still-nonzero stock) ---
     if (sql.includes("FROM app.inventory_balances AS balance")) {
-      const [warehouseExternalId] = values as [string];
-      const warehouse = this.byExternalId(this.warehouses, warehouseExternalId);
-      if (!warehouse) return [];
       return [...this.balances.values()]
-        .filter((balance) => balance.warehouse_id === warehouse.id && balance.quantity_on_hand !== 0)
-        .map((balance) => this.products.get(balance.product_id))
-        .filter((product): product is ProductRow => Boolean(product))
-        .map((product) => ({ external_id: product.external_id }));
+        .filter((balance) => balance.quantity_on_hand !== 0)
+        .flatMap((balance) => {
+          const product = this.products.get(balance.product_id);
+          const warehouse = this.warehouses.get(balance.warehouse_id);
+          return product && warehouse
+            ? [{ external_id: product.external_id, warehouse_external_id: warehouse.external_id }]
+            : [];
+        });
     }
 
     // -- app.brands -----------------------------------------------------------
@@ -348,9 +372,33 @@ class FakeCatalogDatabase {
       row.deleted_at = isActive ? null : row.deleted_at ?? new Date();
       return [];
     }
-    if (sql === "SELECT id FROM app.brands WHERE external_id = $1") {
+    if (sql === "SELECT id, name FROM app.brands WHERE external_id = $1") {
       const found = this.byExternalId(this.brands, values[0] as string);
-      return found ? [{ id: found.id }] : [];
+      return found ? [{ id: found.id, name: found.name }] : [];
+    }
+    // Staff sorting rules (migration 0044): none in these scenarios.
+    if (sql.includes("FROM app.catalog_placement_rules AS rule")) return [];
+
+    // -- app.one_c_group_mappings ---------------------------------------------
+    if (sql.startsWith("INSERT INTO app.one_c_group_mappings")) {
+      const source = /VALUES \('([a-z_]+)'/u.exec(sql)?.[1] ?? "one_c";
+      const [externalId, name, parentExternalId, isActive] = values as [string, string, string | null, boolean];
+      const key = `${source}:${externalId}`;
+      const existing = this.groups.get(key);
+      if (existing && existing.group_name === name && existing.parent_group_external_id === parentExternalId
+        && existing.is_active === isActive) return [];
+      this.groups.set(key, {
+        category_id: existing?.category_id ?? null, group_external_id: externalId, group_name: name,
+        is_active: isActive, parent_group_external_id: parentExternalId, source_key: source,
+      });
+      return [{ changed: true }];
+    }
+    if (sql.includes("FROM app.one_c_group_mappings AS mapping") && sql.includes("mapping.source_key = ANY($1::text[])")) {
+      const sources = new Set(values[0] as string[]);
+      return [...this.groups.values()].filter((row) => sources.has(row.source_key)).map((row) => ({
+        ...row,
+        manual_slug: row.category_id ? this.categories.get(row.category_id)?.slug ?? null : null,
+      }));
     }
 
     // -- app.categories -------------------------------------------------------
@@ -394,10 +442,10 @@ class FakeCatalogDatabase {
     // Batch fetch for applyProduct's category fallback (loadKnownCategoryIds)
     // -- one call per chunk, not per row, mirroring migration 0024's seeded
     // twelve known categories plus "Без категории".
-    if (sql === "SELECT id, slug::text AS slug FROM app.categories WHERE slug::text = ANY($1::text[])") {
+    if (sql.startsWith("SELECT id, slug::text AS slug FROM app.categories WHERE slug::text = ANY($1::text[])")) {
       const slugs = new Set(values[0] as string[]);
       return [...this.categories.values()]
-        .filter((row) => slugs.has(row.slug))
+        .filter((row) => slugs.has(row.slug) && row.external_id === null)
         .map((row) => ({ id: row.id, slug: row.slug }));
     }
 
@@ -433,29 +481,30 @@ class FakeCatalogDatabase {
       return found ? [found] : [];
     }
     if (sql.startsWith("INSERT INTO app.products (")) {
-      const [externalId, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive] = values as [
-        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean,
+      const [externalId, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive, , groupId] = values as [
+        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean, string, string | null,
       ];
       const row: ProductRow = {
         attributes: JSON.parse(attributesJson) as Record<string, unknown>, brand_id: brandId, category_id: categoryId,
         deleted_at: isActive ? null : new Date(), description, external_id: externalId,
-        id: randomUUID(), is_active: isActive, name, search_text: searchText, sku, slug,
+        id: randomUUID(), is_active: isActive, name, one_c_group_external_id: groupId ?? null, search_text: searchText, sku, slug,
       };
       this.products.set(row.id, row);
       return [];
     }
     if (sql.startsWith("UPDATE app.products SET sku")) {
-      const [id, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive] = values as [
-        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean,
+      const [id, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive, , groupId] = values as [
+        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean, string, string | null,
       ];
       const row = this.products.get(id)!;
+      row.one_c_group_external_id = groupId ?? null;
       row.sku = sku; row.name = name; row.slug = slug; row.brand_id = brandId; row.category_id = categoryId;
       row.description = description; row.attributes = JSON.parse(attributesJson) as Record<string, unknown>;
       row.search_text = searchText; row.is_active = isActive;
       row.deleted_at = isActive ? null : row.deleted_at ?? new Date();
       return [];
     }
-    if (sql === "SELECT id FROM app.products WHERE external_id = $1") {
+    if (sql.startsWith("SELECT id FROM app.products WHERE external_id = $1")) {
       const found = this.byExternalId(this.products, values[0] as string);
       return found ? [{ id: found.id }] : [];
     }
@@ -501,6 +550,19 @@ class FakeCatalogDatabase {
     }
     if (sql.startsWith("INSERT INTO app.inventory_events (")) {
       this.inventoryEvents.push({ values });
+      return [];
+    }
+
+    // Per-row savepoints are transaction bookkeeping only for this double.
+    if (/^(SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) /u.test(sql)) return [];
+
+    // Full import.xml: hide live 1C products the file no longer lists, unless
+    // the file covers less than half of them.
+    if (sql.startsWith("WITH live AS (") && sql.includes("UPDATE app.products SET is_active = false")) {
+      const listed = new Set(values[0] as string[]);
+      const live = [...this.products.values()].filter((row) => row.is_active && row.deleted_at === null);
+      if (listed.size * 2 < live.length) return [];
+      for (const row of live) if (!listed.has(row.external_id)) row.is_active = false;
       return [];
     }
 
@@ -557,6 +619,7 @@ async function createHarness() {
   } as unknown as ConfigService;
 
   const database = new FakeCatalogDatabase();
+  seedKnownCategories(database);
   const passwords = new PasswordService();
   database.integration.is_enabled = true;
   database.integration.username = USERNAME;
@@ -564,10 +627,13 @@ async function createHarness() {
   database.integration.allowed_networks = ["127.0.0.1/32"];
 
   const audit = { record: async () => undefined } as unknown as AuditService;
-  const rateLimit = { consume: async () => undefined } as unknown as RateLimitService;
+  // A test may replace `consume` to exhaust one budget by its scope name.
+  const limiter = { consume: async (_scope: string, ..._rest: unknown[]): Promise<void> => undefined };
+  const rateLimit = limiter as unknown as RateLimitService;
   const redisValues = new Map<string, string>();
   const redis = {
     client: {
+      del: async (key: string) => (redisValues.delete(key) ? 1 : 0),
       expire: async (key: string) => (redisValues.has(key) ? 1 : 0),
       get: async (key: string) => redisValues.get(key) ?? null,
       set: async (key: string, value: string) => { redisValues.set(key, value); return "OK"; },
@@ -578,32 +644,25 @@ async function createHarness() {
   const integration = new OneCIntegrationService(audit, database as unknown as DatabaseService, passwords, rateLimit);
   const categoryTreeCache = new CatalogCategoryTreeCache();
   const exchange = new OneCExchangeService(categoryTreeCache, database as unknown as DatabaseService, integration);
-  const session = new OneCExchangeSessionService(redis);
+  const session = new OneCExchangeSessionService(redis, integration);
   const tempStorage = new OneCExchangeTempStorageService(config);
   const controller = new OneCExchangeController(config, exchange, integration, rateLimit, session, tempStorage);
 
-  return { controller, database, exchange, storageRoot, tempStorage };
+  return { controller, database, exchange, limiter, storageRoot, tempStorage };
 }
 
 type Harness = Awaited<ReturnType<typeof createHarness>>;
 
-async function applyCatalogRowForRegression(
-  harness: Harness,
-  row: OneCCatalogRow,
-  knownCategories: ReadonlyMap<string, string> = new Map(),
-) {
+async function applyCatalogRowForRegression(harness: Harness, row: OneCCatalogRow) {
   const exchange = harness.exchange as unknown as {
     applyRow(
       client: { query: FakeCatalogDatabase["query"] },
       catalogRow: OneCCatalogRow,
-      categories: ReadonlyMap<string, string>,
+      placement: PlacementContext,
     ): Promise<{ applied: boolean; rejected: boolean; uncategorized: boolean }>;
   };
-  return exchange.applyRow(
-    { query: harness.database.query.bind(harness.database) },
-    row,
-    knownCategories,
-  );
+  const client = { query: harness.database.query.bind(harness.database) };
+  return exchange.applyRow(client, row, await loadPlacementContext(client as never));
 }
 
 async function checkauth(harness: Harness): Promise<{ cookieName: string; cookieValue: string }> {
@@ -685,14 +744,38 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
     await rm(harness.storageRoot, { force: true, recursive: true });
   });
 
+  it("advances only one import poll at a time", async () => {
+    const { cookieName, cookieValue } = await checkauth(harness);
+    const cookie: [string, string] = [cookieName, cookieValue];
+    const filename = "concurrent/import.xml";
+    await uploadFile(harness, cookie, filename, importXml());
+
+    let finish!: () => void;
+    const processing = vi.spyOn(harness.exchange, "processImport").mockImplementationOnce(() => new Promise((resolve) => {
+      finish = () => resolve({ kind: "progress", message: "Продолжить" });
+    }));
+    const poll = () => harness.controller.get({ filename, mode: "import", type: "catalog" }, fakeRequest({ cookie }), fakeReply());
+    const first = poll();
+    try {
+      await vi.waitFor(() => expect(processing).toHaveBeenCalledOnce());
+      await expect(poll()).resolves.toMatch(/^progress\n/u);
+      expect(processing).toHaveBeenCalledOnce();
+    } finally {
+      finish?.();
+      await first;
+      processing.mockRestore();
+      await harness.tempStorage.remove(filename);
+    }
+  });
+
   it("lands categories, brands, products, prices and stock in the database", () => {
     const { database } = harness;
 
-    expect(database.categories.size).toBe(2);
-    const brakes = [...database.categories.values()].find((row) => row.external_id === "cat-brakes")!;
-    const pads = [...database.categories.values()].find((row) => row.external_id === "cat-pads")!;
-    expect(brakes.parent_id).toBeNull();
-    expect(pads.parent_id).toBe(brakes.id);
+    // 1С groups are remembered per base, never created as public categories.
+    expect([...database.categories.values()].some((row) => row.external_id !== null)).toBe(false);
+    expect(database.groups.get("one_c:cat-brakes")).toMatchObject({ group_name: "Тормозная система", parent_group_external_id: null });
+    expect(database.groups.get("one_c:cat-pads")).toMatchObject({ parent_group_external_id: "cat-brakes" });
+    const slugOf = (categoryId: string | null) => (categoryId ? database.categories.get(categoryId)?.slug : undefined);
 
     expect(database.brands.size).toBe(2);
     const brandNames = new Set([...database.brands.values()].map((row) => row.name.toUpperCase()));
@@ -704,8 +787,11 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
     const prod2 = [...database.products.values()].find((row) => row.external_id === "prod-2")!;
     const prod3 = [...database.products.values()].find((row) => row.external_id === "prod-3")!;
     expect(prod1.sku).toBe("BP-001");
-    expect(prod1.category_id).toBe(pads.id);
-    expect(prod3.category_id).toBe(brakes.id);
+    // Group "Колодки тормозные" → the storefront subsection; group "Тормозная
+    // система" + name "Диск тормозной" → the brake discs subsection.
+    expect(slugOf(prod1.category_id)).toBe("tormoznye-kolodki");
+    expect(prod1.one_c_group_external_id).toBe("cat-pads");
+    expect(slugOf(prod3.category_id)).toBe("tormoznye-diski");
 
     const warehouse = [...database.warehouses.values()][0]!;
     expect(warehouse.code).toBe("1C");
@@ -760,7 +846,7 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
   it("keeps is_active and deleted_at synchronized for every CommerceML catalog entity", async () => {
     const { database } = harness;
     const brand = [...database.brands.values()].find((row) => row.name.toUpperCase() === "BOSCH")!;
-    const category = [...database.categories.values()].find((row) => row.external_id === "cat-brakes")!;
+    const group = database.groups.get("one_c:cat-brakes")!;
     const warehouse = [...database.warehouses.values()][0]!;
     const product = [...database.products.values()].find((row) => row.external_id === "prod-3")!;
     const inactiveRows: OneCCatalogRow[] = [
@@ -769,11 +855,9 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
         name: brand.name, slug: brand.slug, version: 1,
       },
       {
-        // Non-null: found by external_id === "cat-brakes" above, so it is
-        // never one of the (external_id: null) seeded fallback categories.
-        description: category.description, entityType: "category", externalId: category.external_id!,
-        isActive: false, name: category.name, parentExternalId: null, slug: category.slug,
-        sortOrder: category.sort_order, version: 1,
+        description: null, entityType: "category", externalId: group.group_external_id,
+        isActive: false, name: group.group_name, parentExternalId: null, slug: "tormoznaya-sistema-x",
+        sortOrder: 1, version: 1,
       },
       {
         code: warehouse.code, entityType: "warehouse", externalId: warehouse.external_id,
@@ -781,7 +865,7 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
       },
       {
         attributes: product.attributes, brandExternalId: brand.external_id,
-        categoryExternalId: category.external_id, description: product.description,
+        categoryExternalId: group.group_external_id, description: product.description,
         entityType: "product", externalId: product.external_id, isActive: false,
         name: product.name, searchText: product.search_text, sku: product.sku,
         slug: product.slug, version: 1,
@@ -791,8 +875,9 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
     for (const row of inactiveRows) {
       await expect(applyCatalogRowForRegression(harness, row)).resolves.toMatchObject({ applied: true });
     }
-    const softDeleted = [brand, category, warehouse, product];
+    const softDeleted = [brand, warehouse, product];
     expect(softDeleted.every((row) => !row.is_active && row.deleted_at instanceof Date)).toBe(true);
+    expect(database.groups.get("one_c:cat-brakes")?.is_active).toBe(false);
     const deletedAtBeforeReplay = softDeleted.map((row) => row.deleted_at!.getTime());
 
     // Replaying an unchanged inactive row is a true no-op: it must neither
@@ -823,6 +908,7 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
     );
 
     expect(softDeleted.every((row) => row.is_active && row.deleted_at === null)).toBe(true);
+    expect(database.groups.get("one_c:cat-brakes")?.is_active).toBe(true);
   });
 
   it("zeroes stock for a product missing from a full snapshot, without deleting it", async () => {
@@ -895,6 +981,22 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
     expect(response).toBe("failure\nАутентификация не пройдена");
   });
 
+  it("rejects a previously issued cookie immediately after the integration is disabled", async () => {
+    const { cookieName, cookieValue } = await checkauth(harness);
+    harness.database.integration.is_enabled = false;
+    try {
+      const response = await harness.controller.post(
+        { filename: "disabled-session.xml", mode: "file", type: "catalog" },
+        fakeRequest({ body: Buffer.from("<audit/>"), cookie: [cookieName, cookieValue] }),
+        fakeReply(),
+      );
+      expect(response).toBe("failure\nАутентификация не пройдена");
+      await expect(harness.tempStorage.readAssembled("disabled-session.xml")).rejects.toThrow();
+    } finally {
+      harness.database.integration.is_enabled = true;
+    }
+  });
+
   it("fails closed on an unknown type/mode instead of guessing", async () => {
     const unknownType = await harness.controller.get(
       { mode: "checkauth", type: "sale" },
@@ -902,6 +1004,148 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
       fakeReply(),
     );
     expect(unknownType).toBe("failure\nПоддерживается только type=catalog");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The journal of turned-away requests. 1С gets the same bare failure whatever
+// was wrong, so the owner learns the cause only from the site: «the address
+// is not among the allowed networks» is the usual one for a cloud 1С, which
+// calls from addresses nobody knows in advance.
+// ---------------------------------------------------------------------------
+
+describe("OneCExchangeController journal of turned-away requests", () => {
+  let harness: Harness;
+  const OUTSIDE_ADDRESS = "203.0.113.9";
+
+  beforeAll(async () => {
+    harness = await createHarness();
+  });
+
+  afterAll(async () => {
+    await rm(harness.storageRoot, { force: true, recursive: true });
+  });
+
+  /** The journal's last entry: recordRequest's parameters, in the order of its INSERT. */
+  const lastEntry = () => {
+    const values = harness.database.requestLog.at(-1)?.values as unknown[] | undefined;
+    if (!values) return null;
+    return { details: JSON.parse(String(values[8])) as unknown, ip: values[2], operation: values[0], statusCode: values[4], succeeded: values[3] };
+  };
+  const from = (ip: string, options: Parameters<typeof fakeRequest>[0]): FastifyRequest => {
+    const request = fakeRequest(options);
+    Object.defineProperty(request, "ip", { value: ip });
+    return request;
+  };
+
+  it("says in the journal that the login or the password was wrong", async () => {
+    await harness.controller.get(
+      { mode: "checkauth", type: "catalog" },
+      fakeRequest({ authorization: basicAuthHeader(USERNAME, "wrong password entirely") }),
+      fakeReply(),
+    );
+    expect(lastEntry()).toEqual({
+      details: { outcome: "rejected", reason: "wrong_credentials" }, ip: CLIENT_IP, operation: "exchange_checkauth", statusCode: 401, succeeded: false,
+    });
+  });
+
+  it("says in the journal that 1С called from an address outside the allowed networks, and which", async () => {
+    const response = await harness.controller.get(
+      { mode: "checkauth", type: "catalog" },
+      from(OUTSIDE_ADDRESS, { authorization: basicAuthHeader(USERNAME, PASSWORD) }),
+      fakeReply(),
+    );
+    expect(response).toBe("failure");
+    expect(lastEntry()).toEqual({
+      details: { outcome: "rejected", reason: "address_not_allowed" }, ip: OUTSIDE_ADDRESS, operation: "exchange_checkauth", statusCode: 401, succeeded: false,
+    });
+  });
+
+  it("never writes the login or the password of a turned-away request", async () => {
+    await harness.controller.get(
+      { mode: "checkauth", type: "catalog" },
+      fakeRequest({ authorization: basicAuthHeader("somebody-else", "their secret 123") }),
+      fakeReply(),
+    );
+    const written = JSON.stringify(harness.database.requestLog.at(-1));
+    expect(written).not.toContain("somebody-else");
+    expect(written).not.toContain("their secret 123");
+  });
+
+  it("writes down a login turned away for too many attempts", async () => {
+    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-auth") throw new Error("too many"); };
+    try {
+      const response = await harness.controller.get(
+        { mode: "checkauth", type: "catalog" },
+        fakeRequest({ authorization: basicAuthHeader(USERNAME, PASSWORD) }),
+        fakeReply(),
+      );
+      expect(response).toBe("failure\nСлишком много попыток входа");
+      expect(lastEntry()).toEqual({
+        details: { outcome: "rate_limited" }, ip: CLIENT_IP, operation: "exchange_checkauth", statusCode: 429, succeeded: false,
+      });
+    } finally {
+      harness.limiter.consume = async () => undefined;
+    }
+  });
+
+  it("writes down a request turned away after the login: the step, the cause, and whether a session was shown", async () => {
+    const { cookieName, cookieValue } = await checkauth(harness);
+
+    // The session is bound to the address the login came from; the next request comes from another one.
+    const withSession = await harness.controller.get(
+      { mode: "init", type: "catalog" },
+      from(OUTSIDE_ADDRESS, { cookie: [cookieName, cookieValue] }),
+      fakeReply(),
+    );
+    expect(withSession).toBe("failure\nАутентификация не пройдена");
+    expect(lastEntry()).toEqual({
+      details: { outcome: "rejected", reason: "no_credentials", session: "not_accepted", step: "init" },
+      ip: OUTSIDE_ADDRESS, operation: "exchange_request", statusCode: 401, succeeded: false,
+    });
+
+    // 1С sends its login with every request: the cause is then the address itself.
+    await harness.controller.post(
+      { filename: "import.xml", mode: "file", type: "catalog" },
+      from(OUTSIDE_ADDRESS, { authorization: basicAuthHeader(USERNAME, PASSWORD), body: Buffer.from("<x/>") }),
+      fakeReply(),
+    );
+    expect(lastEntry()).toEqual({
+      details: { outcome: "rejected", reason: "address_not_allowed", session: "absent", step: "file" },
+      ip: OUTSIDE_ADDRESS, operation: "exchange_request", statusCode: 401, succeeded: false,
+    });
+  });
+
+  it("writes down an exchange stopped for sending too many requests", async () => {
+    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-request") throw new Error("too many"); };
+    try {
+      const response = await harness.controller.get({ mode: "import", type: "catalog" }, fakeRequest({}), fakeReply());
+      expect(response).toBe("failure\nСлишком много запросов");
+      expect(lastEntry()).toEqual({
+        details: { outcome: "rate_limited", step: "import" }, ip: CLIENT_IP, operation: "exchange_request", statusCode: 429, succeeded: false,
+      });
+    } finally {
+      harness.limiter.consume = async () => undefined;
+    }
+  });
+
+  it("stops writing about one address once the journal's own budget for it is spent, and still turns the request away", async () => {
+    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-journal") throw new Error("too many"); };
+    try {
+      const before = harness.database.requestLog.length;
+      const response = await harness.controller.get({ mode: "init", type: "catalog" }, from(OUTSIDE_ADDRESS, {}), fakeReply());
+      expect(response).toBe("failure\nАутентификация не пройдена");
+      expect(harness.database.requestLog.length).toBe(before);
+    } finally {
+      harness.limiter.consume = async () => undefined;
+    }
+  });
+
+  it("writes nothing about a request that is let in", async () => {
+    const { cookieName, cookieValue } = await checkauth(harness);
+    const before = harness.database.requestLog.length;
+    await init(harness, [cookieName, cookieValue]);
+    expect(harness.database.requestLog.length).toBe(before);
   });
 });
 
@@ -916,15 +1160,17 @@ describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import
 // stay unaffected by.
 // ---------------------------------------------------------------------------
 
+/** Migrations 0024 + 0036: every storefront section and subsection plus «Без категории». */
 function seedKnownCategories(database: FakeCatalogDatabase): void {
-  const seeds = [
-    ...KNOWN_CATALOG_CATEGORIES,
-    { label: UNCATEGORIZED_CATEGORY_LABEL, slug: UNCATEGORIZED_CATEGORY_SLUG },
-  ];
-  for (const category of seeds) {
+  if ([...database.categories.values()].some((row) => row.slug === UNCATEGORIZED_CATEGORY_SLUG)) return;
+  const label = new Map<string, string>([
+    ...STOREFRONT_TAXONOMY.map((section) => [section.slug, section.label] as const),
+    [UNCATEGORIZED_CATEGORY_SLUG, UNCATEGORIZED_CATEGORY_LABEL],
+  ]);
+  for (const slug of STOREFRONT_CATEGORY_SLUGS) {
     const row: CategoryRow = {
       deleted_at: null, description: null, external_id: null, id: randomUUID(),
-      is_active: true, name: category.label, parent_id: null, slug: category.slug, sort_order: 9000,
+      is_active: true, name: label.get(slug) ?? slug, parent_id: null, slug, sort_order: 9000,
     };
     database.categories.set(row.id, row);
   }
@@ -973,7 +1219,7 @@ function importXmlForCategoryFallback(): string {
       <Товар>
         <Ид>prod-unrecognisable</Ид>
         <Артикул>STK-001</Артикул>
-        <Наименование>Наклейка декоративная на бампер</Наименование>
+        <Наименование>Сувенир с логотипом магазина</Наименование>
       </Товар>
     </Товары>
   </Каталог>
@@ -1005,18 +1251,33 @@ describe("OneCExchangeService category fallback (AN30-013)", () => {
     return category?.slug;
   }
 
-  it("lets a real, specific 1С group win over what the product's own name would infer", () => {
-    // "Фильтр масляный Bosch" would itself infer to "filtry" (see
-    // catalog-known-categories.test.ts), but this product is filed under
-    // the real, specific "Тормозная система" group -- 1С's own grouping
-    // must win regardless of what the name suggests.
-    const brakes = [...harness.database.categories.values()].find((row) => row.external_id === "cat-brakes")!;
-    expect(categorySlugFor("prod-control")).toBe(brakes.slug);
-    expect(categorySlugFor("prod-control")).not.toBe("filtry");
+  it("lets a name that leads with its part type beat a 1С group of another section", () => {
+    // "Фильтр масляный Bosch" filed under "Тормозная система" in 1С is a
+    // misfiled filter: the leading part type decides (a staff mapping of the
+    // group would still win).
+    expect(categorySlugFor("prod-control")).toBe("maslyanye-filtry");
+  });
+
+  it("never creates a public category from a 1С group", () => {
+    expect([...harness.database.categories.values()].some((row) => row.external_id !== null)).toBe(false);
+  });
+
+  it("follows a staff mapping of the group on the next import", async () => {
+    const filters = [...harness.database.categories.values()].find((row) => row.slug === "filtry")!;
+    harness.database.groups.get("one_c:cat-junk")!.category_id = filters.id;
+    await driveFullSequence(harness, "import_files/category-fallback/import2.xml",
+      importXmlForCategoryFallback().replace("2026-08-10T03:00:00", "2026-08-11T03:00:00"));
+    // «Антифриз G12» in a group staff pointed at «Фильтры» goes there; no
+    // filter subsection matches its name, so it stays in the section.
+    expect(categorySlugFor("prod-junk")).toBe("filtry");
+    harness.database.groups.get("one_c:cat-junk")!.category_id = null;
+    await driveFullSequence(harness, "import_files/category-fallback/import3.xml",
+      importXmlForCategoryFallback().replace("2026-08-10T03:00:00", "2026-08-12T03:00:00"));
+    expect(categorySlugFor("prod-junk")).toBe("antifriz");
   });
 
   it("falls back to name inference when a product has no <Группы> at all", () => {
-    expect(categorySlugFor("prod-nogroup")).toBe("akkumulyatory");
+    expect(categorySlugFor("prod-nogroup")).toBe("akkumulyatory-legkovye");
   });
 
   it("falls back to name inference when the group id is dangling (absent from <Классификатор>)", () => {
@@ -1039,5 +1300,75 @@ describe("OneCExchangeService category fallback (AN30-013)", () => {
     // group *did* resolve, it was just generic -- that is not a 1С data
     // problem to flag, only a signal to fall through to name inference.
     expect(run.rows_rejected).toBe(1);
+  });
+});
+
+describe("OneCExchangeService warehouses, split files and shared brands", () => {
+  let harness: Harness;
+  const balance = (productExternalId: string, warehouseExternalId: string) => {
+    const product = [...harness.database.products.values()].find((row) => row.external_id === productExternalId);
+    const warehouse = [...harness.database.warehouses.values()].find((row) => row.external_id === warehouseExternalId);
+    return product && warehouse ? harness.database.balances.get(`${product.id}:${warehouse.id}`)?.quantity_on_hand : undefined;
+  };
+  const offers = (timestamp: string, body: string, full = true) => `<?xml version="1.0" encoding="UTF-8"?>
+<КоммерческаяИнформация ДатаФормирования="${timestamp}"><ПакетПредложений СодержитТолькоИзменения="${full ? "false" : "true"}">
+<Склады><Склад><Ид>wa</Ид><Наименование>Склад А</Наименование></Склад><Склад><Ид>wb</Ид><Наименование>Склад Б</Наименование></Склад></Склады>
+<Предложения>${body}</Предложения></ПакетПредложений></КоммерческаяИнформация>`;
+
+  beforeAll(async () => {
+    harness = await createHarness();
+    await driveFullSequence(harness, "import.xml", importXml());
+    await driveFullSequence(harness, "offers.xml", offers("2026-08-02T01:00:00", `
+      <Предложение><Ид>prod-1</Ид><Цены><Цена><ЦенаЗаЕдиницу>100</ЦенаЗаЕдиницу></Цена></Цены>
+        <Склад ИдСклада="wa" КоличествоНаСкладе="3"/><Склад ИдСклада="wb" КоличествоНаСкладе="2"/></Предложение>
+      <Предложение><Ид>prod-2</Ид><Цены><Цена><ЦенаЗаЕдиницу>200</ЦенаЗаЕдиницу></Цена></Цены>
+        <Склад ИдСклада="wb" КоличествоНаСкладе="4"/></Предложение>
+      <Предложение><Ид>prod-3</Ид><Цены><Цена><ЦенаЗаЕдиницу>300</ЦенаЗаЕдиницу></Цена></Цены>
+        <Остатки><Остаток><Склад><Ид>wa</Ид><Количество>6</Количество></Склад></Остаток></Остатки></Предложение>`));
+  });
+
+  afterAll(async () => {
+    await rm(harness.storageRoot, { force: true, recursive: true });
+  });
+
+  it("keeps stock per named 1C warehouse with the warehouse's own name", () => {
+    expect(balance("prod-1", "wa")).toBe(3);
+    expect(balance("prod-1", "wb")).toBe(2);
+    expect(balance("prod-3", "wa")).toBe(6);
+    expect([...harness.database.warehouses.values()].find((row) => row.external_id === "wb")?.name).toBe("Склад Б");
+  });
+
+  it("accepts the separate prices*.xml file of a 2.08+ export and zeroes nothing from a stock-less file", async () => {
+    await driveFullSequence(harness, "prices0_1.xml", offers("2026-08-02T02:00:00", `
+      <Предложение><Ид>prod-1</Ид><Цены><Цена><ЦенаЗаЕдиницу>150</ЦенаЗаЕдиницу></Цена></Цены></Предложение>`));
+    expect(balance("prod-2", "wb")).toBe(4);
+    expect(balance("prod-3", "wa")).toBe(6);
+    const prod1 = [...harness.database.products.values()].find((row) => row.external_id === "prod-1")!;
+    expect([...harness.database.prices.values()].find((row) => row.product_id === prod1.id && row.valid_to === null)?.amount_kopeks).toBe(15000);
+  });
+
+  it("a full rests*.xml zeroes a warehouse the offer stopped listing and products missing from the file", async () => {
+    await driveFullSequence(harness, "rests0_1.xml", offers("2026-08-02T03:00:00", `
+      <Предложение><Ид>prod-1</Ид><Остатки><Остаток><Склад><Ид>wa</Ид><Количество>1</Количество></Склад></Остаток></Остатки></Предложение>
+      <Предложение><Ид>prod-3</Ид><Цены><Цена><ЦенаЗаЕдиницу>300</ЦенаЗаЕдиницу></Цена></Цены></Предложение>`));
+    expect(balance("prod-1", "wa")).toBe(1);
+    expect(balance("prod-1", "wb")).toBe(0);
+    expect(balance("prod-2", "wb")).toBe(0);
+    // Present with a price only: its stock is not known from this file, so it stays.
+    expect(balance("prod-3", "wa")).toBe(6);
+  });
+
+  it("does not rename a shared brand when another file spells it in a different case", async () => {
+    await driveFullSequence(harness, "import_case.xml", importXml("2026-08-03T00:00:00").replace(/<Наименование>Bosch<\/Наименование>/gu, "<Наименование>BOSCH</Наименование>"));
+    expect([...harness.database.brands.values()].map((row) => row.name).sort()).toEqual(["Bosch", "NGK"]);
+  });
+
+  it("refuses an unknown file name but recognises every offers-type name", async () => {
+    const { detectFileKind } = await import("./one-c-exchange.controller.js");
+    expect(detectFileKind("import_files/x/prices___1.xml")).toBe("offers");
+    expect(detectFileKind("rests0_1.xml")).toBe("offers");
+    expect(detectFileKind("import0_1.xml")).toBe("catalog");
+    expect(detectFileKind("import_files/ab/photo.jpg")).toBeNull();
+    expect(detectFileKind("documents.xml")).toBeNull();
   });
 });

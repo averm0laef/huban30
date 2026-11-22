@@ -11,7 +11,9 @@ import { randomBytes } from "node:crypto";
 
 import { Injectable } from "@nestjs/common";
 
+import { OneCIntegrationService } from "../catalog/one-c-integration.service.js";
 import { RedisService } from "../infrastructure/redis.service.js";
+import type { OneCSource } from "./one-c-source.js";
 
 // 1C is expected to drive checkauth -> init -> file (many chunks) -> import
 // (many polls) back to back for one export, but a 30-40k SKU catalog can
@@ -19,30 +21,66 @@ import { RedisService } from "../infrastructure/redis.service.js";
 // short enough that an abandoned session does not linger forever.
 const SESSION_TTL_SECONDS = 2 * 60 * 60;
 
+interface ExchangeSession {
+  source?: OneCSource;
+  authRevision: string;
+  expiresAt: number;
+  ipAddress: string;
+}
+
 @Injectable()
 export class OneCExchangeSessionService {
   readonly cookieName = "an30_1c_exchange";
 
-  constructor(private readonly redis: RedisService) {}
+  constructor(
+    private readonly redis: RedisService,
+    private readonly integration: OneCIntegrationService,
+  ) {}
 
-  async issue(ipAddress: string): Promise<string> {
+  async issue(ipAddress: string, authRevision: string, source: OneCSource = "one_c"): Promise<string> {
     const token = randomBytes(32).toString("base64url");
     await this.redis.ensureConnected();
     // Bind the opaque cookie to the source address that passed the CIDR
     // allowlist during checkauth. Otherwise a copied token would bypass the
     // integration's IP restriction for its full two-hour lifetime.
-    await this.redis.client.set(this.key(token), ipAddress, "EX", SESSION_TTL_SECONDS);
+    const session: ExchangeSession = {
+      source,
+      authRevision,
+      expiresAt: Date.now() + SESSION_TTL_SECONDS * 1_000,
+      ipAddress,
+    };
+    await this.redis.client.set(this.key(token), JSON.stringify(session), "EX", SESSION_TTL_SECONDS);
     return token;
   }
 
-  /** Verifies a session token and slides its expiry so a long chunked import does not time out mid-poll. */
-  async verify(token: string | undefined, ipAddress: string): Promise<boolean> {
-    if (!token) return false;
+  /** Absolute expiry cannot be extended by requests; settings changes revoke existing sessions. */
+  async verify(token: string | undefined, ipAddress: string, source: OneCSource = "one_c"): Promise<boolean> {
+    if (!token || !/^[A-Za-z0-9_-]{43}$/u.test(token)) return false;
     await this.redis.ensureConnected();
-    const boundIp = await this.redis.client.get(this.key(token));
-    if (boundIp !== ipAddress) return false;
-    const extended = await this.redis.client.expire(this.key(token), SESSION_TTL_SECONDS);
-    return extended === 1;
+    const stored = await this.redis.client.get(this.key(token));
+    if (!stored) return false;
+    let session: ExchangeSession;
+    try {
+      session = JSON.parse(stored) as ExchangeSession;
+      if (!session || typeof session.authRevision !== "string" || !/^\d+$/u.test(session.authRevision)
+        || typeof session.ipAddress !== "string" || !Number.isSafeInteger(session.expiresAt)) {
+        throw new Error("Invalid exchange session");
+      }
+    } catch {
+      // Tokens issued before revision binding are deliberately invalidated on upgrade.
+      await this.redis.client.del(this.key(token));
+      return false;
+    }
+    if (session.ipAddress !== ipAddress) return false;
+    if ((session.source ?? "one_c") !== source) return false;
+    const currentRevision = source === "one_c" ? await this.integration.currentExchangeSessionRevision(ipAddress)
+      : await this.integration.currentExchangeSessionRevision(ipAddress,source);
+    if (Date.now() >= session.expiresAt
+      || session.authRevision !== currentRevision) {
+      await this.redis.client.del(this.key(token));
+      return false;
+    }
+    return true;
   }
 
   private key(token: string): string {

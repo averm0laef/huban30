@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, truncate } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -28,6 +28,15 @@ describe("OneCExchangeTempStorageService", () => {
     const assembled = await service.readAssembled("import_files/20260806/import.xml");
     expect(assembled.toString("utf8")).toBe("<КоммерческаяИнформация/>");
   });
+  it("isolates same-named files and init cleanup between two information bases",async()=>{
+    await service.appendChunk("import.xml",Buffer.from("primary"),"one_c");
+    await service.appendChunk("import.xml",Buffer.from("secondary"),"one_c_secondary");
+    await expect(service.readAssembled("import.xml","one_c")).resolves.toEqual(Buffer.from("primary"));
+    await expect(service.readAssembled("import.xml","one_c_secondary")).resolves.toEqual(Buffer.from("secondary"));
+    await service.purgeAll("one_c_secondary");
+    await expect(service.readAssembled("import.xml","one_c")).resolves.toEqual(Buffer.from("primary"));
+    await expect(service.readAssembled("import.xml","one_c_secondary")).rejects.toThrow();
+  });
 
   it("preserves adjacent chunks even when their bytes are identical", async () => {
     await service.appendChunk("offers.xml", Buffer.from("AAAA"));
@@ -45,12 +54,10 @@ describe("OneCExchangeTempStorageService", () => {
     expect(assembled.toString("utf8")).toBe("AAAA");
   });
 
-  it("computes a stable sha256 over the assembled file", async () => {
-    await service.appendChunk("checksum.xml", Buffer.from("hello"));
-    const first = await service.checksum("checksum.xml");
-    const second = await service.checksum("checksum.xml");
-    expect(first.equals(second)).toBe(true);
-    expect(first).toHaveLength(32);
+  it("only reads an assembled file when it fits the caller's size limit", async () => {
+    await service.appendChunk("image.png", Buffer.from("hello"));
+    await expect(service.readAssembled("image.png", "one_c", 4)).rejects.toThrow(RangeError);
+    await expect(service.readAssembled("image.png", "one_c", 5)).resolves.toEqual(Buffer.from("hello"));
   });
 
   it("rejects a filename that tries to escape the storage root", async () => {
@@ -70,5 +77,21 @@ describe("OneCExchangeTempStorageService", () => {
     await service.remove("import.xml");
     await expect(service.readAssembled("import.xml")).rejects.toThrow();
     await expect(service.readAssembled("offers.xml")).resolves.toEqual(Buffer.from("b"));
+  });
+
+  it("counts files left on disk after a restart and enforces the quota across concurrent uploads", async () => {
+    await service.appendChunk("old/images.bin", Buffer.from("old"));
+    await truncate(path.join(root, "one-c-exchange", "incoming", "one_c", "old/images.bin"), 4 * 1024 ** 3 - 1);
+    service = new OneCExchangeTempStorageService(new ConfigService({ STORAGE_ROOT: root }));
+
+    const results = await Promise.allSettled([
+      service.appendChunk("primary-first.xml", Buffer.from("a")),
+      service.appendChunk("primary-second.xml", Buffer.from("b")),
+      service.appendChunk("secondary.xml", Buffer.from("c"), "one_c_secondary"),
+    ]);
+    expect(results.map((result) => result.status)).toEqual(["fulfilled", "rejected", "fulfilled"]);
+    expect(results[1]).toMatchObject({ reason: { message: expect.stringContaining("квота") } });
+    await service.remove("old/images.bin");
+    await expect(service.appendChunk("primary-second.xml", Buffer.from("b"))).resolves.toBeUndefined();
   });
 });
