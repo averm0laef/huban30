@@ -30,6 +30,9 @@ describe("storefront input schemas", () => {
     expect(AccountUpdateSchema.safeParse({}).success).toBe(false);
     expect(AccountUpdateSchema.safeParse({ role: "admin" }).success).toBe(false);
     expect(AccountUpdateSchema.safeParse({ displayName: "Новый клиент" }).success).toBe(true);
+    for (const displayName of ["Иван\nПетров", "Иван\u202Eворт", "Иван\u2066Петров", "Иван\u0085Петров"]) {
+      expect(AccountUpdateSchema.safeParse({ displayName }).success).toBe(false);
+    }
   });
 
   it("bounds current and new passwords", () => {
