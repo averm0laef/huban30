@@ -12,6 +12,7 @@ const optionalPositiveInteger = z.preprocess(
 );
 
 const WorkerEnvironmentSchema = z.object({
+  DEPLOYMENT_ENVIRONMENT: z.enum(["development", "staging", "production"]).default("development"),
   DATA_ENCRYPTION_KEY: z.string().min(32).optional(),
   DATA_ENCRYPTION_KEY_FILE: z.string().min(1).optional(),
   DATABASE_URL: z.string().url().optional(),
@@ -90,6 +91,7 @@ export function readWorkerConfig(raw: NodeJS.ProcessEnv) {
   }
 
   return {
+    deploymentEnvironment: environment.DEPLOYMENT_ENVIRONMENT,
     databaseUrl: environment.DATABASE_URL ?? [
       `postgresql://${encodeURIComponent(environment.DB_USER)}`,
       `:${encodeURIComponent(databasePassword ?? "an30_dev")}`,

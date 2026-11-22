@@ -29,9 +29,9 @@ export class NotificationProviders {
     return Boolean(this.mailer);
   }
 
-  async sendEmail(recipient: string, subject: string, text: string): Promise<void> {
+  async sendEmail(recipient: string, subject: string, text: string, html?: string): Promise<void> {
     if (!this.mailer || !this.config.smtp.from) throw new Error("smtp_disabled");
-    await this.mailer.sendMail({ from: this.config.smtp.from, subject, text, to: recipient });
+    await this.mailer.sendMail({ from: this.config.smtp.from, subject, text, to: recipient, ...(html ? { html } : {}) });
   }
 
   async sendStaffAlert(text: string, idempotencyKey: string): Promise<number> {

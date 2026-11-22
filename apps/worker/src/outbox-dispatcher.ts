@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
+import { renderBrandedEmailHtml, renderBrandedEmailText, type BrandedEmail } from "./email-template.js";
 
 import type { readWorkerConfig } from "./config.js";
 import { NotificationProviders } from "./notification-providers.js";
@@ -67,20 +68,58 @@ export function buildAuthEmailTemplate(
   topic: string,
   token: string,
   publicBaseUrl: string,
-): { subject: string; text: string } {
-  const routes: Record<string, { mode: string; subject: string }> = {
-    "auth.email.verify": { mode: "verify", subject: "Подтверждение email АН-30" },
-    "auth.password.reset": { mode: "reset", subject: "Восстановление пароля АН-30" },
-    "auth.staff.invitation": { mode: "staff-accept", subject: "Приглашение в команду АН-30" },
+): { html: string; subject: string; text: string } {
+  const routes: Record<string, { mode: string; subject: string; email: Omit<BrandedEmail, "action"> & { actionLabel: string } }> = {
+    "auth.email.verify": {
+      mode: "verify",
+      subject: "Подтверждение email АН-30",
+      email: {
+        actionLabel: "Подтвердить email",
+        lead: "Остался один шаг, чтобы открыть личный кабинет.",
+        note: "Ссылка одноразовая. Если вы не регистрировались на сайте АН-30, просто удалите письмо — аккаунт не будет создан.",
+        paragraphs: ["Здравствуйте! Вы зарегистрировались в магазине автозапчастей АН-30. Подтвердите адрес — и сможете следить за заказами, сохранить свой автомобиль и переписываться с магазином."],
+        title: "Подтвердите email",
+      },
+    },
+    "auth.password.reset": {
+      mode: "reset",
+      subject: "Восстановление пароля АН-30",
+      email: {
+        actionLabel: "Задать новый пароль",
+        lead: "Вы запросили восстановление пароля.",
+        note: "Ссылка одноразовая. Если вы не запрашивали восстановление, ничего не делайте — пароль останется прежним.",
+        paragraphs: ["Здравствуйте! Чтобы задать новый пароль для личного кабинета АН-30, нажмите кнопку ниже."],
+        title: "Новый пароль",
+      },
+    },
+    "auth.staff.invitation": {
+      mode: "staff-accept",
+      subject: "Приглашение в команду АН-30",
+      email: {
+        actionLabel: "Принять приглашение",
+        lead: "Вас пригласили в рабочее место магазина.",
+        note: "Ссылка одноразовая и действует ограниченное время. Если вы не ждали приглашения, удалите письмо.",
+        paragraphs: ["Здравствуйте! Администратор магазина АН-30 пригласил вас в рабочее место. Примите приглашение, задайте пароль и подключите вход по коду из приложения."],
+        title: "Приглашение в команду",
+      },
+    },
   };
   const template = routes[topic];
   if (!template) throw new Error("unsupported_auth_topic");
   const url = new URL("/auth", publicBaseUrl);
   url.searchParams.set("mode", template.mode);
   url.hash = new URLSearchParams({ token }).toString();
+  const email: BrandedEmail = {
+    action: { label: template.email.actionLabel, url: url.toString() },
+    lead: template.email.lead,
+    note: template.email.note,
+    paragraphs: template.email.paragraphs,
+    title: template.email.title,
+  };
   return {
+    html: renderBrandedEmailHtml(email, publicBaseUrl),
     subject: template.subject,
-    text: `Откройте одноразовую ссылку: ${url.toString()}\n\nЕсли вы не запрашивали это действие, проигнорируйте письмо.`,
+    text: renderBrandedEmailText(email),
   };
 }
 
@@ -164,7 +203,7 @@ export class OutboxDispatcher {
         `${event.topic}:${event.aggregate_id}`,
       );
       const template = this.authTemplate(event.topic, token);
-      await this.providers.sendEmail(payload.recipient, template.subject, template.text);
+      await this.providers.sendEmail(payload.recipient, template.subject, template.text, template.html);
       return;
     }
     if (event.topic === "chat.staff.notify" || event.topic === "contact.staff.notify") {
@@ -177,7 +216,7 @@ export class OutboxDispatcher {
     throw new Error("unsupported_outbox_topic");
   }
 
-  private authTemplate(topic: string, token: string): { subject: string; text: string } {
+  private authTemplate(topic: string, token: string): { html: string; subject: string; text: string } {
     return buildAuthEmailTemplate(topic, token, this.config.notifications.publicBaseUrl);
   }
 

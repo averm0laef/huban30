@@ -119,6 +119,11 @@ describe("ingestArticleCrosses", () => {
     expect(sql).toContain("ON CONFLICT (article_a, brand_a, article_b, brand_b) DO UPDATE");
     expect(sql).toContain("app.article_crosses.status = 'confirmed'");
     expect(sql).toContain("WHEN EXCLUDED.status = 'confirmed' THEN EXCLUDED.source");
+    // One rule for every writer (migration 0042): a staff decision is final,
+    // a second source confirms; a rejected pair keeps its provenance.
+    expect(sql).toContain("app.article_cross_merged_status(");
+    expect(sql).toContain("WHEN app.article_crosses.status = 'rejected' THEN app.article_crosses.source");
+    expect(sql).toContain("app.article_cross_relation(incoming.brand_a, incoming.brand_b)");
     // article_a/article_b arrays (positions 1 and 5)
     expect(values[0]).toEqual(["OC90"]);
     expect(values[4]).toEqual(["W9142"]);

@@ -10,6 +10,8 @@ import { WorkerJobSchema } from "@an30/contracts";
 import { ingestArticleCrosses } from "./article-cross-ingest.js";
 import { readWorkerConfig } from "./config.js";
 import { OutboxDispatcher } from "./outbox-dispatcher.js";
+import { HubDispatcher } from "./hub-dispatcher.js";
+import { createSearchIndexer } from "./search-index/create-search-indexer.js";
 
 const config = readWorkerConfig(process.env);
 const logger = pino({ name: "an30-worker", level: process.env.LOG_LEVEL ?? "info" });
@@ -32,30 +34,13 @@ const worker = new Worker(
   { connection: redis, concurrency: 4 },
 );
 const outbox = new OutboxDispatcher(database, config, logger);
+const hub = new HubDispatcher(database, config.dataEncryptionKey, config.deploymentEnvironment, logger);
+const hubTimer = setInterval(() => void hub.poll(), 1_000);
+hubTimer.unref();
+void hub.poll();
 
 worker.on("completed", (job) => logger.info({ jobId: job.id, jobName: job.name }, "Job completed"));
 worker.on("failed", (job, error) => logger.error({ error, jobId: job?.id, jobName: job?.name }, "Job failed"));
-
-let expiryRunning = false;
-async function releaseExpiredReservations() {
-  if (expiryRunning) return;
-  expiryRunning = true;
-  try {
-    const result = await database.query<{ expired_count: number }>(
-      "SELECT app.expire_stock_reservations(100) AS expired_count",
-    );
-    const expiredCount = result.rows[0]?.expired_count ?? 0;
-    if (expiredCount > 0) logger.info({ expiredCount }, "Expired stock reservations released");
-  } catch (error) {
-    logger.error({ error }, "Reservation expiry sweep failed");
-  } finally {
-    expiryRunning = false;
-  }
-}
-
-const expiryTimer = setInterval(() => void releaseExpiredReservations(), 30_000);
-expiryTimer.unref();
-void releaseExpiredReservations();
 
 let contactRetentionRunning = false;
 async function anonymizeExpiredContactRequests() {
@@ -106,6 +91,13 @@ const supplierWaitlistRetentionTimer = setInterval(
 supplierWaitlistRetentionTimer.unref();
 void anonymizeExpiredSupplierWaitlistRequests();
 
+// Optional search engine (docs/SEARCH_ENGINE.md); null unless SEARCH_ENGINE=opensearch.
+const searchIndexer = createSearchIndexer(database, process.env, logger);
+const searchIndexTimer = searchIndexer
+  ? setInterval(() => void searchIndexer.drainQueue().catch((error: unknown) => logger.warn({ error }, "Search index drain failed")), 5_000)
+  : null;
+searchIndexTimer?.unref();
+
 const outboxTimer = setInterval(() => void outbox.poll(), 5_000);
 outboxTimer.unref();
 void outbox.poll();
@@ -153,10 +145,12 @@ healthServer.listen(config.healthPort, "0.0.0.0", () => {
 async function shutdown(signal: string) {
   logger.info({ signal }, "Worker shutdown started");
   healthServer.close();
-  clearInterval(expiryTimer);
   clearInterval(contactRetentionTimer);
   clearInterval(supplierWaitlistRetentionTimer);
   clearInterval(outboxTimer);
+  if (searchIndexTimer) clearInterval(searchIndexTimer);
+  clearInterval(hubTimer);
+  await hub.stop();
   await worker.close();
   await database.end();
   await redis.quit();

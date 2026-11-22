@@ -1,20 +1,22 @@
-FROM node:24.12.0-alpine AS build
+FROM node:24.22.3-alpine AS build
 RUN npm install --global pnpm@11.9.0
 WORKDIR /workspace
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/worker/package.json ./apps/worker/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
+COPY packages/messaging/package.json ./packages/messaging/package.json
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
   pnpm --filter @an30/worker... install --frozen-lockfile --trust-lockfile
 COPY tsconfig.base.json ./tsconfig.base.json
 COPY apps/worker ./apps/worker
 COPY packages/contracts ./packages/contracts
-RUN pnpm --filter @an30/contracts build && pnpm --filter @an30/worker build
+COPY packages/messaging ./packages/messaging
+RUN pnpm --filter @an30/contracts build && pnpm --filter @an30/messaging build && pnpm --filter @an30/worker build
 RUN --mount=type=cache,id=an30-pnpm-store,target=/pnpm/store \
   pnpm --filter @an30/worker --prod deploy --trust-lockfile /opt/an30/worker
 
-FROM node:24.12.0-alpine AS runtime
+FROM node:24.22.3-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S an30 && adduser -S -G an30 an30
