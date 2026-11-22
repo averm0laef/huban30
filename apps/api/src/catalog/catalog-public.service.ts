@@ -6,6 +6,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { fileTypeFromBuffer } from "file-type";
 
@@ -14,6 +15,7 @@ import {
   CatalogImageIdentifierSchema,
   CatalogProductIdentifierSchema,
   CatalogProductsQuerySchema,
+  publicProductName,
   type CatalogProductsQuery,
 } from "@an30/contracts";
 
@@ -26,7 +28,24 @@ import {
 } from "../security/public-media.js";
 import { buildCategoryTree } from "./catalog-category-tree.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
-import { alternateSearchQueries, foldYo, normalizeArticleNumber } from "./catalog-search-normalize.js";
+import { alternateSearchQueries, catalogPartsAlias, foldYo } from "./catalog-search-normalize.js";
+import { catalogSearchIdentity } from "./catalog-search-identity.js";
+import {
+  catalogSearchCte,
+  catalogSearchFilter,
+  catalogSearchRelevanceOrder,
+  CROSS_MATCH,
+  type CatalogSearchInput,
+  escapeLike,
+  SqlParameters,
+} from "./catalog-search-sql.js";
+import { searchTokenPlan } from "./catalog-search-tokens.js";
+import {
+  catalogSearchIsFreeText,
+  CATALOG_SEARCH_ENGINE,
+  type CatalogSearchEngine,
+  catalogSearchEngineFromEnvironment,
+} from "./catalog-search-engine.js";
 import { VISIBLE_CATEGORIES_CTE, visibleCategoriesWithSubtreeCte } from "./catalog-visibility.sql.js";
 
 const PUBLIC_IMAGE_MIME_TYPES = ["image/avif", "image/jpeg", "image/png", "image/webp"] as const;
@@ -111,109 +130,9 @@ const PUBLIC_PRODUCT_FROM = `FROM app.products AS product
       AND warehouse.is_active AND warehouse.deleted_at IS NULL
   ) AS stock ON true`;
 
-// $8 is the query normalised into an article key (see catalog-search-normalize.ts):
-// case-folded, Cyrillic/Latin-homoglyph-folded, punctuation-stripped, compared
-// against the generated app.products.sku_normalized column (migration 0016).
-// This is what lets "W 914/2", "w914-2" and a Cyrillic-"С"-for-Latin-"C" typo
-// all find the same part regardless of how 1C or the customer formatted it —
-// it subsumes (and replaces) a plain case-insensitive sku prefix check.
-// The trigram similarity() fallback on the name only ever matters once every
-// exact/prefix article and substring/full-text branch above it has already
-// failed, so a fuzzy name hit can add recall but can never hide a real match.
-//
-// cross_equivalents (see ARTICLE_CROSS_EQUIVALENTS_CTE) widens this one step
-// further: every *confirmed* app.article_crosses equivalent of $8, so a
-// search for an OEM number also finds the shop's own product listed only
-// under an aftermarket number, and vice versa. It is a CTE joined into the
-// same statement rather than a second query — see that constant's comment.
-//
-// $9 is alternateSearchQueries($1) (catalog-search-normalize.ts): 0-2 extra
-// Cyrillic candidate strings recovering a query typed in Latin by mistake --
-// a phonetic transliteration ("filtr" -> "филтр") and a keyboard-layout swap
-// ("abkmnh" -> "фильтр"), see that function's doc for why both are needed
-// and why they are computed in TypeScript once per request rather than as
-// SQL. Matched exactly the same three ways ($1 already is above: substring,
-// trigram, full-text) against each candidate via unnest, so this is still
-// one statement, not a second query — same length>=3 low-precision guard
-// applies to each candidate individually (see MIN_ALTERNATE_QUERY_LENGTH).
-//
-// $1, $2 and every $9 candidate are already ё/Ё-folded (foldYo, applied in
-// products() below) by the time they reach this statement, and compared
-// against product.name_folded / product.search_text_folded rather than the
-// raw name/search_text columns — two generated columns migration 0025 adds,
-// folded the identical way (app.fold_yo). Almost no customer types ё, so
-// without folding both sides a product name stored with a ё (as 1C exports
-// it) would be unreachable by the near-universal plain spelling — see that
-// migration's comment.
-//
-// The extra to_tsvector('russian', ...) branch below is additive real
-// (Snowball) stemming — PostgreSQL's built-in 'russian' text-search config,
-// no extension needed — recovering *regular* Russian word-form variation
-// ("фильтры" now finds "Фильтр ...") the 'simple' branch above it cannot,
-// since 'simple' never stems. It does not recover every word form: see
-// migration 0025's comment and catalog-public.service.test.ts for
-// "щёток" -> "щётка", a deliberate, documented gap (an epenthetic vowel, not
-// a suffix, so there is nothing for a suffix-stripping stemmer to strip).
-const PUBLIC_PRODUCT_FILTERS = `product.is_active AND product.deleted_at IS NULL
-  AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
-  AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
-  AND ($1::text IS NULL
-    OR ($8<>'' AND product.sku_normalized LIKE $8 || '%')
-    OR (product.sku_normalized<>'' AND EXISTS (
-      SELECT 1 FROM cross_equivalents
-      WHERE cross_equivalents.article=product.sku_normalized
-        AND cross_equivalents.brand=app.normalize_brand(brand.name)
-    ))
-    OR (length($1)>=3 AND product.name_folded ILIKE '%' || $2 || '%' ESCAPE '\\')
-    OR (length($1)>=3 AND similarity(product.name_folded, $1) > 0.25)
-    OR to_tsvector('simple',product.search_text_folded)
-      @@ websearch_to_tsquery('simple',$1)
-    OR to_tsvector('russian',product.search_text_folded)
-      @@ websearch_to_tsquery('russian',$1)
-    OR (length($1)>=3 AND EXISTS (
-      SELECT 1 FROM unnest($9::text[]) AS alt_query
-      WHERE length(alt_query)>=3
-        AND (product.name_folded ILIKE '%' || alt_query || '%' ESCAPE '\\'
-          OR similarity(product.name_folded, alt_query) > 0.25
-          OR to_tsvector('simple',product.search_text_folded)
-            @@ websearch_to_tsquery('simple', alt_query))
-    )))
-  AND ($3::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
-  AND (cardinality($4::text[])=0 OR brand.slug::text=ANY($4::text[]))
-  AND ($5::bigint IS NULL OR price.amount_kopeks >= $5)
-  AND ($6::bigint IS NULL OR price.amount_kopeks <= $6)
-  AND ($7::text='all' OR ($7='in_stock' AND stock.available_quantity>0)
-    OR ($7='out_of_stock' AND stock.available_quantity=0))`;
-
-// Every *confirmed* article-cross equivalent of the normalised query article
-// ($8), read back in both stored directions (see migration 0018's
-// table-level comment for why app.article_crosses stores one row per pair
-// and is queried both ways instead of storing two mirrored rows). Spliced
-// onto visibleCategoriesWithSubtreeCte's WITH clause as one more CTE (that
-// function already returns a complete, unterminated-by-comma WITH clause) so
-// this costs zero extra round trips — not a second query per search.
-//
-// The target brand travels with the target article: article numbers are not
-// globally unique across manufacturers, and docs/CATALOG_MATCHING.md defines
-// identity as normalised article + normalised brand. The product-side EXISTS
-// therefore checks both fields; matching only article could return an
-// unrelated Bosch OC90 for a confirmed MAHLE OC90 cross.
-//
-// Only status='confirmed' rows ever reach here — this is the actual
-// enforcement point for the correctness bar in docs/CATALOG_MATCHING.md and
-// this feature's own safety requirement: a cross weak enough to need human
-// review (see article_crosses.status) must never silently widen a
-// customer's search to a different part than the one they typed. $8='' (no
-// article-shaped query) naturally yields zero rows here too, since
-// app.article_crosses.article_a/article_b can never be '' (CHECK
-// constraint) — no extra guard needed.
-const ARTICLE_CROSS_EQUIVALENTS_CTE = `cross_equivalents AS (
-  SELECT article_b AS article,brand_b AS brand FROM app.article_crosses
-    WHERE article_a=$8 AND status='confirmed'
-  UNION
-  SELECT article_a AS article,brand_a AS brand FROM app.article_crosses
-    WHERE article_b=$8 AND status='confirmed'
-)`;
+// The search WHERE/ORDER BY are generated per request in
+// catalog-search-sql.ts (index-friendly, one OR-group per query word); see
+// that file and catalog-search-tokens.ts for how a query is matched.
 
 const PRODUCT_SELECT = `SELECT product.id,product.sku::text,product.name,product.slug::text,
   product.created_at,product.updated_at,price.amount_kopeks::text AS price_kopeks,
@@ -229,17 +148,33 @@ function safeInteger(value: string, label: string): number {
   return parsed;
 }
 
-function escapeLike(value: string | undefined): string | null {
-  return value ? value.replace(/[\\%_]/gu, (character) => `\\${character}`) : null;
+/**
+ * A pasted article often carries a tab, a line break or a non-breaking
+ * space ("W914\t2" from a spreadsheet). The contract rejects control
+ * characters, which used to turn such a search into an error page; read
+ * them as the spaces they stand for instead.
+ */
+function withSingleLineSearchText(rawQuery: unknown): unknown {
+  if (!rawQuery || typeof rawQuery !== "object" || typeof (rawQuery as { q?: unknown }).q !== "string") return rawQuery;
+  const q = (rawQuery as { q: string }).q.replace(/[\s\u0000-\u001f\u007f]+/gu, " ").trim();
+  return { ...(rawQuery as Record<string, unknown>), q };
 }
 
 @Injectable()
 export class CatalogPublicService {
+  private readonly engine: CatalogSearchEngine | null;
+
   constructor(
     private readonly categoryTreeCache: CatalogCategoryTreeCache,
     private readonly database: DatabaseService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
-  ) {}
+    // Optional external search engine (docs/SEARCH_ENGINE.md). Not
+    // registered by default: then SEARCH_ENGINE in the environment decides,
+    // and with it unset PostgreSQL alone answers every search.
+    @Optional() @Inject(CATALOG_SEARCH_ENGINE) engine?: CatalogSearchEngine | null,
+  ) {
+    this.engine = engine === undefined ? catalogSearchEngineFromEnvironment(process.env) : engine;
+  }
 
   async categories() {
     const result = await this.database.query<CategoryRow>(
@@ -310,9 +245,18 @@ export class CatalogPublicService {
     return { items };
   }
 
-  async brands() {
+  /**
+   * Brands for the filter rail. With a category slug, only brands that
+   * actually have products in that section (and its subsections) are
+   * returned, with counts for that section — never brands with zero hits.
+   */
+  async brands(rawCategory?: unknown) {
+    const category = typeof rawCategory === "string" && rawCategory.length <= 180
+      && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(rawCategory)
+      ? rawCategory
+      : null;
     const result = await this.database.query<BrandRow>(
-      `${VISIBLE_CATEGORIES_CTE}
+      `${visibleCategoriesWithSubtreeCte("$1")}
        SELECT brand.id,brand.name,brand.slug::text,COALESCE(products.product_count,0)::text
                 AS product_count
        FROM app.brands AS brand
@@ -322,9 +266,11 @@ export class CatalogPublicService {
          LEFT JOIN app.categories AS category ON category.id=product.category_id
          WHERE product.brand_id=brand.id AND product.is_active AND product.deleted_at IS NULL
            AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
+           AND ($1::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
        ) AS products ON true
        WHERE brand.is_active AND brand.deleted_at IS NULL AND products.product_count>0
        ORDER BY lower(brand.name),brand.id`,
+      [category],
     );
     return {
       items: result.rows
@@ -339,88 +285,149 @@ export class CatalogPublicService {
   }
 
   async products(rawQuery: unknown) {
-    const parsed = CatalogProductsQuerySchema.safeParse(rawQuery);
+    const parsed = CatalogProductsQuerySchema.safeParse(withSingleLineSearchText(rawQuery));
     if (!parsed.success) {
       throw new BadRequestException({ error: "invalid_catalog_query", issues: parsed.error.issues });
     }
     const query = parsed.data;
-    // $1/$2 are ё/Ё-folded (foldYo) before they ever reach SQL, matching the
-    // fold app.fold_yo applies when building product.name_folded/
-    // .search_text_folded (migration 0025) — see PUBLIC_PRODUCT_FILTERS' own
-    // comment for why both sides must agree. normalizeArticleNumber ($8
-    // below) is computed from the un-folded query.q on purpose: article
-    // matching has its own, separate Cyrillic/Latin homoglyph fold and does
-    // not need (or want) the ё fold layered on top of it.
-    const foldedQuery = query.q ? foldYo(query.q) : null;
-    const values = [
-      foldedQuery,
-      escapeLike(foldedQuery ?? undefined),
-      query.category ?? null,
-      query.brand,
-      query.minPriceKopeks ?? null,
-      query.maxPriceKopeks ?? null,
-      query.availability,
-      // Empty (not null) when there is no query, so the SQL side can compare
-      // with a plain <>'' guard instead of a three-valued NULL check.
-      query.q ? normalizeArticleNumber(query.q) : "",
-      // Escaped the same way $2 is, and ё/Ё-folded the same way $1 is, since
-      // these feed the same folded-column ILIKE/trigram/full-text branches —
-      // see PUBLIC_PRODUCT_FILTERS' $9 comment.
-      query.q ? alternateSearchQueries(query.q).map((candidate) => {
-        const foldedCandidate = foldYo(candidate);
-        return escapeLike(foldedCandidate) ?? foldedCandidate;
-      }) : [],
-    ];
-    const order = this.productOrder(query);
+    // Free text is ё/Ё-folded before it reaches SQL, matching app.fold_yo on
+    // the stored name_folded/search_text_folded columns (migration 0025).
+    // The article key has its own homoglyph fold (normalizeArticleNumber).
+    const partsAlias = query.q ? catalogPartsAlias(query.q) : undefined;
+    const alternates = query.q ? alternateSearchQueries(foldYo(query.q)) : [];
+    if (partsAlias) alternates.unshift(partsAlias);
+    const input: CatalogSearchInput = {
+      alternates: alternates.map(foldYo),
+      folded: query.q ? foldYo(query.q) : null,
+      identity: catalogSearchIdentity(query.q),
+      plan: query.q ? searchTokenPlan(query.q) : { alternatives: [], leads: [], words: [] },
+      query,
+    };
+    if (this.engine && input.folded !== null && catalogSearchIsFreeText(input)) {
+      const viaEngine = await withPublicCatalogQuery(() => this.productsFromEngine(this.engine!, input));
+      if (viaEngine) return viaEngine;
+    }
     return withPublicCatalogQuery(() => this.database.transaction(async (client) => {
       await client.query("SET LOCAL statement_timeout='2500ms'");
-      const items = await client.query<ProductRow & { is_cross_match: boolean; total_count: string }>(
-        `${visibleCategoriesWithSubtreeCte("$3")}, ${ARTICLE_CROSS_EQUIVALENTS_CTE}
-         ${PRODUCT_SELECT},count(*) OVER()::text AS total_count,
-                (NOT ($8<>'' AND product.sku_normalized LIKE $8 || '%')
-                  AND product.sku_normalized<>'' AND EXISTS (
-                  SELECT 1 FROM cross_equivalents
-                  WHERE cross_equivalents.article=product.sku_normalized
-                    AND cross_equivalents.brand=app.normalize_brand(brand.name)
-                )) AS is_cross_match,
-                primary_image.id AS primary_image_id,
-                primary_image.alt_text AS primary_image_alt_text,
-                primary_image.is_primary AS primary_image_is_primary,
-                primary_image.mime_type AS primary_image_mime_type,
-                primary_image.byte_size::text AS primary_image_byte_size
-         ${PUBLIC_PRODUCT_FROM}
-         LEFT JOIN LATERAL (
-           SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
-           FROM app.product_images AS image
-           JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-           WHERE image.product_id=product.id AND storage.provider=$10
-             AND storage.status='available' AND storage.deleted_at IS NULL
-             AND storage.mime_type=ANY($13::text[])
-           ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
-         ) AS primary_image ON true
-         WHERE ${PUBLIC_PRODUCT_FILTERS}
-         ORDER BY ${order},product.id
-         LIMIT $11 OFFSET $12`,
-        [...values, this.storage.name, query.limit, query.offset, [...PUBLIC_IMAGE_MIME_TYPES]],
-      );
-      const fallbackCount = items.rows.length === 0 && query.offset > 0
-        ? await client.query<{ count: string }>(
-        `${visibleCategoriesWithSubtreeCte("$3")}, ${ARTICLE_CROSS_EQUIVALENTS_CTE}
-         SELECT count(*)::text AS count ${PUBLIC_PRODUCT_FROM}
-         WHERE ${PUBLIC_PRODUCT_FILTERS}`,
-        values,
-      )
-        : null;
-      return {
-        items: items.rows.map((row) => this.productSummary(row, row.is_cross_match ? "cross" : "query")),
-        limit: query.limit,
-        offset: query.offset,
-        total: safeInteger(
-          items.rows[0]?.total_count ?? fallbackCount?.rows[0]?.count ?? "0",
-          "product count",
-        ),
-      };
+      await client.query("SET LOCAL pg_trgm.similarity_threshold=0.25");
+      const strict = await this.productPage(client, input, false);
+      // Nothing matched every word: show what matches any of them, or is
+      // close to the whole query, instead of an empty page, and say so
+      // (matchMode "any"). A concrete part number is never relaxed.
+      if (!input.identity.articleOnly && strict.total === 0 && input.plan.words.length >= 1) {
+        const relaxed = await this.productPage(client, input, true);
+        if (relaxed.total > 0) return { ...relaxed, matchMode: "any" as const };
+      }
+      return { ...strict, matchMode: "all" as const };
     }));
+  }
+
+  /**
+   * Free-text search through the external engine: ranked ids from the
+   * engine, rows (price, stock, image, visibility) from PostgreSQL in that
+   * order. Null when the engine cannot answer, so PostgreSQL does.
+   */
+  private async productsFromEngine(engine: CatalogSearchEngine, input: CatalogSearchInput) {
+    let matchMode: "all" | "any" = "all";
+    let found = await engine.search(input, false);
+    if (found && found.total === 0 && !input.identity.articleOnly) {
+      const relaxed = await engine.search(input, true);
+      if (relaxed === null) return null;
+      if (relaxed.total > 0) {
+        found = relaxed;
+        matchMode = "any";
+      }
+    }
+    if (!found) return null;
+    const p = new SqlParameters();
+    const ids = p.add(found.ids);
+    const rows = found.ids.length === 0 ? [] : (await this.database.query<ProductRow>(
+      `${VISIBLE_CATEGORIES_CTE}
+       ${PRODUCT_SELECT},primary_image.id AS primary_image_id,
+              primary_image.alt_text AS primary_image_alt_text,
+              primary_image.is_primary AS primary_image_is_primary,
+              primary_image.mime_type AS primary_image_mime_type,
+              primary_image.byte_size::text AS primary_image_byte_size
+       ${PUBLIC_PRODUCT_FROM}
+       LEFT JOIN LATERAL (
+         SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
+         FROM app.product_images AS image
+         JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
+         WHERE image.product_id=product.id AND storage.provider=${p.add(this.storage.name)}
+           AND storage.status='available' AND storage.deleted_at IS NULL
+           AND storage.mime_type=ANY(${p.add([...PUBLIC_IMAGE_MIME_TYPES])}::text[])
+         ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
+       ) AS primary_image ON true
+       WHERE product.id=ANY(${ids}::uuid[])
+         AND product.is_active AND product.deleted_at IS NULL
+         AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+         AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
+       ORDER BY array_position(${ids}::uuid[],product.id)`,
+      p.values,
+    )).rows;
+    return {
+      items: rows.map((row) => this.productSummary(row)),
+      limit: input.query.limit,
+      matchMode,
+      offset: input.query.offset,
+      // A product hidden after it was indexed is dropped from the page above
+      // and from the count; the indexer removes it from the engine shortly.
+      total: Math.max(0, found.total - (found.ids.length - rows.length)),
+    };
+  }
+
+  private async productPage(client: { query: DatabaseService["query"] }, input: CatalogSearchInput, matchAny: boolean) {
+    const { query } = input;
+    // A typo must be close to the word in the strict pass; the retry also
+    // accepts e.g. "фольтр" for "фильтр".
+    await client.query(`SET LOCAL pg_trgm.word_similarity_threshold=${matchAny ? "0.4" : "0.5"}`);
+    const p = new SqlParameters();
+    const cte = catalogSearchCte(p, input, visibleCategoriesWithSubtreeCte);
+    const where = catalogSearchFilter(p, input, matchAny);
+    const { join, order } = this.productOrder(p, input, cte.article);
+    const items = await client.query<ProductRow & { is_cross_match: boolean; total_count: string }>(
+      `${cte.sql}
+       ${PRODUCT_SELECT},count(*) OVER()::text AS total_count,
+              (NOT (${cte.article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}) AND ${CROSS_MATCH}) AS is_cross_match,
+              primary_image.id AS primary_image_id,
+              primary_image.alt_text AS primary_image_alt_text,
+              primary_image.is_primary AS primary_image_is_primary,
+              primary_image.mime_type AS primary_image_mime_type,
+              primary_image.byte_size::text AS primary_image_byte_size
+       ${PUBLIC_PRODUCT_FROM}
+       LEFT JOIN LATERAL (
+         SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
+         FROM app.product_images AS image
+         JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
+         WHERE image.product_id=product.id AND storage.provider=${p.add(this.storage.name)}
+           AND storage.status='available' AND storage.deleted_at IS NULL
+           AND storage.mime_type=ANY(${p.add([...PUBLIC_IMAGE_MIME_TYPES])}::text[])
+         ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
+       ) AS primary_image ON true
+       ${join}
+       WHERE ${where}
+       ORDER BY ${order},product.id
+       LIMIT ${p.add(query.limit)} OFFSET ${p.add(query.offset)}`,
+      p.values,
+    );
+    let total = items.rows[0]?.total_count;
+    if (total === undefined && query.offset > 0) {
+      const count = new SqlParameters();
+      const countCte = catalogSearchCte(count, input, visibleCategoriesWithSubtreeCte);
+      const countWhere = catalogSearchFilter(count, input, matchAny);
+      total = (await client.query<{ count: string }>(
+        `${countCte.sql}
+         SELECT count(*)::text AS count ${PUBLIC_PRODUCT_FROM}
+         WHERE ${countWhere}`,
+        count.values,
+      )).rows[0]?.count;
+    }
+    return {
+      items: items.rows.map((row) => this.productSummary(row, row.is_cross_match ? "cross" : "query")),
+      limit: query.limit,
+      offset: query.offset,
+      total: safeInteger(total ?? "0", "product count"),
+    };
   }
 
   async product(idOrSlug: string) {
@@ -582,7 +589,8 @@ export class CatalogPublicService {
       createdAt: row.created_at.toISOString(),
       id: row.id,
       matchedVia,
-      name: row.name,
+      // Without the staff's notes typed into the name in 1С («(Ш)», «+++», the shelf box): product-name.ts.
+      name: publicProductName(row.name),
       priceKopeks: row.price_kopeks === null ? null : safeInteger(row.price_kopeks, "price"),
       primaryImage: image,
       sku: row.sku,
@@ -591,52 +599,22 @@ export class CatalogPublicService {
     };
   }
 
-  private productOrder(query: CatalogProductsQuery): string {
-    switch (query.sort) {
-      case "newest": return "product.created_at DESC";
-      case "name": return "lower(product.name) ASC";
-      case "price_asc": return "price.amount_kopeks ASC NULLS LAST";
-      case "price_desc": return "price.amount_kopeks DESC NULLS LAST";
+  private productOrder(p: SqlParameters, input: CatalogSearchInput, article: string): { join: string; order: string } {
+    switch (input.query.sort) {
+      case "newest": return { join: "", order: "product.created_at DESC" };
+      case "name": return { join: "", order: "lower(product.name) ASC" };
+      case "price_asc": return { join: "", order: "price.amount_kopeks ASC NULLS LAST" };
+      case "price_desc": return { join: "", order: "price.amount_kopeks DESC NULLS LAST" };
       // Ranking never lets a fuzzy match outrank an exact one: an exact
-      // normalised-article match is tier 1, a confirmed cross-equivalent
-      // article is tier 2 (still an exact identity match, just under a
-      // different known-equivalent number — see ARTICLE_CROSS_EQUIVALENTS_CTE),
-      // a plain prefix match is tier 3 (all insensitive to case, W/w, "-"/"
-      // "/"/" and the Cyrillic homoglyphs a customer's keyboard can
-      // substitute — see catalog-search-normalize.ts), and only once none of
-      // those apply does trigram/full-text relevance on the product name
-      // decide the order.
-      case "relevance": return query.q
-        ? `($8<>'' AND product.sku_normalized=$8) DESC,
-           (product.sku_normalized<>'' AND EXISTS (
-             SELECT 1 FROM cross_equivalents
-             WHERE cross_equivalents.article=product.sku_normalized
-               AND cross_equivalents.brand=app.normalize_brand(brand.name)
-           )) DESC,
-           ($8<>'' AND product.sku_normalized LIKE $8 || '%') DESC,
-           GREATEST(
-             similarity(product.name_folded, $1),
-             ts_rank_cd(to_tsvector('simple',product.search_text_folded),
-               websearch_to_tsquery('simple',$1)),
-             -- Real (Snowball) Russian stemming via PostgreSQL's built-in
-             -- 'russian' text-search config — see PUBLIC_PRODUCT_FILTERS'
-             -- comment for what this does and does not recover. Exactly as
-             -- much of a fuzzy, last-resort signal as the other two terms
-             -- here, never a promotion over a real article/prefix match.
-             ts_rank_cd(to_tsvector('russian',product.search_text_folded),
-               websearch_to_tsquery('russian',$1)),
-             -- A Latin-transliteration/layout-swap recovery (see $9's comment
-             -- on PUBLIC_PRODUCT_FILTERS) is exactly as much of a fuzzy,
-             -- last-resort signal as the others above, never a promotion over
-             -- a real article/prefix match — folded into the same
-             -- GREATEST(), not a new tier.
-             COALESCE((
-               SELECT max(similarity(product.name_folded, alt_query))
-               FROM unnest($9::text[]) AS alt_query WHERE length(alt_query)>=3
-             ), 0)
-           ) DESC,
-           lower(product.name) ASC`
-        : "product.updated_at DESC";
+      // normalised-article match, then a confirmed cross-equivalent, then an
+      // article prefix, and only then text relevance (catalog-search-sql.ts).
+      case "relevance": return input.folded !== null
+        ? catalogSearchRelevanceOrder(p, input, article)
+        // Browsing a section: what can be bought today first, then priced
+        // items, then alphabetical — never "last touched by the import".
+        : { join: "", order: "(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) ASC" };
     }
   }
+
+
 }

@@ -118,23 +118,17 @@ describe("CatalogPublicService", () => {
     // "Кузов" must also surface products filed under "Кузов / Щётки".
     expect(itemsSql).toContain("category_subtree");
     expect(itemsSql).toContain("category.id IN (SELECT id FROM category_subtree)");
-    expect(itemsParameters).toEqual([
-      "фильтр",
-      "фильтр",
-      "filters",
-      ["ngk"],
-      100000,
-      200000,
-      "in_stock",
-      normalizeArticleNumber("фильтр"),
-      // A Cyrillic query needs neither transliteration nor a layout-swap
-      // recovery — see alternateSearchQueries.
-      [],
-      "local",
-      12,
-      24,
+    expect(itemsSql).toContain("brand.slug::text=ANY(");
+    expect(itemsSql).toContain("price.amount_kopeks >= $");
+    expect(itemsSql).toContain("price.amount_kopeks <= $");
+    expect(itemsSql).toContain("stock.available_quantity>0");
+    // Every placeholder in the generated statement has a bound value.
+    const placeholders = [...itemsSql.matchAll(/\$(\d+)/gu)].map((match) => Number(match[1]));
+    expect(Math.max(...placeholders)).toBe(itemsParameters.length);
+    expect(itemsParameters).toEqual(expect.arrayContaining([
+      "filters", ["ngk"], 100000, 200000, "фильтр", "%фильтр%", "local", 12, 24,
       ["image/avif", "image/jpeg", "image/png", "image/webp"],
-    ]);
+    ]));
   });
 
   it("ranks an exact normalised article match before a prefix match before fuzzy name relevance", async () => {
@@ -143,147 +137,123 @@ describe("CatalogPublicService", () => {
     await service.products({ q: "w914-2" });
 
     const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    // Rank order lives in ORDER BY. The same LIKE also appears earlier in the
-    // WHERE clause, so searching the whole statement would measure the filter
-    // rather than the ranking and read the tiers as inverted.
+    // Rank order lives in the final ORDER BY (the primary-image LATERAL has
+    // its own ORDER BY earlier in the statement).
     const ranking = sql.slice(sql.lastIndexOf("ORDER BY"));
-    const exactTier = ranking.indexOf("product.sku_normalized=$8");
-    const prefixTier = ranking.indexOf("product.sku_normalized LIKE $8");
-    const fuzzyTier = ranking.indexOf("similarity(product.name");
+    const exactTier = ranking.search(/product\.sku_normalized=\$\d+\) DESC/u);
+    const prefixTier = ranking.search(/product\.sku_normalized LIKE \$\d+\) DESC/u);
+    const fuzzyTier = ranking.indexOf("relevance.score");
     const nameTiebreak = ranking.indexOf("lower(product.name) ASC");
     expect(exactTier).toBeGreaterThan(-1);
     expect(prefixTier).toBeGreaterThan(exactTier);
     expect(fuzzyTier).toBeGreaterThan(prefixTier);
     expect(nameTiebreak).toBeGreaterThan(fuzzyTier);
-    expect(parameters[7]).toBe(normalizeArticleNumber("w914-2"));
-    expect(parameters[7]).toBe("W9142");
+    expect(sql).toContain("similarity(product.name_folded");
+    expect(parameters).toContain(normalizeArticleNumber("w914-2"));
+    expect(parameters).toContain("W9142%");
+  });
+
+  it("requires both the named brand and article and never relaxes to any word for a concrete part", async () => {
+    query.mockResolvedValue({ rows: [] });
+    const result = await service.products({ q:"манн W 914/2" });
+    expect(result).toMatchObject({items:[],total:0,matchMode:"all"});
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql,parameters]=query.mock.calls[0] as [string,unknown[]];
+    expect(parameters).toContain("W9142");
+    expect(parameters).toContainEqual(["MANN","MANNFILTER"]);
+    expect(sql).toMatch(/app\.normalize_brand\(brand\.name\)=ANY\(\$\d+::text\[\]\)/u);
   });
 
   it("recovers a Cyrillic word typed in Latin, both phonetically and via a wrong keyboard layout", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValue({ rows: [] });
     await service.products({ q: "filtr" });
     const [, phoneticParameters] = query.mock.calls[0] as [string, unknown[]];
     // filtr -> "филтр" (transliteration) and "ашдек" (layout swap) — see
     // packages/contracts/src/catalog-search-normalize.test.ts for how each
     // is derived. Both are searched, not just one.
-    expect(phoneticParameters[8]).toEqual(["филтр", "ашдек"]);
+    expect(phoneticParameters).toEqual(expect.arrayContaining(["%филтр%", "%ашдек%"]));
 
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockClear();
     // The task's own example: "фильтр" typed with the OS layout left on
     // English lands as "abkmnh".
     await service.products({ q: "abkmnh" });
-    const [layoutSql, layoutParameters] = query.mock.calls[1] as [string, unknown[]];
-    expect(layoutParameters[8]).toEqual(["абкмнх", "фильтр"]);
-    // The alt-query branch is folded into the existing WHERE/ORDER BY, not a
-    // second statement — extend the one search path, not a parallel one.
-    expect(layoutSql).toContain("unnest($9::text[])");
-    expect(query.mock.calls).toHaveLength(2);
+    const [layoutSql, layoutParameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(layoutParameters).toContain("%фильтр%");
+    // Still one statement per pass, not one per candidate.
+    expect(layoutSql).toContain("product.search_text_folded ILIKE");
   });
 
   it("does not attempt Latin recovery on a query that is already Cyrillic or is an article-shaped code", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await service.products({ q: "фильтр" });
-    expect((query.mock.calls[0] as [string, unknown[]])[1][8]).toEqual([]);
-
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValue({ rows: [] });
     await service.products({ q: "w914-2" });
     // Only one Latin letter ("w") — too little signal to guess a misspelled
     // word from, and normalizeArticleNumber already owns this case.
-    expect((query.mock.calls[1] as [string, unknown[]])[1][8]).toEqual([]);
+    const [, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(parameters.filter((value) => typeof value === "string" && /[а-я]/u.test(value))).toEqual([]);
   });
 
   it("folds ё to е on the query, in both directions, so a plain-е query and a ё query converge", async () => {
-    // AN30-013 search-gap fix: a product name stored with a ё (1C exports
-    // "Щётка стеклоочистителя ...") was unreachable by the near-universal
-    // plain spelling "щетка", because nothing folded ё to е anywhere on the
-    // search path. foldYo now runs on the query before it becomes $1/$2 —
-    // see catalog-search-normalize.ts's foldYo and this file's module
-    // comment on PUBLIC_PRODUCT_FILTERS.
-    query.mockResolvedValueOnce({ rows: [] });
+    // A product name stored with a ё (1C exports "Щётка стеклоочистителя
+    // ...") must be reachable by the near-universal plain spelling "щетка".
+    query.mockResolvedValue({ rows: [] });
     await service.products({ q: "щётка" });
-    const [, yoParameters] = query.mock.calls[0] as [string, unknown[]];
+    const [yoSql, yoParameters] = query.mock.calls[0] as [string, unknown[]];
 
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockClear();
     await service.products({ q: "щетка" });
-    const [, plainParameters] = query.mock.calls[1] as [string, unknown[]];
+    const [plainSql, plainParameters] = query.mock.calls[0] as [string, unknown[]];
 
-    // Both spellings produce the *identical* $1/$2 — proof that whichever
-    // way the customer happens to type it, PostgreSQL receives the same
-    // free-text query and so returns the same rows, regardless of which
-    // spelling (if either) the stored product name actually used.
-    expect(yoParameters[0]).toBe("щетка");
-    expect(yoParameters[1]).toBe("щетка");
-    expect(plainParameters[0]).toBe("щетка");
-    expect(plainParameters[1]).toBe("щетка");
-    expect(yoParameters[9]).toEqual(plainParameters[9]);
-
-    // $8 is the *article* parameter and deliberately keeps the ё: it is
-    // matched against product.sku_normalized, which app.normalize_article
-    // (migration 0016) builds without any ё fold, so folding only the query
-    // side would break the agreement the two sides already have. The narrow
-    // consequence — a SKU that literally contains ё is not reachable by its
-    // plain-е spelling — is accepted because article numbers are Latin and
-    // digits in practice; see this service's $8 comment.
-    expect(yoParameters[7]).toBe("ЩЁTKA");
-    expect(plainParameters[7]).toBe("ЩETKA");
+    // Both spellings produce the identical statement and free-text values.
+    // The article key (normalizeArticleNumber) keeps its own fold, so only
+    // that one value differs.
+    expect(yoSql).toBe(plainSql);
+    expect(yoParameters).toContain("щетка");
+    // "щетка" is covered by its stem "щетк" as a substring.
+    expect(yoParameters).toContain("%щетк%");
+    expect(yoParameters).not.toContain("щётка");
+    expect(yoParameters).toContain("ЩЁTKA");
+    expect(plainParameters).toContain("ЩETKA");
+    const differing = yoParameters.filter((value, index) => JSON.stringify(value) !== JSON.stringify(plainParameters[index]));
+    expect(differing.every((value) => typeof value === "string" && value.toUpperCase().includes("ЩЁTKA"))).toBe(true);
   });
 
   it("folds Ё (upper-case) too, and folds every alt-query candidate the same way", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
     await service.products({ q: "ЁЖ ФИЛЬТР" });
     const [, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(parameters[0]).toBe("ЕЖ ФИЛЬТР");
+    expect(parameters).toContain("ЕЖ ФИЛЬТР");
+    expect(parameters).toContain("%еж%");
   });
 
   it("matches ё/е-folded, generated columns rather than the raw name/search_text columns", async () => {
-    // The other half of the fold: folding only the query would still miss a
-    // product whose *stored* name carries the ё (the shop's actual case).
     // product.name_folded / product.search_text_folded are generated
     // columns (migration 0025) built through app.fold_yo, the SQL mirror of
     // foldYo — so both sides of every comparison are folded the same way.
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValue({ rows: [] });
     await service.products({ q: "щетка" });
     const [sql] = query.mock.calls[0] as [string, unknown[]];
 
-    expect(sql).toContain("product.name_folded ILIKE");
-    expect(sql).toContain("similarity(product.name_folded, $1)");
+    expect(sql).toContain("product.search_text_folded ILIKE");
+    expect(sql).toContain("similarity(product.name_folded,");
     expect(sql).toContain("to_tsvector('simple',product.search_text_folded)");
-    // The raw (unfolded) columns must not be the ones actually matched —
-    // only the display-only final tiebreaker (lower(product.name) ASC, an
-    // existing, unrelated stable-sort clause) legitimately still names the
-    // raw column.
+    expect(sql).toContain("app.fold_yo(searched_brand.name)");
+    // Only the display tiebreaker (lower(product.name) ASC) names the raw column.
     expect(sql).not.toContain("product.name ILIKE");
     expect(sql).not.toContain("coalesce(product.search_text,product.name)");
   });
 
-  it("adds real Russian stemming as an additive full-text branch, in both the filter and the ranking", async () => {
-    // Gap 2: search only ever matched substrings/trigrams/'simple' lexemes
-    // of the exact text typed, never a Russian word form ("щёток" the
-    // genitive plural vs "щётка"). PostgreSQL's built-in 'russian'
-    // text-search config already ships a real (Snowball) stemmer, so this
-    // reuses the existing to_tsvector/websearch_to_tsquery idiom instead of
-    // taking on a full morphological-analysis dependency.
-    query.mockResolvedValueOnce({ rows: [] });
-    await service.products({ q: "фильтры", sort: "relevance" });
-    const [sql] = query.mock.calls[0] as [string, unknown[]];
+  it("adds real Russian stemming as an additive full-text branch and a light stem for fleeting vowels", async () => {
+    query.mockResolvedValue({ rows: [] });
+    await service.products({ q: "колодок", sort: "relevance" });
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
 
-    // Present in the filter (can add a match)... sliced at the LAST
-    // "ORDER BY", not the first: the primary-image LATERAL join carries an
-    // "ORDER BY image.is_primary" of its own that sits *before* the WHERE
-    // clause, so slicing at the first occurrence cuts the filter away
-    // entirely and the assertion below would pass or fail for the wrong
-    // reason.
     const filterPart = sql.slice(0, sql.lastIndexOf("ORDER BY"));
     expect(filterPart).toContain("to_tsvector('russian',product.search_text_folded)");
-    expect(filterPart).toContain("websearch_to_tsquery('russian',$1)");
-    // ...and in the ranking (a stemmed hit still only ever competes as a
-    // last-resort relevance signal, never ahead of an exact/prefix article
-    // match — same GREATEST() as the existing trigram/'simple' terms).
-    const ranking = sql.slice(sql.lastIndexOf("ORDER BY"));
-    const exactArticleTier = ranking.indexOf("product.sku_normalized=$8");
-    const russianTerm = ranking.indexOf("ts_rank_cd(to_tsvector('russian',product.search_text_folded)");
-    expect(russianTerm).toBeGreaterThan(exactArticleTier);
-    expect(ranking).toContain("websearch_to_tsquery('russian',$1)");
+    expect(filterPart).toMatch(/websearch_to_tsquery\('russian',\$\d+\)/u);
+    // Snowball leaves "колодок" alone; the light stem finds "колодки".
+    expect(parameters).toContain("%колодк%");
+    // The ranking puts names that start with the named part type first.
+    expect(parameters).toContainEqual(["колодк"]);
   });
 
   it("documents a Russian word form the stemmer deliberately does not recover", () => {
@@ -315,22 +285,15 @@ describe("CatalogPublicService", () => {
     expect(migrationSql).toContain("no suffix");
   });
 
-  it("a two-letter query matches nothing by design, not by omission", async () => {
-    // CatalogProductsQuerySchema accepts a 2-character query (min(2)), but
-    // PUBLIC_PRODUCT_FILTERS' length>=3 guard on the substring/trigram/
-    // full-text/alt-query branches deliberately excludes it: a 2-letter
-    // Cyrillic prefix like "фи" is too generic a signal (near-every "Фильтр
-    // ..." AND "Фитинг ..." AND unrelated name would qualify) to be useful
-    // recall rather than noise, and ILIKE '%фи%' / a raw trigram scan at
-    // that length is exactly the kind of query this codebase already
-    // refuses to run unindexed over 30-40k rows. This is the same threshold
-    // the sku_normalized prefix and cross-equivalent branches do not need
-    // (those are indexed exact/prefix lookups, not fuzzy scans), so it does
-    // not block a short *article* search — only short free-text.
-    query.mockResolvedValueOnce({ rows: [] });
+  it("matches a two-letter query only as the start of a word, through the full-text index", async () => {
+    // "фи" or "h7" give a trigram index nothing to look up and a mid-word
+    // substring would be noise; the start of a word is useful ("h7" lamps).
+    query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
     await service.products({ q: "фи" });
-    const [sql] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("length($1)>=3");
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/to_tsquery\('simple',\$\d+\)/u);
+    expect(parameters).toContain("фи:*");
+    expect(sql).not.toMatch(/search_text_folded ILIKE \$\d+\n/u);
   });
 
   it("widens search to confirmed article-cross equivalents, ranked between an exact and a prefix match", async () => {
@@ -338,29 +301,27 @@ describe("CatalogPublicService", () => {
 
     await service.products({ q: "w914-2" });
 
-    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    const article = `$${parameters.indexOf("W9142") + 1}`;
     // Symmetric lookup: a confirmed cross is found whichever side of the
-    // stored pair the searched article landed on (see migration 0018's
-    // "one row per pair" comment) — both UNION branches must be present.
-    expect(sql).toContain("WHERE article_a=$8 AND status='confirmed'");
-    expect(sql).toContain("WHERE article_b=$8 AND status='confirmed'");
-    // Never widens on an unconfirmed cross — this is the actual enforcement
-    // of the correctness bar: nothing in this statement ever reads a
-    // article_crosses row without also filtering status='confirmed'.
+    // stored pair the searched article landed on (migration 0018).
+    expect(sql).toContain(`WHERE article_a=${article} AND status='confirmed'`);
+    expect(sql).toContain(`WHERE article_b=${article} AND status='confirmed'`);
+    // Never widens on an unconfirmed cross.
     expect(sql.match(/FROM app\.article_crosses/gu)).toHaveLength(2);
     expect(sql.match(/status='confirmed'/gu)).toHaveLength(2);
     expect(sql).not.toContain("unconfirmed");
-    // A cross identity is article + brand. The target article alone is not
-    // enough because the same number can belong to unrelated manufacturers.
-    expect(sql).toContain("cross_equivalents.brand=app.normalize_brand(brand.name)");
+    // A cross identity is article + brand.
+    // Brands are compared by identity (migration 0042): «MANN» = «MANN-FILTER».
+    expect(sql).toContain("app.canonical_brand(cross_equivalents.brand)=app.canonical_brand(brand.name)");
     // A product whose own SKU already matches the typed prefix is a direct
     // query result even if another-brand same-number cross also exists.
-    expect(sql).toContain("NOT ($8<>'' AND product.sku_normalized LIKE $8 || '%')");
+    expect(sql).toMatch(/NOT \(\$\d+<>'' AND product\.sku_normalized LIKE \$\d+\)/u);
 
     const ranking = sql.slice(sql.lastIndexOf("ORDER BY"));
-    const exactTier = ranking.indexOf("product.sku_normalized=$8");
+    const exactTier = ranking.indexOf(`product.sku_normalized=${article}`);
     const crossTier = ranking.indexOf("cross_equivalents.article=product.sku_normalized");
-    const prefixTier = ranking.indexOf("product.sku_normalized LIKE $8");
+    const prefixTier = ranking.search(/product\.sku_normalized LIKE \$\d+\) DESC/u);
     expect(exactTier).toBeGreaterThan(-1);
     expect(crossTier).toBeGreaterThan(exactTier);
     expect(prefixTier).toBeGreaterThan(crossTier);
@@ -382,6 +343,24 @@ describe("CatalogPublicService", () => {
     ]);
   });
 
+  it("shows a product's name without the staff's notes typed into it in 1С, in the list, on the card and among the featured", async () => {
+    // «(Ш)», «+++» and the shelf box are the staff's own marks (packages/contracts/src/product-name.ts).
+    const noted = { name: "(Ш) +++ Клипса крепежная TORSO КОРОБКА 9" };
+    query.mockResolvedValueOnce({ rows: [productRow(noted)] }).mockResolvedValueOnce({ rows: [{ count: "1" }] });
+    const list = await service.products({});
+    expect(list.items[0]?.name).toBe("Клипса крепежная TORSO");
+
+    // The list may not have needed its count: start each call from an empty queue of answers.
+    query.mockReset();
+    query.mockResolvedValueOnce({ rows: [productRow({ ...noted, description: null, public_attributes: {} })] })
+      .mockResolvedValueOnce({ rows: [] });
+    expect((await service.product("oil-filter-1")).name).toBe("Клипса крепежная TORSO");
+
+    query.mockReset();
+    query.mockResolvedValueOnce({ rows: [productRow(noted)] });
+    expect((await service.featured({})).items[0]?.name).toBe("Клипса крепежная TORSO");
+  });
+
   it("defaults matchedVia to a direct query match for product() and featured(), which never widen via crosses", async () => {
     query.mockResolvedValueOnce({ rows: [productRow({ description: null, public_attributes: {} })] })
       .mockResolvedValueOnce({ rows: [] });
@@ -394,14 +373,14 @@ describe("CatalogPublicService", () => {
   });
 
   it("escapes SQL LIKE wildcards without changing full-text search input", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValue({ rows: [] });
 
     await service.products({ q: "100%_" });
 
-    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("ESCAPE '\\'");
-    expect(parameters[0]).toBe("100%_");
-    expect(parameters[1]).toBe("100\\%\\_");
+    const [, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(parameters).toContain("100%_");
+    expect(parameters).toContain("%100\\%\\_%");
+    expect(parameters.some((value) => typeof value === "string" && /(^|[^\\])[%_]/u.test(value.slice(1, -1)) && value.startsWith("%") && value !== "%100\\%\\_%")).toBe(false);
   });
 
   it("returns only active category and brand projections", async () => {
@@ -635,6 +614,7 @@ describe("CatalogPublicController media headers", () => {
     const controller = new CatalogPublicController(
       catalog as unknown as CatalogPublicService,
       rateLimit as never,
+      { record: vi.fn() } as never,
     );
 
     await controller.media(
@@ -650,5 +630,63 @@ describe("CatalogPublicController media headers", () => {
     expect(headers.get("Cache-Control")).toContain("stale-while-revalidate");
     expect(headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(reply.send).toHaveBeenCalledWith();
+  });
+});
+
+describe("CatalogPublicService word-by-word search", () => {
+  const query = vi.fn();
+  const service = new CatalogPublicService(
+    new CatalogCategoryTreeCache(),
+    {
+      query,
+      transaction: async <T>(work: (client: { query: typeof query }) => Promise<T>) => work({
+        query: vi.fn((text: string, values?: unknown[]) => (
+          text.startsWith("SET LOCAL") ? Promise.resolve({ rows: [] }) : query(text, values)
+        )),
+      }),
+    } as unknown as DatabaseService,
+    { name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() },
+  );
+
+  beforeEach(() => query.mockReset());
+
+  it("requires every word in any order, searches the brand and a mid-article fragment", async () => {
+    query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "фильтр mann" });
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("<% product.search_text_folded");
+    expect(sql).toContain("app.fold_yo(searched_brand.name)");
+    expect(sql).toMatch(/\)\n {4}INTERSECT \(/u);
+    expect(parameters).toEqual(expect.arrayContaining(["%фильтр%", "%mann%"]));
+    // "mann-filter" adds nothing once "mann" matches as a substring.
+    expect(parameters).not.toContain("%mann-filter%");
+
+    query.mockClear();
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ q: "914/2" });
+    expect((query.mock.calls[0] as [string, unknown[]])[1]).toContain("%9142%");
+  });
+
+  it("retries a multi-word query with any word when no product has all of them", async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const result = await service.products({ q: "масляный фильтр" });
+    expect(query.mock.calls).toHaveLength(2);
+    const [strictSql] = query.mock.calls[0] as [string, unknown[]];
+    const [relaxedSql] = query.mock.calls[1] as [string, unknown[]];
+    expect(strictSql).toMatch(/\)\n {4}INTERSECT \(/u);
+    expect(relaxedSql).not.toMatch(/INTERSECT/u);
+    // Whole-query closeness only widens the retry.
+    expect(strictSql).not.toContain("product.name_folded %");
+    expect(relaxedSql).toContain("product.name_folded %");
+    expect(result.matchMode).toBe("all");
+  });
+
+  it("browses a section with in-stock and priced items first", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.products({ category: "filters" });
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) ASC");
   });
 });

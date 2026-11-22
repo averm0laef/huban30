@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { Public } from "../auth/auth.decorators.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
+import { CatalogSearchLogService } from "./catalog-search-log.service.js";
 
 const MEDIA_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 
@@ -13,6 +14,7 @@ export class CatalogPublicController {
   constructor(
     private readonly catalog: CatalogPublicService,
     private readonly rateLimit: RateLimitService,
+    private readonly searchLog: CatalogSearchLogService,
   ) {}
 
   @Get("categories")
@@ -28,15 +30,17 @@ export class CatalogPublicController {
   }
 
   @Get("brands")
-  async brands(@Req() request: FastifyRequest) {
+  async brands(@Req() request: FastifyRequest, @Query("category") category?: string) {
     await this.rateLimit.consume("catalog-brands", request.ip, 60, 60);
-    return this.catalog.brands();
+    return this.catalog.brands(category);
   }
 
   @Get("products")
   async products(@Query() query: unknown, @Req() request: FastifyRequest) {
     await this.rateLimit.consume("catalog-products", request.ip, 60, 60);
-    return this.catalog.products(query);
+    const result = await this.catalog.products(query);
+    this.searchLog.record(query, (result as { total?: unknown }).total);
+    return result;
   }
 
   @Get("products/:idOrSlug")
