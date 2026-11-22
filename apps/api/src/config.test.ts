@@ -15,6 +15,51 @@ describe("API environment", () => {
     expect(configured.REEFAPI_ENABLED).toBe(true);expect(configured.REEFAPI_DAILY_CREDITS).toBe(6);
     expect(()=>validateEnvironment({...secrets,REEFAPI_DAILY_CREDITS:"1000000"})).toThrow();
   });
+  it("keeps product photos on the local disk until S3 is switched on with a bucket and keys", () => {
+    expect(validateEnvironment(secrets).PRODUCT_PHOTO_STORAGE).toBe("local");
+    const s3 = {
+      ...secrets,
+      DEPLOYMENT_ENVIRONMENT: "production",
+      PRODUCT_PHOTO_STORAGE: "s3",
+      S3_ACCESS_KEY_ID: "FAKEACCESSKEYID",
+      S3_BUCKET: "an30-photos",
+      S3_ENDPOINT: "https://s3.example.test",
+      S3_REGION: "ru-1",
+      S3_SECRET_ACCESS_KEY: "fake-secret-access-key-0123456789",
+    };
+    const configured = validateEnvironment(s3);
+    expect(configured.PRODUCT_PHOTO_STORAGE).toBe("s3");
+    expect(configured.S3_FORCE_PATH_STYLE).toBe(true);
+    expect(validateEnvironment({ ...s3, S3_FORCE_PATH_STYLE: "false" }).S3_FORCE_PATH_STYLE).toBe(false);
+    expect(() => validateEnvironment({ ...s3, S3_SECRET_ACCESS_KEY: undefined })).toThrow(/S3 storage is not configured/);
+    expect(() => validateEnvironment({ ...s3, S3_BUCKET: undefined })).toThrow(/S3 storage is not configured/);
+    expect(() => validateEnvironment({ ...s3, S3_ENDPOINT: undefined })).toThrow(/S3 storage is not configured/);
+    expect(() => validateEnvironment({ ...s3, S3_BUCKET: "Bad_Bucket/../x" })).toThrow();
+  });
+
+  it("starts with the empty S3 settings compose passes when S3 is off", () => {
+    const off = validateEnvironment({ ...secrets, PRODUCT_PHOTO_STORAGE: "local", S3_BUCKET: "", S3_ENDPOINT: "", S3_ACCESS_KEY_ID: "", S3_SECRET_ACCESS_KEY: "" });
+    expect(off.PRODUCT_PHOTO_STORAGE).toBe("local");
+    expect(off.S3_ENDPOINT).toBeUndefined();
+    expect(off.S3_BUCKET).toBeUndefined();
+    expect(() => validateEnvironment({ ...secrets, PRODUCT_PHOTO_STORAGE: "s3", S3_BUCKET: "", S3_ENDPOINT: "" })).toThrow(/S3 storage is not configured/);
+  });
+
+  it("sends S3 keys over HTTPS only, except to a local store on a development stand", () => {
+    const s3 = {
+      ...secrets,
+      PRODUCT_PHOTO_STORAGE: "s3",
+      S3_ACCESS_KEY_ID: "FAKEACCESSKEYID",
+      S3_BUCKET: "an30-photos",
+      S3_ENDPOINT: "http://127.0.0.1:8333",
+      S3_REGION: "ru-1",
+      S3_SECRET_ACCESS_KEY: "fake-secret-access-key-0123456789",
+    };
+    expect(validateEnvironment({ ...s3, DEPLOYMENT_ENVIRONMENT: "development" }).S3_ENDPOINT).toBe("http://127.0.0.1:8333");
+    expect(() => validateEnvironment({ ...s3, DEPLOYMENT_ENVIRONMENT: "staging" })).toThrow(/S3 endpoint must use HTTPS/);
+    expect(() => validateEnvironment({ ...s3, DEPLOYMENT_ENVIRONMENT: "production" })).toThrow(/S3 endpoint must use HTTPS/);
+  });
+
   it("fails closed without security keys", () => {
     expect(() => validateEnvironment({ NODE_ENV: "development" })).toThrow(/Session HMAC secret/);
   });

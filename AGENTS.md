@@ -42,7 +42,7 @@ dropdb an30_search_scratch
 - Платные провайдеры (FAPI, TecDoc, ReefAPI, Apify, Groq) в тестах не вызываются — только подставные ответы.
 - TecDoc (tecdoc.site): только «запрос — ответ» для посетителя. Нельзя писать его данные в PostgreSQL (в том числе в `app.article_crosses`), вызывать его из фоновых задач и увеличивать кеш без письменного согласия поставщика — см. `docs/TECDOC.md`.
 - Разделы каталога и сортировка товаров из 1С — `docs/OWN_CATALOG.md`; при изменении `storefront-taxonomy.ts` нужна миграция с теми же строками.
-- Описание подбора — `docs/PARTS_FINDER.md`, обмена с 1С — `docs/ONE_C_INTEGRATION.md`, поиска — `docs/SEARCH_ENGINE.md`.
+- Описание подбора — `docs/PARTS_FINDER.md`, обмена с 1С — `docs/ONE_C_INTEGRATION.md`, поиска — `docs/SEARCH_ENGINE.md`, хранения фото товаров в S3 — `docs/PRODUCT_PHOTOS_S3.md`.
 
 ## Репозиторий
 

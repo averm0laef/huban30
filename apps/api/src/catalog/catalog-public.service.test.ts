@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import type { StorageProvider } from "../adapters/provider-contracts.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
@@ -67,7 +68,7 @@ describe("CatalogPublicService", () => {
   const service = new CatalogPublicService(
     new CatalogCategoryTreeCache(),
     database as unknown as DatabaseService,
-    storage,
+    new ProductPhotoStorage(storage),
   );
 
   beforeEach(() => {
@@ -139,7 +140,7 @@ describe("CatalogPublicService", () => {
     const placeholders = [...itemsSql.matchAll(/\$(\d+)/gu)].map((match) => Number(match[1]));
     expect(Math.max(...placeholders)).toBe(itemsParameters.length);
     expect(itemsParameters).toEqual(expect.arrayContaining([
-      "filters", ["ngk"], 100000, 200000, "фильтр", "%фильтр%", "local", 12, 24,
+      "filters", ["ngk"], 100000, 200000, "фильтр", "%фильтр%", ["local"], 12, 24,
       ["image/avif", "image/jpeg", "image/png", "image/webp"],
     ]));
   });
@@ -556,6 +557,7 @@ describe("CatalogPublicService", () => {
       rows: [{
         byte_size: String(PNG.length),
         mime_type: "image/png",
+        provider: "local",
         sha256: digest,
         storage_key: "chat/2026-08/019bf9ea-0d3e-7def-8c9a-000000000011.png",
       }],
@@ -571,7 +573,7 @@ describe("CatalogPublicService", () => {
     expect(sql).toContain("FROM app.product_images");
     expect(sql).toContain("product.is_active");
     expect(sql).toContain("storage.status='available'");
-    expect(parameters[1]).toBe("local");
+    expect(parameters[1]).toEqual(["local"]);
   });
 
   it("does not return missing or corrupt media", async () => {
@@ -583,6 +585,7 @@ describe("CatalogPublicService", () => {
       rows: [{
         byte_size: String(PNG.length),
         mime_type: "image/png",
+        provider: "local",
         sha256: digest,
         storage_key: "chat/2026-08/019bf9ea-0d3e-7def-8c9a-000000000011.png",
       }],
@@ -594,6 +597,7 @@ describe("CatalogPublicService", () => {
       rows: [{
         byte_size: String(PNG.length),
         mime_type: "image/png",
+        provider: "local",
         sha256: digest,
         storage_key: "catalog/2026-08/019bf9ea-0d3e-7def-8c9a-000000000011.png",
       }],
@@ -606,12 +610,39 @@ describe("CatalogPublicService", () => {
       rows: [{
         byte_size: String(10 * 1024 * 1024 + 1),
         mime_type: "image/png",
+        provider: "local",
         sha256: digest,
         storage_key: "catalog/2026-08/019bf9ea-0d3e-7def-8c9a-000000000011.png",
       }],
     });
     await expect(service.media(IMAGE_ID)).rejects.toBeInstanceOf(NotFoundException);
     expect(read).not.toHaveBeenCalled();
+  });
+
+  it("serves a photo from the storage its record names: the S3 bucket or the disk it was left on", async () => {
+    const digest = createHash("sha256").update(PNG).digest();
+    const readS3 = vi.fn().mockResolvedValue(PNG);
+    const readLocal = vi.fn().mockResolvedValue(PNG);
+    const both = new CatalogPublicService(
+      new CatalogCategoryTreeCache(),
+      database as unknown as DatabaseService,
+      new ProductPhotoStorage(
+        { name: "s3", read: readS3, remove: vi.fn(), store: vi.fn() },
+        [{ name: "local", read: readLocal, remove: vi.fn(), store: vi.fn() }],
+      ),
+    );
+    const row = { byte_size: String(PNG.length), mime_type: "image/png", sha256: digest };
+
+    query.mockResolvedValueOnce({ rows: [{ ...row, provider: "s3", storage_key: "catalog/2026-11/019bf9ea-0d3e-7def-8c9a-000000000011.png" }] });
+    await expect(both.media(IMAGE_ID)).resolves.toMatchObject({ content: PNG });
+    expect(readS3).toHaveBeenCalledWith("catalog/2026-11/019bf9ea-0d3e-7def-8c9a-000000000011.png");
+    expect(readLocal).not.toHaveBeenCalled();
+    expect((query.mock.calls[0] as [string, unknown[]])[1][1]).toEqual(["s3", "local"]);
+
+    query.mockResolvedValueOnce({ rows: [{ ...row, provider: "local", storage_key: "chat/2026-08/019bf9ea-0d3e-7def-8c9a-000000000011.png" }] });
+    await expect(both.media(IMAGE_ID)).resolves.toMatchObject({ content: PNG });
+    expect(readLocal).toHaveBeenCalledWith("chat/2026-08/019bf9ea-0d3e-7def-8c9a-000000000011.png");
+    expect(readS3).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -667,7 +698,7 @@ describe("CatalogPublicService word-by-word search", () => {
         )),
       }),
     } as unknown as DatabaseService,
-    { name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() },
+    new ProductPhotoStorage({ name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() }),
   );
 
   beforeEach(() => query.mockReset());
@@ -728,7 +759,7 @@ describe("CatalogPublicService first page of a section", () => {
         )),
       }),
     } as unknown as DatabaseService,
-    { name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() },
+    new ProductPhotoStorage({ name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() }),
   );
 
   beforeEach(() => {

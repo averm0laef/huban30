@@ -13,7 +13,8 @@ import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { fileTypeFromBuffer } from "file-type";
 
-import { STORAGE_PROVIDER, type StorageProvider } from "../adapters/provider-contracts.js";
+import { PRODUCT_PHOTO_STORAGE, type ProductPhotoStorage } from "../adapters/product-photo-storage.js";
+import type { StoredObject } from "../adapters/provider-contracts.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { MalwareScannerService } from "../security/malware-scanner.service.js";
 import { MediaValidationService } from "../security/media-validation.service.js";
@@ -42,7 +43,7 @@ export class OneCExchangeImagesService {
   constructor(
     private readonly database: DatabaseService,
     private readonly tempStorage: OneCExchangeTempStorageService,
-    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    @Inject(PRODUCT_PHOTO_STORAGE) private readonly photos: ProductPhotoStorage,
     private readonly malwareScanner: MalwareScannerService,
     private readonly mediaValidation: MediaValidationService,
   ) {}
@@ -93,7 +94,14 @@ export class OneCExchangeImagesService {
       return this.skip(task, error instanceof Error ? error.constructor.name : "validation failed");
     }
 
-    const stored = await this.storage.store(content, extension);
+    const storage = this.photos.target;
+    let stored: StoredObject;
+    try {
+      stored = await storage.store(content, extension);
+    } catch (error) {
+      // An unreachable bucket must not abort the price and stock update.
+      return this.skip(task, `photo storage "${storage.name}" did not accept it (${error instanceof Error ? error.name : "error"})`);
+    }
     let removeStored = false;
     try {
       const outcome = await this.database.transaction(async (client) => {
@@ -109,7 +117,7 @@ export class OneCExchangeImagesService {
                THEN NULL ELSE app.storage_objects.deleted_at END,
              updated_at = clock_timestamp()
            RETURNING id, storage_key, status::text`,
-          [this.storage.name, stored.storageKey, `1c:${task.path}`.slice(0, 255), detected.mime, content.length, sha256],
+          [storage.name, stored.storageKey, `1c:${task.path}`.slice(0, 255), detected.mime, content.length, sha256],
         )).rows[0]!;
         removeStored = object.storage_key !== stored.storageKey;
         if (object.status !== "available") return "skipped" as const;
@@ -127,7 +135,7 @@ export class OneCExchangeImagesService {
       removeStored = true;
       throw error;
     } finally {
-      if (removeStored) await this.storage.remove(stored.storageKey).catch(() => undefined);
+      if (removeStored) await storage.remove(stored.storageKey).catch(() => undefined);
     }
   }
 

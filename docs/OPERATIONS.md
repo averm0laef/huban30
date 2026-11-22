@@ -69,8 +69,11 @@ ssh an30-deploy@185.177.216.238 'set -e
   tar xzf /tmp/an30-src.tar.gz -C app.new
   rm -rf app.old && mv app app.old && mv app.new app'
 
-# 3. Сборка и запуск
+# 3. Сборка и запуск. Сначала — файлы ключей: новая версия может ждать файл, которого на сервере ещё нет
+#    (например, s3_access_key_id.txt), и без него docker compose не запустит службы. Команда создаёт
+#    недостающие пустые файлы и не меняет заполненные.
 cd /opt/an30/app
+sudo env AN30_SECRETS_DIR=/etc/an30/secrets sh scripts/init-secrets.sh
 sudo AN30_SECRETS_DIR=/etc/an30/secrets docker compose --env-file /etc/an30/staging.env up -d --build
 sudo AN30_SECRETS_DIR=/etc/an30/secrets docker compose --env-file /etc/an30/staging.env ps
 curl -fsS https://staging.an30.ru/health/ready
