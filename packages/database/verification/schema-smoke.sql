@@ -8,7 +8,6 @@ DECLARE
   invalid_money_column_count integer;
   missing_foreign_key_index_count integer;
   order_states text[];
-  payment_states text[];
   roles text[];
 BEGIN
   SELECT count(*)
@@ -70,33 +69,14 @@ BEGIN
   WHERE enumtypid = 'app.order_status'::regtype;
 
   IF order_states <> ARRAY[
-    'pending_payment',
-    'paid',
+    'awaiting_confirmation',
     'processing',
     'awaiting_delivery_terms',
     'ready',
     'completed',
-    'cancelled',
-    'refunded'
+    'cancelled'
   ] THEN
     RAISE EXCEPTION 'Unexpected order state contract: %', order_states;
-  END IF;
-
-  SELECT array_agg(enumlabel ORDER BY enumsortorder)
-  INTO payment_states
-  FROM pg_enum
-  WHERE enumtypid = 'app.payment_status'::regtype;
-
-  IF payment_states <> ARRAY[
-    'pending',
-    'authorized',
-    'succeeded',
-    'failed',
-    'cancelled',
-    'partially_refunded',
-    'refunded'
-  ] THEN
-    RAISE EXCEPTION 'Unexpected payment state contract: %', payment_states;
   END IF;
 END;
 $$;
@@ -247,7 +227,14 @@ $$;
 DO $$
 DECLARE
   checkout_order_id uuid := gen_random_uuid();
+  legal_version text;
 BEGIN
+  FOREACH legal_version IN ARRAY ARRAY[
+    'checkout-terms-v1',
+    'checkout-terms-2026-08-15-v2',
+    'checkout-terms-2026-08-30-v3'
+  ] LOOP
+  checkout_order_id := gen_random_uuid();
   INSERT INTO app.orders (
     id,
     public_number,
@@ -279,13 +266,13 @@ BEGIN
     0,
     0,
     clock_timestamp(),
-    'checkout-terms-2026-08-15-v2',
-    clock_timestamp(),
-    'checkout-personal-data-2026-08-15-v1',
-    '/checkout-personal-data-consent',
-    'Schema smoke exact checkout consent text',
-    '127.0.0.1',
-    'schema-smoke'
+    legal_version,
+    CASE WHEN legal_version<>'checkout-terms-v1' THEN clock_timestamp() END,
+    CASE WHEN legal_version<>'checkout-terms-v1' THEN 'checkout-personal-data-2026-08-15-v1' END,
+    CASE WHEN legal_version<>'checkout-terms-v1' THEN '/checkout-personal-data-consent' END,
+    CASE WHEN legal_version<>'checkout-terms-v1' THEN 'Schema smoke exact checkout consent text' END,
+    CASE WHEN legal_version<>'checkout-terms-v1' THEN '127.0.0.1'::inet END,
+    CASE WHEN legal_version<>'checkout-terms-v1' THEN 'schema-smoke' END
   );
 
   BEGIN
@@ -296,23 +283,65 @@ BEGIN
   EXCEPTION
     WHEN SQLSTATE '55000' THEN NULL;
   END;
+  END LOOP;
+
+  BEGIN
+    INSERT INTO app.orders (
+      public_number,idempotency_key,customer_email,customer_phone,customer_name,
+      contact_snapshot,delivery_snapshot,subtotal_kopeks,total_amount_kopeks,
+      terms_accepted_at,legal_policy_version
+    ) VALUES (
+      'AN-SCHEMA-MISSING-CONSENT','schema-missing-consent','schema-smoke@example.test',
+      '+79141234567','Schema Smoke','{}'::jsonb,'{"method":"pickup"}'::jsonb,0,0,
+      clock_timestamp(),'checkout-terms-2026-08-30-v3'
+    );
+    RAISE EXCEPTION 'Current checkout unexpectedly accepted missing consent evidence';
+  EXCEPTION
+    WHEN check_violation THEN NULL;
+  END;
+END;
+$$;
+
+DO $$
+DECLARE
+  integration_id uuid;
+  previous_revision bigint;
+  current_revision bigint;
+  statement text;
+BEGIN
+  INSERT INTO app.integration_endpoints (integration_key)
+  VALUES ('schema_smoke_session_revision')
+  RETURNING id,auth_revision INTO integration_id,previous_revision;
+
+  FOR statement IN SELECT unnest(ARRAY[
+    'username=''schema-smoke-user''',
+    'secret_hash=decode(''ab'',''hex'')',
+    'allowed_networks=ARRAY[''127.0.0.1/32''::cidr]',
+    'is_enabled=true',
+    'is_enabled=false'
+  ]) LOOP
+    EXECUTE 'UPDATE app.integration_endpoints SET ' || statement || ' WHERE id=$1'
+      USING integration_id;
+    SELECT auth_revision INTO current_revision FROM app.integration_endpoints WHERE id=integration_id;
+    IF current_revision<>previous_revision+1 THEN
+      RAISE EXCEPTION 'Integration security change did not advance session generation: %', statement;
+    END IF;
+    previous_revision := current_revision;
+  END LOOP;
+
+  UPDATE app.integration_endpoints
+  SET last_used_at=clock_timestamp(),last_exchange_at=clock_timestamp(),username=username,
+      auth_revision=auth_revision+100
+  WHERE id=integration_id
+  RETURNING auth_revision INTO current_revision;
+  IF current_revision<>previous_revision THEN
+    RAISE EXCEPTION 'Usage updates changed security generation or allowed it to be overwritten';
+  END IF;
 END;
 $$;
 
 DO $$
 BEGIN
-  IF to_regprocedure('app.expire_stock_reservations(integer)') IS NULL THEN
-    RAISE EXCEPTION 'Reservation expiry function is missing';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_indexes
-    WHERE schemaname = 'app'
-      AND indexname = 'payments_one_live_goods_per_order_uidx'
-  ) THEN
-    RAISE EXCEPTION 'Live goods payment uniqueness index is missing';
-  END IF;
-
   IF NOT EXISTS (
     SELECT 1 FROM pg_trigger
     WHERE tgrelid = 'app.order_items'::regclass
