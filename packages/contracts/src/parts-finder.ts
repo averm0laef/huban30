@@ -259,6 +259,8 @@ export const PartsFinderStaffOverviewSchema = z.object({
     configured: z.boolean(),
     dailyLimit: z.number(),
     fitmentEnabled: z.boolean(),
+    /** One visitor's share of the day's credits. */
+    visitorDailyLimit: z.number(),
     packageRemaining: z.number().nullable(),
     plan: z.string().nullable(),
     status: z.string().nullable(),

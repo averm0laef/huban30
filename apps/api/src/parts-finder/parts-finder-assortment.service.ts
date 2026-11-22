@@ -134,10 +134,11 @@ export class PartsFinderAssortmentService {
   }
 
   private async linkProduct(product: Candidate, identities: BrandIdentities, report: AssortmentLinkReport): Promise<void> {
-    let card = await this.engine.crosses({ article: product.sku });
+    // Linking the assortment is the shop's own work: not counted against any visitor.
+    let card = await this.engine.crosses({ article: product.sku }, null);
     let decision = decideProductLink(card, product.brand, identities);
     if (decision.action === "ask_brand") {
-      card = await this.engine.crosses({ article: product.sku, manufacturer_id: decision.manufacturerId });
+      card = await this.engine.crosses({ article: product.sku, manufacturer_id: decision.manufacturerId }, null);
       decision = decideProductLink(card, product.brand, identities);
       if (decision.action === "ask_brand") decision = { action: "no_data" };
     }

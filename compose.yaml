@@ -171,6 +171,7 @@ services:
       FAPI_KEY_FILE: /run/secrets/fapi_key
       FAPI_FITMENT_ENABLED: ${FAPI_FITMENT_ENABLED:-false}
       FAPI_DAILY_CREDIT_LIMIT: ${FAPI_DAILY_CREDIT_LIMIT:-1000}
+      FAPI_VISITOR_DAILY_CREDIT_LIMIT: ${FAPI_VISITOR_DAILY_CREDIT_LIMIT:-100}
       API_NINJAS_KEY_FILE: /run/secrets/api_ninjas_key
       # TecDoc (tecdoc.site): the vehicle and applicability catalogue; see docs/TECDOC.md.
       TECDOC_API_KEY_FILE: /run/secrets/tecdoc_api_key

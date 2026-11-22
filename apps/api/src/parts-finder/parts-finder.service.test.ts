@@ -66,6 +66,7 @@ function setup(options: {
   const engine = {
     crosses: vi.fn(options.engine?.crosses ?? (async () => ({}))),
     dailyLimit: 1000,
+    visitorDailyLimit: 100,
     enabled: options.enabled ?? true,
     fapiFitmentEnabled: false,
     fapiKey: "set",
@@ -113,7 +114,7 @@ describe("search", () => {
     const rows = [row("0415240060", "TOYOTA", "p-exact"), row("9091510009", "TOYOTA", "p-out", { available_quantity: "0" })];
     const { engine, query, service } = setup({ engine: { search: async () => PROBOX }, rows });
     const result = await service.search({ catalog: "autodoc", choices: { engine: 1 }, query: " масляный фильтр пробокс " });
-    expect(engine.search).toHaveBeenCalledWith({ choices: { engine: 1 }, query: "масляный фильтр пробокс" }, VOCABULARY);
+    expect(engine.search).toHaveBeenCalledWith({ choices: { engine: 1 }, query: "масляный фильтр пробокс" }, VOCABULARY, { payer: null });
     expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0]![0]).toBe(SHOP_OFFERS_SQL);
     expect((result.parts as Array<{ article: string }>).map((part) => part.article)).toEqual(["04152-40060", "90915-10009", "90915-10003"]);
@@ -131,7 +132,7 @@ describe("search", () => {
       choices: { make: 111, model: 123, modification: 456 },
       confirmed: true,
       query: "масляный фильтр Toyota Probox 1NR-FE 1.3 л",
-    }, VOCABULARY);
+    }, VOCABULARY, { payer: null });
     expect(result.selected_vehicle).toBe("Toyota · Probox · 1.3 1NR-FE");
   });
 
@@ -148,7 +149,7 @@ describe("search", () => {
       rows: [[], [row("2330074060", "TOYOTA", "p-cross", { via: 1, sku: "WK614/10" })]],
     });
     const result = await service.search({ query: "топливный фильтр Toyota Gaia" });
-    expect(engine.crosses.mock.calls).toEqual([[{ article: "23300-74060", manufacturer_id: 111 }], [{ article: "FS-1001", manufacturer_id: 222 }]]);
+    expect(engine.crosses.mock.calls).toEqual([[{ article: "23300-74060", manufacturer_id: 111 }, null], [{ article: "FS-1001", manufacturer_id: 222 }, null]]);
     expect(crossStore.remember).toHaveBeenCalledTimes(2);
     expect(query).toHaveBeenCalledTimes(2);
     expect((result.parts as Array<{ shop: unknown[] }>)[0]!.shop).toEqual([expect.objectContaining({ matchedVia: "cross", productId: "p-cross" })]);
@@ -267,7 +268,7 @@ describe("resolve (header search)", () => {
     expect(crossStore.rememberPairs).toHaveBeenCalledWith(
       [{ article: "04152-40060", brand: "Toyota", confirmed: false, crossArticle: "W 68/3", crossBrand: "MANN-FILTER" }], "rossko",
     );
-    expect(engine.crosses).toHaveBeenCalledWith({ article: "04152-40060" });
+    expect(engine.crosses).toHaveBeenCalledWith({ article: "04152-40060" }, null);
     expect(query).toHaveBeenCalledTimes(2);
     expect(result.shop).toEqual([expect.objectContaining({ matchedVia: "possible", productId: "p-analog" })]);
   });
@@ -336,7 +337,7 @@ describe("staff overview", () => {
     expect(await service.staffOverview()).toEqual({
       fapi: {
         cacheEntries: 2, cacheHits: 4, checkedAt: "2026-11-21T08:00:00.000Z", configured: true, dailyLimit: 1000,
-        fitmentEnabled: false, packageRemaining: 29_000, plan: "standard", status: "allowed", usedToday: 7,
+        fitmentEnabled: false, packageRemaining: 29_000, plan: "standard", status: "allowed", usedToday: 7, visitorDailyLimit: 100,
       },
       supplier: { enabled: true, lastError: null, lastSuccessAt: null },
       vin: { cacheEntries: 3, cacheHits: 9, vinrokuRemaining: 97 },
@@ -357,5 +358,47 @@ describe("helpers", () => {
     const offer = (availableQuantity: number) => ({ availableQuantity });
     const parts = [{ id: "a" }, { id: "b", shop: [offer(0)] }, { id: "c", shop: [offer(3)] }, { id: "d", shop: [offer(1)] }];
     expect(rankByShop(parts).map((part) => part.id)).toEqual(["c", "d", "b", "a"]);
+  });
+});
+
+// One address could spend the whole site's day of FAPI credits. Every paid lookup a public route starts is now
+// made in the visitor's name, so it is counted against that visitor's own share of the day.
+describe("whose share of the day a visitor's request spends", () => {
+  const VISITOR = { ip: "203.0.113.9" };
+
+  it("the guided search, and the cards it looks up for parts the shop does not stock", async () => {
+    const found = { parts: [{ article: "23300-74060", brand: "Toyota", manufacturer_id: 111 }], status: "found", vehicle: "Toyota Gaia" };
+    const { engine, service } = setup({ engine: { crosses: async () => ({ status: "found" }), search: async () => found }, remembered: 1, rows: [[], []] });
+    await service.search({ query: "топливный фильтр Toyota Gaia" }, VISITOR);
+    expect(engine.search).toHaveBeenCalledWith({ query: "топливный фильтр Toyota Gaia" }, VOCABULARY, { payer: "203.0.113.9" });
+    expect(engine.crosses).toHaveBeenCalledWith({ article: "23300-74060", manufacturer_id: 111 }, "203.0.113.9");
+  });
+
+  it("the analogues of a part number", async () => {
+    const { engine, service } = setup({ engine: { crosses: async () => ({ status: "no_data" }) } });
+    await service.crosses({ article: "W 75/3" }, VISITOR);
+    expect(engine.crosses).toHaveBeenCalledWith({ article: "W 75/3" }, "203.0.113.9");
+  });
+
+  it("the header search, when it learns a number the shop does not stock", async () => {
+    const { engine, service } = setup({ engine: { crosses: async () => ({ status: "no_data" }), search: async () => ({ article: "04152-40060", status: "article" }) }, rows: [[], []] });
+    await service.resolve({ query: "04152-40060" }, VISITOR);
+    expect(engine.search).toHaveBeenCalledWith({ query: "04152-40060" }, VOCABULARY, { payer: "203.0.113.9" });
+    expect(engine.crosses).toHaveBeenCalledWith({ article: "04152-40060" }, "203.0.113.9");
+  });
+
+  it("a visitor out of their share is answered from the shop's own data, without a word about credits", async () => {
+    const search = vi.fn(async (_form: unknown, _vocabulary: unknown, options: { offline?: boolean }) => {
+      if (!options.offline) throw new PartsFinderError(429, "fapi_visitor_limit", "Суточная доля запросов к каталогу для одного посетителя исчерпана.");
+      return { status: "need_detail" };
+    });
+    const { engine, service } = setup({ engine: { search: search as never } });
+    await expect(service.search({ query: "масляный фильтр пробокс" }, VISITOR)).resolves.toMatchObject({ status: "need_detail" });
+    expect(engine.search).toHaveBeenLastCalledWith({ query: "масляный фильтр пробокс" }, VOCABULARY, { offline: true, payer: "203.0.113.9" });
+  });
+
+  it("the staff overview names the share", async () => {
+    const { service } = setup();
+    expect((await service.staffOverview()).fapi.visitorDailyLimit).toBe(100);
   });
 });

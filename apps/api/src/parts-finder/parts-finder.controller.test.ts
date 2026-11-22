@@ -49,8 +49,11 @@ describe("PartsFinderController rate limits", () => {
     const body = { query: "x" };
     await expect(controller[route](body, request)).resolves.toEqual({ ok: route });
     expect(consume).toHaveBeenCalledWith(scope, "203.0.113.7", limit, window);
-    // The header search also says whose request it is: TecDoc answers only a visitor's own request.
-    expect(finder[route]).toHaveBeenCalledWith(body, ...(route === "resolve" ? [{ ip: "203.0.113.7" }] : []));
+    // Every route that can reach a paid catalogue says whose request it is: the paid call is then counted
+    // against that visitor's share of the day (and TecDoc answers only a visitor's own request). Decoding a VIN
+    // and looking in the shop's own catalogue cost nothing and name nobody.
+    const paid = route === "resolve" || route === "search" || route === "crosses";
+    expect(finder[route]).toHaveBeenCalledWith(body, ...(paid ? [{ ip: "203.0.113.7" }] : []));
     expect(calls).toEqual([`limit:${scope}`, `service:${route}`]);
   });
 
@@ -62,7 +65,8 @@ describe("PartsFinderController rate limits", () => {
     const { consume, controller, finder } = setup();
     await controller[route]({ q: "x" }, request);
     expect(consume).toHaveBeenCalledWith(scope, "203.0.113.7", limit, window);
-    expect(finder[route]).toHaveBeenCalledWith({ q: "x" });
+    // The lists of models and of engines are filled from the paid catalogue on their first request.
+    expect(finder[route]).toHaveBeenCalledWith({ q: "x" }, ...(route === "suggest" ? [] : [{ ip: "203.0.113.7" }]));
   });
 
   it("makes are throttled with the picker limit", async () => {
@@ -142,6 +146,15 @@ describe("parts finder configuration", () => {
     const config = validateEnvironment(base);
     expect([config.PARTS_FINDER_ENABLED, config.FAPI_KEY, config.FAPI_FITMENT_ENABLED, config.FAPI_DAILY_CREDIT_LIMIT, config.API_NINJAS_MODE])
       .toEqual([true, undefined, false, 1000, "off"]);
+  });
+
+  // One address could spend the site's whole day of credits in a couple of minutes (60 lists of engines a minute
+  // at 8 credits each). A visitor's own share of the day: two cold searches and a few lists fit into 100.
+  it("gives one visitor a share of the day's FAPI credits, 100 unless set otherwise", () => {
+    expect(validateEnvironment(base).FAPI_VISITOR_DAILY_CREDIT_LIMIT).toBe(100);
+    expect(validateEnvironment({ ...base, FAPI_VISITOR_DAILY_CREDIT_LIMIT: "250" }).FAPI_VISITOR_DAILY_CREDIT_LIMIT).toBe(250);
+    expect(() => validateEnvironment({ ...base, FAPI_VISITOR_DAILY_CREDIT_LIMIT: "0" })).toThrow();
+    expect(() => validateEnvironment({ ...base, FAPI_VISITOR_DAILY_CREDIT_LIMIT: "abc" })).toThrow();
   });
 
   it("reads optional keys from secret files; a missing or empty file means not configured", async () => {

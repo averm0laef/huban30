@@ -29,7 +29,7 @@ import { SupplierSearchService } from "../suppliers/supplier-search.service.js";
 import { PartsFinderError } from "./engine/errors.js";
 import { findEngine, isEngineCode } from "./engine/part-query.js";
 import { normalizeChassis } from "./engine/vin-decoder.js";
-import { PartsFinderEngine } from "./parts-finder.engine.js";
+import { type FapiPayer, PartsFinderEngine } from "./parts-finder.engine.js";
 import { PartsFinderCrossStore, crossRowsFromSupplier } from "./parts-finder-crosses.store.js";
 import type { TecdocCaller } from "../tecdoc/tecdoc.gateway.js";
 import { TecdocService } from "../tecdoc/tecdoc.service.js";
@@ -131,7 +131,10 @@ export class PartsFinderService {
     return { catalog: this.tecdoc?.available ? "tecdoc" : "local", enabled: this.engine.enabled };
   }
 
-  async search(body: unknown): Promise<JsonRecord> {
+  // `caller` is the visitor a public route answers: what the paid catalogue costs is counted against that
+  // visitor's share of the day. Without it (staff, tests) the shop pays.
+  async search(body: unknown, caller?: TecdocCaller): Promise<JsonRecord> {
+    const payer = caller?.ip ?? null;
     const request = parse(PartsFinderSearchRequestSchema, body);
     const form: JsonRecord = { query: request.query };
     if (request.confirmed !== undefined) form.confirmed = request.confirmed;
@@ -152,7 +155,7 @@ export class PartsFinderService {
       form.choices = choices;
       form.confirmed = true;
     }
-    const result = await this.guided(form);
+    const result = await this.guided(form, payer);
     if (vehicleLabel) result.selected_vehicle = vehicleLabel;
     return result;
   }
@@ -162,9 +165,9 @@ export class PartsFinderService {
     return this.run(() => this.engine.vehicle(request.vin));
   }
 
-  async crosses(body: unknown): Promise<JsonRecord> {
+  async crosses(body: unknown, caller?: TecdocCaller): Promise<JsonRecord> {
     const request = parse(PartsFinderCrossesRequestSchema, body);
-    const result = await this.run(() => this.engine.crosses(request));
+    const result = await this.run(() => this.engine.crosses(request, caller?.ip ?? null));
     await this.crossStore.remember(result);
     const groups = isRecord(result.groups) ? result.groups : null;
     const candidates = Array.isArray(result.candidates) ? result.candidates : null;
@@ -222,7 +225,7 @@ export class PartsFinderService {
     if (!this.engine.enabled) return { kind: "text", query };
     let first: JsonRecord;
     try {
-      first = await this.run(() => this.engineSearch({ query }));
+      first = await this.run(() => this.engineSearch({ query }, caller?.ip ?? null));
     } catch {
       return { kind: "text", query };
     }
@@ -247,7 +250,7 @@ export class PartsFinderService {
       // the supplier's answer (free) and its FAPI card (1 credit, cached),
       // then ask our catalog again. The routing-only call (supplier: false)
       // never spends anything.
-      if (withSupplier && !shop.some((offer) => offer.availableQuantity > 0) && await this.learnArticle(article, supplier)) {
+      if (withSupplier && !shop.some((offer) => offer.availableQuantity > 0) && await this.learnArticle(article, supplier, caller?.ip ?? null)) {
         shop = (await this.shop.lookup([{ article, brand: null }], PARTS_FINDER_SHOP_ANALOGS_LIMIT)).for({ article });
       }
       return {
@@ -265,7 +268,7 @@ export class PartsFinderService {
     }
     if (["choose", "confirm", "reference", "found"].includes(String(first.status))
       || (first.status === "no_data" && typeof first.vehicle === "string")) {
-      return { kind: "vehicle_part", query, search: await this.enrichSearch(first) as PartsFinderResolveResponse["search"] };
+      return { kind: "vehicle_part", query, search: await this.enrichSearch(first, caller?.ip ?? null) as PartsFinderResolveResponse["search"] };
     }
     return { kind: "text", query };
   }
@@ -305,14 +308,14 @@ export class PartsFinderService {
     return this.run(() => this.vehicles.makes());
   }
 
-  async models(query: unknown) {
+  async models(query: unknown, caller?: TecdocCaller) {
     const { make } = parse(PickerModelsQuerySchema, query);
-    return this.run(() => this.vehicles.models(make));
+    return this.run(() => this.vehicles.models(make, caller?.ip ?? null));
   }
 
-  async modifications(query: unknown) {
+  async modifications(query: unknown, caller?: TecdocCaller) {
     const { model } = parse(PickerModificationsQuerySchema, query);
-    return this.run(() => this.vehicles.modifications(model));
+    return this.run(() => this.vehicles.modifications(model, caller?.ip ?? null));
   }
 
   async suggest(query: unknown) {
@@ -341,6 +344,7 @@ export class PartsFinderService {
         dailyLimit: this.engine.dailyLimit,
         fitmentEnabled: this.engine.fapiFitmentEnabled,
         packageRemaining: remaining,
+        visitorDailyLimit: this.engine.visitorDailyLimit,
         plan: usage && usage.plan !== undefined ? String(usage.plan) : null,
         status: usage?.status ?? null,
         usedToday: ledger.reservedToday,
@@ -350,9 +354,9 @@ export class PartsFinderService {
     };
   }
 
-  private async guided(form: JsonRecord): Promise<JsonRecord> {
-    const result = await this.run(() => this.engineSearch(form));
-    return this.enrichSearch(result);
+  private async guided(form: JsonRecord, payer: FapiPayer): Promise<JsonRecord> {
+    const result = await this.run(() => this.engineSearch(form, payer));
+    return this.enrichSearch(result, payer);
   }
 
   /**
@@ -360,18 +364,19 @@ export class PartsFinderService {
    * a key is our problem, not the customer's: the search then answers from
    * the shop's own fitment and leads into the catalog section of the part.
    */
-  private async engineSearch(form: JsonRecord): Promise<JsonRecord> {
+  private async engineSearch(form: JsonRecord, payer: FapiPayer): Promise<JsonRecord> {
     const vocabulary = await this.vehicles.vocabulary();
     try {
-      return await this.engine.search(form, vocabulary);
+      return await this.engine.search(form, vocabulary, { payer });
     } catch (error) {
+      // A visitor out of their own share of the day is answered the same way: from the shop's own data.
       if (!(error instanceof PartsFinderError) || !isCatalogueOutage(error)) throw error;
       this.logger.warn(`parts catalogue unavailable (${error.code}): answering from our own data`);
-      return this.engine.search(form, vocabulary, { offline: true });
+      return this.engine.search(form, vocabulary, { offline: true, payer });
     }
   }
 
-  private async enrichSearch(result: JsonRecord): Promise<JsonRecord> {
+  private async enrichSearch(result: JsonRecord, payer: FapiPayer): Promise<JsonRecord> {
     const parts = Array.isArray(result.parts) ? result.parts : null;
     const article = result.status === "article" && typeof result.article === "string" && result.article ? result.article : null;
     const requests = (parts ?? []).filter(isPart).map(partRequest);
@@ -381,7 +386,7 @@ export class PartsFinderService {
     // Nothing of ours for the fitting articles: look up the first few cards
     // (1 credit each, cached for a month), keep their crosses in our base and
     // ask our catalog again, so the customer sees what we stock instead.
-    if (parts && !requests.some((request) => offers.for(request).length > 0) && await this.linkThroughCrosses(parts.filter(isPart))) {
+    if (parts && !requests.some((request) => offers.for(request).length > 0) && await this.linkThroughCrosses(parts.filter(isPart), payer)) {
       offers = await this.shop.lookup(requests, PARTS_FINDER_OFFERS_PER_PART);
     }
     const enriched: JsonRecord = { ...result };
@@ -391,10 +396,10 @@ export class PartsFinderService {
   }
 
   /** What the supplier and FAPI know about one number, into app.article_crosses; true when anything was stored. */
-  private async learnArticle(article: string, supplier: { parts: SupplierSearchResponse["parts"] } | null): Promise<boolean> {
+  private async learnArticle(article: string, supplier: { parts: SupplierSearchResponse["parts"] } | null, payer: FapiPayer): Promise<boolean> {
     const stored = [supplier ? this.crossStore.rememberPairs(crossRowsFromSupplier(supplier.parts), "rossko") : Promise.resolve(0)];
     if (this.engine.fapiKey && await this.autoLookupBudget(1)) {
-      stored.push(this.engine.crosses({ article })
+      stored.push(this.engine.crosses({ article }, payer)
         // Several brands share the number: the customer picks one under «Аналоги».
         .then((card) => (card.status === "found" ? this.crossStore.remember(card) : 0))
         .catch(() => 0));
@@ -419,12 +424,12 @@ export class PartsFinderService {
   }
 
   /** FAPI cards for the first fitting articles into app.article_crosses; true when any cross was stored. */
-  private async linkThroughCrosses(parts: readonly PartRecord[]): Promise<boolean> {
+  private async linkThroughCrosses(parts: readonly PartRecord[], payer: FapiPayer): Promise<boolean> {
     if (!this.engine.fapiKey) return false;
     const wanted = parts.filter((part) => typeof part.manufacturer_id === "number").slice(0, AUTO_CROSS_CARDS);
     if (wanted.length === 0 || !await this.autoLookupBudget(wanted.length)) return false;
     const cards = wanted
-      .map((part) => this.engine.crosses({ article: part.article, manufacturer_id: part.manufacturer_id as number })
+      .map((part) => this.engine.crosses({ article: part.article, manufacturer_id: part.manufacturer_id as number }, payer)
         .then((card) => this.crossStore.remember(card))
         .catch(() => 0));
     return (await Promise.all(cards)).some((stored) => stored > 0);

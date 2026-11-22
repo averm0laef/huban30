@@ -9,7 +9,7 @@ import {
 import { CATEGORIES } from "./engine/vehicle-parts.js";
 import { parseModelName } from "./engine/model-name.js";
 import { VEHICLE_SEED, slugify } from "./engine/vehicle-seed.js";
-import { PartsFinderEngine } from "./parts-finder.engine.js";
+import { type FapiPayer, PartsFinderEngine } from "./parts-finder.engine.js";
 
 const REFRESH_SECONDS = 90 * 86_400;
 const SYNC_PAUSE_MS = 400;
@@ -275,12 +275,13 @@ export class PartsFinderVehiclesService {
     return { groups: [...groups.entries()].map(([letter, list]) => ({ letter, makes: list })), popular };
   }
 
-  async models(makeSlug: string): Promise<{ make: PickerMake; models: PickerModel[]; popular: string[]; source: "fapi" | "seed" }> {
+  /** `payer`: whose share of the day the paid catalogue is asked on, when the list has to be fetched (`null` — the shop's). */
+  async models(makeSlug: string, payer: FapiPayer): Promise<{ make: PickerMake; models: PickerModel[]; popular: string[]; source: "fapi" | "seed" }> {
     let { makes } = await this.load();
     let make = makes.find((row) => row.slug === makeSlug);
     if (!make) throw new PartsFinderError(404, "vehicle_make_not_found", "Марка не найдена. Выберите её из списка.");
     if (this.fapiUsable && stale(make.models_checked_at)) {
-      const refresh = this.refreshModels(make);
+      const refresh = this.refreshModels(make, payer);
       if (make.models_checked_at) void refresh.catch(() => undefined);
       else await refresh.catch(() => undefined);
       ({ makes } = await this.load());
@@ -308,13 +309,13 @@ export class PartsFinderVehiclesService {
     };
   }
 
-  async modifications(modelId: number): Promise<{ available: boolean; message?: string; model: PickerModel; modifications: PickerModification[] }> {
+  async modifications(modelId: number, payer: FapiPayer): Promise<{ available: boolean; message?: string; model: PickerModel; modifications: PickerModification[] }> {
     const { models } = await this.load();
     const model = models.find((row) => row.id === modelId);
     if (!model) throw new PartsFinderError(404, "vehicle_model_not_found", "Модель не найдена. Выберите её из списка.");
     const view: PickerModel = { fapi: model.fapi_id !== null, id: model.id, name: model.name, yearFrom: model.year_from, yearTo: model.year_to };
     if (model.fapi_id !== null && this.fapiUsable && modificationsStale(model)) {
-      const refresh = this.refreshModifications(model);
+      const refresh = this.refreshModifications(model, payer);
       if (model.modifications_checked_at) void refresh.catch(() => undefined);
       else {
         try {
@@ -456,7 +457,7 @@ export class PartsFinderVehiclesService {
     const spent = async () => (await this.engine.ledger.summary(this.engine.today())).reservedToday - startUsed;
     const report: VehicleCatalogSyncReport = { creditsUsed: 0, error: null, finishedAt: "", makesLinked: 0, modelsRefreshed: 0, modificationsRefreshed: 0 };
     await this.ensureSeeded();
-    const manufacturers = rows(await this.engine.fapi.fetch("/catalogList/dt/manufacturerList", {}, 3), "mf");
+    const manufacturers = rows(await this.engine.fapiFor(null).fetch("/catalogList/dt/manufacturerList", {}, 3), "mf");
     // Only the curated makes (vehicle-seed.ts) are linked: FAPI also lists
     // motorcycles, scooters and joint ventures nobody looks for here.
     let { makes } = await this.load();
@@ -476,7 +477,7 @@ export class PartsFinderVehiclesService {
       if (await spent() >= options.maxCredits) break;
       if (make.popular_rank === null && !options.allMakes) continue;
       if (!stale(make.models_checked_at)) continue;
-      if (!await this.syncStep(() => this.refreshModels(make), report)) break;
+      if (!await this.syncStep(() => this.refreshModels(make, null), report)) break;
       report.modelsRefreshed += 1;
     }
     if (options.modifications) {
@@ -490,7 +491,7 @@ export class PartsFinderVehiclesService {
         if (model.fapi_id === null || !popular.has(model.make_id) || !modificationsStale(model)) continue;
         // Only generations still on the road: from 1995 on.
         if (model.year_to !== null && model.year_to < 1995) continue;
-        if (!await this.syncStep(() => this.refreshModifications(model), report)) break;
+        if (!await this.syncStep(() => this.refreshModifications(model, null), report)) break;
         report.modificationsRefreshed += 1;
       }
     }
@@ -515,12 +516,15 @@ export class PartsFinderVehiclesService {
     }
   }
 
-  private refreshModels(make: MakeRow): Promise<void> {
-    const key = `make:${make.id}`;
+  // One refresh at a time per list AND per payer: a visitor out of their share must not hand that refusal to the
+  // staff's sync of the same make, nor to another visitor (the budget itself shares one paid call between them).
+  private refreshModels(make: MakeRow, payer: FapiPayer): Promise<void> {
+    const key = `make:${make.id}:${payer ?? "shop"}`;
+    const fapi = this.engine.fapiFor(payer);
     const pending = this.refreshing.get(key) ?? (async () => {
       let fapiMakeId = make.fapi_id;
       if (fapiMakeId === null) {
-        const list = rows(await this.engine.fapi.fetch("/catalogList/dt/manufacturerList", {}, 3), "mf");
+        const list = rows(await fapi.fetch("/catalogList/dt/manufacturerList", {}, 3), "mf");
         const target = new Set([keyOf(make.name), keyOf(make.slug.replaceAll("-", " "))]);
         const found = list.find((row) => typeof row.ds === "string" && target.has(keyOf(row.ds)));
         if (!found || typeof found.dbi !== "number") {
@@ -530,7 +534,7 @@ export class PartsFinderVehiclesService {
         fapiMakeId = found.dbi;
         await this.database.query("UPDATE app.parts_finder_vehicle_makes SET fapi_id=$2 WHERE id=$1 AND fapi_id IS NULL", [make.id, fapiMakeId]);
       }
-      const list = rows(await this.engine.fapi.fetch("/catalogList/dt/modelList", { mfi: fapiMakeId }, 8), "m");
+      const list = rows(await fapi.fetch("/catalogList/dt/modelList", { mfi: fapiMakeId }, 8), "m");
       const items = list.flatMap((row) => {
         if (typeof row.dbi !== "number" || typeof row.d !== "string" || !row.d.trim()) return [];
         const name = prettyModel(row.d, make.name);
@@ -559,10 +563,10 @@ export class PartsFinderVehiclesService {
     return pending;
   }
 
-  private refreshModifications(model: ModelRow): Promise<void> {
-    const key = `model:${model.id}`;
+  private refreshModifications(model: ModelRow, payer: FapiPayer): Promise<void> {
+    const key = `model:${model.id}:${payer ?? "shop"}`;
     const pending = this.refreshing.get(key) ?? (async () => {
-      const list = rows(await this.engine.fapi.fetch("/catalogList/dt/modificationList", { mi: model.fapi_id! }, 8), "m");
+      const list = rows(await this.engine.fapiFor(payer).fetch("/catalogList/dt/modificationList", { mi: model.fapi_id! }, 8), "m");
       const items = list.flatMap((row) => {
         if (typeof row.dbi !== "number" || typeof row.d !== "string" || !row.d.trim()) return [];
         const start = yearOf(row.cb);

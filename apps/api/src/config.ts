@@ -78,6 +78,8 @@ const RawEnvironmentSchema = z.object({
   // default: fitment comes from the shop's own table, FAPI pays for crosses.
   FAPI_FITMENT_ENABLED: z.enum(["true", "false", "1", "0"]).default("false"),
   FAPI_DAILY_CREDIT_LIMIT: z.coerce.number().int().min(0).max(1_000_000).default(1_000),
+  // One visitor's share of the day's credits: without it one address spends the whole site's day in minutes.
+  FAPI_VISITOR_DAILY_CREDIT_LIMIT: z.coerce.number().int().min(1).max(100_000).default(100),
   API_NINJAS_KEY: z.string().optional(),
   API_NINJAS_KEY_FILE: z.string().min(1).optional(),
   API_NINJAS_MODE: z.enum(["off", "demo", "commercial"]).default("off"),

@@ -52,7 +52,7 @@ export class PartsFinderController {
   @HttpCode(200)
   async search(@Body() body: unknown, @Req() request: FastifyRequest) {
     await this.throttle("search", request);
-    return this.finder.search(body);
+    return this.finder.search(body, { ip: request.ip });
   }
 
   @Post("vehicle")
@@ -66,7 +66,7 @@ export class PartsFinderController {
   @HttpCode(200)
   async crosses(@Body() body: unknown, @Req() request: FastifyRequest) {
     await this.throttle("crosses", request);
-    return this.finder.crosses(body);
+    return this.finder.crosses(body, { ip: request.ip });
   }
 
   @Post("shop-analogs")
@@ -85,13 +85,13 @@ export class PartsFinderController {
   @Get("models")
   async models(@Query() query: unknown, @Req() request: FastifyRequest) {
     await this.throttle("picker", request);
-    return this.finder.models(query);
+    return this.finder.models(query, { ip: request.ip });
   }
 
   @Get("modifications")
   async modifications(@Query() query: unknown, @Req() request: FastifyRequest) {
     await this.throttle("picker", request);
-    return this.finder.modifications(query);
+    return this.finder.modifications(query, { ip: request.ip });
   }
 
   @Get("vehicles/suggest")

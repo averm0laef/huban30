@@ -20,6 +20,7 @@ interface Overview {
     plan: string | null;
     status: string | null;
     usedToday: number;
+    visitorDailyLimit: number;
   };
   supplier: { enabled: boolean; lastError: { at: string; message: string } | null; lastSuccessAt: string | null };
   vin: { cacheEntries: number; cacheHits: number; vinrokuRemaining: number | null };
@@ -306,6 +307,7 @@ export function PartsFinderStatusCard() {
           ) : <Badge appearance="tint" color="informative">Ключ не задан — аналоги FAPI недоступны, остальной подбор работает</Badge>}
           <dl className={styles.detailList}>
             <div><dt>Потрачено сегодня (по Москве)</dt><dd>{number.format(data.fapi.usedToday)} из {number.format(data.fapi.dailyLimit)} кредитов</dd></div>
+            <div><dt>Одному посетителю в сутки</dt><dd>не больше {number.format(data.fapi.visitorDailyLimit)} кредитов — дальше подбор отвечает ему по данным магазина</dd></div>
             <div><dt>Остаток пакета</dt><dd>{data.fapi.packageRemaining === null ? "ещё не запрашивался" : `${number.format(data.fapi.packageRemaining)} кредитов`}</dd></div>
             <div><dt>Тариф</dt><dd>{data.fapi.plan ?? "—"}{data.fapi.status ? `, ${FAPI_STATUS[data.fapi.status] ?? data.fapi.status}` : ""}</dd></div>
             <div><dt>Проверено</dt><dd>{formatDate(data.fapi.checkedAt)}</dd></div>
