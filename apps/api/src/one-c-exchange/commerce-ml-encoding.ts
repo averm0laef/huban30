@@ -31,9 +31,16 @@ function byteOrderMark(content: Buffer): string | null {
   return null;
 }
 
-/** The encoding the file itself names: a byte order mark first, then the XML declaration, UTF-8 otherwise. */
+/** UTF-16 without a byte order mark: the "<?" every XML declaration starts with, a zero byte beside each character. */
+function unmarkedUtf16(content: Buffer): string | null {
+  if (content[0] === 0x3c && content[1] === 0x00 && content[2] === 0x3f && content[3] === 0x00) return "utf-16le";
+  if (content[0] === 0x00 && content[1] === 0x3c && content[2] === 0x00 && content[3] === 0x3f) return "utf-16be";
+  return null;
+}
+
+/** The encoding the file itself names: a byte order mark or the byte pattern of UTF-16 first, then the XML declaration, UTF-8 otherwise. */
 export function detectCommerceMlEncoding(content: Buffer): string {
-  const marked = byteOrderMark(content);
+  const marked = byteOrderMark(content) ?? unmarkedUtf16(content);
   if (marked) return marked;
   // The declaration is ASCII in every supported single-byte encoding and in UTF-8.
   const declared = DECLARATION.exec(content.subarray(0, 256).toString("latin1"))?.[1]?.trim().toLowerCase();

@@ -58,6 +58,16 @@ describe("the encoding of a 1С exchange file", () => {
     expect(productName(big)).toBe(NAME);
   });
 
+  it("reads UTF-16 that carries no byte order mark", () => {
+    const little = Buffer.from(document("UTF-16LE"), "utf16le");
+    expect(detectCommerceMlEncoding(little)).toBe("utf-16le");
+    expect(productName(little)).toBe(NAME);
+    const big = Buffer.from(document("UTF-16BE"), "utf16le");
+    big.swap16();
+    expect(detectCommerceMlEncoding(big)).toBe("utf-16be");
+    expect(productName(big)).toBe(NAME);
+  });
+
   it("rejects an encoding it cannot read instead of guessing", () => {
     const content = Buffer.from(document("x-mac-cyrillic"), "utf8");
     expect(() => decodeCommerceMl(content)).toThrow(CommerceMlParseError);
