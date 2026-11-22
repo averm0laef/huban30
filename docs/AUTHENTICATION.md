@@ -56,7 +56,7 @@ sudo sh -c 'docker compose exec -T api node dist/cli/create-owner.js \
 ## Клиентский сценарий
 
 1. `POST /api/v1/auth/register` создаёт неподтверждённый аккаунт и outbox-событие.
-2. `POST /api/v1/auth/email/verify` активирует одноразовый токен на 24 часа.
+2. `POST /api/v1/auth/email/verify` принимает одноразовый токен со сроком действия 24 часа и пароль, указанный при регистрации.
 3. `POST /api/v1/auth/login` создаёт opaque-сессию.
 4. `POST /api/v1/auth/password/forgot` всегда возвращает одинаковый ответ и не
    раскрывает наличие email; reset-токен действует 30 минут.
@@ -76,7 +76,7 @@ sudo sh -c 'docker compose exec -T api node dist/cli/create-owner.js \
 TOTP того же временного шага блокируется.
 
 Development может возвращать `developmentToken` для воспроизводимых smoke-тестов
-только при `AUTH_DEBUG_TOKENS=true` и локальном HTTP origin. С не-local origin
+только в development при `AUTH_DEBUG_TOKENS=true` и локальном HTTP origin. С не-local origin
 API завершает запуск с ошибкой. В production эта возможность выключена.
 
 ## Проверка на локальном стеке
