@@ -71,6 +71,8 @@ export class ResetPasswordDto extends TokenDto {
   password!: string;
 }
 
+export class VerifyEmailDto extends ResetPasswordDto {}
+
 export class TotpCodeDto {
   @IsString()
   @Matches(/^(?:\d{6}|[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4})$/iu)

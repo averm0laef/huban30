@@ -116,6 +116,13 @@ export class AccountController {
   }
 
   @RequirePermissions("account:update:self")
+  @Patch("avatar")
+  async updateAvatar(@Body() body: unknown, @Req() request: FastifyRequest) {
+    await this.rateLimit.consume("account-avatar", request.authContext!.userId, 60, 3_600);
+    return this.account.updateAvatar(body, request.authContext!, metadata(request));
+  }
+
+  @RequirePermissions("account:update:self")
   @Put("password")
   async changePassword(@Body() body: unknown, @Req() request: FastifyRequest) {
     await this.rateLimit.consume("account-password", request.authContext!.userId, 5, 3_600);
@@ -126,6 +133,12 @@ export class AccountController {
   @Get("wishlist")
   wishlist(@Query() query: unknown, @Req() request: FastifyRequest) {
     return this.account.wishlist(query, request.authContext!);
+  }
+
+  @RequirePermissions("wishlist:manage:self")
+  @Get("wishlist/:productId")
+  wishlistItem(@Param("productId") productId: string, @Req() request: FastifyRequest) {
+    return this.account.wishlistItem(productId, request.authContext!);
   }
 
   @RequirePermissions("wishlist:manage:self")

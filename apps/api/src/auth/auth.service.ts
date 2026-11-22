@@ -32,6 +32,7 @@ import type {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
+  VerifyEmailDto,
 } from "./auth.dto.js";
 import { SessionService, type CreatedSession } from "./session.service.js";
 
@@ -208,43 +209,52 @@ export class AuthService {
     };
   }
 
-  async verifyEmail(rawToken: string, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+  async verifyEmail(input: VerifyEmailDto, metadata: RequestMetadata): Promise<Record<string, unknown>> {
+    const tokenHash = this.crypto.opaqueHash("email-verification", input.token);
+    const account = (await this.database.query<{ id: string; password_hash: string | null }>(
+      `SELECT account.id, account.password_hash
+       FROM app.email_verification_tokens AS token
+       JOIN app.users AS account ON account.id = token.user_id
+       WHERE token.token_hash = $1 AND token.used_at IS NULL AND token.expires_at > clock_timestamp()
+         AND account.status = 'pending_email' AND account.deleted_at IS NULL`,
+      [tokenHash],
+    )).rows[0];
+    if (!account?.password_hash) throw new BadRequestException("Ссылка подтверждения недействительна или истекла");
+    if (!await this.passwords.verify(input.password, account.password_hash)) {
+      throw new BadRequestException("Введите пароль, указанный при регистрации");
+    }
+
     const userId = await this.database.transaction(async (client) => {
-      const selected = await client.query<{ id: string; user_id: string }>(
-        `
-          SELECT id, user_id
-          FROM app.email_verification_tokens
-          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
-          FOR UPDATE
-        `,
-        [this.crypto.opaqueHash("email-verification", rawToken)],
+      // Lock the account before its tokens, as register does. A refresh of
+      // the pending registration invalidates the checked password and token.
+      const current = await client.query(
+        `SELECT 1 FROM app.users WHERE id = $1 AND password_hash = $2
+         AND status = 'pending_email' AND deleted_at IS NULL FOR UPDATE`,
+        [account.id, account.password_hash],
       );
-      const token = selected.rows[0];
-      if (!token) throw new BadRequestException("Ссылка подтверждения недействительна или истекла");
+      if (!current.rowCount) throw new BadRequestException("Ссылка подтверждения недействительна или истекла");
+      const consumed = await client.query(
+        `UPDATE app.email_verification_tokens SET used_at = clock_timestamp()
+         WHERE user_id = $1 AND token_hash = $2 AND used_at IS NULL AND expires_at > clock_timestamp()`,
+        [account.id, tokenHash],
+      );
+      if (!consumed.rowCount) throw new BadRequestException("Ссылка подтверждения недействительна или истекла");
       await client.query(
-        "UPDATE app.email_verification_tokens SET used_at = clock_timestamp() WHERE id = $1",
-        [token.id],
-      );
-      const activated = await client.query(
         `
           UPDATE app.users
           SET status = 'active', email_verified_at = COALESCE(email_verified_at, clock_timestamp())
-          WHERE id = $1 AND status='pending_email' AND deleted_at IS NULL
-          RETURNING id
+          WHERE id = $1
         `,
-        [token.user_id],
+        [account.id],
       );
-      if (activated.rowCount === 0) {
-        throw new BadRequestException("Ссылка подтверждения недействительна или истекла");
-      }
       await this.audit.record({
         action: "auth.email.verified",
-        entityId: token.user_id,
+        entityId: account.id,
         entityType: "user",
         ipAddress: metadata.ipAddress,
         userAgent: metadata.userAgent,
       }, client);
-      return token.user_id;
+      return account.id;
     });
     return { message: "Email подтверждён", userId };
   }

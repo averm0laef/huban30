@@ -5,10 +5,16 @@ import { validateEnvironment } from "./config.js";
 const secrets = {
   DATA_ENCRYPTION_KEY: "test-data-encryption-key-with-more-than-32-characters",
   SESSION_SECRET: "test-session-hmac-secret-with-more-than-32-characters",
-  SANDBOX_PAYMENT_WEBHOOK_SECRET: "test-sandbox-webhook-secret-with-more-than-32-characters",
 };
 
 describe("API environment", () => {
+  it("keeps external matching opt-in and requires a server key when enabled", () => {
+    expect(validateEnvironment(secrets).REEFAPI_ENABLED).toBe(false);
+    expect(() => validateEnvironment({ ...secrets, REEFAPI_ENABLED:"true" })).toThrow(/ReefAPI credentials/);
+    const configured=validateEnvironment({...secrets,REEFAPI_ENABLED:"true",REEFAPI_KEY:"server-side-test-key",REEFAPI_DAILY_CREDITS:"6",REEFAPI_MARKET:"de"});
+    expect(configured.REEFAPI_ENABLED).toBe(true);expect(configured.REEFAPI_DAILY_CREDITS).toBe(6);
+    expect(()=>validateEnvironment({...secrets,REEFAPI_DAILY_CREDITS:"1000000"})).toThrow();
+  });
   it("fails closed without security keys", () => {
     expect(() => validateEnvironment({ NODE_ENV: "development" })).toThrow(/Session HMAC secret/);
   });
@@ -31,6 +37,36 @@ describe("API environment", () => {
 
     expect(environment.AUTH_DEBUG_TOKENS).toBe(true);
     expect(environment.COOKIE_SECURE).toBe(false);
+  });
+
+  it.each(["http://localhost", "http://localhost:3000", "http://127.0.0.1:3000"])(
+    "rejects production debug tokens even with the local origin %s",
+    (origin) => {
+      expect(() => validateEnvironment({
+        ...secrets,
+        APP_ORIGIN: origin,
+        AUTH_DEBUG_TOKENS: "true",
+        DEPLOYMENT_ENVIRONMENT: "production",
+      })).toThrow(/forbidden in staging and production deployments/);
+    },
+  );
+
+  it("allows production to start with debug tokens disabled", () => {
+    expect(validateEnvironment({
+      ...secrets,
+      APP_ORIGIN: "https://an30.ru",
+      AUTH_DEBUG_TOKENS: "false",
+      DEPLOYMENT_ENVIRONMENT: "production",
+    }).AUTH_DEBUG_TOKENS).toBe(false);
+  });
+
+  it("rejects auth debug tokens in staging even with a loopback origin", () => {
+    expect(() => validateEnvironment({
+      ...secrets,
+      APP_ORIGIN: "http://localhost:3000",
+      AUTH_DEBUG_TOKENS: "true",
+      DEPLOYMENT_ENVIRONMENT: "staging",
+    })).toThrow(/forbidden in staging and production deployments/);
   });
 
   it("pins bounded local malware and media probe settings", () => {
@@ -75,24 +111,19 @@ describe("API environment", () => {
     expect(spoofed.AUTH_ADMIN_TOKEN_LOOKUP).toBe(false);
   });
 
-  it("blocks sandbox checkout in production but permits it in staging", () => {
+  it("keeps public checkout closed until the legal documents are approved", () => {
     expect(() => validateEnvironment({
       ...secrets,
-      DEPLOYMENT_ENVIRONMENT: "production",
       ENABLE_PUBLIC_CHECKOUT: "true",
-      LEGAL_DOCUMENTS_APPROVED: "true",
-      PAYMENTS_PROVIDER: "sandbox",
-    })).toThrow(/Production public checkout cannot use the sandbox/);
+    })).toThrow(/Public checkout requires approved legal documents/);
 
     const staging = validateEnvironment({
       ...secrets,
       DEPLOYMENT_ENVIRONMENT: "staging",
       ENABLE_PUBLIC_CHECKOUT: "true",
       LEGAL_DOCUMENTS_APPROVED: "true",
-      PAYMENTS_PROVIDER: "sandbox",
     });
     expect(staging.ENABLE_PUBLIC_CHECKOUT).toBe(true);
-    expect(staging.PAYMENTS_PROVIDER).toBe("sandbox");
   });
 
   it("leaves the Rossko supplier integration off by default without requiring credentials", () => {

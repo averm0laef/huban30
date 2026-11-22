@@ -9,6 +9,8 @@ import {
 } from "@nestjs/common";
 import { z } from "zod";
 
+import { AccountAvatarUpdateSchema, customerAvatarKey, publicProductName } from "@an30/contracts";
+
 import type { AuthContext } from "../auth/auth-context.js";
 import { assertStrongPassword } from "../auth/auth.service.js";
 import { STORAGE_PROVIDER, type StorageProvider } from "../adapters/provider-contracts.js";
@@ -32,16 +34,32 @@ interface RequestMetadata {
 }
 
 interface AccountRow {
+  avatar_key: string | null;
   created_at: Date;
   display_name: string | null;
   email: string;
+  id: string;
   phone: string | null;
+}
+
+/** The profile as the storefront sees it; `avatarKey` is never empty. */
+function accountView(row: AccountRow) {
+  return {
+    avatarChosen: row.avatar_key !== null,
+    avatarKey: customerAvatarKey(row.id, row.avatar_key),
+    createdAt: row.created_at.toISOString(),
+    displayName: row.display_name,
+    email: row.email,
+    phone: row.phone,
+  };
 }
 
 interface ProductListRow {
   amount_kopeks: string | null;
   available_quantity: string;
   brand_name: string | null;
+  category_name: string | null;
+  category_slug: string | null;
   created_at: Date;
   id: string;
   name: string;
@@ -91,10 +109,12 @@ function productView(row: ProductListRow) {
   return {
     availableQuantity: safeInteger(row.available_quantity, "остаток"),
     brandName: row.brand_name,
+    category: row.category_slug ? { name: row.category_name, slug: row.category_slug } : null,
     createdAt: row.created_at.toISOString(),
     id: row.id,
     imageUrl: row.primary_image_id ? `/api/v1/catalog/media/${row.primary_image_id}` : null,
-    name: row.name,
+    // Without the staff's notes typed into the name in 1С («(Ш)», «+++», the shelf box): product-name.ts.
+    name: publicProductName(row.name),
     price: row.amount_kopeks === null ? null : {
       amountKopeks: safeInteger(row.amount_kopeks, "цена"),
       currency: "RUB",
@@ -115,18 +135,43 @@ export class AccountService {
 
   async read(auth: AuthContext) {
     const row = (await this.database.query<AccountRow>(
-      `SELECT email::text,phone,display_name,created_at
+      `SELECT id,email::text,phone,display_name,avatar_key,created_at
        FROM app.users
        WHERE id=$1 AND status='active' AND deleted_at IS NULL`,
       [auth.userId],
     )).rows[0];
     if (!row) throw new NotFoundException("Профиль не найден");
-    return {
-      createdAt: row.created_at.toISOString(),
-      displayName: row.display_name,
-      email: row.email,
-      phone: row.phone,
-    };
+    return accountView(row);
+  }
+
+  /** One of the 15 shop pictures, or null to go back to the automatic one. */
+  async updateAvatar(input: unknown, auth: AuthContext, metadata: RequestMetadata) {
+    const body = parseBody(AccountAvatarUpdateSchema, input);
+    return this.database.transaction(async (client) => {
+      const before = (await client.query<{ avatar_key: string | null }>(
+        "SELECT avatar_key FROM app.users WHERE id=$1 AND status='active' AND deleted_at IS NULL FOR UPDATE",
+        [auth.userId],
+      )).rows[0];
+      if (!before) throw new NotFoundException("Профиль не найден");
+      const after = (await client.query<AccountRow>(
+        `UPDATE app.users SET avatar_key=$2,updated_at=clock_timestamp() WHERE id=$1
+         RETURNING id,email::text,phone,display_name,avatar_key,created_at`,
+        [auth.userId, body.avatarKey],
+      )).rows[0];
+      if (!after) throw new NotFoundException("Профиль не найден");
+      await this.audit.record({
+        action: "account.avatar.updated",
+        actorRole: auth.role,
+        actorUserId: auth.userId,
+        afterState: { avatarKey: after.avatar_key },
+        beforeState: { avatarKey: before.avatar_key },
+        entityId: auth.userId,
+        entityType: "user",
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      }, client);
+      return accountView(after);
+    });
   }
 
   async update(input: unknown, auth: AuthContext, metadata: RequestMetadata) {
@@ -134,7 +179,7 @@ export class AccountService {
     try {
       return await this.database.transaction(async (client) => {
         const before = (await client.query<AccountRow>(
-          `SELECT email::text,phone,display_name,created_at
+          `SELECT id,email::text,phone,display_name,avatar_key,created_at
            FROM app.users
            WHERE id=$1 AND status='active' AND deleted_at IS NULL
            FOR UPDATE`,
@@ -146,7 +191,7 @@ export class AccountService {
              display_name=CASE WHEN $2::boolean THEN $3 ELSE display_name END,
              phone=CASE WHEN $4::boolean THEN $5 ELSE phone END
            WHERE id=$1
-           RETURNING email::text,phone,display_name,created_at`,
+           RETURNING id,email::text,phone,display_name,avatar_key,created_at`,
           [
             auth.userId,
             body.displayName !== undefined,
@@ -167,12 +212,7 @@ export class AccountService {
           ipAddress: metadata.ipAddress,
           userAgent: metadata.userAgent,
         }, client);
-        return {
-          createdAt: after.created_at.toISOString(),
-          displayName: after.display_name,
-          email: after.email,
-          phone: after.phone,
-        };
+        return accountView(after);
       });
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
@@ -266,6 +306,15 @@ export class AccountService {
       if (exists.rowCount === 0) throw new NotFoundException("Товар не найден");
     }
     return { productId: body.productId, saved: true };
+  }
+
+  async wishlistItem(productId: string, auth: AuthContext) {
+    const item = parseBody(ProductActionSchema, { productId });
+    const result = await this.database.query(
+      "SELECT 1 FROM app.wishlist_items WHERE user_id=$1 AND product_id=$2",
+      [auth.userId, item.productId],
+    );
+    return { saved: Boolean(result.rowCount) };
   }
 
   async removeWishlist(productId: string, auth: AuthContext) {
@@ -496,7 +545,8 @@ export class AccountService {
   private productSelect(createdAt: string) {
     return `${VISIBLE_CATEGORIES_CTE}
             SELECT product.id,product.sku::text,product.slug::text,product.name,
-              brand.name AS brand_name,price.amount_kopeks::text,
+              brand.name AS brand_name,category.name AS category_name,
+              category.slug::text AS category_slug,price.amount_kopeks::text,
               COALESCE(inventory.available_quantity,0)::text AS available_quantity,
               image.id AS primary_image_id,${createdAt} AS created_at
             FROM app.products AS product

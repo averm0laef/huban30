@@ -38,6 +38,40 @@ function configStub(overrides: Record<string, unknown> = {}): ConfigService {
   return { getOrThrow: (key: string) => values[key] } as unknown as ConfigService;
 }
 
+describe("email verification", () => {
+  it.each([false, true])("requires the registration password before activating the account (%s)", async (matches) => {
+    const account = { id: "019bf9ea-0d3e-7def-8c9a-0000000000cc", password_hash: "pending-password-hash" };
+    const tokenHash = Buffer.from("verification-hash");
+    const query = vi.fn().mockResolvedValue({ rows: [account] });
+    const clientQuery = vi.fn().mockResolvedValue({ rowCount: 1 });
+    const transaction = vi.fn((work: (client: { query: typeof clientQuery }) => Promise<unknown>) => work({ query: clientQuery }));
+    const verify = vi.fn().mockResolvedValue(matches);
+    const record = vi.fn();
+    const service = new AuthService(
+      configStub(),
+      { record } as unknown as AuditService,
+      { opaqueHash: vi.fn().mockReturnValue(tokenHash) } as unknown as CryptoService,
+      { query, transaction } as unknown as DatabaseService,
+      { verify } as unknown as PasswordService,
+      {} as SessionService,
+      {} as TotpService,
+    );
+
+    const result = service.verifyEmail({ token: "email-token", password: "registration password" }, { ipAddress: "192.0.2.7" });
+    if (matches) {
+      await expect(result).resolves.toMatchObject({ userId: account.id });
+      expect(clientQuery).toHaveBeenNthCalledWith(1, expect.stringContaining("FOR UPDATE"), [account.id, account.password_hash]);
+      expect(clientQuery).toHaveBeenNthCalledWith(2, expect.stringContaining("used_at IS NULL"), [account.id, tokenHash]);
+      expect(clientQuery).toHaveBeenNthCalledWith(3, expect.stringContaining("status = 'active'"), [account.id]);
+    } else {
+      await expect(result).rejects.toThrow(BadRequestException);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(record).not.toHaveBeenCalled();
+    }
+    expect(verify).toHaveBeenCalledWith("registration password", account.password_hash);
+  });
+});
+
 describe("auth account state policy", () => {
   it("allows registration refresh only for an unverified pending account", () => {
     expect(canRefreshPendingRegistration(undefined)).toBe(true);

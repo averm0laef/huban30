@@ -10,8 +10,8 @@ import {
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
-  TokenDto,
   TotpCodeDto,
+  VerifyEmailDto,
 } from "./auth.dto.js";
 import { AuthService } from "./auth.service.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
@@ -48,9 +48,9 @@ export class AuthController {
 
   @Public()
   @Post("email/verify")
-  async verifyEmail(@Body() input: TokenDto, @Req() request: FastifyRequest) {
+  async verifyEmail(@Body() input: VerifyEmailDto, @Req() request: FastifyRequest) {
     await this.rateLimit.consume("verify-email-ip", request.ip, 20, 900);
-    return this.auth.verifyEmail(input.token, requestMetadata(request));
+    return this.auth.verifyEmail(input, requestMetadata(request));
   }
 
   @Public()
@@ -60,10 +60,8 @@ export class AuthController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    await Promise.all([
-      this.rateLimit.consume("login-ip", request.ip, 20, 900),
-      this.rateLimit.consume("login-email", input.email, 8, 900),
-    ]);
+    await this.rateLimit.consume("login-ip", request.ip, 20, 900);
+    await this.rateLimit.consume("login-email", input.email, 8, 900);
     const result = await this.auth.login(input, requestMetadata(request));
     this.sessions.setCookie(reply, result.session);
     return result.body;
