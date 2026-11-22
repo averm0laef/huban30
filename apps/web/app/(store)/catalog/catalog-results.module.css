@@ -354,7 +354,7 @@
 .matchedServices a {
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
+  min-height: 44px;
   color: var(--store-brand);
   font-weight: 640;
   text-underline-offset: 4px;

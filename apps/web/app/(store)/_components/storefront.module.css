@@ -1807,7 +1807,7 @@ button.promoControl {
 .checkoutLines { border-top: 1px solid var(--store-border); }
 .checkoutLines > div { display: grid; grid-template-columns: 1fr auto; gap: var(--store-space-sm); padding: var(--store-space-md) 0; border-bottom: 1px solid var(--store-border); }
 .checkoutLines > div > div { min-width: 0; display: grid; gap: 5px; }
-.checkoutLines small { overflow-wrap: anywhere; color: var(--store-muted); font-size: 0.7rem; }
+.checkoutLines small { overflow-wrap: anywhere; color: var(--store-muted); font-size: 0.75rem; }
 .checkoutLines label { display: grid; gap: 5px; color: var(--store-muted); font-size: .75rem; }
 .checkoutLines input { width: 74px; min-height: 44px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); text-align: center; }
 .checkoutLines button { grid-column: 1 / -1; justify-self: start; border: 0; background: none; color: var(--store-danger); cursor: pointer; }

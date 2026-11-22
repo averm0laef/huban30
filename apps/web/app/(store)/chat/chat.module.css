@@ -245,7 +245,7 @@
   border-radius: 10px;
   background: var(--store-brand);
   color: var(--store-on-brand);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: var(--store-weight-black);
 }
 .closedTag {
