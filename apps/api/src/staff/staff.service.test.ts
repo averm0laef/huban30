@@ -38,11 +38,10 @@ describe("staff workspace policy", () => {
   });
 
   it("issues invoices only for an eligible order state", () => {
-    expect(canIssueInvoiceForOrder("paid")).toBe(true);
+    expect(canIssueInvoiceForOrder("processing")).toBe(true);
     expect(canIssueInvoiceForOrder("completed")).toBe(true);
-    expect(canIssueInvoiceForOrder("pending_payment")).toBe(false);
+    expect(canIssueInvoiceForOrder("awaiting_confirmation")).toBe(false);
     expect(canIssueInvoiceForOrder("cancelled")).toBe(false);
-    expect(canIssueInvoiceForOrder("refunded")).toBe(false);
   });
 });
 
@@ -206,5 +205,68 @@ describe("StaffService.chats visibility of a brand-new guest thread", () => {
     expect(rowsParams[2]).toBe(true); // "only unassigned" now active
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.id).toBe(THREAD_ID);
+  });
+});
+
+describe("chat numbers, avatars and deletion", () => {
+  const staff = (role: AuthContext["role"]): AuthContext => ({
+    csrfTokenHash: Buffer.alloc(32), email: `${role}@example.test`, mfaSetupRequired: false, mfaVerified: true,
+    role, sessionId: "66666666-6666-4666-8666-666666666666", userId: STAFF_ID,
+  });
+  const row = {
+    assigned_name: null, assigned_staff_id: null, created_at: new Date("2026-11-20T08:00:00Z"), customer_avatar_key: null,
+    customer_email: null, customer_name: null, customer_user_id: null, id: THREAD_ID, last_message_at: null,
+    last_message_body: null, order_id: null, order_number: null, public_number: "123", status: "open", subject: "Колодки",
+    unread_count: "0", version: 3,
+  };
+  function service(query: ReturnType<typeof vi.fn>) {
+    const publish = vi.fn().mockResolvedValue(undefined), record = vi.fn().mockResolvedValue(undefined);
+    const database = { query, transaction: (work: (client: unknown) => unknown) => work({ query }) };
+    return { publish, record, service: new StaffService({ record } as unknown as AuditService, { publish } as unknown as ChatEventBus, database as unknown as DatabaseService) };
+  }
+
+  it("lists the chat number and a stable avatar, and finds a chat by «Ч-000123»", async () => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [row, { ...row, customer_user_id: STAFF_ID, customer_avatar_key: "customer-07", id: "x", public_number: "7" }] })
+      .mockResolvedValueOnce({ rows: [{ count: "2" }] });
+    const { service: staffService } = service(query);
+    const result = await staffService.chats({ q: "Ч-000123" }, staff("manager"));
+    const [rowsSql, rowsParams] = query.mock.calls[0] as [string, unknown[]];
+    const [countSql, countParams] = query.mock.calls[1] as [string, unknown[]];
+    expect(rowsSql).toContain("thread.public_number=$8::bigint");
+    expect(rowsParams[7]).toBe(123);
+    expect(countSql).toContain("thread.public_number=$5::bigint");
+    expect(countParams[4]).toBe(123);
+    expect(result.items[0]).toMatchObject({ number: "Ч-000123", publicNumber: 123 });
+    expect(result.items[0]?.customerAvatarKey).toMatch(/^customer-(0[1-9]|1[0-5])$/u);
+    expect(result.items[1]).toMatchObject({ customerAvatarKey: "customer-07", number: "Ч-000007" });
+  });
+
+  it("does not treat an ordinary search phrase as a chat number", async () => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ count: "0" }] });
+    await service(query).service.chats({ q: "колодки" }, staff("manager"));
+    expect((query.mock.calls[0] as [string, unknown[]])[1][7]).toBeNull();
+  });
+
+  it("lets only a director or administrator delete, softly, with an audit entry and a closed broadcast", async () => {
+    const forbidden = service(vi.fn());
+    await expect(forbidden.service.deleteChat(THREAD_ID, { reason: "Спам", version: 3 }, staff("manager"), {})).rejects.toMatchObject({ status: 403 });
+
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ public_number: "123", status: "open", version: 3 }] })
+      .mockResolvedValueOnce({ rows: [{ deleted_at: new Date("2026-11-21T10:00:00Z") }] });
+    const { publish, record, service: staffService } = service(query);
+    await expect(staffService.deleteChat(THREAD_ID, { reason: "Спам-рассылка", version: 3 }, staff("admin"), {})).resolves.toMatchObject({ id: THREAD_ID });
+    expect(String(query.mock.calls[1]?.[0])).toContain("deleted_at=clock_timestamp()");
+    expect(String(query.mock.calls[1]?.[0])).not.toContain("DELETE FROM");
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ action: "chat.thread_deleted", beforeState: { number: "Ч-000123", status: "open" }, metadata: { reason: "Спам-рассылка" } }), expect.anything());
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ status: "closed" }), threadId: THREAD_ID }));
+  });
+
+  it("refuses to delete a chat that changed meanwhile and never broadcasts", async () => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [{ public_number: "123", status: "open", version: 4 }] });
+    const { publish, service: staffService } = service(query);
+    await expect(staffService.deleteChat(THREAD_ID, { reason: "Дубль обращения", version: 3 }, staff("director"), {})).rejects.toMatchObject({ status: 409 });
+    expect(publish).not.toHaveBeenCalled();
+    await expect(staffService.deleteChat(THREAD_ID, { version: 3 }, staff("admin"), {})).rejects.toMatchObject({ status: 400 });
   });
 });

@@ -1,3 +1,4 @@
+import { HttpException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { ConfigService } from "@nestjs/config";
 import type { FastifyRequest } from "fastify";
@@ -20,6 +21,7 @@ function fakeSocket() {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
   return {
     OPEN: 1,
+    bufferedAmount: 0,
     readyState: 1,
     send: vi.fn(),
     close: vi.fn(),
@@ -71,6 +73,7 @@ async function buildService(sessionsByToken: Map<string, AuthContext | null>) {
   const config = { getOrThrow: () => APP_ORIGIN } as unknown as ConfigService;
   const assistant = {} as ChatAssistantService;
   const chat = {
+    authorize: vi.fn().mockResolvedValue({}),
     history: vi.fn().mockResolvedValue({
       items: [],
       nextSequence: "0",
@@ -94,6 +97,7 @@ async function buildService(sessionsByToken: Map<string, AuthContext | null>) {
   return {
     chat,
     emit: (event: ChatBroadcast) => published?.(event),
+    rateLimit,
     service,
   };
 }
@@ -113,6 +117,65 @@ async function connectAndSend(
 }
 
 describe("ChatRealtimeService staff queue fan-out", () => {
+  it.each(["revoked", "role changed"])("stops delivery when the session is %s", async (change) => {
+    const sessions = new Map<string, AuthContext | null>([["staff-token", staffAuth()]]);
+    const { emit, service } = await buildService(sessions);
+    try {
+      const thread = await connectAndSend(service, "staff-token", {
+        afterSequence: "0", threadId: THREAD_A, type: "subscribe",
+      });
+      const queue = await connectAndSend(service, "staff-token", { type: "subscribe.queue" });
+      const initialThreadMessages = messagesOf(thread);
+      const initialQueueMessages = messagesOf(queue);
+      sessions.set("staff-token", change === "revoked" ? null : staffAuth({ role: "customer" }));
+
+      emit({ payload: { type: "message" }, threadId: THREAD_A });
+
+      await vi.waitFor(() => {
+        expect(thread.close).toHaveBeenCalledWith(1008, "subscription_unavailable");
+        expect(queue.close).toHaveBeenCalledWith(1008, "subscription_unavailable");
+      });
+      expect(messagesOf(thread)).toEqual(initialThreadMessages);
+      expect(messagesOf(queue)).toEqual(initialQueueMessages);
+    } finally {
+      service.onModuleDestroy();
+    }
+  });
+
+  it("rechecks access to the subscribed conversation before sending its contents", async () => {
+    const { chat, emit, service } = await buildService(new Map());
+    try {
+      const guestToken = "a".repeat(43);
+      const socket = await connectAndSend(service, undefined, {
+        afterSequence: "0", guestToken, threadId: THREAD_A, type: "subscribe",
+      });
+      const initialMessages = messagesOf(socket);
+      vi.mocked(chat.authorize).mockRejectedValueOnce(new HttpException("Not found", 404));
+
+      emit({ payload: { type: "message" }, threadId: THREAD_A });
+
+      await vi.waitFor(() => expect(socket.close).toHaveBeenCalledWith(1008, "subscription_unavailable"));
+      expect(chat.authorize).toHaveBeenCalledWith(THREAD_A, { guestToken, kind: "guest" });
+      expect(messagesOf(socket)).toEqual(initialMessages);
+    } finally {
+      service.onModuleDestroy();
+    }
+  });
+
+  it("disconnects a slow socket before growing its outgoing buffer", async () => {
+    const { service, emit } = await buildService(new Map([["staff-token", staffAuth()]]));
+    try {
+      const socket = await connectAndSend(service, "staff-token", { type: "subscribe.queue" });
+      const sent = socket.send.mock.calls.length;
+      socket.bufferedAmount = 1024 * 1024;
+      emit({ payload: { type: "message" }, threadId: THREAD_A });
+      expect(socket.terminate).toHaveBeenCalledOnce();
+      expect(socket.send).toHaveBeenCalledTimes(sent);
+    } finally {
+      service.onModuleDestroy();
+    }
+  });
+
   it("lets a manager subscribe to the queue and nudges it on a message for ANY thread, without leaking the payload", async () => {
     const managerToken = "manager-session";
     const { emit, service } = await buildService(new Map([[managerToken, staffAuth()]]));
@@ -212,5 +275,114 @@ describe("ChatRealtimeService staff queue fan-out", () => {
       expect(messagesOf(directorSocket)).toContainEqual({ threadId: THREAD_A, type: "queue.event" });
       expect(messagesOf(managerSocket)).toContainEqual({ threadId: THREAD_A, type: "queue.event" });
     });
+  });
+});
+
+
+describe("ChatRealtimeService bounded inbound queue", () => {
+  it("applies the connection quota before parsing a frame", async () => {
+    const { rateLimit, service } = await buildService(new Map());
+    vi.mocked(rateLimit.consume).mockRejectedValueOnce(new HttpException("Too many requests", 429));
+    const socket = fakeSocket();
+    try {
+      await service.handle(asWebSocket(socket), fakeRequest(undefined));
+      socket.emit("message", Buffer.from("invalid json"));
+      await vi.waitFor(() => expect(socket.close).toHaveBeenCalledWith(1008, "request_rejected"));
+      expect(rateLimit.consume).toHaveBeenCalledWith("chat-ws", "203.0.113.9", 60, 60);
+      expect(messagesOf(socket)).toContainEqual(expect.objectContaining({ code: 429 }));
+    } finally {
+      service.onModuleDestroy();
+    }
+  });
+
+  it("closes an overfull message queue before doing more Redis work", async () => {
+    const { rateLimit, service } = await buildService(new Map());
+    let resume!: () => void;
+    vi.mocked(rateLimit.consume).mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resume = resolve;
+    }));
+    const socket = fakeSocket();
+    try {
+      await service.handle(asWebSocket(socket), fakeRequest(undefined));
+      socket.emit("message", Buffer.from('{"type":"ping"}'));
+      await vi.waitFor(() => expect(rateLimit.consume).toHaveBeenCalledOnce());
+      for (let index = 0; index < 8; index += 1) {
+        socket.emit("message", Buffer.from('{"type":"ping"}'));
+      }
+      expect(socket.close).toHaveBeenCalledWith(1008, "message_queue_full");
+      resume();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(rateLimit.consume).toHaveBeenCalledOnce();
+      expect(messagesOf(socket)).not.toContainEqual({ type: "pong" });
+    } finally {
+      resume?.();
+      service.onModuleDestroy();
+    }
+  });
+
+  it("bounds queued bytes independently of the message count", async () => {
+    const { rateLimit, service } = await buildService(new Map());
+    let resume!: () => void;
+    vi.mocked(rateLimit.consume).mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resume = resolve;
+    }));
+    const socket = fakeSocket();
+    const frame = Buffer.from('{"type":"ping"}'.padEnd(16 * 1024, " "));
+    try {
+      await service.handle(asWebSocket(socket), fakeRequest(undefined));
+      socket.emit("message", frame);
+      await vi.waitFor(() => expect(rateLimit.consume).toHaveBeenCalledOnce());
+      for (let index = 0; index < 4; index += 1) socket.emit("message", frame);
+      expect(socket.close).toHaveBeenCalledWith(1008, "message_queue_full");
+      resume();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(rateLimit.consume).toHaveBeenCalledOnce();
+    } finally {
+      resume?.();
+      service.onModuleDestroy();
+    }
+  });
+
+  it("drops the backlog and closes the connection on a rate-limit rejection", async () => {
+    const { rateLimit, service } = await buildService(new Map());
+    vi.mocked(rateLimit.consume).mockRejectedValue(new HttpException("Too many requests", 429));
+    const socket = fakeSocket();
+    try {
+      await service.handle(asWebSocket(socket), fakeRequest(undefined));
+      for (let index = 0; index < 8; index += 1) {
+        socket.emit("message", Buffer.from('{"type":"ping"}'));
+      }
+      await vi.waitFor(() => expect(socket.close).toHaveBeenCalledWith(1008, "request_rejected"));
+      expect(rateLimit.consume).toHaveBeenCalledOnce();
+      expect(messagesOf(socket).filter((value) => (value as { code?: number }).code === 429)).toHaveLength(1);
+      socket.emit("message", Buffer.from('{"type":"ping"}'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(rateLimit.consume).toHaveBeenCalledOnce();
+    } finally {
+      service.onModuleDestroy();
+    }
+  });
+
+  it("does not consume queued messages after the peer closes", async () => {
+    const { rateLimit, service } = await buildService(new Map());
+    let resume!: () => void;
+    vi.mocked(rateLimit.consume).mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resume = resolve;
+    }));
+    const socket = fakeSocket();
+    try {
+      await service.handle(asWebSocket(socket), fakeRequest(undefined));
+      socket.emit("message", Buffer.from('{"type":"ping"}'));
+      await vi.waitFor(() => expect(rateLimit.consume).toHaveBeenCalledOnce());
+      socket.emit("message", Buffer.from('{"type":"ping"}'));
+      socket.emit("close");
+      resume();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(rateLimit.consume).toHaveBeenCalledOnce();
+      expect(messagesOf(socket)).not.toContainEqual({ type: "pong" });
+    } finally {
+      resume?.();
+      service.onModuleDestroy();
+    }
   });
 });

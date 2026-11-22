@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import type { FastifyRequest } from "fastify";
 
 import { RequirePermissions } from "../auth/auth.decorators.js";
@@ -18,8 +18,8 @@ export class StaffController {
 
   @RequirePermissions("orders:read:any")
   @Get("summary")
-  summary(@Req() request: FastifyRequest) {
-    return this.staff.summary(request.authContext!);
+  summary() {
+    return this.staff.summary();
   }
 
   @RequirePermissions("orders:read:any")
@@ -76,7 +76,18 @@ export class StaffController {
     );
   }
 
-  @RequirePermissions("catalog:read")
+  /** Soft delete; the service additionally limits it to director/admin. */
+  @RequirePermissions("chat:manage:any")
+  @Delete("chats/:threadId")
+  deleteChat(
+    @Param("threadId") threadId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.staff.deleteChat(threadId, body, request.authContext!, metadata(request));
+  }
+
+  @RequirePermissions("catalog:write")
   @Get("catalog")
   catalog(@Query() query: unknown) {
     return this.staff.catalog(query);

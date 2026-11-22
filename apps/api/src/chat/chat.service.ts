@@ -9,6 +9,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  RequestTimeoutException,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import type { MultipartFile } from "@fastify/multipart";
@@ -17,11 +18,11 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 
 import {
-  CHAT_INTAKE_INTENT_LABELS,
+  formatChatIntakeMessage,
   ChatMessageCreateSchema,
   ChatThreadCreateSchema,
   ROLE_PERMISSIONS,
-  type ChatIntake,
+  chatNumberLabel,
   type Permission,
 } from "@an30/contracts";
 
@@ -51,6 +52,8 @@ const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 // admission slot prevents a burst of otherwise rate-limited guest uploads
 // from retaining many 15 MiB buffers and spawning decoders concurrently.
 const MAX_CONCURRENT_ATTACHMENT_PROCESSING = 1;
+const MAX_CONCURRENT_ATTACHMENT_RECEIVES = 8;
+const ATTACHMENT_RECEIVE_TIMEOUT_MS = 30_000;
 const ALLOWED_ATTACHMENTS = new Map<string, { extension: string; maxBytes: number }>([
   ["image/jpeg", { extension: "jpg", maxBytes: 5 * 1024 * 1024 }],
   ["image/png", { extension: "png", maxBytes: 5 * 1024 * 1024 }],
@@ -62,12 +65,15 @@ const ALLOWED_ATTACHMENTS = new Map<string, { extension: string; maxBytes: numbe
 
 interface ThreadRow {
   assigned_staff_id: string | null;
+  manager_wait_since?: Date | null;
   created_at: Date;
   customer_user_id: string | null;
   guest_token_hash: Buffer | null;
   id: string;
   last_message_at: Date | null;
   order_id: string | null;
+  /** Sequential human-readable number (migration 0039), shown as «Ч-000123». */
+  public_number?: string | number | null;
   status: "closed" | "open" | "waiting_customer" | "waiting_staff";
   subject: string | null;
 }
@@ -90,6 +96,7 @@ interface MessageRow {
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
   private activeAttachmentProcessing = 0;
+  private activeAttachmentReceives = 0;
 
   constructor(
     private readonly database: DatabaseService,
@@ -128,7 +135,7 @@ export class ChatService {
         client,
         thread.id,
         sender,
-        { body: this.intakeOpeningMessage(input.intake), clientMessageId: randomUUID(), replyToId: null },
+        { body: formatChatIntakeMessage(input.intake), clientMessageId: randomUUID(), replyToId: null },
         "text",
       );
       return thread;
@@ -144,8 +151,8 @@ export class ChatService {
       }
       const order = await this.database.query(
         `SELECT 1 FROM app.orders AS checkout_order
-         JOIN app.stock_reservations AS reservation ON reservation.id=checkout_order.reservation_id
-         WHERE checkout_order.id=$1 AND checkout_order.user_id IS NULL AND reservation.guest_token_hash=$2`,
+         WHERE checkout_order.id=$1 AND checkout_order.user_id IS NULL
+           AND checkout_order.guest_token_hash=$2`,
         [input.orderId, this.crypto.opaqueHash("guest-order-access", guestOrderToken)],
       );
       if (order.rowCount === 0) throw new NotFoundException("Заказ не найден");
@@ -162,7 +169,7 @@ export class ChatService {
         client,
         thread.id,
         { kind: "guest", userId: null },
-        { body: this.intakeOpeningMessage(input.intake), clientMessageId: randomUUID(), replyToId: null },
+        { body: formatChatIntakeMessage(input.intake), clientMessageId: randomUUID(), replyToId: null },
         "text",
       );
       return thread;
@@ -306,6 +313,7 @@ export class ChatService {
     clientMessageId: string | undefined,
     file: MultipartFile | undefined,
     identity: ChatIdentity,
+    signal?: AbortSignal,
   ) {
     const parsedClientId = z.uuid().safeParse(clientMessageId);
     if (!parsedClientId.success) throw new BadRequestException("Требуется корректный x-client-message-id");
@@ -313,15 +321,11 @@ export class ChatService {
     const thread = await this.authorize(threadId, identity);
     if (thread.status === "closed") throw new ConflictException("Чат закрыт");
 
+    // Receiving bytes must not monopolize the one expensive scan/decode slot.
+    // Both stages have their own admission limit; slow senders have a deadline.
+    const content = await this.receiveAttachment(file, signal);
     const releaseProcessingSlot = this.acquireAttachmentProcessingSlot();
     try {
-
-      let content: Buffer;
-      try {
-        content = await file.toBuffer();
-      } catch {
-        throw new BadRequestException("Файл превышает 15 МБ или повреждён");
-      }
     if (content.length === 0 || content.length > MAX_ATTACHMENT_BYTES) {
       throw new BadRequestException("Допустимый размер файла: от 1 байта до 15 МБ");
     }
@@ -558,9 +562,14 @@ export class ChatService {
     body: string,
     replyToId: string | null,
     needsHuman: boolean,
-  ): Promise<ChatMessageView> {
+  ): Promise<ChatMessageView | null> {
     const clientMessageId = randomUUID();
     const row = await this.database.transaction(async (client) => {
+      const current = (await client.query<Pick<ThreadRow, "status" | "assigned_staff_id">>(
+        "SELECT status,assigned_staff_id FROM app.chat_threads WHERE id=$1 AND deleted_at IS NULL FOR UPDATE",
+        [threadId],
+      )).rows[0];
+      if (!current || current.status === "closed" || current.assigned_staff_id) return null;
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO app.chat_messages
            (thread_id,sender_user_id,sender_kind,message_type,body,client_message_id,reply_to_id)
@@ -589,6 +598,7 @@ export class ChatService {
         `${this.messageSelect()} WHERE message.id=$1`, [messageId],
       )).rows[0]!;
     });
+    if (!row) return null;
     const view = this.messageView(row);
     await this.events.publish({ payload: { message: view, type: "message" }, threadId });
     return view;
@@ -700,10 +710,14 @@ export class ChatService {
   private async threadAssignmentView(thread: ThreadRow): Promise<{
     assignedStaffId: string | null;
     assignedStaffName: string | null;
+    managerWaitSince?: string | null;
     status: ThreadRow["status"];
   }> {
     if (!thread.assigned_staff_id) {
-      return { assignedStaffId: null, assignedStaffName: null, status: thread.status };
+      return {
+        assignedStaffId: null, assignedStaffName: null, status: thread.status,
+        ...(thread.manager_wait_since !== undefined ? { managerWaitSince: thread.manager_wait_since?.toISOString() ?? null } : {}),
+      };
     }
     const staff = (await this.database.query<{ display_name: string | null }>(
       "SELECT display_name FROM app.users WHERE id=$1",
@@ -762,6 +776,47 @@ export class ChatService {
     return error instanceof Error ? error.message.slice(0, 256) : "unknown error";
   }
 
+  private async receiveAttachment(file: MultipartFile, signal?: AbortSignal): Promise<Buffer> {
+    if (this.activeAttachmentReceives >= MAX_CONCURRENT_ATTACHMENT_RECEIVES) {
+      file.file?.destroy();
+      throw new ServiceUnavailableException("Сейчас загружается слишком много файлов. Повторите позже");
+    }
+    this.activeAttachmentReceives += 1;
+    try {
+      return await new Promise<Buffer>((resolve, reject) => {
+        let settled = false;
+        const finish = (error?: Error, content?: Buffer) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", abort);
+          if (error) reject(error);
+          else resolve(content!);
+        };
+        const stop = (error: Error) => {
+          finish(error);
+          file.file?.destroy();
+        };
+        const abort = () => stop(new BadRequestException("Загрузка файла прервана"));
+        const timer = setTimeout(() => {
+          stop(new RequestTimeoutException("Время загрузки файла истекло. Повторите попытку"));
+        }, ATTACHMENT_RECEIVE_TIMEOUT_MS);
+        timer.unref();
+        signal?.addEventListener("abort", abort, { once: true });
+        if (signal?.aborted) {
+          abort();
+          return;
+        }
+        void Promise.resolve().then(() => file.toBuffer()).then(
+          (content) => finish(undefined, content),
+          () => finish(new BadRequestException("Файл превышает 15 МБ или повреждён")),
+        );
+      });
+    } finally {
+      this.activeAttachmentReceives -= 1;
+    }
+  }
+
   private acquireAttachmentProcessingSlot(): () => void {
     if (this.activeAttachmentProcessing >= MAX_CONCURRENT_ATTACHMENT_PROCESSING) {
       throw new ServiceUnavailableException("Сейчас обрабатывается другой файл. Повторите загрузку через несколько секунд");
@@ -789,17 +844,6 @@ export class ChatService {
       throw new BadRequestException({ error: "invalid_chat_thread", issues: parsed.error.issues });
     }
     return parsed.data;
-  }
-
-  /** Renders the intake questionnaire as the thread's opening message body. */
-  private intakeOpeningMessage(intake: ChatIntake): string {
-    const lines = [
-      `Что нужно: ${CHAT_INTAKE_INTENT_LABELS[intake.intent]}`,
-      `Автомобиль/VIN: ${intake.vehicle ?? "не указано"}`,
-      `Номер детали: ${intake.articleNumber ?? "не указано"}`,
-    ];
-    if (intake.comment) lines.push(`Комментарий: ${intake.comment}`);
-    return lines.join("\n");
   }
 
   private parseCursor(value: string | undefined): string {
@@ -849,7 +893,9 @@ export class ChatService {
       createdAt: row.created_at.toISOString(),
       id: row.id,
       lastMessageAt: row.last_message_at?.toISOString() ?? null,
+      number: chatNumberLabel(row.public_number),
       orderId: row.order_id,
+      publicNumber: row.public_number === null || row.public_number === undefined ? null : Number(row.public_number),
       status: row.status,
       subject: row.subject,
     };

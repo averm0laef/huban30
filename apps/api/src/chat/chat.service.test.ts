@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  RequestTimeoutException,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
@@ -392,10 +393,76 @@ describe("ChatService attachment security and durability", () => {
       competingFile,
       { auth, kind: "authenticated" },
     )).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(competingFile.toBuffer).not.toHaveBeenCalled();
+    expect(competingFile.toBuffer).toHaveBeenCalledOnce();
+    expect(setupResult.assertClean).toHaveBeenCalledOnce();
 
     releaseScan();
     await expect(first).resolves.toMatchObject({ id: MESSAGE_ID });
+  });
+
+  it("lets another upload finish while one sender has not completed its body", async () => {
+    const setupResult = setup();
+    const controller = new AbortController();
+    const stream = new Readable({ read() {} });
+    const pendingFile = { ...multipart(), file: stream, toBuffer: () => new Promise<Buffer>(() => undefined) };
+    const pending = setupResult.service.uploadAttachment(
+      THREAD_ID, CLIENT_MESSAGE_ID, pendingFile as MultipartFile,
+      { auth, kind: "authenticated" }, controller.signal,
+    );
+    const rejected = expect(pending).rejects.toBeInstanceOf(BadRequestException);
+    await new Promise((resolve) => setImmediate(resolve));
+    await expect(setupResult.service.uploadAttachment(
+      THREAD_ID, CLIENT_MESSAGE_ID, multipart(), { auth, kind: "authenticated" },
+    )).resolves.toMatchObject({ id: MESSAGE_ID });
+    controller.abort();
+    await rejected;
+    expect(stream.destroyed).toBe(true);
+  });
+
+  it("destroys a stalled upload at its receive deadline and releases admission", async () => {
+    vi.useFakeTimers();
+    const setupResult = setup();
+    const stream = new Readable({ read() {} });
+    const pendingFile = { ...multipart(), file: stream, toBuffer: () => new Promise<Buffer>(() => undefined) };
+    try {
+      const pending = setupResult.service.uploadAttachment(
+        THREAD_ID, CLIENT_MESSAGE_ID, pendingFile as MultipartFile,
+        { auth, kind: "authenticated" },
+      );
+      const rejected = expect(pending).rejects.toBeInstanceOf(RequestTimeoutException);
+      await vi.advanceTimersByTimeAsync(30_001);
+      await rejected;
+      expect(stream.destroyed).toBe(true);
+      expect(setupResult.assertClean).not.toHaveBeenCalled();
+      await expect(setupResult.service.uploadAttachment(
+        THREAD_ID, CLIENT_MESSAGE_ID, multipart(), { auth, kind: "authenticated" },
+      )).resolves.toMatchObject({ id: MESSAGE_ID });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds simultaneous receivers and releases them when clients abort", async () => {
+    const setupResult = setup();
+    const controllers = Array.from({ length: 8 }, () => new AbortController());
+    const uploads = controllers.map((controller) => setupResult.service.uploadAttachment(
+      THREAD_ID, CLIENT_MESSAGE_ID,
+      { ...multipart(), file: new Readable({ read() {} }), toBuffer: () => new Promise<Buffer>(() => undefined) } as MultipartFile,
+      { auth, kind: "authenticated" }, controller.signal,
+    ).catch((error: unknown) => error));
+    await new Promise((resolve) => setImmediate(resolve));
+    try {
+      await expect(setupResult.service.uploadAttachment(
+        THREAD_ID, CLIENT_MESSAGE_ID, multipart(), { auth, kind: "authenticated" },
+      )).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(setupResult.assertClean).not.toHaveBeenCalled();
+    } finally {
+      for (const controller of controllers) controller.abort();
+      await Promise.all(uploads);
+    }
+    await expect(setupResult.service.uploadAttachment(
+      THREAD_ID, CLIENT_MESSAGE_ID, multipart(), { auth, kind: "authenticated" },
+    )).resolves.toMatchObject({ id: MESSAGE_ID });
   });
 
   it("rechecks and locks thread state after scanning, cleaning up if staff closed it", async () => {

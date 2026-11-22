@@ -10,11 +10,14 @@ import { z } from "zod";
 
 import {
   type ContactRequestStatus,
-  ROLE_PERMISSIONS,
   StaffAuditQuerySchema,
   StaffCatalogQuerySchema,
+  StaffChatDeleteSchema,
   StaffChatsQuerySchema,
   StaffChatUpdateSchema,
+  chatNumberLabel,
+  customerAvatarKey,
+  parseChatNumber,
   StaffInvoiceCreateSchema,
   StaffInvoicesQuerySchema,
   StaffInvoiceUpdateSchema,
@@ -24,7 +27,6 @@ import {
   StaffTeamQuerySchema,
   type ChatThreadStatus,
   type OrderStatus,
-  type Permission,
   type Role,
 } from "@an30/contracts";
 
@@ -98,6 +100,11 @@ export function canReopenChat(role: Role): boolean {
   return role === "director" || role === "admin";
 }
 
+/** Deleting a conversation is reserved for the shop's director and administrators. */
+export function canDeleteChat(role: Role): boolean {
+  return role === "director" || role === "admin";
+}
+
 export function canManagerChangeAssignment(
   currentAssignment: string | null,
   requestedAssignment: string | null,
@@ -110,7 +117,7 @@ export function canManagerChangeAssignment(
 }
 
 export function canIssueInvoiceForOrder(status: OrderStatus | null): boolean {
-  return status === null || !["pending_payment", "cancelled", "refunded"].includes(status);
+  return status === null || !["awaiting_confirmation", "cancelled"].includes(status);
 }
 
 export function canReopenRequest(role: Role): boolean {
@@ -125,24 +132,22 @@ export class StaffService {
     private readonly database: DatabaseService,
   ) {}
 
-  async summary(auth: AuthContext) {
-    const permissions: readonly Permission[] = ROLE_PERMISSIONS[auth.role];
-    const canReadReports = permissions.includes("reports:read");
+  async summary() {
     const result = await this.database.query<{
       chats_unassigned: string;
       chats_waiting_staff: string;
       low_stock: string;
       orders_active: string;
+      orders_awaiting_confirmation: string;
       orders_ready: string;
-      orders_waiting_payment: string;
       out_of_stock: string;
       requests_new: string;
-      cashflow_today_kopeks: string | null;
     }>(
       `SELECT
         (SELECT count(*)::text FROM app.orders
-          WHERE status IN ('paid','processing','awaiting_delivery_terms')) AS orders_active,
-        (SELECT count(*)::text FROM app.orders WHERE status='pending_payment') AS orders_waiting_payment,
+          WHERE status IN ('processing','awaiting_delivery_terms')) AS orders_active,
+        (SELECT count(*)::text FROM app.orders WHERE status='awaiting_confirmation')
+          AS orders_awaiting_confirmation,
         (SELECT count(*)::text FROM app.orders WHERE status='ready') AS orders_ready,
         (SELECT count(*)::text FROM app.chat_threads
           WHERE deleted_at IS NULL AND status='waiting_staff') AS chats_waiting_staff,
@@ -165,21 +170,7 @@ export class StaffService {
           WHERE product.deleted_at IS NULL AND product.is_active
           GROUP BY product.id
           HAVING COALESCE(sum(balance.quantity_available),0) BETWEEN 1 AND 3
-        ) AS low) AS low_stock,
-        CASE WHEN $1::boolean THEN (
-          (SELECT COALESCE(sum(amount_kopeks),0) FROM app.payments
-           WHERE succeeded_at >= (
-             date_trunc('day', clock_timestamp() AT TIME ZONE 'Asia/Chita')
-             AT TIME ZONE 'Asia/Chita'
-           ) AND status IN ('succeeded','partially_refunded','refunded'))
-          -
-          (SELECT COALESCE(sum(amount_kopeks),0) FROM app.refunds
-           WHERE succeeded_at >= (
-             date_trunc('day', clock_timestamp() AT TIME ZONE 'Asia/Chita')
-             AT TIME ZONE 'Asia/Chita'
-           ) AND status='succeeded')
-        )::text ELSE NULL END AS cashflow_today_kopeks`,
-      [canReadReports],
+        ) AS low) AS low_stock`,
     );
     const row = result.rows[0];
     return {
@@ -194,15 +185,12 @@ export class StaffService {
       generatedAt: new Date().toISOString(),
       orders: {
         active: Number(row?.orders_active ?? 0),
+        awaitingConfirmation: Number(row?.orders_awaiting_confirmation ?? 0),
         ready: Number(row?.orders_ready ?? 0),
-        waitingPayment: Number(row?.orders_waiting_payment ?? 0),
       },
       requests: {
         open: Number(row?.requests_new ?? 0),
       },
-      cashflowTodayKopeks: row?.cashflow_today_kopeks === null
-        ? null
-        : Number(row?.cashflow_today_kopeks ?? 0),
     };
   }
 
@@ -400,7 +388,6 @@ export class StaffService {
         customer_phone: string;
         id: string;
         item_count: string;
-        paid_amount_kopeks: string;
         public_number: string;
         status: OrderStatus;
         total_amount_kopeks: string;
@@ -409,7 +396,7 @@ export class StaffService {
         `SELECT checkout_order.id,checkout_order.public_number,checkout_order.status,
                 checkout_order.customer_name,checkout_order.customer_email::text,
                 checkout_order.customer_phone,checkout_order.total_amount_kopeks::text,
-                checkout_order.paid_amount_kopeks::text,checkout_order.version,
+                checkout_order.version,
                 checkout_order.created_at,count(order_item.id)::text AS item_count
          FROM app.orders AS checkout_order
          LEFT JOIN app.order_items AS order_item ON order_item.order_id=checkout_order.id
@@ -440,7 +427,6 @@ export class StaffService {
       customerPhone: row.customer_phone,
       id: row.id,
       itemCount: Number(row.item_count),
-      paidAmountKopeks: Number(row.paid_amount_kopeks),
       publicNumber: row.public_number,
       status: row.status,
       totalAmountKopeks: Number(row.total_amount_kopeks),
@@ -458,32 +444,39 @@ export class StaffService {
     const pattern = searchPattern(query.q);
     const assignedStaffId = query.assigned === "mine" ? auth.userId : null;
     const onlyUnassigned = query.assigned === "unassigned";
-    const filters = `thread.deleted_at IS NULL
+    // «Ч-000123», «#123» or «123» also finds the chat by its number.
+    const chatNumber = query.q ? parseChatNumber(query.q) : null;
+    const filters = (numberParam: number) => `thread.deleted_at IS NULL
       AND ($1::app.chat_thread_status IS NULL OR thread.status=$1)
       AND ($2::uuid IS NULL OR thread.assigned_staff_id=$2)
       AND (NOT $3::boolean OR thread.assigned_staff_id IS NULL)
       AND ($4::text IS NULL OR thread.subject ILIKE $4 ESCAPE '\\'
         OR customer.display_name ILIKE $4 ESCAPE '\\'
         OR customer.email::text ILIKE $4 ESCAPE '\\'
-        OR checkout_order.public_number ILIKE $4 ESCAPE '\\')`;
+        OR checkout_order.public_number ILIKE $4 ESCAPE '\\'
+        OR thread.public_number=$${numberParam}::bigint)`;
     const [rows, count] = await Promise.all([
       this.database.query<{
         assigned_name: string | null;
         assigned_staff_id: string | null;
         created_at: Date;
+        customer_avatar_key: string | null;
         customer_email: string | null;
         customer_name: string | null;
+        customer_user_id: string | null;
         id: string;
         last_message_at: Date | null;
         last_message_body: string | null;
         order_id: string | null;
         order_number: string | null;
+        public_number: string;
         status: ChatThreadStatus;
         subject: string | null;
         unread_count: string;
         version: number;
       }>(
-        `SELECT thread.id,thread.order_id,thread.assigned_staff_id,thread.status,
+        `SELECT thread.id,thread.public_number,thread.customer_user_id,customer.avatar_key AS customer_avatar_key,
+                thread.order_id,thread.assigned_staff_id,thread.status,
                 thread.subject,thread.last_message_at,thread.created_at,thread.version,
                 customer.display_name AS customer_name,customer.email::text AS customer_email,
                 assigned.display_name AS assigned_name,checkout_order.public_number AS order_number,
@@ -503,28 +496,32 @@ export class StaffService {
            WHERE thread_id=thread.id AND deleted_at IS NULL
            ORDER BY sequence_number DESC LIMIT 1
          ) AS last_message ON true
-         WHERE ${filters}
+         WHERE ${filters(8)}
          ORDER BY ${sort} ${query.direction === "asc" ? "ASC" : "DESC"} NULLS LAST,thread.id
          LIMIT $6 OFFSET $7`,
         [query.status ?? null, assignedStaffId, onlyUnassigned, pattern,
-          auth.userId, query.limit, query.offset],
+          auth.userId, query.limit, query.offset, chatNumber],
       ),
       this.database.query<{ count: string }>(
         `SELECT count(*)::text AS count
          FROM app.chat_threads AS thread
          LEFT JOIN app.users AS customer ON customer.id=thread.customer_user_id
          LEFT JOIN app.orders AS checkout_order ON checkout_order.id=thread.order_id
-         WHERE ${filters}`,
-        [query.status ?? null, assignedStaffId, onlyUnassigned, pattern],
+         WHERE ${filters(5)}`,
+        [query.status ?? null, assignedStaffId, onlyUnassigned, pattern, chatNumber],
       ),
     ]);
     return paged(rows.rows.map((row) => ({
       assignedName: row.assigned_name,
       assignedStaffId: row.assigned_staff_id,
       createdAt: row.created_at.toISOString(),
+      // Guests have no account: their picture is a stable pick by chat id.
+      customerAvatarKey: customerAvatarKey(row.customer_user_id ?? `guest:${row.id}`, row.customer_avatar_key),
       customerEmail: row.customer_email,
       customerName: row.customer_name ?? (row.customer_email ? null : "Гость"),
       id: row.id,
+      number: chatNumberLabel(row.public_number),
+      publicNumber: Number(row.public_number),
       lastMessageAt: iso(row.last_message_at),
       lastMessageBody: row.last_message_body,
       orderId: row.order_id,
@@ -573,8 +570,8 @@ export class StaffService {
         status: ChatThreadStatus;
         version: number;
       }>(
-        `UPDATE app.chat_threads SET assigned_staff_id=$2,status=$3,
-           closed_at=CASE WHEN $3='closed' THEN COALESCE(closed_at,clock_timestamp()) ELSE NULL END,
+        `UPDATE app.chat_threads SET assigned_staff_id=$2,status=$3::app.chat_thread_status,
+           closed_at=CASE WHEN $3::app.chat_thread_status='closed' THEN COALESCE(closed_at,clock_timestamp()) ELSE NULL END,
            version=version+1
          WHERE id=$1 AND version=$4
          RETURNING assigned_staff_id,status,closed_at,version`,
@@ -765,7 +762,7 @@ export class StaffService {
         [input.orderId],
       )).rows[0];
       if (!order) throw new NotFoundException("Заказ не найден");
-      if (["pending_payment", "cancelled", "refunded"].includes(order.status)) {
+      if (["awaiting_confirmation", "cancelled"].includes(order.status)) {
         throw new ConflictException("Для текущего состояния заказа нельзя создать накладную");
       }
       const numberParts = (await client.query<{ business_year: number; value: string }>(
@@ -933,7 +930,6 @@ export class StaffService {
       this.database.query<{
         day: string;
         orders: string;
-        net_cashflow_kopeks: string;
       }>(
         `WITH days AS (
            SELECT generate_series(
@@ -945,18 +941,7 @@ export class StaffService {
          SELECT days.day::text AS day,
                 (SELECT count(*)::text FROM app.orders AS checkout_order
                  WHERE checkout_order.created_at>=(days.day::timestamp AT TIME ZONE 'Asia/Chita')
-                   AND checkout_order.created_at<((days.day+1)::timestamp AT TIME ZONE 'Asia/Chita')) AS orders,
-                ((SELECT COALESCE(sum(payment.amount_kopeks),0)
-                  FROM app.payments AS payment
-                  WHERE payment.succeeded_at>=(days.day::timestamp AT TIME ZONE 'Asia/Chita')
-                    AND payment.succeeded_at<((days.day+1)::timestamp AT TIME ZONE 'Asia/Chita')
-                    AND payment.status IN ('succeeded','partially_refunded','refunded'))
-                 -
-                 (SELECT COALESCE(sum(refund.amount_kopeks),0)
-                  FROM app.refunds AS refund
-                  WHERE refund.succeeded_at>=(days.day::timestamp AT TIME ZONE 'Asia/Chita')
-                    AND refund.succeeded_at<((days.day+1)::timestamp AT TIME ZONE 'Asia/Chita')
-                    AND refund.status='succeeded'))::text AS net_cashflow_kopeks
+                   AND checkout_order.created_at<((days.day+1)::timestamp AT TIME ZONE 'Asia/Chita')) AS orders
          FROM days ORDER BY days.day`,
       ),
       this.database.query<{ count: string; status: OrderStatus }>(
@@ -967,7 +952,6 @@ export class StaffService {
       days: days.rows.map((row) => ({
         date: row.day,
         orders: Number(row.orders),
-        netCashflowKopeks: Number(row.net_cashflow_kopeks),
       })),
       generatedAt: new Date().toISOString(),
       orderStatuses: statuses.rows.map((row) => ({ count: Number(row.count), status: row.status })),
@@ -1097,6 +1081,54 @@ export class StaffService {
       updatedAt: row.updated_at.toISOString(),
       version: row.version,
     };
+  }
+
+  /** Soft delete: the chat disappears for staff and the customer, history stays in the database. */
+  async deleteChat(
+    threadId: string,
+    rawInput: unknown,
+    auth: AuthContext,
+    metadata: RequestMetadata,
+  ) {
+    this.uuid(threadId, "Некорректный идентификатор чата");
+    if (!canDeleteChat(auth.role)) throw new ForbiddenException("Удалить чат может директор или администратор");
+    const input = this.parse(StaffChatDeleteSchema, rawInput, "Укажите причину удаления");
+    const deleted = await this.database.transaction(async (client) => {
+      const current = (await client.query<{ public_number: string; status: ChatThreadStatus; version: number }>(
+        `SELECT public_number,status,version FROM app.chat_threads
+         WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+        [threadId],
+      )).rows[0];
+      if (!current) throw new NotFoundException("Чат не найден");
+      if (current.version !== input.version) {
+        throw new ConflictException({ error: "chat_version_conflict", currentVersion: current.version });
+      }
+      const row = (await client.query<{ deleted_at: Date }>(
+        `UPDATE app.chat_threads SET deleted_at=clock_timestamp(),status='closed',
+           closed_at=COALESCE(closed_at,clock_timestamp()),version=version+1
+         WHERE id=$1 AND version=$2 RETURNING deleted_at`,
+        [threadId, input.version],
+      )).rows[0];
+      if (!row) throw new ConflictException({ error: "chat_version_conflict" });
+      await this.auditLog.record({
+        action: "chat.thread_deleted",
+        actorRole: auth.role,
+        actorUserId: auth.userId,
+        beforeState: { number: chatNumberLabel(current.public_number), status: current.status },
+        entityId: threadId,
+        entityType: "chat_thread",
+        ipAddress: metadata.ipAddress,
+        metadata: { reason: input.reason },
+        userAgent: metadata.userAgent,
+      }, client);
+      return { deletedAt: row.deleted_at.toISOString(), id: threadId };
+    });
+    // Open customer windows switch to the closed state at once.
+    await this.chatEvents.publish({
+      payload: { assignedStaffId: null, assignedStaffName: null, status: "closed", type: "thread" },
+      threadId,
+    });
+    return deleted;
   }
 
   private assertChatTransition(

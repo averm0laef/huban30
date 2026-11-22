@@ -53,6 +53,26 @@ function sendAttachment(
     .send(value.content);
 }
 
+async function withUploadAbort<T>(
+  request: FastifyRequest,
+  work: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const close = () => {
+    if (!request.raw.complete) abort();
+  };
+  request.raw.once("aborted", abort);
+  request.raw.once("close", close);
+  if (request.raw.aborted) abort();
+  try {
+    return await work(controller.signal);
+  } finally {
+    request.raw.off("aborted", abort);
+    request.raw.off("close", close);
+  }
+}
+
 @Controller("chat")
 export class CustomerChatController {
   constructor(
@@ -138,12 +158,13 @@ export class CustomerChatController {
     @Req() request: FastifyRequest,
   ) {
     await this.rateLimit.consume("chat-attachment-upload", request.authContext!.userId, 20, 3_600);
-    return this.chat.uploadAttachment(
+    return withUploadAbort(request, async (signal) => this.chat.uploadAttachment(
       threadId,
       clientMessageId,
       await request.file(),
       { auth: request.authContext!, kind: "authenticated" },
-    );
+      signal,
+    ));
   }
 
   @Get("attachments/:attachmentId")
@@ -243,12 +264,13 @@ export class GuestChatController {
     @Req() request: FastifyRequest,
   ) {
     await this.rateLimit.consume("guest-chat-attachment-upload", request.ip, 20, 3_600);
-    return this.chat.uploadAttachment(
+    return withUploadAbort(request, async (signal) => this.chat.uploadAttachment(
       threadId,
       clientMessageId,
       await request.file(),
       { guestToken: guestToken ?? "", kind: "guest" },
-    );
+      signal,
+    ));
   }
 
   @Get("attachments/:attachmentId")
