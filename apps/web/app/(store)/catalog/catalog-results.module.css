@@ -229,6 +229,9 @@
 /* Shown when no product had every word of the query and the list falls back
    to items matching at least one of them. */
 .looseMatchNote { margin: 0 0 var(--store-space-sm); padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--store-accent) 50%, var(--store-border)); border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-accent) 9%, var(--store-surface)); color: var(--store-text); font-size: 0.9rem; line-height: 1.5; }
+/* The note repeats what the visitor typed (a car, a search text): a long word without spaces must wrap instead of
+   widening the page — «яяя…» in ?vehicle= made a phone page 671 px wider than the screen. */
+.looseMatchNote { overflow-wrap: anywhere; }
 .looseMatchNote a { color: var(--store-brand); font-weight: 600; }
 
 .activeFilters {
