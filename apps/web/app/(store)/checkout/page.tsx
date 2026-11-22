@@ -4,7 +4,7 @@ import { CheckoutClient } from "../_components/checkout-client";
 
 export const metadata: Metadata = {
   title: "Оформление заказа",
-  description: "Защищённое оформление заказа с серверной проверкой цены и остатка.",
+  description: "Оформление заказа в АН-30: цену и наличие проверим перед подтверждением.",
   robots: { index: false, follow: false },
 };
 

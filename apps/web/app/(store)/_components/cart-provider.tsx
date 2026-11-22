@@ -14,13 +14,10 @@ export interface CartLine {
 
 interface CartContextValue {
   addItem: (productId: string, quantity?: number) => void;
-  cartOpen: boolean;
   clear: () => void;
-  closeCart: () => void;
   itemCount: number;
   hydrated: boolean;
   items: CartLine[];
-  openCart: () => void;
   persistenceAvailable: boolean;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
@@ -82,7 +79,6 @@ function browserStorage(): CartStorage | null {
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
   const [persistenceAvailable, setPersistenceAvailable] = useState(true);
 
   useEffect(() => {
@@ -130,10 +126,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [removeItem]);
 
   const clear = useCallback(() => setItems([]), []);
-  const closeCart = useCallback(() => setCartOpen(false), []);
-  const openCart = useCallback(() => setCartOpen(true), []);
   const itemCount = items.reduce((total, line) => total + line.quantity, 0);
-  const value = useMemo(() => ({ addItem, cartOpen, clear, closeCart, hydrated, itemCount, items, openCart, persistenceAvailable, removeItem, updateQuantity }), [addItem, cartOpen, clear, closeCart, hydrated, itemCount, items, openCart, persistenceAvailable, removeItem, updateQuantity]);
+  const value = useMemo(() => ({ addItem, clear, hydrated, itemCount, items, persistenceAvailable, removeItem, updateQuantity }), [addItem, clear, hydrated, itemCount, items, persistenceAvailable, removeItem, updateQuantity]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

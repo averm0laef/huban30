@@ -1,15 +1,18 @@
 "use client";
 
+import { EyeOff20Regular, Eye20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, RefObject } from "react";
 
 import { REGISTRATION_PERSONAL_DATA_CONSENT_VERSION } from "@an30/contracts";
 
+import { BrandLockup } from "./brand-mark";
 import authStyles from "../auth/auth-flow.module.css";
 import { consumeAuthToken } from "../_lib/auth-token";
 import { apiRequest, errorText, StorefrontApiError } from "../_lib/storefront-api";
+import { SocialLogin } from "./social-login";
 import styles from "./storefront.module.css";
 
 export type AuthMode = "forgot" | "login" | "register" | "reset" | "staff-accept" | "verify";
@@ -25,18 +28,11 @@ interface LoginResponse {
   totpSetupRequired: boolean;
 }
 
-interface ModeContext {
-  benefits: Array<{ body: string; title: string }>;
-  description: string;
-  heading: string;
-}
-
-const primaryModes = new Set<AuthMode>(["forgot", "login", "register"]);
+const primaryModes = new Set<AuthMode>(["login", "register"]);
 
 const modeLabels: Array<{ label: string; mode: AuthMode }> = [
   { label: "Вход", mode: "login" },
   { label: "Регистрация", mode: "register" },
-  { label: "Восстановить", mode: "forgot" },
 ];
 
 const modeTitles: Record<AuthMode, string> = {
@@ -50,68 +46,11 @@ const modeTitles: Record<AuthMode, string> = {
 
 const modeDescriptions: Record<AuthMode, string> = {
   forgot: "Укажите email аккаунта. Мы отправим ссылку для смены пароля, если адрес зарегистрирован.",
-  login: "Введите email и пароль, которые использовали при регистрации.",
-  register: "Заполните форму и подтвердите email по ссылке из письма.",
+  login: "",
+  register: "Сохраняйте детали в избранном и следите за заказами.",
   reset: "Придумайте новую парольную фразу для аккаунта.",
   "staff-accept": "Укажите имя и задайте пароль, чтобы завершить приглашение.",
-  verify: "Подтвердите адрес, чтобы активировать аккаунт и войти.",
-};
-
-const modeContext: Record<AuthMode, ModeContext> = {
-  forgot: {
-    heading: "Доступ можно вернуть",
-    description: "Смена пароля не затронет заказы и сохранённые товары.",
-    benefits: [
-      { title: "Без подсказок посторонним", body: "Ответ формы не сообщает, зарегистрирован ли указанный email." },
-      { title: "Одноразовая ссылка", body: "После использования или окончания срока действия ссылка перестаёт работать." },
-      { title: "Сеансы будут закрыты", body: "После смены пароля потребуется войти заново на каждом устройстве." },
-    ],
-  },
-  login: {
-    heading: "Вернитесь к своим заказам",
-    description: "В аккаунте собраны покупки, избранные товары и адреса доставки.",
-    benefits: [
-      { title: "Статусы заказов", body: "Проверяйте, что уже готово к выдаче и что ещё обрабатывается." },
-      { title: "Сохранённые товары", body: "Не ищите повторно детали, которые отложили раньше." },
-      { title: "Меньше повторного ввода", body: "Форма заказа подставит имя, email и телефон из профиля." },
-    ],
-  },
-  register: {
-    heading: "Заказы и детали под рукой",
-    description: "Создайте аккаунт, чтобы история покупок и нужные детали оставались под рукой.",
-    benefits: [
-      { title: "Заказы в одном месте", body: "Смотрите состав, сумму и актуальный статус каждой покупки." },
-      { title: "Избранное не потеряется", body: "Сохраняйте найденные детали и возвращайтесь к ним позже." },
-      { title: "Удобнее оформлять", body: "После входа форма заказа подставит имя, email и телефон из профиля." },
-    ],
-  },
-  reset: {
-    heading: "Задайте новый пароль",
-    description: "Используйте отдельную парольную фразу, которой нет на других сайтах.",
-    benefits: [
-      { title: "Не менее 12 символов", body: "Несколько несвязанных слов обычно легче запомнить, чем короткий сложный пароль." },
-      { title: "Не повторяйте email", body: "Имя почтового ящика не должно быть частью пароля." },
-      { title: "Вход заново", body: "После смены пароля активные сеансы аккаунта будут закрыты." },
-    ],
-  },
-  "staff-accept": {
-    heading: "Завершите приглашение",
-    description: "После установки пароля система попросит настроить одноразовые коды для входа.",
-    benefits: [
-      { title: "Персональный доступ", body: "Не передавайте пароль или приглашение другому сотруднику." },
-      { title: "Дополнительная проверка", body: "При первом входе потребуется настроить TOTP в приложении-аутентификаторе." },
-      { title: "Резервные коды", body: "После настройки сохраните их отдельно от рабочего устройства." },
-    ],
-  },
-  verify: {
-    heading: "Подтвердите ваш email",
-    description: "Это связывает аккаунт с адресом, к которому у вас есть доступ.",
-    benefits: [
-      { title: "Активация аккаунта", body: "До подтверждения email вход в новый аккаунт закрыт." },
-      { title: "Одно нажатие", body: "Кнопка в форме завершит проверку открытой ссылки." },
-      { title: "После подтверждения", body: "Вернитесь ко входу и продолжайте работу с заказами." },
-    ],
-  },
+  verify: "Введите пароль, который вы указали при регистрации.",
 };
 
 const submitLabels: Record<AuthMode, { pending: string; ready: string }> = {
@@ -137,7 +76,7 @@ function StatusBanner({ status }: { status: StatusState }) {
   return (
     <div className={`${stateClass} ${authStyles.statusBanner}`} role={role}>
       <strong>{status.title}</strong>
-      <p>{status.message}</p>
+      {status.message !== status.title && <p>{status.message}</p>}
     </div>
   );
 }
@@ -169,14 +108,186 @@ function passwordGuidance(length: number): string {
   return "Минимальная длина соблюдена. Не используйте этот пароль на других сайтах.";
 }
 
+/* ----------------------------------------------------------------------
+ * Field building blocks — one small, stable component per input, each
+ * carrying only the markup/attributes that field ever needs. AuthClient
+ * below composes these per mode (see `renderFields`) instead of one form
+ * asking "which mode am I?" at every field. Declared at module scope (not
+ * inside AuthClient) so their identity never changes between renders —
+ * nesting them inside the component would force React to remount every
+ * field, and the input under the user's cursor, on each keystroke.
+ * ---------------------------------------------------------------------- */
+
+function NameField() {
+  return (
+    <div className={authStyles.formField}>
+      <label htmlFor="auth-display-name">Имя</label>
+      <input id="auth-display-name" name="displayName" required minLength={2} maxLength={120} autoComplete="name" />
+    </div>
+  );
+}
+
+function EmailField({ registerHint }: { registerHint?: boolean }) {
+  return (
+    <div className={authStyles.formField}>
+      <label htmlFor="auth-email">Email</label>
+      <input id="auth-email" name="email" type="email" required maxLength={254} autoComplete="email" inputMode="email"
+        aria-describedby={registerHint ? "auth-email-hint" : undefined} />
+      {registerHint ? <small id="auth-email-hint">На этот адрес придёт ссылка для подтверждения регистрации.</small> : null}
+    </div>
+  );
+}
+
+interface PasswordVisibilityProps {
+  inputRef: RefObject<HTMLInputElement | null>;
+  inputType: "password" | "text";
+  onToggleVisible: () => void;
+  visible: boolean;
+}
+
+function PasswordToggle({
+  controls,
+  visible,
+  onClick,
+}: { controls: string; visible: boolean; onClick: () => void }) {
+  return (
+    <button className={authStyles.passwordToggle} type="button" aria-controls={controls}
+      aria-label={visible ? "Скрыть пароль" : "Показать пароль"} onClick={onClick}>
+      {visible ? <EyeOff20Regular aria-hidden="true" /> : <Eye20Regular aria-hidden="true" />}
+    </button>
+  );
+}
+
+function LoginPasswordField({ inputRef, inputType, onToggleVisible, visible }: PasswordVisibilityProps) {
+  return (
+    <div className={authStyles.formField}>
+      <div className={authStyles.fieldHeading}>
+        <label htmlFor="auth-password">Пароль</label>
+        <Link href="/auth?mode=forgot">Забыли пароль?</Link>
+      </div>
+      <div className={authStyles.passwordControl}>
+        <input
+          ref={inputRef}
+          id="auth-password"
+          name="password"
+          type={inputType}
+          required
+          minLength={1}
+          maxLength={128}
+          autoComplete="current-password"
+        />
+        <PasswordToggle controls="auth-password" visible={visible} onClick={onToggleVisible} />
+      </div>
+    </div>
+  );
+}
+
+function NewPasswordField({
+  confirm = false,
+  inputRef,
+  inputType,
+  label,
+  onInput,
+  onToggleVisible,
+  passwordLength,
+  visible,
+}: PasswordVisibilityProps & { confirm?: boolean; label: string; onInput: () => void; passwordLength: number }) {
+  return (
+    <div className={authStyles.formField}>
+      <label htmlFor="auth-password">{label}</label>
+      <div className={authStyles.passwordControl}>
+        <input
+          ref={inputRef}
+          id="auth-password"
+          name="password"
+          type={inputType}
+          required
+          minLength={12}
+          maxLength={128}
+          autoComplete="new-password"
+          onInput={onInput}
+          aria-describedby="auth-password-hint"
+        />
+        <PasswordToggle controls={confirm ? "auth-password auth-password-confirm" : "auth-password"}
+          visible={visible} onClick={onToggleVisible} />
+      </div>
+      <small id="auth-password-hint" className={passwordLength >= 12 ? authStyles.fieldSuccess : undefined} aria-live="polite">
+        {passwordGuidance(passwordLength)}
+      </small>
+    </div>
+  );
+}
+
+function PasswordConfirmField({
+  inputRef,
+  inputType,
+  mismatch,
+  onInput,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>;
+  inputType: "password" | "text";
+  mismatch: boolean;
+  onInput: () => void;
+}) {
+  return (
+    <div className={authStyles.formField}>
+      <label htmlFor="auth-password-confirm">Повторите пароль</label>
+      <input
+        ref={inputRef}
+        id="auth-password-confirm"
+        name="passwordConfirm"
+        type={inputType}
+        required
+        minLength={12}
+        maxLength={128}
+        autoComplete="new-password"
+        onInput={onInput}
+        aria-invalid={mismatch}
+        aria-describedby={mismatch ? "auth-password-mismatch" : undefined}
+      />
+      {mismatch ? (
+        <small id="auth-password-mismatch" className={authStyles.fieldError} role="alert">
+          Пароли не совпадают
+        </small>
+      ) : null}
+    </div>
+  );
+}
+
+function ConsentField() {
+  return (
+    <div className={authStyles.consentBlock}>
+      <label className={authStyles.consentField}>
+        <input name="personalDataConsent" type="checkbox" required aria-describedby="registration-consent-note" />
+        <span>
+          Я даю согласие на обработку персональных данных для регистрации и использования личного кабинета на условиях документа {" "}
+          <Link href="/personal-data-consent" target="_blank" rel="noreferrer">
+            «Согласие на обработку персональных данных»
+          </Link>.
+        </span>
+      </label>
+      <label className={authStyles.consentField}>
+        <input name="termsAccepted" type="checkbox" required />
+        <span>
+          Я принимаю {" "}<Link href="/terms" target="_blank" rel="noreferrer">условия работы магазина</Link>{" "}
+          и ознакомлен(а) с {" "}<Link href="/privacy" target="_blank" rel="noreferrer">политикой конфиденциальности</Link>.
+        </span>
+      </label>
+      <p id="registration-consent-note">Обе отметки обязательны. Согласие на обработку данных оформлено отдельным документом.</p>
+    </div>
+  );
+}
+
 export function AuthClient({
   initialMode,
   initialSuccess,
   registrationEnabled,
+  socialStatus,
 }: {
   initialMode: AuthMode;
   initialSuccess: string;
   registrationEnabled: boolean;
+  socialStatus?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -191,24 +302,16 @@ export function AuthClient({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
   const passwordConfirmRef = useRef<HTMLInputElement>(null);
-  const mountedMode = useRef(initialMode);
+  const tokenRead = useRef(false);
 
   useEffect(() => {
+    if (tokenRead.current) return;
+    tokenRead.current = true;
     const consumed = consumeAuthToken(window.location.href);
     window.history.replaceState(window.history.state, "", consumed.cleanUrl);
     setToken(consumed.token);
     setTokenReady(true);
   }, []);
-
-  useEffect(() => {
-    if (mountedMode.current === initialMode) return;
-    mountedMode.current = initialMode;
-    setStatus(null);
-    setDevelopmentToken("");
-    setPasswordLength(0);
-    setPasswordMismatch(false);
-    setPasswordVisible(false);
-  }, [initialMode]);
 
   function resetStatus() {
     setStatus(null);
@@ -246,7 +349,6 @@ export function AuthClient({
       }
       if (initialMode === "register") {
         const password = String(form.get("password") ?? "");
-        if (password !== form.get("passwordConfirm")) throw new Error("Пароли не совпадают");
         if (form.get("personalDataConsent") !== "on") {
           throw new Error("Подтвердите согласие на обработку персональных данных");
         }
@@ -287,7 +389,7 @@ export function AuthClient({
       if (initialMode === "verify") {
         const result = await apiRequest<MessageResponse>("/auth/email/verify", {
           method: "POST",
-          body: { token },
+          body: { token, password: form.get("password") },
         });
         setStatus({
           kind: "success",
@@ -329,33 +431,86 @@ export function AuthClient({
     }
   }
 
-  const context = modeContext[initialMode];
   const tokenRequired = initialMode === "verify" || initialMode === "reset" || initialMode === "staff-accept";
   const tokenMissing = tokenRequired && token.length < 32;
-  const showPasswordConfirm = initialMode === "register" || initialMode === "reset" || initialMode === "staff-accept";
   const registerSucceeded = initialMode === "register" && status?.kind === "success";
+  const forgotSucceeded = initialMode === "forgot" && status?.kind === "success";
   const registrationUnavailable = initialMode === "register" && !registrationEnabled;
   const verifySucceeded = initialMode === "verify" && status?.kind === "success";
   const resetSucceeded = initialMode === "reset" && status?.kind === "success";
   const passwordInputType = passwordVisible ? "text" : "password";
-  const passwordControlIds = showPasswordConfirm ? "auth-password auth-password-confirm" : "auth-password";
+
+  const passwordControls: PasswordVisibilityProps = {
+    inputRef: passwordRef,
+    inputType: passwordInputType,
+    onToggleVisible: () => setPasswordVisible((current) => !current),
+    visible: passwordVisible,
+  };
+  const confirmControls: Parameters<typeof PasswordConfirmField>[0] = {
+    inputRef: passwordConfirmRef,
+    inputType: passwordInputType,
+    mismatch: passwordMismatch,
+    onInput: updatePasswordState,
+  };
+
+  // Every mode lists its own fields explicitly instead of each field asking
+  // "am I visible in this mode?" — the six screens read as purpose-built
+  // even though they share the same small set of field components.
+  function renderFields() {
+    switch (initialMode) {
+      case "login":
+        return (
+          <>
+            <EmailField />
+            <LoginPasswordField {...passwordControls} />
+          </>
+        );
+      case "register":
+        return (
+          <>
+            <NameField />
+            <EmailField registerHint />
+            <NewPasswordField {...passwordControls} label="Пароль" onInput={updatePasswordState} passwordLength={passwordLength} />
+            <ConsentField />
+          </>
+        );
+      case "forgot":
+        return <EmailField />;
+      case "reset":
+        return (
+          <>
+            <NewPasswordField {...passwordControls} confirm label="Новый пароль" onInput={updatePasswordState} passwordLength={passwordLength} />
+            <PasswordConfirmField {...confirmControls} />
+          </>
+        );
+      case "staff-accept":
+        return (
+          <>
+            <NameField />
+            <NewPasswordField {...passwordControls} confirm label="Пароль" onInput={updatePasswordState} passwordLength={passwordLength} />
+            <PasswordConfirmField {...confirmControls} />
+          </>
+        );
+      case "verify":
+        return <LoginPasswordField {...passwordControls} />;
+    }
+  }
+
+  const showPasswordConfirm = initialMode === "reset" || initialMode === "staff-accept";
 
   return (
     <div className={`${styles.page} ${authStyles.authPage}`}>
-      <section className={authStyles.authIntro} aria-labelledby="auth-context-title">
-        <p className={authStyles.contextLabel}>Личный кабинет АН-30</p>
-        <h1 id="auth-context-title">{context.heading}</h1>
-        <p className={authStyles.contextDescription}>{context.description}</p>
-        <ul className={authStyles.benefitList}>
-          {context.benefits.map((benefit) => (
-            <li key={benefit.title}>
-              <strong>{benefit.title}</strong>
-              <span>{benefit.body}</span>
-            </li>
-          ))}
+      <div className={authStyles.authShell}>
+      <aside className={authStyles.brandPanel} aria-label="Личный кабинет АН-30">
+        <BrandLockup className={authStyles.brandLogo} tone="current" />
+        <p className={authStyles.brandTitle}>Личный кабинет покупателя</p>
+        <ul className={authStyles.brandBenefits}>
+          <li>Статус заказов и история покупок</li>
+          <li>Мой автомобиль — подбор без повторного ввода</li>
+          <li>Переписка с магазином в одном месте</li>
         </ul>
-      </section>
-
+        <span className={authStyles.brandCar} aria-hidden="true" />
+      </aside>
       <section className={authStyles.formPanel} aria-labelledby="auth-form-title">
         {primaryModes.has(initialMode) ? (
           <nav className={authStyles.segmentedNav} aria-label="Действия с аккаунтом">
@@ -372,8 +527,8 @@ export function AuthClient({
         ) : null}
 
         <header className={authStyles.formHeading}>
-          <h2 id="auth-form-title">{modeTitles[initialMode]}</h2>
-          <p>{modeDescriptions[initialMode]}</p>
+          <h1 id="auth-form-title">{modeTitles[initialMode]}</h1>
+          {modeDescriptions[initialMode] && <p>{modeDescriptions[initialMode]}</p>}
         </header>
 
         <StatusBanner status={status} />
@@ -396,7 +551,7 @@ export function AuthClient({
           <div className={`${styles.formError} ${authStyles.statusBanner}`} role="alert">
             <strong>Ссылка неполная</strong>
             <p>
-              В адресе нет действующего токена. Возможно, ссылка скопирована не полностью или уже устарела. {" "}
+              Похоже, ссылка из письма открылась не полностью или уже устарела. {" "}
               {initialMode === "verify" ? (
                 <>Зарегистрируйтесь ещё раз на <Link href="/auth?mode=register">странице регистрации</Link>, чтобы получить новое письмо.</>
               ) : initialMode === "reset" ? (
@@ -408,13 +563,20 @@ export function AuthClient({
           </div>
         ) : registrationUnavailable ? (
           <div className={authStyles.unavailableState} role="status">
-            <h3>Регистрация временно недоступна</h3>
+            <h2>Регистрация временно недоступна</h2>
             <p>Мы откроем создание аккаунтов после утверждения обязательных документов. Каталог и поиск товаров продолжают работать без регистрации.</p>
             <Link className={styles.primaryAction} href="/catalog">Перейти в каталог</Link>
           </div>
         ) : verifySucceeded || resetSucceeded ? (
           <div className={authStyles.successActions}>
             <Link className={styles.primaryAction} href="/auth?mode=login">Войти</Link>
+          </div>
+        ) : forgotSucceeded ? (
+          <div className={authStyles.nextStep}>
+            <p>Если письмо не пришло, проверьте папку «Спам» или уточните адрес.</p>
+            <button className={authStyles.secondaryButton} type="button" onClick={resetStatus}>
+              Ввести другой email
+            </button>
           </div>
         ) : registerSucceeded ? (
           <div className={authStyles.nextStep}>
@@ -434,147 +596,26 @@ export function AuthClient({
           </div>
         ) : (
           <form className={authStyles.stackForm} onSubmit={submit} aria-busy={pending}>
-            {initialMode === "register" || initialMode === "staff-accept" ? (
-              <div className={authStyles.formField}>
-                <label htmlFor="auth-display-name">Имя</label>
-                <input
-                  id="auth-display-name"
-                  name="displayName"
-                  required
-                  minLength={2}
-                  maxLength={120}
-                  autoComplete="name"
-                />
-              </div>
-            ) : null}
-
-            {initialMode === "login" || initialMode === "register" || initialMode === "forgot" ? (
-              <div className={authStyles.formField}>
-                <label htmlFor="auth-email">Email</label>
-                <input
-                  id="auth-email"
-                  name="email"
-                  type="email"
-                  required
-                  maxLength={254}
-                  autoComplete="email"
-                  inputMode="email"
-                />
-                {initialMode === "register" ? (
-                  <small>На этот адрес придёт одноразовая ссылка подтверждения.</small>
-                ) : null}
-              </div>
-            ) : null}
-
-            {initialMode === "login" || initialMode === "register" || initialMode === "reset" || initialMode === "staff-accept" ? (
-              <div className={authStyles.formField}>
-                <label htmlFor="auth-password">{initialMode === "reset" ? "Новый пароль" : "Пароль"}</label>
-                <div className={authStyles.passwordControl}>
-                  <input
-                    ref={passwordRef}
-                    id="auth-password"
-                    name="password"
-                    type={passwordInputType}
-                    required
-                    minLength={initialMode === "login" ? 1 : 12}
-                    maxLength={128}
-                    autoComplete={initialMode === "login" ? "current-password" : "new-password"}
-                    onInput={initialMode === "login" ? undefined : updatePasswordState}
-                    aria-describedby={initialMode === "login" ? undefined : "auth-password-hint"}
-                  />
-                  <button
-                    className={authStyles.passwordToggle}
-                    type="button"
-                    aria-controls={passwordControlIds}
-                    aria-pressed={passwordVisible}
-                    onClick={() => setPasswordVisible((visible) => !visible)}
-                  >
-                    {passwordVisible ? "Скрыть" : "Показать"}
-                  </button>
-                </div>
-                {initialMode !== "login" ? (
-                  <small
-                    id="auth-password-hint"
-                    className={passwordLength >= 12 ? authStyles.fieldSuccess : undefined}
-                    aria-live="polite"
-                  >
-                    {passwordGuidance(passwordLength)}
-                  </small>
-                ) : null}
-              </div>
-            ) : null}
-
-            {showPasswordConfirm ? (
-              <div className={authStyles.formField}>
-                <label htmlFor="auth-password-confirm">Повторите пароль</label>
-                <input
-                  ref={passwordConfirmRef}
-                  id="auth-password-confirm"
-                  name="passwordConfirm"
-                  type={passwordInputType}
-                  required
-                  minLength={12}
-                  maxLength={128}
-                  autoComplete="new-password"
-                  onInput={updatePasswordState}
-                  aria-invalid={passwordMismatch}
-                  aria-describedby={passwordMismatch ? "auth-password-mismatch" : undefined}
-                />
-                {passwordMismatch ? (
-                  <small id="auth-password-mismatch" className={authStyles.fieldError} role="alert">
-                    Пароли не совпадают
-                  </small>
-                ) : null}
-              </div>
-            ) : null}
-
-            {initialMode === "register" ? (
-              <div className={authStyles.consentBlock}>
-                <label className={authStyles.consentField}>
-                  <input
-                    name="personalDataConsent"
-                    type="checkbox"
-                    required
-                    aria-describedby="registration-consent-note"
-                  />
-                  <span>
-                    Я даю согласие на обработку персональных данных для регистрации и использования личного кабинета на условиях документа {" "}
-                    <Link href="/personal-data-consent" target="_blank" rel="noreferrer">
-                      «Согласие на обработку персональных данных»
-                    </Link>.
-                  </span>
-                </label>
-                <p id="registration-consent-note">Это отдельное согласие. Без отметки аккаунт не создаётся.</p>
-              </div>
-            ) : null}
+            {renderFields()}
 
             <button
               className={`${styles.submitButton} ${authStyles.submitButton}`}
               type="submit"
               disabled={pending || (showPasswordConfirm && passwordMismatch)}
             >
-              {pending ? submitLabels[initialMode].pending : submitLabels[initialMode].ready}
+              <span>{pending ? submitLabels[initialMode].pending : submitLabels[initialMode].ready}</span>
             </button>
           </form>
         )}
 
-        {initialMode === "login" ? (
-          <details className={authStyles.helpDetails}>
-            <summary>Не получается войти?</summary>
-            <ul>
-              <li>Проверьте написание email и пароля.</li>
-              <li>После регистрации сначала подтвердите email по ссылке из письма.</li>
-              <li>После пяти неверных попыток вход закрывается на 15 минут.</li>
-            </ul>
-          </details>
-        ) : null}
-
+        {initialMode === "login" && <SocialLogin status={socialStatus} />}
         <div className={authStyles.formLinks}>
-          {initialMode === "login" ? <Link href="/auth?mode=forgot">Забыли пароль?</Link> : null}
           {!primaryModes.has(initialMode) ? <Link href="/auth?mode=login">Вернуться ко входу</Link> : null}
           <Link href="/privacy">Политика конфиденциальности</Link>
         </div>
       </section>
+      </div>
+
     </div>
   );
 }

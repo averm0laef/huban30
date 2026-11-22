@@ -49,11 +49,14 @@ export interface ChatMessage {
 
 export interface ChatThread {
   assignedStaffId: string | null;
+  managerWaitSince?: string | null;
   createdAt: string;
   guestToken?: string;
   id: string;
   lastMessageAt: string | null;
   orderId: string | null;
+  /** Sequential chat number staff use («Ч-000123»); absent on old stored threads. */
+  publicNumber?: number | null;
   status: "closed" | "open" | "waiting_customer" | "waiting_staff";
   subject: string | null;
 }
@@ -62,6 +65,7 @@ export interface ChatHistoryWindow {
   items: ChatMessage[];
   nextSequence: string;
   olderCursor: string | null;
+  thread?: ChatThreadAssignment;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,11 +87,13 @@ function parseGuestThread(value: unknown): ChatThread | null {
   }
   return {
     assignedStaffId: null,
+    managerWaitSince: normalized.managerWaitSince,
     createdAt: normalized.createdAt,
     guestToken: normalized.guestToken,
     id: normalized.id,
     lastMessageAt: normalized.lastMessageAt,
     orderId: normalized.orderId,
+    ...(typeof normalized.publicNumber === "number" ? { publicNumber: normalized.publicNumber } : {}),
     status: normalized.status,
     subject: normalized.subject,
   };
@@ -100,12 +106,20 @@ export function isChatThread(value: unknown): value is ChatThread {
     && (value.assignedStaffId === null
       || (typeof value.assignedStaffId === "string" && UUID_PATTERN.test(value.assignedStaffId)))
     && isDate(value.createdAt)
+    && (value.managerWaitSince === undefined || value.managerWaitSince === null || isDate(value.managerWaitSince))
     && (value.lastMessageAt === null || isDate(value.lastMessageAt))
     && typeof value.status === "string"
     && THREAD_STATUSES.has(value.status)
     && (value.subject === null || (typeof value.subject === "string" && value.subject.length <= 240))
     && (value.orderId === null || (typeof value.orderId === "string" && UUID_PATTERN.test(value.orderId)))
-    && (value.guestToken === undefined || typeof value.guestToken === "string");
+    && (value.guestToken === undefined || typeof value.guestToken === "string")
+    && (value.publicNumber === undefined || value.publicNumber === null
+      || (typeof value.publicNumber === "number" && Number.isSafeInteger(value.publicNumber) && value.publicNumber > 0));
+}
+
+/** «Обращение №000123» — what the customer quotes to the shop. */
+export function threadNumberLabel(thread: Pick<ChatThread, "publicNumber"> | null | undefined): string | null {
+  return thread?.publicNumber ? `Обращение №${String(thread.publicNumber).padStart(6, "0")}` : null;
 }
 
 export function isChatMessage(value: unknown): value is ChatMessage {
@@ -140,6 +154,7 @@ export function isChatMessage(value: unknown): value is ChatMessage {
 export interface ChatThreadAssignment {
   assignedStaffId: string | null;
   assignedStaffName: string | null;
+  managerWaitSince?: string | null;
   status: ChatThread["status"];
 }
 
@@ -150,6 +165,7 @@ export function isChatThreadAssignment(value: unknown): value is ChatThreadAssig
     && (value.assignedStaffName === null
       || (typeof value.assignedStaffName === "string"
         && value.assignedStaffName.length > 0 && value.assignedStaffName.length <= 240))
+    && (value.managerWaitSince === undefined || value.managerWaitSince === null || isDate(value.managerWaitSince))
     && typeof value.status === "string" && THREAD_STATUSES.has(value.status);
 }
 
@@ -182,6 +198,7 @@ export function serializeGuestThreads(threads: ChatThread[]): string {
       id: thread.id,
       lastMessageAt: thread.lastMessageAt,
       orderId: thread.orderId,
+      ...(thread.publicNumber ? { publicNumber: thread.publicNumber } : {}),
       status: thread.status,
       subject: thread.subject,
     })));
@@ -413,17 +430,21 @@ export function unansweredSince(messages: ChatMessage[]): string | null {
 export function managerJoinState(input: {
   assignedStaffId: string | null;
   assignedStaffName: string | null;
+  managerWaitSince?: string | null;
   messages: ChatMessage[];
   now: number;
   status: ChatThread["status"];
 }): ManagerJoinState {
   if (input.status === "closed") return { kind: "closed" };
   if (input.assignedStaffId) return { kind: "assigned", staffName: input.assignedStaffName };
-  const since = unansweredSince(input.messages);
+  // New servers supply the queue's original timestamp, independent of
+  // paginated messages, reloads and follow-up messages. Undefined alone
+  // enables the legacy fallback; an explicit null means no pending queue.
+  const since = input.managerWaitSince === undefined ? unansweredSince(input.messages) : input.managerWaitSince;
   if (!since) return { kind: "none" };
   const shop = computeShopStatusNow(new Date(input.now));
   if (!shop.open) return { kind: "outOfHours", openDetail: shop.detail, sinceIso: since };
-  const elapsedMs = input.now - Date.parse(since);
+  const elapsedMs = Math.max(0, input.now - Date.parse(since));
   if (elapsedMs >= MANAGER_RESPONSE_WINDOW_MS) return { kind: "elapsed", sinceIso: since };
   return { kind: "waiting", remainingMs: MANAGER_RESPONSE_WINDOW_MS - elapsedMs, sinceIso: since };
 }
@@ -440,13 +461,13 @@ export function formatCountdown(remainingMs: number): string {
 export const MANAGER_WAITING_TEXT = "Менеджер отвечает обычно за 10 минут";
 export const MANAGER_ELAPSED_HEADLINE = "Менеджеры сейчас заняты";
 export const MANAGER_ELAPSED_BODY =
-  "Обычное время ответа — 10 минут — уже прошло. Ваше сообщение никуда не делось, и мы ответим прямо в этом чате. Если вопрос срочный, позвоните нам или напишите в мессенджер:";
+  "Обычное время ответа — 10 минут — уже прошло. Ваше сообщение сохранено, менеджер ответит в этом чате. Если вопрос срочный, позвоните в магазин.";
 export const MANAGER_ASSIGNED_HEADLINE = "Менеджер подключился к чату";
 export const MANAGER_OUT_OF_HOURS_HEADLINE = "Сейчас нерабочее время";
 
 /** `openDetail` comes straight from `ManagerJoinState`'s `outOfHours` case (shop-status.ts's own phrasing). */
 export function managerOutOfHoursBody(openDetail: string): string {
-  return `Магазин ${openDetail}. Ваше сообщение сохранено — менеджер ответит в течение 10 минут после этого.`;
+  return `Магазин ${openDetail}. Сообщение сохранено — ответим после открытия. Если менеджер уже на сайте, он сможет подключиться раньше.`;
 }
 
 /** Null when the server hasn't reported a name — never guess or invent one. */
@@ -538,6 +559,7 @@ export function isChatHistoryWindow(value: unknown): value is ChatHistoryWindow 
       && (typeof value.olderCursor !== "string" || !SEQUENCE_PATTERN.test(value.olderCursor)))) {
     return false;
   }
+  if (value.thread !== undefined && !isChatThreadAssignment(value.thread)) return false;
   for (let index = 1; index < value.items.length; index += 1) {
     if (BigInt(value.items[index - 1]!.sequence) >= BigInt(value.items[index]!.sequence)) return false;
   }

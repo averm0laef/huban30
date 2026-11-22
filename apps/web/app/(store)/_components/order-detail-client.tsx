@@ -12,8 +12,6 @@ interface OrderDetail {
   delivery: unknown;
   id: string;
   items: Array<{ id: string; lineTotalKopeks: number; name: string; quantity: number; sku: string; unitPriceKopeks: number }>;
-  paidAmountKopeks: number;
-  payments: Array<{ amountKopeks: number; id: string; kind: string; provider: string; refundedAmountKopeks: number; status: string }>;
   publicNumber: string;
   status: string;
   subtotalKopeks: number;
@@ -21,14 +19,12 @@ interface OrderDetail {
 }
 
 const orderLabels: Record<string, string> = {
+  awaiting_confirmation: "Ожидает подтверждения",
   awaiting_delivery_terms: "Согласование доставки",
   cancelled: "Отменён",
   completed: "Завершён",
-  paid: "Оплачен",
-  pending_payment: "Ожидает оплаты",
   processing: "В работе",
   ready: "Готов к выдаче",
-  refunded: "Возвращён",
 };
 
 function money(value: number) {
@@ -70,6 +66,9 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             <div><p className={styles.eyebrow}>Заказ</p><h1>{order.publicNumber}</h1><p>Создан {new Date(order.createdAt).toLocaleString("ru-RU")}</p></div>
             <strong className={styles.statusBadge}>{orderLabels[order.status] ?? order.status}</strong>
           </header>
+          {order.status === "awaiting_confirmation" ? (
+            <p className={styles.serverPriceNote}>Заявка передана менеджеру. Мы позвоним вам, чтобы подтвердить заказ.</p>
+          ) : null}
           <section className={styles.detailSection} aria-labelledby="order-items">
             <h2 id="order-items">Состав заказа</h2>
             <div className={styles.lineList}>
@@ -83,14 +82,7 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             <dl className={styles.orderTotals}>
               <div><dt>Товары</dt><dd>{money(order.subtotalKopeks)}</dd></div>
               <div><dt>Итого</dt><dd>{money(order.totalAmountKopeks)}</dd></div>
-              <div><dt>Оплачено</dt><dd>{money(order.paidAmountKopeks)}</dd></div>
             </dl>
-          </section>
-          <section className={styles.detailSection} aria-labelledby="order-payments">
-            <h2 id="order-payments">Платежи</h2>
-            {order.payments.length ? order.payments.map((payment) => (
-              <p key={payment.id}>{payment.kind === "goods" ? "Товары" : "Доставка"}: {money(payment.amountKopeks)}, статус {payment.status}</p>
-            )) : <p className={styles.mutedText}>Платежей пока нет.</p>}
           </section>
         </article>
       ) : null}

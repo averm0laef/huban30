@@ -1,104 +1,44 @@
+/* One focused form for each account action. */
 .authPage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(390px, 500px);
-  align-items: start;
-  gap: clamp(44px, 8vw, 108px);
-  padding-block: clamp(42px, 7vw, 84px) clamp(72px, 9vw, 112px);
-}
-
-.authIntro {
-  max-width: 650px;
-  padding-top: clamp(14px, 3vw, 38px);
-}
-
-.contextLabel {
-  margin: 0 0 14px;
-  color: var(--store-brand);
-  font-size: 0.86rem;
-  font-weight: var(--store-weight-bold);
-}
-
-.authIntro h1 {
-  max-width: 620px;
-  margin: 0;
-  font-size: clamp(2.15rem, 4.7vw, 4rem);
-  font-weight: var(--store-weight-black);
-  letter-spacing: var(--store-tracking-tighter);
-  line-height: 1.02;
-}
-
-.contextDescription {
-  max-width: 570px;
-  margin: 20px 0 0;
-  color: var(--store-muted);
-  font-size: clamp(1rem, 1.8vw, 1.12rem);
-  line-height: 1.6;
-}
-
-.benefitList {
-  max-width: 590px;
-  display: grid;
-  margin: 34px 0 0;
-  padding: 0;
-  border-top: 1px solid var(--store-border);
-  list-style: none;
-}
-
-.benefitList li {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
-  gap: var(--store-space-md);
-  padding-block: var(--store-space-md);
-  border-bottom: 1px solid var(--store-border);
-}
-
-.benefitList strong {
-  color: var(--store-text);
-  font-weight: var(--store-weight-bold);
-  line-height: 1.35;
-}
-
-.benefitList span {
-  color: var(--store-muted);
-  line-height: 1.5;
+  width: min(calc(100% - 32px), 520px);
+  margin-inline: auto;
+  padding-block: clamp(24px, 5vw, 64px) clamp(56px, 8vw, 88px);
 }
 
 .formPanel {
   min-width: 0;
-  padding: clamp(22px, 4vw, 34px);
+  padding: clamp(20px, 5vw, 36px);
   border: 1px solid var(--store-border);
-  border-top: 5px solid var(--store-brand);
   border-radius: var(--store-radius);
   background: var(--store-surface);
-  box-shadow: var(--store-shadow-md);
 }
 
 .segmentedNav {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
-  margin: 0 0 var(--store-space-lg);
-  padding: 3px;
-  border: 1px solid var(--store-border);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 0 clamp(20px, 3vw, 28px);
+  padding: 4px;
   border-radius: var(--store-radius-sm);
-  background: var(--store-bg);
+  background: var(--store-surface-strong);
 }
 
 .segmentedNav a {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   display: grid;
   place-items: center;
-  padding: 5px 7px;
-  border-radius: 9px;
+  padding: 5px 8px;
+  border-radius: 8px;
   color: var(--store-muted);
-  font-size: clamp(0.7rem, 2.6vw, 0.82rem);
-  font-weight: var(--store-weight-bold);
+  font-family: var(--store-font-display);
+  font-size: clamp(0.72rem, 2.6vw, 0.82rem);
+  font-weight: 700;
   line-height: 1.15;
   text-align: center;
   text-decoration: none;
-  white-space: nowrap;
-  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+  overflow-wrap: anywhere;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
 }
 
 .segmentedNav a:hover {
@@ -107,24 +47,25 @@
 
 .segmentedNav a[aria-current="page"] {
   background: var(--store-surface);
-  color: var(--store-text);
-  box-shadow: var(--store-shadow-xs);
+  color: var(--store-brand);
+  box-shadow: var(--store-shadow-sm);
 }
 
 .formHeading {
   margin: 0 0 var(--store-space-lg);
 }
 
-.formHeading h2 {
+.formHeading h1 {
   margin: 0;
-  font-size: clamp(1.55rem, 3vw, 2rem);
-  font-weight: var(--store-weight-black);
+  font-size: clamp(1.6rem, 2.6vw, 2.05rem);
+  font-weight: 700;
   letter-spacing: var(--store-tracking-tight);
   line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
 .formHeading p {
-  margin: 9px 0 0;
+  margin: 10px 0 0;
   color: var(--store-muted);
   line-height: 1.5;
 }
@@ -136,10 +77,9 @@
 .formWarning {
   margin: 0 0 var(--store-space-lg);
   padding: var(--store-space-sm) var(--store-space-md);
-  border-left: 4px solid var(--store-accent);
-  border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0;
-  background: color-mix(in srgb, var(--store-accent) 13%, var(--store-surface));
-  box-shadow: var(--store-shadow-xs);
+  border: 1px solid color-mix(in srgb, var(--store-accent) 50%, var(--store-border));
+  border-radius: var(--store-radius-sm);
+  background: color-mix(in srgb, var(--store-accent) 9%, var(--store-surface));
 }
 
 .formWarning strong {
@@ -161,38 +101,63 @@
 .formField {
   min-width: 0;
   display: grid;
-  gap: 7px;
+  gap: 8px;
 }
 
 .formField label {
   color: var(--store-text);
-  font-size: 0.86rem;
-  font-weight: var(--store-weight-bold);
+  font-family: var(--store-font-display);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.fieldHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.fieldHeading a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: var(--store-brand);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-underline-offset: 3px;
 }
 
 .formField input {
+  min-width: 0;
   width: 100%;
-  min-height: 48px;
-  padding: 0 13px;
-  border: 1px solid var(--store-border);
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1.5px solid var(--store-border);
   border-radius: var(--store-radius-sm);
   background: var(--store-bg);
   color: var(--store-text);
   font-size: 1rem;
-  transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
+  transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease), background var(--store-duration-fast) var(--store-ease);
 }
 
 .formField input:hover {
-  border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border));
+  border-color: color-mix(in srgb, var(--store-brand) 40%, var(--store-border));
 }
 
 .formField input:focus {
+  background: var(--store-surface);
   border-color: var(--store-brand);
-  box-shadow: 0 0 0 1px var(--store-brand);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--store-brand) 14%, transparent);
 }
 
 .formField input[aria-invalid="true"] {
   border-color: var(--store-danger);
+}
+
+.formField input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--store-danger) 14%, transparent);
 }
 
 .formField small,
@@ -213,44 +178,61 @@
 }
 
 .passwordControl {
-  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  border: 1.5px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+}
+
+.passwordControl:focus-within {
+  border-color: var(--store-brand);
+  background: var(--store-surface);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--store-brand) 14%, transparent);
 }
 
 .passwordControl input {
-  padding-right: 102px;
+  min-height: 49px;
+  padding-inline-end: 6px;
+  border: 0;
+  background: transparent;
+}
+
+.passwordControl input:focus {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 .passwordToggle {
-  position: absolute;
-  inset: 2px 3px 2px auto;
-  min-width: 92px;
-  min-height: 44px;
-  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  align-self: center;
   border: 0;
-  border-left: 1px solid var(--store-border);
-  border-radius: 0 9px 9px 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--store-brand);
-  font-size: 0.82rem;
-  font-weight: var(--store-weight-bold);
   cursor: pointer;
-  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
 }
 
-.passwordToggle:hover {
-  background: color-mix(in srgb, var(--store-brand) 8%, transparent);
+.passwordToggle:hover,
+.passwordToggle:focus-visible {
+  background: var(--store-brand-soft);
   color: var(--store-brand-strong);
 }
 
-.passwordToggle:active {
-  transform: translateY(1px);
-}
+.passwordControl .passwordToggle:focus-visible { outline-offset: -2px; }
 
 .consentBlock {
   padding: var(--store-space-md);
   border: 1px solid var(--store-border);
   border-radius: var(--store-radius-sm);
-  background: color-mix(in srgb, var(--store-brand) 4%, var(--store-surface));
+  background: var(--store-bg);
 }
 
 .consentField {
@@ -287,17 +269,32 @@
   line-height: 1.4;
 }
 
-.submitButton {
+.authPage .submitButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
-  margin-top: 2px;
+  min-height: 52px;
+  padding: 10px 16px;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  font-size: 1rem;
+}
+
+.authPage .submitButton:hover:not(:disabled) { background: var(--store-brand-strong); }
+
+.submitIcon {
+  flex: 0 0 auto;
 }
 
 .devNotice {
   margin: 0 0 var(--store-space-lg);
-  padding: var(--store-space-sm);
-  border-left: 4px solid var(--store-accent);
-  border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0;
-  background: var(--store-surface-strong);
+  padding: var(--store-space-sm) var(--store-space-md);
+  border: 1px solid color-mix(in srgb, var(--store-accent) 50%, var(--store-border));
+  border-radius: var(--store-radius-sm);
+  background: color-mix(in srgb, var(--store-accent) 9%, var(--store-surface));
   color: var(--store-text);
   font-size: 0.9rem;
   line-height: 1.45;
@@ -344,16 +341,16 @@
   gap: 12px;
   padding: var(--store-space-lg);
   border: 1px solid var(--store-border);
-  border-radius: var(--store-radius-sm);
+  border-radius: var(--store-radius);
   background: var(--store-bg);
 }
 
-.unavailableState h3,
+.unavailableState h2,
 .unavailableState p {
   margin: 0;
 }
 
-.unavailableState h3 {
+.unavailableState h2 {
   font-size: 1.08rem;
   font-weight: var(--store-weight-black);
 }
@@ -366,6 +363,7 @@
 .unavailableState a {
   justify-self: start;
   margin-top: 3px;
+  border-radius: var(--store-radius-sm);
 }
 
 .nextStep h3,
@@ -387,23 +385,24 @@
   min-height: 44px;
   justify-self: start;
   margin-top: 4px;
-  padding: 0 var(--store-space-md);
-  border: 1px solid var(--store-border);
+  padding: 0 var(--store-space-lg);
+  border: 1.5px solid var(--store-border);
   border-radius: var(--store-radius-sm);
   background: var(--store-surface);
   color: var(--store-brand);
-  font-weight: var(--store-weight-bold);
+  font-family: var(--store-font-display);
+  font-weight: 700;
   cursor: pointer;
   transition: border-color var(--store-duration-fast) var(--store-ease), background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
 }
 
 .secondaryButton:hover {
   border-color: var(--store-brand);
-  background: color-mix(in srgb, var(--store-brand) 5%, var(--store-surface));
+  background: var(--store-brand-soft);
 }
 
 .secondaryButton:active {
-  transform: translateY(1px);
+  transform: scale(0.97);
 }
 
 .successActions {
@@ -413,31 +412,40 @@
   margin: 4px 0 var(--store-space-lg);
 }
 
-.helpDetails {
+.successActions a {
+  border-radius: var(--store-radius-sm);
+}
+
+/* Always visible, not tucked behind a click — a failed sign-in should not
+   require the visitor to notice and open a disclosure to find out what to
+   do next. */
+.helpPanel {
   margin-top: var(--store-space-lg);
-  padding: var(--store-space-sm) var(--store-space-md);
-  border: 1px solid var(--store-border);
+  padding: 14px var(--store-space-md);
   border-radius: var(--store-radius-sm);
   background: var(--store-bg);
 }
 
-.helpDetails summary {
-  min-height: 32px;
+.helpPanelTitle {
+  margin: 0;
   color: var(--store-text);
-  font-size: 0.9rem;
-  font-weight: var(--store-weight-bold);
-  line-height: 32px;
-  cursor: pointer;
+  font-family: var(--store-font-display);
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 
-.helpDetails ul {
+.helpPanel ul {
   display: grid;
-  gap: 8px;
-  margin: var(--store-space-sm) 0 0;
+  gap: 6px;
+  margin: 10px 0 0;
   padding: 0 0 0 1.2em;
   color: var(--store-muted);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   line-height: 1.5;
+}
+
+.helpPanel li::marker {
+  color: var(--store-brand);
 }
 
 .formLinks {
@@ -445,15 +453,21 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 10px 20px;
-  margin-top: var(--store-space-xl);
+  margin-top: var(--store-space-lg);
   padding-top: var(--store-space-md);
   border-top: 1px solid var(--store-border);
   font-size: 0.88rem;
 }
 
+.socialPanel + .formLinks {
+  margin-top: 16px;
+  padding-top: 0;
+  border-top: 0;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .formPanel {
-    animation: auth-panel-enter 240ms var(--store-ease) both;
+    animation: auth-panel-enter 320ms var(--store-ease) both;
   }
 
   .statusBanner,
@@ -468,7 +482,7 @@
 }
 
 @keyframes auth-panel-enter {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -482,75 +496,12 @@
   to { opacity: 1; transform: scaleX(1); }
 }
 
-@media (max-width: 980px) {
-  .authPage {
-    grid-template-columns: 1fr;
-    gap: 34px;
-    padding-top: 32px;
-  }
-
-  .authIntro {
-    max-width: 720px;
-    padding-top: 0;
-  }
-
-  .authIntro h1 {
-    max-width: 720px;
-  }
-
-  .formPanel {
-    width: min(100%, 620px);
-  }
-}
-
 @media (max-width: 560px) {
-  .authPage {
-    gap: 26px;
-    padding-block: 24px 84px;
-  }
-
-  .contextLabel {
-    margin-bottom: 9px;
-  }
-
-  .authIntro h1 {
-    font-size: clamp(2rem, 10vw, 2.7rem);
-  }
-
-  .contextDescription {
-    margin-top: 14px;
-  }
-
-  .benefitList {
-    margin-top: 22px;
-  }
-
-  .benefitList li {
-    grid-template-columns: 1fr;
-    gap: 5px;
-    padding-block: 12px;
-  }
-
-  .formPanel {
-    padding: 20px 16px 22px;
-    border-radius: var(--store-radius);
-  }
-
-  .segmentedNav a {
-    padding-inline: 4px;
-  }
-
-  .formHeading {
-    margin-bottom: 20px;
-  }
-
-  .consentBlock {
-    padding: 14px 12px;
-  }
-
-  .consentBlock > p {
-    margin-left: 31px;
-  }
+  .authPage { padding-block: 16px 48px; }
+  .formPanel { padding: 18px 16px 22px; }
+  .formHeading { margin-bottom: 20px; }
+  .consentBlock { padding: 14px 12px; }
+  .consentBlock > p { margin-left: 31px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -565,7 +516,150 @@
   .passwordToggle,
   .secondaryButton,
   .segmentedNav a,
-  .formField input {
+  .formField input,
+  .submitIcon {
     transition-duration: 0.01ms;
   }
+}
+
+.socialPanel {
+  display: grid;
+  gap: 9px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--store-border);
+}
+.socialPanel h2 {
+  margin: 0;
+  font-family: var(--store-font-sans);
+  font-size: .88rem;
+  font-weight: 650;
+}
+.providerButtons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 115px), 1fr));
+  gap: 8px;
+}
+.providerButtons button,
+.connections button {
+  min-height: 44px;
+  padding: 7px 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-brand);
+  font-size: .88rem;
+  font-weight: 640;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.providerButtons button:hover:not(:disabled),
+.connections button:hover:not(:disabled) { border-color: var(--store-brand); background: var(--store-brand-soft); }
+.providerButtons button:disabled,
+.connections button:disabled { color: var(--store-muted); cursor: wait; }
+.providerMessage,
+.providerError {
+  margin: 0;
+  color: var(--store-muted);
+  font-size: .86rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.providerError { color: var(--store-danger); }
+.connections {
+  display: grid;
+  gap: 10px;
+  max-width: 560px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--store-border);
+}
+.connections h2,
+.connections p { margin: 0; }
+.connections h2 { font-size: clamp(1.25rem, 2.2vw, 1.45rem); }
+.connections > p { color: var(--store-muted); line-height: 1.5; }
+.connections ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.connections li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding-block: 6px;
+}
+.connections small { display: block; color: var(--store-success); }
+.connectionForm {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+}
+.connectionForm input { min-height: 48px; }
+.connectionForm button { justify-self: start; }
+
+/* ---------------- Design board «Вход и регистрация» ----------------
+   One card: ink-indigo brand panel (white logo, what the account gives,
+   the car) beside the form. On a phone the panel shrinks to a header. */
+.authPage { width: min(calc(100% - 32px), 1080px); }
+.authShell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--store-surface);
+  box-shadow: 0 30px 80px rgb(16 30 60 / 12%);
+}
+.authShell .formPanel { border: 0; border-radius: 0; padding: clamp(22px, 3.4vw, 44px); }
+.brandPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+  overflow: hidden;
+  padding: clamp(28px, 3.4vw, 44px);
+  background: var(--store-header-bg);
+  color: #fff;
+}
+.brandLogo { display: block; width: auto; height: 56px; color: #fff; }
+.brandTitle { margin: 6px 0 0; font-family: var(--store-font-display); font-size: clamp(1.5rem, 1rem + 1.4vw, 2.1rem); font-weight: 800; line-height: 1.12; }
+.brandBenefits { display: grid; justify-self: center; text-align: left; gap: 12px; margin: 0; padding: 0; list-style: none; color: #d6d4ff; font-size: .98rem; }
+.brandBenefits li { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 10px; }
+.brandBenefits li::before {
+  content: "✓";
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgb(245 196 0 / 16%);
+  color: var(--store-accent);
+  font-weight: 800;
+}
+/* The car stands right on the panel: no box behind it. A soft indigo glow
+   and a floor shadow lift the blue body off the ink background. */
+.brandCar {
+  position: relative;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-height: 240px;
+  max-height: 300px;
+  margin: 6px 0 -4px;
+  padding: 14px 4% 10px;
+  background:
+    url("/brand/car-drive.webp") center 62% / contain no-repeat,
+    radial-gradient(ellipse 46% 9% at 50% 86%, rgb(5 3 30 / 70%), transparent 70%),
+    radial-gradient(ellipse 60% 52% at 50% 56%, rgb(122 108 255 / 34%), transparent 72%);
+  background-origin: content-box, border-box, border-box;
+}
+@media (max-width: 860px) {
+  .authPage { width: min(calc(100% - 24px), 560px); }
+  .authShell { grid-template-columns: minmax(0, 1fr); border-radius: 24px; }
+  .brandPanel { gap: 10px; padding: 22px 20px 20px; }
+  .brandLogo { height: 40px; }
+  .brandTitle { font-size: 1.35rem; }
+  .brandBenefits, .brandCar { display: none; }
 }

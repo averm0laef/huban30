@@ -9,6 +9,7 @@ const baseFlags: AutoplayFlags = {
   hovered: false,
   focusWithin: false,
   tabHidden: false,
+  inViewport: true,
   interacted: false,
 };
 
@@ -34,6 +35,11 @@ describe("isAutoplayActive", () => {
     expect(isAutoplayActive({ ...baseFlags, tabHidden: true })).toBe(false);
   });
 
+  it("pauses outside the viewport and resumes when the banner becomes visible", () => {
+    expect(isAutoplayActive({ ...baseFlags, inViewport: false })).toBe(false);
+    expect(isAutoplayActive({ ...baseFlags, inViewport: true })).toBe(true);
+  });
+
   it("resumes once a pause condition clears and nothing else blocks it", () => {
     const hoveredThenNot: AutoplayFlags = { ...baseFlags, hovered: true };
     expect(isAutoplayActive(hoveredThenNot)).toBe(false);
@@ -54,8 +60,21 @@ describe("isAutoplayActive", () => {
     })).toBe(false);
   });
 
-  it("stops for good once the visitor has interacted with a control", () => {
+  it("stops once the visitor has interacted with a control", () => {
     expect(isAutoplayActive({ ...baseFlags, interacted: true })).toBe(false);
+  });
+
+  it("allows explicit play after an interaction once the pointer and focus leave", () => {
+    const stopped = { ...baseFlags, interacted: true };
+    expect(isAutoplayActive({ ...stopped, interacted: false, focusWithin: true })).toBe(false);
+    expect(isAutoplayActive({ ...stopped, interacted: false, hovered: true })).toBe(false);
+    expect(isAutoplayActive({ ...stopped, interacted: false })).toBe(true);
+  });
+
+  it("keeps reduced-motion and visibility protections after explicit play", () => {
+    expect(isAutoplayActive({ ...baseFlags, interacted: false, reducedMotion: true })).toBe(false);
+    expect(isAutoplayActive({ ...baseFlags, interacted: false, inViewport: false })).toBe(false);
+    expect(isAutoplayActive({ ...baseFlags, interacted: false, tabHidden: true })).toBe(false);
   });
 
   it("stays stopped after an interaction even once hover, focus and tab-hidden all clear again", () => {

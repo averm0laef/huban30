@@ -22,10 +22,9 @@ export const metadata: Metadata = {
   },
 };
 
-/** Matches `--store-header-bg` — the ink-blue signage band browser chrome
- * (mobile address bar, PWA splash) should pick up alongside it. */
 export const viewport: Viewport = {
-  themeColor: "#0f2d66",
+  themeColor: "#f4f5f7",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

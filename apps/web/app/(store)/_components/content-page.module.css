@@ -1,0 +1,128 @@
+/* Customer and legal pages — the «Шаблон» boards of the design canvas.
+   Same tokens as the rest of the storefront (--store-*), white cards on the
+   page background, ink-indigo help panel with the yellow primary action. */
+
+.page { width: var(--store-container); display: grid; gap: 22px; margin: 0 auto; padding-block: clamp(20px, 3vw, 36px) clamp(44px, 6vw, 68px); }
+.breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--store-muted); font-size: .82rem; }
+.breadcrumbs a { display: inline-flex; align-items: center; min-height: 32px; color: inherit; text-decoration: none; }
+.breadcrumbs a:hover { color: var(--store-brand); }
+.breadcrumbs [aria-current] { color: var(--store-text); }
+
+.header { display: grid; gap: 10px; max-width: 780px; }
+.header h1 { margin: 0; font-size: clamp(1.4rem, 1rem + 2.2vw, 2.5rem); font-weight: var(--store-weight-black); line-height: 1.12; letter-spacing: var(--store-tracking-tight); overflow-wrap: break-word; }
+.header p { margin: 0; color: var(--store-muted); font-size: 1.02rem; line-height: 1.6; }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 14px; }
+.fact { display: grid; align-content: start; gap: 8px; padding: 20px 22px; border-radius: var(--store-radius); background: var(--store-surface); }
+.factPrimary { box-shadow: inset 0 0 0 2px var(--store-brand); }
+.factLabel { color: var(--store-muted); font-size: .75rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.factPrimary .factLabel { color: var(--store-brand); }
+.fact strong { font-family: var(--store-font-display); font-size: 1.15rem; line-height: 1.25; }
+.factText { color: var(--store-muted); font-size: .92rem; line-height: 1.5; }
+.factAction {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  margin-top: 4px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  font-family: var(--store-font-display);
+  font-size: .86rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.factAction:hover { background: var(--store-brand-strong); }
+
+.steps { padding: 22px 26px; border-radius: var(--store-radius); background: var(--store-surface); }
+.steps h2 { margin: 0 0 16px; font-size: 1.3rem; }
+.steps ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 18px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: grid; align-content: start; gap: 6px; }
+.steps li > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--store-brand-soft); color: var(--store-brand); font-family: var(--store-font-display); font-weight: 800; }
+.steps small { color: var(--store-muted); font-size: .86rem; line-height: 1.45; }
+
+.withContents { display: grid; grid-template-columns: 270px minmax(0, 1fr); align-items: start; gap: 22px; }
+.single { display: grid; }
+.contents { position: sticky; top: 96px; display: grid; gap: 2px; padding: 16px; border-radius: var(--store-radius); background: var(--store-surface); font-size: .88rem; }
+.contents strong { padding: 0 10px 8px; color: var(--store-muted); font-size: .75rem; letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.contents a { padding: 8px 10px; border-radius: 10px; color: var(--store-text); line-height: 1.35; text-decoration: none; }
+.contents a:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+
+.cards { display: grid; gap: 14px; min-width: 0; }
+.card,
+.sheet { min-width: 0; padding: clamp(18px, 2.4vw, 28px) clamp(18px, 3vw, 34px); border-radius: var(--store-radius); background: var(--store-surface); }
+.card h2,
+.sheetSection h2 { margin: 0 0 10px; font-size: clamp(1.1rem, 1rem + .5vw, 1.3rem); line-height: 1.3; }
+.card p,
+.sheetSection p { max-width: 72ch; margin: 0; color: color-mix(in srgb, var(--store-text) 82%, var(--store-muted)); font-size: 1rem; line-height: 1.7; overflow-wrap: break-word; }
+.card,
+.sheetSection { scroll-margin-top: 110px; }
+.sheet { display: grid; gap: 24px; }
+.sheetSection + .sheetSection { padding-top: 22px; border-top: 1px solid var(--store-border); }
+.sheetSection h2 { display: flex; gap: 12px; }
+.sheetSection h2 span { color: var(--store-brand); font-variant-numeric: tabular-nums; }
+.links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px !important; }
+.links a { color: var(--store-brand); font-weight: 600; text-underline-offset: 3px; }
+
+.help { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 24px; padding: 26px 30px; border-radius: 22px; background: var(--store-header-bg, #140f57); color: #fff; }
+.help > div:first-child { display: grid; gap: 6px; }
+.help strong { font-family: var(--store-font-display); font-size: 1.3rem; }
+.help span { color: rgb(255 255 255 / 78%); font-size: .95rem; line-height: 1.5; }
+.helpActions { display: flex; flex-wrap: wrap; gap: 10px; }
+.helpPrimary,
+.helpSecondary { display: inline-flex; align-items: center; min-height: 46px; padding: 0 20px; border-radius: 12px; font-family: var(--store-font-display); font-weight: 800; text-decoration: none; }
+.helpPrimary { background: var(--store-accent); color: #140f57; }
+.helpPrimary:hover { filter: brightness(1.05); }
+.helpSecondary { border: 1.5px solid rgb(255 255 255 / 50%); color: #fff; }
+.helpSecondary:hover { background: rgb(255 255 255 / 10%); }
+.helpPrimary:focus-visible,
+.helpSecondary:focus-visible,
+.factAction:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 3px; }
+
+.map { width: 100%; min-height: 340px; border: 0; border-radius: var(--store-radius); background: var(--store-surface-strong); }
+
+@media (max-width: 900px) {
+  .withContents { grid-template-columns: minmax(0, 1fr); }
+  .contents { position: static; display: flex; overflow-x: auto; gap: 6px; padding: 8px; scrollbar-width: none; }
+  .contents strong { display: none; }
+  .contents a { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border-radius: var(--store-radius-full); background: var(--store-bg); white-space: nowrap; }
+  .help { padding: 22px; }
+}
+
+/* ---------------- Contacts ---------------- */
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.contactGrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: stretch; gap: 18px; }
+.contactCard { display: grid; align-content: start; gap: 16px; padding: clamp(18px, 2.4vw, 28px); border-radius: var(--store-radius); background: var(--store-surface); }
+.openLine { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--store-muted); font-size: .92rem; }
+.openLine strong { color: var(--store-text); }
+.openDot { width: 10px; height: 10px; border-radius: 50%; background: var(--store-muted); }
+.openDot[data-open] { background: var(--store-success); }
+.contactList { display: grid; gap: 12px; margin: 0; }
+.contactList div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; font-size: 1rem; }
+.contactList dt { color: var(--store-muted); }
+.contactList dd { margin: 0; font-weight: 600; }
+.contactList a { color: var(--store-brand); }
+.contactActions { display: flex; flex-wrap: wrap; gap: 10px; }
+.contactActions .factAction { margin-top: 0; min-height: 46px; padding: 0 20px; }
+.outlineAction { display: inline-flex; align-items: center; min-height: 46px; padding: 0 20px; border: 1.5px solid var(--store-brand); border-radius: 10px; color: var(--store-brand); font-family: var(--store-font-display); font-size: .86rem; font-weight: 700; text-decoration: none; }
+.outlineAction:hover { background: var(--store-brand); color: var(--store-on-brand); }
+.messengers { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--store-border); }
+.messengers > span { color: var(--store-muted); font-size: .82rem; }
+.messengers ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.messengers a { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; border-radius: 10px; background: var(--store-bg); color: var(--store-text); font-size: .88rem; font-weight: 600; text-decoration: none; }
+.messengers a:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+.messengers svg { color: var(--store-brand); }
+.contactGrid .map { min-height: 100%; }
+.quickLinks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; }
+.quickLinks a { display: grid; gap: 6px; padding: 18px 22px; border-radius: var(--store-radius); background: var(--store-surface); color: var(--store-text); text-decoration: none; transition: box-shadow var(--store-duration-base) var(--store-ease); }
+.quickLinks a:hover { box-shadow: 0 0 0 1.5px var(--store-brand); }
+.quickLinks strong { font-family: var(--store-font-display); font-size: 1.05rem; }
+.quickLinks span { color: var(--store-muted); font-size: .88rem; }
+.formCard { scroll-margin-top: 110px; }
+@media (max-width: 900px) {
+  .contactGrid { grid-template-columns: minmax(0, 1fr); }
+  .contactGrid .map { min-height: 300px; }
+  .contactList div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}

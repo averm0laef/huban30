@@ -21,6 +21,7 @@ import styles from "./manager-join-notice.module.css";
 export interface ManagerJoinNoticeProps {
   assignedStaffId: string | null;
   assignedStaffName: string | null;
+  managerWaitSince?: string | null;
   messages: ChatMessage[];
   status: ChatThread["status"];
 }
@@ -50,17 +51,20 @@ function announcementFor(state: ManagerJoinState): string {
  * fires when the *state* changes — nobody needs "9:58, 9:57, 9:56..."
  * read aloud.
  */
-export function ManagerJoinNotice({ assignedStaffId, assignedStaffName, messages, status }: ManagerJoinNoticeProps) {
+export function ManagerJoinNotice({ assignedStaffId, assignedStaffName, managerWaitSince, messages, status }: ManagerJoinNoticeProps) {
   const [now, setNow] = useState(() => Date.now());
-  const state = managerJoinState({ assignedStaffId, assignedStaffName, messages, now, status });
+  const state = managerJoinState({ assignedStaffId, assignedStaffName, managerWaitSince, messages, now, status });
 
   const [announcement, setAnnouncement] = useState("");
   const lastKindRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (state.kind !== "waiting") return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
+    if (state.kind !== "waiting" && state.kind !== "outOfHours") return;
+    const updateClock = () => setNow(Date.now());
+    const timer = window.setInterval(updateClock, state.kind === "waiting" ? 1_000 : 30_000);
+    window.addEventListener("focus", updateClock);
+    document.addEventListener("visibilitychange", updateClock);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", updateClock); document.removeEventListener("visibilitychange", updateClock); };
     // Re-armed whenever the *kind* changes (e.g. staff replies mid-count),
     // not on every tick — `now` itself is deliberately not a dependency.
   }, [state.kind]);
@@ -77,7 +81,7 @@ export function ManagerJoinNotice({ assignedStaffId, assignedStaffName, messages
   const headline = state.kind === "waiting" ? MANAGER_WAITING_TEXT
     : state.kind === "elapsed" ? MANAGER_ELAPSED_HEADLINE
       : state.kind === "outOfHours" ? MANAGER_OUT_OF_HOURS_HEADLINE
-        : MANAGER_ASSIGNED_HEADLINE;
+        : assignedStaffName ? `${assignedStaffName} на связи` : MANAGER_ASSIGNED_HEADLINE;
   const body = state.kind === "elapsed" ? MANAGER_ELAPSED_BODY
     : state.kind === "outOfHours" ? managerOutOfHoursBody(state.openDetail)
       : state.kind === "assigned" ? managerAssignedNote(assignedStaffName)

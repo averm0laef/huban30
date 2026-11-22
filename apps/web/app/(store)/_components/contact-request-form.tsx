@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 
 import {
   CONTACT_CONSENT_POLICY_VERSION,
@@ -10,6 +10,8 @@ import {
 } from "@an30/contracts";
 
 import { clearIdempotencyKey, stableIdempotencyKey } from "../_lib/idempotency";
+import { catalogQueryPrefillMessage, EXPERT_HELP_CATALOG_QUERY_STORAGE_KEY, EXPERT_HELP_PRODUCT_STORAGE_KEY } from "../_lib/expert-help-prefill";
+import { EXPERT_HELP_VIN_STORAGE_KEY, isValidVin } from "../_lib/vin";
 import { apiRequest, errorText } from "../_lib/storefront-api";
 import styles from "./storefront.module.css";
 
@@ -22,7 +24,10 @@ interface ContactResponse {
 }
 
 interface ContactRequestFormProps {
+  className?: string;
   description: string;
+  /** Shown instead of the generic notice while the form is switched off. */
+  disabledFallback?: ReactNode;
   enabled?: boolean;
   messagePlaceholder?: string;
   source: "contacts" | "expert_help" | "vin_request";
@@ -35,7 +40,9 @@ function optional(value: FormDataEntryValue | null) {
 }
 
 export function ContactRequestForm({
+  className,
   description,
+  disabledFallback,
   enabled = true,
   messagePlaceholder,
   source,
@@ -53,6 +60,27 @@ export function ContactRequestForm({
     window.addEventListener("offline", update);
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
+
+  useEffect(() => {
+    if (!enabled || (source !== "vin_request" && source !== "expert_help")) return;
+    const message = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
+    if (!message || message.value) return;
+    try {
+      const vin = source === "vin_request" ? window.sessionStorage.getItem(EXPERT_HELP_VIN_STORAGE_KEY) : null;
+      const query = window.sessionStorage.getItem(EXPERT_HELP_CATALOG_QUERY_STORAGE_KEY);
+      const productPrefill = window.sessionStorage.getItem(EXPERT_HELP_PRODUCT_STORAGE_KEY);
+      if (!vin && !query && !productPrefill) return;
+      if (vin) window.sessionStorage.removeItem(EXPERT_HELP_VIN_STORAGE_KEY);
+      if (query) window.sessionStorage.removeItem(EXPERT_HELP_CATALOG_QUERY_STORAGE_KEY);
+      if (productPrefill) window.sessionStorage.removeItem(EXPERT_HELP_PRODUCT_STORAGE_KEY);
+      const validVin = vin && isValidVin(vin) ? vin.toUpperCase() : null;
+      if (!validVin && !query && !productPrefill) return;
+      message.value = validVin ? `VIN: ${validVin}\nНужная деталь: ` : productPrefill ?? catalogQueryPrefillMessage(query ?? "");
+      message.dispatchEvent(new Event("input", { bubbles: true }));
+    } catch {
+      // The form remains fully usable when browser storage is restricted.
+    }
+  }, [enabled, source]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,9 +113,10 @@ export function ContactRequestForm({
   }
 
   return (
-    <section className={styles.formPanel} aria-labelledby={`contact-form-${source}`}>
+    <section className={className ? `${styles.formPanel} ${className}` : styles.formPanel} aria-labelledby={`contact-form-${source}`}>
       <h2 id={`contact-form-${source}`}>{title}</h2><p>{description}</p>
-      {!enabled ? (
+      {!enabled && disabledFallback ? disabledFallback : null}
+      {!enabled && !disabledFallback ? (
         <div className={styles.offlineNotice} role="status">
           Онлайн-форма откроется после публикации утверждённой политики обработки данных.
           Пока свяжитесь с магазином по телефону, указанному на странице.
@@ -96,7 +125,7 @@ export function ContactRequestForm({
       {!enabled ? null : <>
       {!online ? <div className={styles.offlineNotice} role="status">Нет подключения к сети. Заполненные данные останутся в форме.</div> : null}
       {error ? <div className={styles.formError} role="alert"><strong>Обращение не отправлено</strong><p>{error}</p><p>После восстановления связи нажмите кнопку ещё раз. Ключ повтора сохранён.</p></div> : null}
-      {success ? <div className={styles.formSuccess} role="status"><strong>Обращение принято</strong><p>{success.message}</p><p>Номер: {success.id}</p></div> : null}
+      {success ? <div className={styles.formSuccess} role="status"><strong>Обращение принято</strong><p>{success.message}</p><p>Номер обращения: <strong>{success.id.slice(0, 8).toUpperCase()}</strong></p></div> : null}
       <form className={styles.stackForm} onSubmit={submit}>
         <label className={styles.field}>Имя<input name="name" required minLength={2} maxLength={160} autoComplete="name" /></label>
         <div className={styles.splitFields}>

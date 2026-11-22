@@ -14,25 +14,22 @@ import {
 import type { ChatIntake } from "@an30/contracts";
 
 import { errorText, readSession, type SessionView } from "../_lib/storefront-api";
-import { ChatAttachmentMedia } from "./attachment-preview";
+import { computeShopStatusNow, type ShopStatus } from "../_components/shop-status";
+import { ChatAvatar, ChatComposer, ChatMessageLog, ChatSystemPill, presenceLine } from "./chat-conversation";
 import { ChatIntakeForm } from "./chat-intake-form";
 import {
-  CHAT_ATTACHMENT_ACCEPT,
-  CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
   STATUS_LABELS,
   chatRequest,
   chatThreadCreateBody,
-  formatDate,
   isChatThread,
-  isOwnMessage,
-  isPreviewableMedia,
   parseStoredGuestThreads,
-  senderLabel,
   serializeGuestThreads,
+  threadNumberLabel,
   upsertThread,
   type ChatThread,
 } from "./chat-state";
+import { listTimeLabel, messagePreview } from "./chat-timeline";
 import { ManagerJoinNotice } from "./manager-join-notice";
 import { useChatThread } from "./use-chat-thread";
 import styles from "./chat.module.css";
@@ -45,6 +42,21 @@ type Viewer =
   | { kind: "staff" };
 
 interface ThreadListResponse { items: ChatThread[] }
+type Previews = Record<string, { at: string; text: string }>;
+
+/** The thread list endpoint has no last-message text, so the page keeps the
+ * last line it has seen per conversation on this device (preview only). */
+const PREVIEW_STORAGE_KEY = "an30_chat_previews_v1";
+function readPreviews(): Previews {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(PREVIEW_STORAGE_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed as Record<string, unknown>).filter((entry): entry is [string, { at: string; text: string }] => {
+      const value = entry[1] as { at?: unknown; text?: unknown } | null;
+      return Boolean(value) && typeof value?.text === "string" && typeof value?.at === "string";
+    }).slice(-100));
+  } catch { return {}; }
+}
 interface GuestThreadResponse extends ChatThread { guestToken: string }
 
 export function ChatClient() {
@@ -53,15 +65,19 @@ export function ChatClient() {
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadsError, setThreadsError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<"conversation" | "threads">("conversation");
+  const [createFormOpen, setCreateFormOpen] = useState(false);
   const [createPending, setCreatePending] = useState(false);
   const [createError, setCreateError] = useState("");
   const [storageWarning, setStorageWarning] = useState("");
   const [forgetId, setForgetId] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
   const [draft, setDraft] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const fileInput = useRef<HTMLInputElement | null>(null);
+  const [search, setSearch] = useState("");
+  const [previews, setPreviews] = useState<Previews>({});
+  const [shopStatus, setShopStatus] = useState<ShopStatus | null>(null);
   const messageEnd = useRef<HTMLDivElement | null>(null);
+  const createForm = useRef<HTMLDivElement | null>(null);
 
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedId) ?? null,
@@ -74,6 +90,7 @@ export function ChatClient() {
   const {
     assignedStaffId,
     assignedStaffName,
+    managerWaitSince,
     connection,
     connectionError,
     downloadAttachment,
@@ -90,7 +107,6 @@ export function ChatClient() {
     olderHistoryError,
     olderHistoryLoading,
     renderedMessages,
-    resetFileAttempt,
     resetSendAttempt,
     retryHistory,
     sendAttemptId,
@@ -136,6 +152,8 @@ export function ChatClient() {
   }, []);
 
   const initialize = useCallback(async () => {
+    setPreviews(readPreviews());
+    setShopStatus(computeShopStatusNow());
     setViewer({ kind: "loading" });
     setThreadsError("");
     try {
@@ -181,6 +199,18 @@ export function ChatClient() {
     if (viewingLatest) messageEnd.current?.scrollIntoView({ block: "end" });
   }, [renderedMessages, viewingLatest]);
 
+  const lastMessage = messages.at(-1);
+  useEffect(() => {
+    if (!selectedId || !lastMessage) return;
+    const text = messagePreview(lastMessage);
+    setPreviews((current) => {
+      if (current[selectedId]?.text === text) return current;
+      const next = { ...current, [selectedId]: { at: lastMessage.createdAt, text } };
+      try { window.localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(next)); } catch { /* preview only */ }
+      return next;
+    });
+  }, [lastMessage, selectedId]);
+
   async function showOlderMessages(): Promise<void> {
     const container = messageEnd.current?.parentElement;
     const containerTop = container?.getBoundingClientRect().top ?? 0;
@@ -214,6 +244,8 @@ export function ChatClient() {
       setThreads(next);
       if (viewer.kind === "guest") persistGuestThreads(next);
       setSelectedId(created.id);
+      setMobileView("conversation");
+      setCreateFormOpen(false);
     } catch (caught) {
       setCreateError(errorText(caught));
     } finally {
@@ -234,13 +266,9 @@ export function ChatClient() {
     }
   }
 
-  async function uploadAttachment(): Promise<void> {
-    if (!selectedFile || !online) return;
-    const ok = await submitAttachment(selectedFile);
-    if (ok) {
-      setSelectedFile(null);
-      if (fileInput.current) fileInput.current.value = "";
-    }
+  async function uploadAttachment(file: File): Promise<boolean> {
+    if (!online || !selectedThread || selectedThread.status === "closed") return false;
+    return submitAttachment(file);
   }
 
   function forgetGuestThread(threadId: string): void {
@@ -262,8 +290,33 @@ export function ChatClient() {
     buttons[nextIndex]?.focus();
   }
 
+  function openCreateForm(): void {
+    setMobileView("threads");
+    setCreateFormOpen(true);
+    window.requestAnimationFrame(() => {
+      createForm.current?.querySelector<HTMLElement>("select, input, textarea, button")?.focus();
+    });
+  }
+
+  function showThreads(): void {
+    setMobileView("threads");
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>("[data-customer-chat-thread][aria-current='true'], [data-customer-chat-thread]")?.focus();
+    });
+  }
+
+  function openThread(threadId: string): void {
+    setForgetId(null);
+    setSelectedId(threadId);
+    setMobileView("conversation");
+    // Desktop only: on a phone focusing would pop up the keyboard uninvited.
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      window.requestAnimationFrame(() => document.getElementById("chat-message")?.focus({ preventScroll: true }));
+    }
+  }
+
   if (viewer.kind === "loading") {
-    return <div className={styles.page}><div className={styles.statePanel} role="status"><h1>Открываем чат</h1><p>Проверяем сессию и сохранённые обращения.</p></div></div>;
+    return <div className={styles.page}><div className={styles.statePanel} role="status"><h1>Открываем чат</h1><p>Загружаем ваши обращения.</p></div></div>;
   }
   if (viewer.kind === "error") {
     return <div className={styles.page}><div className={styles.statePanel} role="alert"><h1>Чат пока недоступен</h1><p>{viewer.message}</p><button type="button" onClick={() => void initialize()}>Повторить</button></div></div>;
@@ -273,182 +326,180 @@ export function ChatClient() {
   }
 
   const threadClosed = selectedThread?.status === "closed";
-  const ownMessages = messages.filter(isOwnMessage);
-  const lastOwnMessageId = ownMessages.at(-1)?.id ?? null;
+  const query = search.trim().toLocaleLowerCase("ru");
+  const visibleThreads = query
+    ? threads.filter((thread) => `${thread.subject ?? ""} ${thread.orderId ?? ""} ${previews[thread.id]?.text ?? ""}`.toLocaleLowerCase("ru").includes(query))
+    : threads;
+  const presence = presenceLine({
+    assignedStaffId: selectedThread ? assignedStaffId ?? selectedThread.assignedStaffId : null,
+    assignedStaffName,
+    connection,
+    online,
+    shopStatus,
+    threadClosed,
+  });
+  const isRetry = Boolean(sendAttemptId) && !sendPending;
 
   return (
     <div className={styles.page}>
-      <header className={styles.pageHeading}>
-        <div><p>Поддержка АН-30</p><h1>Чат с магазином</h1><span>Сообщения сохраняются на сервере. Сотрудник увидит обращение в своей рабочей очереди.</span></div>
-        <button type="button" disabled={threadsLoading} onClick={() => void loadThreads(viewer)}>Обновить список</button>
-      </header>
-      {!online ? <div className={styles.notice} role="status"><strong>Нет подключения</strong><span>История остаётся на экране, но отправка временно недоступна.</span></div> : null}
+      <h1 className={styles.visuallyHidden}>Чат с магазином АН-30</h1>
+      {!online ? <div className={styles.notice} role="status"><strong>Нет подключения</strong><span>История остаётся на экране, отправка вернётся вместе с сетью.</span></div> : null}
       {storageWarning ? <div className={styles.warning} role="alert"><strong>Доступ сохранён только на этой странице</strong><span>{storageWarning}</span></div> : null}
-      <div className={styles.workspace}>
-        <aside className={styles.sidebar} aria-label="Список чатов">
-          <div className={styles.createForm}>
+      <div className={styles.workspace} data-mobile-view={selectedThread ? mobileView : "threads"}>
+        <aside className={styles.sidebar} aria-label="Обращения">
+          <div className={styles.sidebarTop}>
+            <label className={styles.visuallyHidden} htmlFor="chat-thread-search">Поиск по обращениям</label>
+            <input
+              className={styles.search}
+              id="chat-thread-search"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Поиск"
+              type="search"
+              value={search}
+            />
+            <button
+              aria-controls="chat-intake-form"
+              aria-expanded={createFormOpen}
+              className={styles.newButton}
+              onClick={() => { if (createFormOpen) setCreateFormOpen(false); else openCreateForm(); }}
+              type="button"
+            >{createFormOpen ? "Скрыть" : "Новое"}</button>
+          </div>
+          <div className={styles.createForm} data-open={createFormOpen || undefined} id="chat-intake-form" ref={createForm}>
             <ChatIntakeForm disabled={!online} error={createError} onSubmit={(intake) => void createThread(intake)} pending={createPending} />
           </div>
           {threadsError ? <div className={styles.listError} role="alert"><strong>Список не загружен</strong><span>{threadsError}</span><button type="button" onClick={() => void loadThreads(viewer)}>Повторить</button></div> : null}
-          {threadsLoading ? <div className={styles.listState} role="status">Загружаем чаты</div> : null}
-          {!threadsLoading && !threadsError && threads.length === 0 ? <div className={styles.listState}>Здесь появятся ваши обращения.</div> : null}
-          <div className={styles.threadList} role="list" aria-label="Ваши чаты">
-            {threads.map((thread, index) => (
-              <article className={styles.threadRow} data-active={thread.id === selectedId || undefined} key={thread.id} role="listitem">
-                <button
-                  aria-pressed={thread.id === selectedId}
-                  data-customer-chat-thread
-                  onClick={() => { setForgetId(null); setSelectedId(thread.id); }}
-                  onKeyDown={(event) => focusThread(event, index)}
-                  type="button"
-                >
-                  <strong>{thread.subject ?? "Обращение без темы"}</strong>
-                  <span>{STATUS_LABELS[thread.status]}</span>
-                  <time dateTime={thread.lastMessageAt ?? thread.createdAt}>{formatDate(thread.lastMessageAt ?? thread.createdAt)}</time>
-                </button>
-                {viewer.kind === "guest" ? (
-                  forgetId === thread.id ? (
-                    <div className={styles.forgetConfirm} role="alert">
-                      <span>После удаления восстановить доступ без токена нельзя.</span>
-                      <button type="button" onClick={() => forgetGuestThread(thread.id)}>Удалить доступ</button>
-                      <button type="button" onClick={() => setForgetId(null)}>Отмена</button>
-                    </div>
-                  ) : <button className={styles.forgetButton} type="button" onClick={() => setForgetId(thread.id)}>Убрать с устройства</button>
-                ) : null}
-              </article>
-            ))}
-          </div>
+          {threadsLoading ? <div className={styles.listState} role="status">Загружаем обращения…</div> : null}
+          {!threadsLoading && !threadsError && threads.length === 0 && !createFormOpen ? (
+            <div className={styles.listState}>
+              <strong>Пока нет обращений</strong>
+              <span>Спросите про деталь или заказ — ответит сотрудник магазина.</span>
+              <button className={styles.primaryButton} onClick={openCreateForm} type="button">Написать магазину</button>
+            </div>
+          ) : null}
+          {query && threads.length > 0 && visibleThreads.length === 0 ? <div className={styles.listState}>Ничего не нашлось</div> : null}
+          <ul className={styles.threadList} aria-label="Ваши обращения">
+            {visibleThreads.map((thread, index) => {
+              const active = thread.id === selectedId;
+              const preview = previews[thread.id];
+              const time = preview && (!thread.lastMessageAt || preview.at >= thread.lastMessageAt) ? preview.at : thread.lastMessageAt ?? thread.createdAt;
+              const unread = active && !viewingLatest ? newerMessageCount : 0;
+              return (
+                <li className={styles.threadRow} data-active={active || undefined} key={thread.id}>
+                  <button
+                    aria-current={active ? "true" : undefined}
+                    data-customer-chat-thread
+                    onClick={() => openThread(thread.id)}
+                    onKeyDown={(event) => focusThread(event, index)}
+                    type="button"
+                  >
+                    <ChatAvatar size="lg" tone={active || thread.status !== "closed" ? "brand" : "muted"} />
+                    <span className={styles.threadText}>
+                      <span className={styles.threadLine}>
+                        <strong>{thread.subject ?? "Обращение"}</strong>
+                        <time dateTime={time}>{listTimeLabel(time)}</time>
+                      </span>
+                      <span className={styles.threadLine}>
+                        <span className={styles.threadPreview}>{preview?.text ?? STATUS_LABELS[thread.status]}</span>
+                        {unread > 0 ? <span className={styles.unread} aria-label={`Новых сообщений: ${unread}`}>{unread > 99 ? "99+" : unread}</span>
+                          : thread.status === "closed" ? <span className={styles.closedTag}>завершено</span> : null}
+                      </span>
+                    </span>
+                  </button>
+                  {viewer.kind === "guest" && active ? (
+                    forgetId === thread.id ? (
+                      <div className={styles.forgetConfirm} role="alert">
+                        <span>Переписку на этом устройстве открыть снова не получится.</span>
+                        <button type="button" onClick={() => forgetGuestThread(thread.id)}>Удалить доступ</button>
+                        <button type="button" onClick={() => setForgetId(null)}>Отмена</button>
+                      </div>
+                    ) : <button className={styles.forgetButton} type="button" onClick={() => setForgetId(thread.id)}>Убрать с этого устройства</button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         </aside>
         <section className={styles.conversation} aria-label="Переписка">
           {!selectedThread ? (
-            <div className={styles.statePanel}><h2>Выберите чат</h2><p>Или создайте новое обращение слева.</p></div>
+            <div className={styles.conversationEmpty}>
+              <ChatAvatar size="lg" />
+              <h2>{threadsLoading ? "Загружаем беседу" : "Чат с магазином АН-30"}</h2>
+              <p>{threadsLoading ? "Сейчас покажем ваши обращения." : threads.length ? "Выберите обращение слева, чтобы продолжить переписку." : "Подскажем по детали или заказу. VIN или артикул помогут быстрее разобраться."}</p>
+              {!threadsLoading && !threads.length ? <button className={styles.primaryButton} onClick={openCreateForm} type="button">Написать магазину</button> : null}
+            </div>
           ) : (
             <>
               <header className={styles.conversationHeader}>
-                <div><h2>{selectedThread.subject ?? "Обращение без темы"}</h2><span>{STATUS_LABELS[selectedThread.status]}</span></div>
-                <span className={styles.connection} data-state={connection}>{CONNECTION_LABELS[connection]}</span>
+                <button aria-label="Назад к обращениям" className={styles.backButton} onClick={showThreads} type="button">
+                  <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5-7 7 7 7" /></svg>
+                </button>
+                <ChatAvatar online={presence.tone === "online"} />
+                <div className={styles.conversationTitle}>
+                  <h2>{selectedThread.subject ?? "Обращение"}</h2>
+                  <span data-tone={presence.tone}>{presence.text}</span>
+                  {threadNumberLabel(selectedThread) ? <small>{threadNumberLabel(selectedThread)}</small> : null}
+                </div>
               </header>
-              <ManagerJoinNotice
-                assignedStaffId={assignedStaffId}
-                assignedStaffName={assignedStaffName}
-                messages={messages}
-                status={threadStatus ?? selectedThread.status}
-              />
               {connectionError ? <div className={styles.inlineError} role="alert">{connectionError}</div> : null}
               {historyError ? <div className={styles.historyError} role="alert"><strong>История не загружена</strong><span>{historyError}</span><button type="button" onClick={retryHistory}>Повторить</button></div> : null}
-              {historyLoading ? <div className={styles.historyState} role="status">Загружаем историю</div> : (
-                <div
-                  aria-busy={olderHistoryLoading || undefined}
-                  aria-live={viewingLatest ? "polite" : "off"}
-                  aria-relevant="additions text"
-                  className={styles.messages}
-                  id="chat-message-log"
-                  role="log"
-                >
-                  {hasOlderMessages || !viewingLatest ? (
-                    <div className={styles.historyControls}>
-                      {hasOlderMessages ? (
-                        <button
-                          aria-controls="chat-message-log"
-                          disabled={olderHistoryLoading}
-                          onClick={() => void showOlderMessages()}
-                          type="button"
-                        >
-                          {olderHistoryLoading
-                            ? "Загружаем предыдущие сообщения..."
-                            : olderHistoryError
-                              ? "Повторить загрузку предыдущих"
-                              : "Показать предыдущие сообщения"}
-                        </button>
-                      ) : <span>Это начало переписки.</span>}
-                      {!viewingLatest ? (
-                        <button aria-controls="chat-message-log" onClick={showLatestMessages} type="button">
-                          {newerMessageCount > 0
-                            ? `К последним сообщениям (${newerMessageCount})`
-                            : "К последним сообщениям"}
-                        </button>
-                      ) : null}
-                      {olderHistoryError ? <span role="alert">{olderHistoryError}</span> : null}
-                    </div>
-                  ) : null}
-                  {messages.length === 0 ? (
-                    <div className={styles.emptyMessages}>
-                      <strong>Здравствуйте! Вы в чате магазина АН-30</strong>
-                      <span>Укажите VIN или марку, модель и год автомобиля, название нужной детали. Фото или короткое видео помогут показать деталь и место установки.</span>
-                    </div>
-                  ) : null}
-                  {renderedMessages.map((message) => (
-                    <article
-                      className={styles.message}
-                      data-chat-message-id={message.id}
-                      data-own={isOwnMessage(message) || undefined}
-                      key={message.id}
-                    >
-                      <header><strong>{senderLabel(message.senderKind)}</strong><time dateTime={message.createdAt}>{formatDate(message.createdAt)}</time></header>
-                      {message.body && message.messageType !== "attachment" ? <p>{message.body}</p> : null}
-                      {message.attachments.map((attachment) => (
-                        isPreviewableMedia(attachment) && selectedThread && viewerKind ? (
-                          <ChatAttachmentMedia
-                            attachment={attachment}
-                            key={attachment.id}
-                            onDownload={() => void downloadAttachment(attachment)}
-                            thread={selectedThread}
-                            viewerKind={viewerKind}
-                          />
-                        ) : (
-                          <button className={styles.attachment} key={attachment.id} onClick={() => void downloadAttachment(attachment)} type="button">
-                            <strong>{attachment.originalName}</strong><span>{Math.max(1, Math.ceil(attachment.byteSize / 1024))} КБ, скачать</span>
-                          </button>
-                        )
-                      ))}
-                      {isOwnMessage(message) && lastStaffReadMessageId === message.id ? <small>Прочитано магазином</small> : null}
-                    </article>
-                  ))}
-                  {lastStaffReadMessageId && lastOwnMessageId && lastStaffReadMessageId !== lastOwnMessageId ? <span className={styles.readNote}>Магазин прочитал предыдущие сообщения</span> : null}
-                  <div ref={messageEnd} />
+              {downloadError ? <div className={styles.inlineError} role="alert">Файл не скачан: {downloadError}</div> : null}
+              {historyLoading ? <div className={styles.historyState} role="status">Загружаем историю…</div> : (
+                <ChatMessageLog
+                  key={selectedThread.id}
+                  empty={<><strong>Здравствуйте! Вы в чате магазина АН-30</strong>Укажите VIN или марку, модель и год автомобиля и нужную деталь. Фото или короткое видео помогут показать деталь.</>}
+                  footer={threadClosed ? <ChatSystemPill>Обращение завершено</ChatSystemPill> : null}
+                  hasOlderMessages={hasOlderMessages}
+                  lastStaffReadMessageId={lastStaffReadMessageId}
+                  logId="chat-message-log"
+                  messageEndRef={messageEnd}
+                  messages={messages}
+                  newerMessageCount={newerMessageCount}
+                  olderHistoryError={olderHistoryError}
+                  olderHistoryLoading={olderHistoryLoading}
+                  onDownload={(attachment) => void downloadAttachment(attachment)}
+                  onShowLatest={showLatestMessages}
+                  onShowOlder={() => void showOlderMessages()}
+                  renderedMessages={renderedMessages}
+                  thread={selectedThread}
+                  viewerKind={viewerKind}
+                  viewingLatest={viewingLatest}
+                />
+              )}
+              {threadClosed ? (
+                <div className={styles.closedBar}>
+                  <span>Чат закрыт. Если вопрос остался, начните новое обращение.</span>
+                  <button className={styles.primaryButton} onClick={openCreateForm} type="button">Новое обращение</button>
+                </div>
+              ) : (
+                <div className={styles.footer}>
+                  <ManagerJoinNotice
+                    key={selectedThread.id}
+                    assignedStaffId={assignedStaffId}
+                    assignedStaffName={assignedStaffName}
+                    managerWaitSince={managerWaitSince}
+                    messages={messages}
+                    status={threadStatus ?? selectedThread.status}
+                  />
+                  <ChatComposer
+                    attachDisabled={filePending || !online}
+                    draft={draft}
+                    fileError={fileError}
+                    filePending={filePending}
+                    idPrefix="chat"
+                    isRetry={isRetry}
+                    onDraftChange={(value) => {
+                      if (value !== draft) resetSendAttempt();
+                      setDraft(value);
+                    }}
+                    onFile={uploadAttachment}
+                    onSubmit={(event) => void sendMessage(event)}
+                    sendDisabled={sendPending || !draft.trim() || !online}
+                    sendError={sendError}
+                    sendPending={sendPending}
+                  />
                 </div>
               )}
-              {downloadError ? <div className={styles.inlineError} role="alert">Файл не скачан: {downloadError}</div> : null}
-              <div className={styles.composer}>
-                {threadClosed ? <div className={styles.closedNotice}>Чат закрыт. Создайте новое обращение, если вопрос остался.</div> : (
-                  <>
-                    <form onSubmit={(event) => void sendMessage(event)}>
-                      <label className={styles.visuallyHidden} htmlFor="chat-message">Сообщение магазину</label>
-                      <textarea
-                        id="chat-message"
-                        maxLength={4_000}
-                        onChange={(event) => {
-                          if (event.target.value !== draft) resetSendAttempt();
-                          setDraft(event.target.value);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) event.currentTarget.form?.requestSubmit();
-                        }}
-                        placeholder="Напишите сообщение"
-                        rows={3}
-                        value={draft}
-                      />
-                      <div><span>{draft.length} из 4000</span><button disabled={sendPending || !draft.trim() || !online} type="submit">{sendPending ? "Отправляем..." : sendAttemptId ? "Повторить отправку" : "Отправить"}</button></div>
-                    </form>
-                    {sendError ? <div className={styles.inlineError} role="alert">{sendError}</div> : null}
-                    <div className={styles.uploadRow}>
-                      <label htmlFor="chat-attachment">Фото до 5 МБ. Видео до 15 МБ и до 2 минут</label>
-                      <input
-                        accept={CHAT_ATTACHMENT_ACCEPT}
-                        id="chat-attachment"
-                        onChange={(event) => {
-                          setSelectedFile(event.target.files?.[0] ?? null);
-                          resetFileAttempt();
-                        }}
-                        ref={fileInput}
-                        type="file"
-                      />
-                      <button disabled={!selectedFile || filePending || !online} onClick={() => void uploadAttachment()} type="button">{filePending ? "Проверяем и загружаем..." : fileError ? "Повторить загрузку" : "Отправить фото или видео"}</button>
-                    </div>
-                    {fileError ? <div className={styles.inlineError} role="alert">{fileError}</div> : null}
-                  </>
-                )}
-              </div>
             </>
           )}
         </section>

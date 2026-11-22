@@ -1,0 +1,594 @@
+.home {
+  width: var(--store-container);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 24px);
+  padding: clamp(16px, 2vw, 26px) 0 clamp(24px, 4vw, 52px);
+}
+
+.deliveryBanner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+  padding: 16px clamp(20px, 3vw, 36px);
+  border-radius: 24px;
+  background: linear-gradient(110deg, #100532, #1800e0 42%, #4b35e7 62%, #100532);
+  color: var(--store-on-brand);
+  text-decoration: none;
+}
+.deliveryBanner::before,
+.deliveryBanner::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset-block: -35%;
+  width: 39%;
+  opacity: .5;
+  background: repeating-conic-gradient(#c5baff 0 25%, #120952 0 50%) 0 / 36px 36px;
+  transform: skewX(-18deg) rotate(-4deg);
+}
+.deliveryBanner::before { left: -8%; mask-image: linear-gradient(90deg, #000 58%, transparent 96%); }
+.deliveryBanner::after { right: -8%; mask-image: linear-gradient(270deg, #000 58%, transparent 96%); }
+.deliveryBanner strong {
+  font-family: var(--store-font-display);
+  font-size: clamp(1rem, 1.7vw, 1.18rem);
+  font-weight: 700;
+  letter-spacing: -.022em;
+}
+.deliveryBanner > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 999px;
+  font-size: .77rem;
+  font-weight: 620;
+}
+.deliveryBanner:hover > span { background: rgb(255 255 255 / 12%); }
+
+.home .homeTitle {
+  font-weight: 700;
+  margin: 1px 0 2px;
+  font-size: clamp(1.56rem, 4vw, 2.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.038em;
+  text-align: center;
+}
+.homePanel {
+  min-width: 0;
+  padding: clamp(14px, 2.15vw, 24px);
+  border: 1px solid var(--store-border);
+  border-radius: clamp(16px, 2.1vw, 24px);
+  background: var(--store-surface);
+}
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+  margin-bottom: clamp(12px, 2vw, 20px);
+}
+.sectionHeading h2 {
+  margin: 0;
+  font-size: clamp(1.23rem, 2.65vw, 1.65rem);
+  line-height: 1.18;
+  letter-spacing: var(--store-tracking-tight);
+}
+/* "See all" next to a section title: a quiet pill button, not a coloured
+   text link with an arrow. Fills on hover so it reads as clickable. */
+.headingLink {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-bg);
+  color: var(--store-text);
+  font-family: var(--store-font-display);
+  font-size: .82rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.headingLink:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+.headingLink:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.tile {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(2.6em, auto) 1fr;
+  min-width: 0;
+  min-height: 136px;
+  padding: 11px 13px 8px;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  text-decoration: none;
+  transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease);
+}
+.tileLabel {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  padding-right: 11px;
+  font-family: var(--store-font-display);
+  font-size: .84rem;
+  font-weight: 700;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+.tileArrow {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  color: var(--store-muted);
+  font-size: .98rem;
+}
+.tileImage {
+  justify-self: end;
+  align-self: end;
+  display: block;
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
+  transition: transform var(--store-duration-base) var(--store-ease);
+}
+.featuredTiles {
+  gap: clamp(8px, 1.45vw, 18px);
+}
+.featuredTiles .tile {
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "image" "label";
+  justify-items: center;
+  min-height: 136px;
+  padding: 9px 9px 14px;
+  border-color: transparent;
+  border-radius: var(--store-radius);
+  background: var(--store-bg);
+}
+.featuredTiles .tileLabel {
+  align-self: center;
+  grid-area: label;
+  padding: 0;
+  font-family: var(--store-font-sans);
+  font-size: .92rem;
+  font-weight: 650;
+  text-align: center;
+}
+.featuredTiles .tileImage {
+  grid-area: image;
+  justify-self: center;
+  align-self: center;
+  width: 112px;
+  height: 88px;
+  max-width: 100%;
+}
+.tile:focus-visible { outline-offset: 2px; }
+@media (hover: hover) {
+  .tile:hover {
+    border-color: color-mix(in srgb, var(--store-brand) 36%, var(--store-border));
+    background: color-mix(in srgb, var(--store-brand-soft) 35%, white);
+  }
+  .tile:hover .tileImage { transform: translateY(-2px) scale(1.035); }
+  .tile:hover .tileArrow { color: var(--store-brand); }
+}
+.moreCategories { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--store-border); }
+.moreTiles { gap: 4px clamp(8px, 1vw, 14px); }
+.moreTiles .tile {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto;
+  grid-template-areas: "image label";
+  align-items: center;
+  gap: 5px;
+  min-height: 48px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: var(--store-radius-sm);
+}
+.moreTiles .tileImage { grid-area: image; align-self: center; width: 42px; height: 42px; }
+.moreTiles .tileLabel {
+  grid-area: label;
+  align-self: center;
+  padding: 0;
+  font-family: var(--store-font-sans);
+  font-size: .81rem;
+  font-weight: 620;
+  overflow-wrap: normal;
+}
+
+.homeHelp {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(10px, 1.65vw, 20px);
+}
+.homeHelpCard {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: clamp(16px, 2.25vw, 28px);
+  padding: clamp(16px, 2.35vw, 28px);
+  border: 1px solid var(--store-border);
+  border-radius: clamp(16px, 2.1vw, 24px);
+  background: var(--store-surface);
+}
+.home .homeHelpCard h2 {
+  margin: 0;
+  font-size: clamp(1.28rem, 2.35vw, 1.65rem);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.homeHelpCard p {
+  margin: 6px 0 0;
+  color: var(--store-muted);
+  font-size: .91rem;
+  line-height: 1.5;
+}
+.homeVin {
+  border-color: transparent;
+  background: var(--store-header-bg);
+  color: var(--store-on-brand);
+}
+.homeVin p { color: #dfdcff; }
+.homeVin :is(input, button):focus-visible { outline-color: #c5bcff; }
+.homeVin .vinForm {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.homeVin .vinSubmit,
+.homeAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  /* The display face, as every other action button of the shop: these two were drawn in the body face. */
+  font-family: var(--store-font-display);
+  font-size: .88rem;
+  font-weight: 650;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+}
+.homeAction:hover { background: var(--store-brand-strong); }
+.homeVin .vinSubmit { background: var(--store-accent); color: var(--store-accent-text); }
+.homeVin .vinSubmit:hover { background: var(--store-accent-hover); }
+.homeVin .vinForm .vinError {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+  color: #ffb4ac;
+}
+.homeAction svg,
+.headingLink svg,
+.deliveryBanner svg { flex: none; }
+.homeExpert .homeAction { justify-self: start; min-height: 46px; padding-inline: 20px; font-family: var(--store-font-display); font-weight: 700; }
+
+.serviceLinks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.serviceLink {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(8px, 1.1vw, 16px);
+  min-height: 72px;
+  padding: 10px clamp(6px, 1.8vw, 22px);
+  color: var(--store-text);
+  text-decoration: none;
+}
+.serviceLink:first-child { padding-inline-start: 0; }
+.serviceLink + .serviceLink { border-inline-start: 1px solid var(--store-border); }
+.serviceLink > svg { color: var(--store-brand); }
+.serviceLink:hover h3 { color: var(--store-brand); text-decoration: underline; text-underline-offset: 3px; }
+.home .serviceLink h3 {
+  margin: 0;
+  font-family: var(--store-font-sans);
+  font-size: 1rem;
+  font-weight: 680;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.serviceLink p {
+  margin: 5px 0 0;
+  color: var(--store-muted);
+  font-size: .86rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.aboutHeading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px 22px;
+  margin-bottom: 18px;
+}
+.home .aboutHeading h2 {
+  max-width: 25ch;
+  margin: 0;
+  font-size: clamp(1.45rem, 3vw, 2.28rem);
+  line-height: 1.14;
+  letter-spacing: var(--store-tracking-tight);
+}
+.aboutHeading p, .aboutBenefits p {
+  margin: 7px 0 0;
+  color: var(--store-muted);
+  line-height: 1.5;
+}
+.aboutHeading p { max-width: 60ch; font-size: .92rem; }
+.aboutBenefits, .aboutContacts {
+  display: grid;
+  gap: 12px;
+}
+.aboutBenefits {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.aboutBenefits li, .aboutPickup, .aboutCall {
+  padding: clamp(13px, 2vw, 19px);
+  border-radius: var(--store-radius);
+  background: var(--store-bg);
+}
+.aboutIcon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 9px;
+  border-radius: 10px;
+  background: var(--store-surface);
+  color: var(--store-brand);
+  font-weight: 800;
+  font-size: .76rem;
+}
+.aboutIcon svg { width: 19px; height: 19px; }
+.home .aboutBenefits h3 { margin: 0; font-size: .96rem; line-height: 1.25; }
+.aboutBenefits p { font-size: .86rem; }
+.aboutContacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.aboutPickup, .aboutCall {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 9px 16px;
+}
+.aboutPickup { background: var(--store-header-bg); color: var(--store-on-brand); }
+.aboutPickup span, .aboutCall span { display: block; margin-top: 4px; font-size: .82rem; color: var(--store-muted); }
+.aboutPickup span { color: #dfdcff; }
+.aboutCall div a { color: var(--store-text); font-weight: 750; text-decoration: none; }
+.aboutCall div a:hover { color: var(--store-brand); }
+.aboutCall div a:focus-visible { outline: 3px solid var(--store-brand); outline-offset: 3px; }
+
+.utility {
+  display: grid;
+  gap: 12px;
+  padding: clamp(15px, 2vw, 22px);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+}
+.vinCard { background: color-mix(in srgb, var(--store-brand-soft) 57%, white); }
+.utility h2, .utility h3 { margin: 0; font-size: 1.05rem; line-height: 1.25; }
+.utility p, .utility address { margin: 0; color: var(--store-muted); font-size: .88rem; line-height: 1.48; font-style: normal; }
+.vinForm { display: grid; gap: 8px; }
+.vinInput {
+  width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 11px;
+  border: 1px solid var(--store-border);
+  border-radius: 10px;
+  background: var(--store-surface);
+  color: var(--store-text);
+  font: inherit;
+  font-size: 1rem;
+}
+.vinForm .vinError { color: var(--store-danger); }
+.vinSubmit {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--store-radius-full);
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  font: inherit;
+  font-size: .89rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease);
+}
+.vinSubmit:hover { background: var(--store-brand-strong); }
+.helpLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--store-brand-strong);
+  font-weight: 650;
+  font-size: .86rem;
+  text-underline-offset: 3px;
+}
+.subsections { margin-top: 20px; }
+.subsections h3 { margin: 0 0 8px; font-size: .94rem; }
+.subsections ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.subsections a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 3px 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-full);
+  background: var(--store-surface);
+  color: var(--store-text);
+  text-decoration: none;
+  font-size: .84rem;
+}
+.subsections a:hover { color: var(--store-brand-strong); border-color: var(--store-brand); }
+.subsections a span { color: var(--store-muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1040px) {
+  .tiles:not(.featuredTiles, .moreTiles) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .tileImage { width: 78px; height: 78px; }
+  .tile { min-height: 121px; }
+  .moreTiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .deliveryBanner { display: none; }
+  .home { padding-block-start: 20px; }
+  .homeHelp,
+  .aboutBenefits, .aboutContacts { grid-template-columns: minmax(0, 1fr); }
+  .featuredTiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .featuredTiles .tile { min-height: 90px; padding-block: 5px 9px; }
+  .featuredTiles .tileImage { width: 70px; height: 60px; }
+  .featuredTiles .tileLabel { font-size: .8rem; }
+}
+@media (max-width: 630px) {
+  .serviceLinks { grid-template-columns: 1fr; }
+  .serviceLink { min-height: 64px; padding-inline: 0; }
+  .serviceLink + .serviceLink { border-inline-start: 0; border-top: 1px solid var(--store-border); }
+}
+@media (max-width: 570px) {
+  .tiles:not(.featuredTiles, .moreTiles) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tile { padding: 9px 9px 5px; grid-template-rows: minmax(2.5em, auto) 1fr; }
+  .tileArrow { right: 7px; top: 7px; }
+  .tileLabel { font-size: .79rem; }
+  .headingLink { min-height: 34px; padding: 0 12px; }
+}
+@media (max-width: 470px) {
+  .moreTiles { grid-template-columns: minmax(0, 1fr); }
+  .moreTiles .tile { gap: 9px; min-height: 44px; }
+  .moreTiles .tileImage { height: 38px; }
+}
+@media (min-width: 768px) and (max-width: 950px), (max-width: 440px) {
+  .homeVin .vinForm { grid-template-columns: minmax(0, 1fr); }
+  .homeVin .vinForm .vinError { grid-row: auto; }
+}
+@media (max-width: 350px) {
+  .featuredTiles .tile { padding-inline: 6px; }
+  .featuredTiles .tileLabel { font-size: .76rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile, .tileImage { transition: none; }
+  .tile:hover .tileImage { transform: none; }
+}
+
+.catalogPage.catalogPage { padding-block: clamp(22px, 3.2vw, 40px) clamp(40px, 6vw, 70px); }
+.catalogTitle { margin-bottom: clamp(14px, 2vw, 22px); }
+.catalogPage .catalogTitle h1 { font-size: clamp(1.75rem, 4vw, 2.8rem); line-height: 1.15; }
+
+.catalogStartLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(238px, 27%);
+  align-items: start;
+  gap: clamp(16px, 2.5vw, 32px);
+  margin-top: var(--store-space-lg);
+}
+.catalogStartAside { display: grid; gap: 12px; }
+@media (max-width: 860px) {
+  .catalogStartLayout { grid-template-columns: minmax(0, 1fr); }
+}
+
+.availableGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px clamp(9px, 1.55vw, 20px);
+}
+.availableItem {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-width: 0;
+  padding: 8px 8px 12px;
+  gap: 10px;
+  border: 1px solid var(--store-border);
+  border-radius: clamp(14px, 2vw, 20px);
+}
+.availableDetails {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  color: var(--store-text);
+  text-decoration: none;
+}
+.availableItem:hover,
+.availableItem:focus-within { border-color: var(--store-brand); }
+.availableDetails:hover strong { color: var(--store-brand); }
+.availableImage { grid-row: 1; height: clamp(112px, 14vw, 188px); background: var(--store-bg); border-radius: 12px; }
+.availableImage img { object-fit: contain; padding: 8px; }
+.availableImage[data-photo-missing] img { padding: 13px; }
+.availableName { grid-row: 2; display: flex; flex-direction: column; gap: 4px; min-height: 0; padding-inline: 4px; line-height: 1.35; overflow-wrap: anywhere; }
+.availableName strong { font-size: .87rem; font-weight: 650; }
+.availableName small { color: var(--store-muted); font-size: .75rem; }
+.availableName b { margin-top: auto; padding-top: 4px; font-size: 1.04rem; font-variant-numeric: tabular-nums; }
+.availableActions > :global(.storefront-add-cart) { width: 100%; margin: 0; font-size: .86rem; }
+@media (max-width: 767px) {
+  .availableGrid {
+    grid-template-columns: none;
+    grid-auto-columns: min(180px, 70%);
+    grid-auto-flow: column;
+    gap: 10px;
+    margin: -4px;
+    padding: 4px 4px 8px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 4px;
+  }
+  .availableItem { scroll-snap-align: start; }
+}
+
+/* Home cards and category tiles share the catalog's pointer response. */
+.availableItem { transition: border-color var(--store-duration-base) var(--store-ease), box-shadow var(--store-duration-base) var(--store-ease); }
+.availableItem:hover { box-shadow: 0 10px 28px rgb(16 30 60 / 8%); }
+.availableImage img { transition: transform var(--store-duration-slow) var(--store-ease); }
+@media (prefers-reduced-motion: no-preference) {
+  .availableItem:hover .availableImage img { transform: scale(1.045); }
+}
+
+/* Home section tiles: the label turns bold under the pointer. */
+.tileLabel { transition: font-weight var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.tile:hover .tileLabel { font-weight: 800; color: var(--store-brand); }
+
+@media (max-width: 760px) {
+  .headingLink { min-height: 44px; }
+}

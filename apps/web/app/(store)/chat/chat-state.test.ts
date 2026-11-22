@@ -301,4 +301,32 @@ describe("manager-join countdown", () => {
     expect(firstLoad).toEqual({ kind: "waiting", remainingMs: 7 * 60_000, sinceIso: sentAt });
     expect(reloadTwoMinutesLater).toEqual({ kind: "waiting", remainingMs: 5 * 60_000, sinceIso: sentAt });
   });
+
+  it("keeps the server queue start when only a later history page or a follow-up message is visible", () => {
+    const managerWaitSince = "2026-08-02T04:54:00.000Z";
+    const messages = [guestMessage("019bf9ea-0d3e-7def-9c9a-000000000110", "110", "2026-08-02T04:59:00.000Z")];
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, managerWaitSince, messages, now: OPEN_NOW, status: "waiting_staff" }))
+      .toEqual({ kind: "waiting", remainingMs: 4 * 60_000, sinceIso: managerWaitSince });
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, managerWaitSince, messages: [], now: OPEN_NOW + 60_000, status: "waiting_staff" }))
+      .toEqual({ kind: "waiting", remainingMs: 3 * 60_000, sinceIso: managerWaitSince });
+  });
+
+  it("honours explicit server absence of a waiting queue and never creates a fake manager on timeout", () => {
+    const messages = [guestMessage("019bf9ea-0d3e-7def-9c9a-000000000111", "111", "2026-08-02T04:59:00.000Z")];
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, managerWaitSince: null, messages, now: OPEN_NOW, status: "open" }))
+      .toEqual({ kind: "none" });
+    expect(managerJoinState({ assignedStaffId: null, assignedStaffName: null, managerWaitSince: "2026-08-02T04:40:00.000Z", messages: [], now: OPEN_NOW, status: "waiting_staff" }))
+      .toEqual({ kind: "elapsed", sinceIso: "2026-08-02T04:40:00.000Z" });
+  });
+});
+
+describe("chat number for the customer", () => {
+  it("keeps the number in stored guest sessions and labels it", async () => {
+    const { parseStoredGuestThreads: parse, serializeGuestThreads: serialize, threadNumberLabel } = await import("./chat-state");
+    const thread = { assignedStaffId: null, createdAt: "2026-08-02T01:00:00.000Z", guestToken: "a".repeat(40), id: "019bf9ea-0d3e-7def-9c9a-000000000077", lastMessageAt: null, orderId: null, publicNumber: 123, status: "open" as const, subject: "Колодки" };
+    expect(parse(serialize([thread]))[0]?.publicNumber).toBe(123);
+    expect(threadNumberLabel(thread)).toBe("Обращение №000123");
+    expect(threadNumberLabel({ publicNumber: null })).toBeNull();
+    expect(parse(JSON.stringify([{ ...thread, publicNumber: -1 }]))).toEqual([]);
+  });
 });

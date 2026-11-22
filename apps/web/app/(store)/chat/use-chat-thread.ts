@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { StorefrontApiError, errorText } from "../_lib/storefront-api";
 import {
@@ -25,6 +25,7 @@ import {
   type ChatThread,
   type ConnectionState,
 } from "./chat-state";
+import { randomUuid } from "../../_lib/browser-crypto";
 
 export interface SendOutcome {
   /** The server rejected the send because the thread is closed (HTTP 409). */
@@ -37,6 +38,7 @@ export interface UseChatThreadResult {
   assignedStaffId: string | null;
   /** The assignee's display name, only ever set alongside a real `assignedStaffId`. */
   assignedStaffName: string | null;
+  managerWaitSince: string | null | undefined;
   connection: ConnectionState;
   connectionError: string;
   downloadAttachment: (attachment: ChatAttachment) => Promise<void>;
@@ -99,6 +101,7 @@ export function useChatThread(
   const [unreadCount, setUnreadCount] = useState(0);
   const [assignedStaffId, setAssignedStaffId] = useState<string | null>(null);
   const [assignedStaffName, setAssignedStaffName] = useState<string | null>(null);
+  const [managerWaitSince, setManagerWaitSince] = useState<string | null | undefined>(undefined);
   const [threadStatus, setThreadStatus] = useState<ChatThread["status"] | null>(null);
 
   const [sendAttemptId, setSendAttemptId] = useState<string | null>(null);
@@ -145,7 +148,15 @@ export function useChatThread(
     ? Math.max(0, messages.length - renderedMessages.length)
     : 0;
 
+  // Thread lists may be refreshed or restored twice during development's
+  // effect replay. Replacing a thread object or its subject must not reset
+  // the conversation, loaded older pages, or the realtime subscription.
+  const threadId = thread?.id ?? null;
+  const guestToken = thread?.guestToken ?? null;
+  const readThreadSnapshot = useEffectEvent(() => thread);
+
   useEffect(() => {
+    const thread = readThreadSnapshot();
     const access = thread && viewerKind ? accessFor({ kind: viewerKind }, thread) : null;
     if (!thread || !access) {
       activeThreadIdRef.current = null;
@@ -164,6 +175,7 @@ export function useChatThread(
       setUnreadCount(0);
       setAssignedStaffId(null);
       setAssignedStaffName(null);
+      setManagerWaitSince(undefined);
       setThreadStatus(null);
       return;
     }
@@ -196,6 +208,7 @@ export function useChatThread(
     // server moments later, and every reconnect does the same.
     setAssignedStaffId(activeThread.assignedStaffId);
     setAssignedStaffName(null);
+    setManagerWaitSince(activeThread.managerWaitSince);
     setThreadStatus(activeThread.status);
     cursorRef.current = "0";
 
@@ -283,6 +296,7 @@ export function useChatThread(
           if (isChatThreadAssignment(record.thread)) {
             setAssignedStaffId(record.thread.assignedStaffId);
             setAssignedStaffName(record.thread.assignedStaffName);
+            setManagerWaitSince(record.thread.managerWaitSince);
             setThreadStatus(record.thread.status);
           }
         } else if (record.type === "thread" && isChatThreadAssignment(record)) {
@@ -291,6 +305,7 @@ export function useChatThread(
           // a timer and never inferred from messages.
           setAssignedStaffId(record.assignedStaffId);
           setAssignedStaffName(record.assignedStaffName);
+          setManagerWaitSince(record.managerWaitSince);
           setThreadStatus(record.status);
         } else if (record.type === "message") {
           if (!isChatMessage(record.message)) {
@@ -345,6 +360,12 @@ export function useChatThread(
         messagesRef.current = history.items;
         setMessages(history.items);
         setOlderCursor(history.olderCursor);
+        if (history.thread) {
+          setAssignedStaffId(history.thread.assignedStaffId);
+          setAssignedStaffName(history.thread.assignedStaffName);
+          setManagerWaitSince(history.thread.managerWaitSince);
+          setThreadStatus(history.thread.status);
+        }
         cursorRef.current = history.nextSequence;
         markLatestRead(history.items);
         connect();
@@ -370,7 +391,7 @@ export function useChatThread(
       if (socketRef.current === socket) socketRef.current = null;
       if (markLatestReadRef.current === markLatestRead) markLatestReadRef.current = null;
     };
-  }, [historyRevision, thread, viewerKind]);
+  }, [guestToken, historyRevision, threadId, viewerKind]);
 
   const retryHistory = useCallback(() => setHistoryRevision((value) => value + 1), []);
   const loadOlderMessages = useCallback(async (): Promise<void> => {
@@ -413,7 +434,7 @@ export function useChatThread(
     const access = viewerKind ? accessFor({ kind: viewerKind }, thread) : null;
     const trimmed = body.trim();
     if (!access || !trimmed || trimmed.length > 4_000) return { closed: false, ok: false };
-    const clientMessageId = sendAttemptId ?? crypto.randomUUID();
+    const clientMessageId = sendAttemptId ?? randomUuid();
     setSendAttemptId(clientMessageId);
     sendInFlight.current = true;
     setSendPending(true);
@@ -460,7 +481,7 @@ export function useChatThread(
     setFilePending(true);
     setFileError("");
     const fingerprint = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
-    const clientMessageId = fileAttempt?.fingerprint === fingerprint ? fileAttempt.id : crypto.randomUUID();
+    const clientMessageId = fileAttempt?.fingerprint === fingerprint ? fileAttempt.id : randomUuid();
     setFileAttempt({ fingerprint, id: clientMessageId });
     try {
       const created = await uploadChatAttachment(thread, access, file, clientMessageId);
@@ -509,6 +530,7 @@ export function useChatThread(
   return {
     assignedStaffId,
     assignedStaffName,
+    managerWaitSince,
     connection,
     connectionError,
     downloadAttachment,

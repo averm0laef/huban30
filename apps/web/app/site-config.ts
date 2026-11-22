@@ -46,8 +46,11 @@ export const STORE_COUNTRY = "RU";
 export const STORE_HOURS = "Ежедневно 09:00–19:00";
 /** Schema.org opening hours for the storefront markup. */
 export const STORE_HOURS_SCHEMA = "Mo-Su 09:00-19:00";
+/** The shop's own organisation card on Яндекс Карты (supplied by the owner). */
 export const STORE_MAP_URL =
-  "https://yandex.ru/maps/?text=%D0%A7%D0%B5%D1%80%D0%BD%D1%8B%D1%88%D0%B5%D0%B2%D1%81%D0%BA%2C%20%D1%83%D0%BB.%20%D0%9A%D1%83%D0%B9%D0%B1%D1%8B%D1%88%D0%B5%D0%B2%D0%B0%2C%20118%D0%90";
+  "https://yandex.ru/maps/?ll=116.995334%2C52.526654&mode=poi&poi%5Bpoint%5D=116.995560%2C52.525390&poi%5Buri%5D=ymapsbm1%3A%2F%2Forg%3Foid%3D207536410283&z=17";
+/** Exact pickup point, shared by the map embed and the Schema.org data. */
+export const STORE_GEO = { latitude: 52.52539, longitude: 116.99556 } as const;
 
 export interface MessengerLink {
   /** Short label shown next to the icon. */
@@ -61,12 +64,10 @@ export interface MessengerLink {
 /**
  * Messenger entry points carried over from the previous storefront.
  *
- * These are the shop's real public accounts. `max` has no published handle
- * yet, so it points at the service root until the owner supplies one.
+ * These are the shop's published public accounts.
  */
 export const MESSENGERS: MessengerLink[] = [
   { handle: "@an30_autoparts", href: "https://t.me/an30_autoparts", id: "telegram", label: "Telegram" },
   { handle: STORE_PHONE_DISPLAY, href: `https://wa.me/${STORE_PHONE.replace("+", "")}`, id: "whatsapp", label: "WhatsApp" },
   { handle: "an30_autoparts", href: "https://vk.com/an30_autoparts", id: "vk", label: "ВКонтакте" },
-  { handle: "АН-30", href: "https://max.ru", id: "max", label: "Max" },
 ];

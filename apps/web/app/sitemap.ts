@@ -89,6 +89,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { changeFrequency: "daily", lastModified: now, priority: 0.9, url: absoluteUrl("/catalog") },
     { changeFrequency: "monthly", lastModified: now, priority: 0.7, url: absoluteUrl("/contacts") },
     { changeFrequency: "monthly", lastModified: now, priority: 0.6, url: absoluteUrl("/expert-help") },
+    { changeFrequency: "monthly", lastModified: now, priority: 0.7, url: absoluteUrl("/podbor") },
   ];
 
   const contentEntries: MetadataRoute.Sitemap = Object.keys(storeContentPages).map((slug) => ({

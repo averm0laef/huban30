@@ -1,0 +1,77 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--store-radius-sm);
+  font-family: var(--store-font-display);
+  font-size: .84rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.button:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 3px; }
+.button.accent { background: var(--store-accent); color: var(--store-accent-text); }
+.button.accent:hover { background: var(--store-accent-hover); color: var(--store-accent-text); }
+.button.outline { border-color: var(--store-brand); background: var(--store-surface); color: var(--store-brand); }
+.button.outline:hover { background: var(--store-brand-soft); }
+/* The same lift as for the tiers below: `.button` alone (0,1,0) loses its font to the storefront's `font: inherit`
+   reset for links and buttons (0,1,1), and «Маршрут» and «Написать в чат» were drawn in the body face. */
+.button:is(.accent, .outline) {
+  font-family: var(--store-font-display);
+  font-size: .84rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* Action tiers below the accent call to action: `primary` commits, `soft` is
+   the secondary action, `quiet` is a utility action. Each one is a filled or
+   bordered 44px shape with hover, pressed and focus states, so an action never
+   reads as bare text. The doubled class lifts these rules to (0,2,0): above
+   the storefront's `font: inherit` and outline-only `transition` resets
+   (0,1,1), which flatten single-class button rules to body text. The focus
+   ring stays the storefront's own (brand on light surfaces). */
+.button:is(.primary, .soft, .quiet) {
+  min-width: 0;
+  font-family: var(--store-font-display);
+  font-size: .88rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition:
+    background-color var(--store-duration-base) var(--store-ease),
+    border-color var(--store-duration-base) var(--store-ease),
+    color var(--store-duration-base) var(--store-ease),
+    outline-color var(--store-duration-fast) var(--store-ease),
+    outline-offset var(--store-duration-fast) var(--store-ease);
+}
+.button:is(.primary, .soft, .quiet) > svg { flex: none; }
+/* A label that wraps stays next to its icon instead of centring away from it. */
+.button:is(.primary, .soft, .quiet):has(> svg) { text-align: left; }
+
+.button.primary { background: var(--store-brand); color: var(--store-on-brand); }
+.button.soft { border-color: color-mix(in srgb, var(--store-brand) 22%, var(--store-surface)); background: var(--store-brand-soft); color: var(--store-brand); }
+.button.quiet { border-color: var(--store-border); background: var(--store-surface); color: var(--store-text); }
+.button.quiet > svg { color: var(--store-brand); }
+
+/* Hover only where a pointer can hover: on touch it would stick after a tap. */
+@media (hover: hover) {
+  .button.primary:hover { background: var(--store-brand-strong); }
+  .button.soft:hover { border-color: var(--store-brand); background: color-mix(in srgb, var(--store-brand) 12%, var(--store-surface)); }
+  .button.quiet:hover { border-color: var(--store-brand); background: var(--store-brand-soft); color: var(--store-brand); }
+}
+.button.primary:active { background: var(--store-header-bg); }
+.button.soft:is(:active, [aria-expanded="true"]) { border-color: var(--store-brand); background: color-mix(in srgb, var(--store-brand) 16%, var(--store-surface)); color: var(--store-brand-strong); }
+.button.quiet:active { border-color: var(--store-brand); background: color-mix(in srgb, var(--store-brand) 12%, var(--store-surface)); color: var(--store-brand-strong); }
+.button.primary:disabled { border-color: var(--store-border); background: var(--store-surface-strong); color: var(--store-muted); cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .button:is(.primary, .soft, .quiet) { transition: none; }
+}

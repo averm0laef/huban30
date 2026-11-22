@@ -1,5 +1,6 @@
 "use client";
 
+import { Location24Regular, Person24Regular, VehicleTruck24Regular } from "@fluentui/react-icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -9,46 +10,31 @@ import { CHECKOUT_PERSONAL_DATA_CONSENT_TEXT } from "@an30/contracts";
 
 import { summariseCart, useCartProducts } from "../_lib/cart-products";
 import { formatRubles } from "../_lib/catalog-format";
-import { checkoutPayload } from "../_lib/checkout";
+import { checkoutConfirmationMessage, checkoutPayload } from "../_lib/checkout";
 import { clearIdempotencyKey, stableIdempotencyKey } from "../_lib/idempotency";
 import { apiRequest, errorText, readSession } from "../_lib/storefront-api";
-import { CartLineIdentity } from "./cart-actions";
+import { CartLineIdentity, CartLineThumbnail } from "./cart-actions";
+import commerce from "./commerce.module.css";
 import { useCart } from "./cart-provider";
+import { computeShopStatusNow } from "./shop-status";
 import styles from "./storefront.module.css";
 
 interface CheckoutResponse {
   guestAccessToken: string | null;
   idempotentReplay: boolean;
   order: { id: string; publicNumber: string; status: string; subtotalKopeks: number; totalAmountKopeks: number };
-  payment: {
-    amountKopeks: number;
-    confirmationToken: string | null;
-    confirmationUrl: string;
-    externalPaymentId: string;
-    id: string;
-    provider: string;
-    status: string;
-  };
-  reservation: { expiresAt: string; id: string };
 }
 
 interface AccountPrefill { displayName: string | null; email: string; phone: string | null }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const orderStatusLabels: Record<string, string> = {
+  awaiting_confirmation: "Ожидает подтверждения",
+  awaiting_delivery_terms: "Согласование доставки",
   cancelled: "Отменён",
   completed: "Завершён",
-  paid: "Оплачен",
-  pending_payment: "Ожидает оплаты",
   processing: "В работе",
   ready: "Готов к выдаче",
-  refunded: "Возвращён",
-};
-const paymentStatusLabels: Record<string, string> = {
-  cancelled: "Отменён",
-  failed: "Ошибка",
-  pending: "Ожидает подтверждения",
-  succeeded: "Оплачен",
 };
 
 function money(value: number) {
@@ -80,15 +66,13 @@ export function CheckoutClient({
   initialOrderId: string;
 }) {
   const router = useRouter();
-  const { clear, hydrated, items, removeItem, updateQuantity } = useCart();
+  const { clear, hydrated, items } = useCart();
   const [result, setResult] = useState<CheckoutResponse | null>(null);
   const [deliveryMethod, setDeliveryMethod] = useState<"needs_quote" | "pickup">("pickup");
   const [pending, setPending] = useState(false);
-  const [paymentPending, setPaymentPending] = useState(false);
   const [error, setError] = useState("");
-  const [paymentError, setPaymentError] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("");
   const [online, setOnline] = useState(true);
+  const [guest, setGuest] = useState(false);
   const [contact, setContact] = useState({ email: "", name: "", phone: "" });
   const itemCount = useMemo(() => items.reduce((total, item) => total + item.quantity, 0), [items]);
   const products = useCartProducts(items);
@@ -107,6 +91,7 @@ export function CheckoutClient({
       void (async () => {
         try {
           const session = await readSession();
+          setGuest(!session);
           if (session?.role === "customer") {
             const account = await apiRequest<AccountPrefill>("/account");
             setContact((current) => ({
@@ -132,33 +117,16 @@ export function CheckoutClient({
         try {
           const session = await readSession();
           if (!session || session.role !== "customer") throw new Error("Подтверждение гостевого заказа доступно только в браузере, где он был создан");
-          const order = await apiRequest<{ id: string; publicNumber: string; status: string; subtotalKopeks: number; totalAmountKopeks: number; payments: Array<{ amountKopeks: number; id: string; provider: string; status: string }> }>(`/orders/${initialOrderId}`);
-          const payment = order.payments[0];
-          if (!payment) throw new Error("В заказе не найден платёж");
-          setResult({ guestAccessToken: null, idempotentReplay: true, order, payment: { ...payment, confirmationToken: null, confirmationUrl: "", externalPaymentId: "" }, reservation: { expiresAt: "", id: "" } });
+          const order = await apiRequest<{ id: string; publicNumber: string; status: string; subtotalKopeks: number; totalAmountKopeks: number }>(`/orders/${initialOrderId}`);
+          setResult({ guestAccessToken: null, idempotentReplay: true, order });
         } catch (caught) { setError(errorText(caught)); }
       })();
     }
   }, [initialOrderId]);
 
-  async function confirmSandbox(checkout: CheckoutResponse) {
-    if (checkout.payment.provider !== "sandbox" || !checkout.payment.confirmationToken || !checkout.payment.confirmationUrl) return;
-    setPaymentPending(true); setPaymentError("");
-    try {
-      const completed = await apiRequest<{ status: string; timedOut?: boolean }>(checkout.payment.confirmationUrl, {
-        method: "POST", body: { confirmationToken: checkout.payment.confirmationToken },
-      });
-      setPaymentStatus(completed.timedOut ? "Платёж пока ожидает подтверждения" : completed.status === "succeeded" ? "Оплата подтверждена" : `Статус платежа: ${completed.status}`);
-    } catch (caught) {
-      setPaymentError(errorText(caught));
-    } finally {
-      setPaymentPending(false);
-    }
-  }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true); setError(""); setPaymentError(""); setPaymentStatus("");
+    setPending(true); setError("");
     const form = new FormData(event.currentTarget);
     const baseValue = {
       address: String(form.get("address") ?? ""), customerNote: String(form.get("customerNote") ?? ""),
@@ -192,7 +160,6 @@ export function CheckoutClient({
       clear();
       setResult(checkout);
       router.replace(`/checkout?order=${encodeURIComponent(checkout.order.id)}`);
-      await confirmSandbox(checkout);
     } catch (caught) {
       setError(errorText(caught));
     } finally {
@@ -204,20 +171,17 @@ export function CheckoutClient({
     return (
       <div className={`${styles.page} ${styles.confirmationLayout}`}>
         <section>
-          <p className={styles.eyebrow}>Заказ создан</p>
+          <p className={styles.eyebrow}>Заявка принята</p>
           <h1>{result.order.publicNumber}</h1>
-          <p>Цена и остаток подтверждены сервером. В заказе зафиксирована сумма {money(result.order.totalAmountKopeks)}.</p>
+          <p>Актуальная цена и наличие проверены. В заявке зафиксирована сумма {money(result.order.totalAmountKopeks)}.</p>
+          <p className={styles.serverPriceNote}>{checkoutConfirmationMessage(computeShopStatusNow())}</p>
           <dl className={styles.confirmationFacts}>
-            <div><dt>Статус заказа</dt><dd>{orderStatusLabels[result.order.status] ?? result.order.status}</dd></div>
+            <div><dt>Статус</dt><dd>{orderStatusLabels[result.order.status] ?? result.order.status}</dd></div>
             <div><dt>Товары</dt><dd>{money(result.order.subtotalKopeks)}</dd></div>
-            <div><dt>Платёж</dt><dd>{paymentStatus || paymentStatusLabels[result.payment.status] || result.payment.status}</dd></div>
-            {result.reservation.expiresAt ? <div><dt>Резерв до</dt><dd>{new Date(result.reservation.expiresAt).toLocaleString("ru-RU")}</dd></div> : null}
           </dl>
-          {paymentError ? <div className={styles.formError} role="alert"><strong>Заказ сохранён, но платёж не подтверждён</strong><p>{paymentError}</p></div> : null}
-          {result.payment.confirmationToken && !paymentStatus ? <button className={styles.primaryAction} type="button" disabled={paymentPending || !online} onClick={() => void confirmSandbox(result)}>{paymentPending ? "Подтверждаем..." : "Повторить подтверждение оплаты"}</button> : null}
           <div className={styles.heroActions}><Link className={styles.secondaryAction} href="/catalog">Вернуться в каталог</Link><Link className={styles.secondaryAction} href="/profile">Открыть заказы</Link></div>
         </section>
-        <aside className={styles.checkoutAside}><h2>Что дальше</h2><p>Для самовывоза дождитесь готовности заказа. Стоимость доставки, если она нужна, согласуется отдельно и не входит в сумму товаров.</p><p>Сохраните номер заказа для обращения в магазин.</p></aside>
+        <aside className={styles.checkoutAside}><h2>Что дальше</h2><p>Оплата не требуется на этом шаге: менеджер согласует с вами детали заказа по телефону. Для самовывоза дождитесь готовности заказа. Стоимость доставки, если она нужна, согласуется отдельно и не входит в сумму товаров.</p><p>Сохраните номер заказа для обращения в магазин.</p></aside>
       </div>
     );
   }
@@ -227,7 +191,7 @@ export function CheckoutClient({
       <div className={styles.page}>
         <header className={styles.pageTitle}>
           <h1>Оформление заказа готовится к запуску</h1>
-          <p>Каталог и корзина доступны для проверки. Создание заказа откроется после подключения оплаты и публикации утверждённых юридических документов.</p>
+          <p>Каталог и корзина доступны для проверки. Создание заявки откроется после публикации утверждённых юридических документов.</p>
         </header>
         <div className={styles.emptyState}>
           <h2>Корзина сохранена</h2>
@@ -239,46 +203,80 @@ export function CheckoutClient({
   }
 
   return (
-    <div className={styles.page}>
-      <header className={styles.pageTitle}><h1>Оформление заказа</h1><p>Браузер передаёт только идентификаторы и количество. Цена, остаток и резерв проверяются сервером.</p></header>
+    <div className={`${styles.page} ${commerce.page}`}>
+      <nav className={commerce.crumbs} aria-label="Хлебные крошки">
+        <Link href="/">Главная</Link><span aria-hidden="true">/</span><Link href="/cart">Корзина</Link>
+        <span aria-hidden="true">/</span><span aria-current="page">Оформление заказа</span>
+      </nav>
+      <header className={commerce.heading}><h1>Оформление заказа</h1></header>
       {!online ? <div className={styles.offlineNotice} role="status">Нет подключения к сети. Данные формы останутся на странице, но отправка недоступна.</div> : null}
-      {error ? <div className={styles.formError} role="alert"><strong>Заказ не создан</strong><p>{error}</p><p>Исправьте данные или повторите отправку. Повтор использует тот же ключ и не создаст второй заказ.</p></div> : null}
-      {!hydrated ? <div className={styles.loadingState} role="status"><h2>Открываем корзину</h2><p>Читаем сохранённые позиции.</p></div> : itemCount === 0 ? (
-        <div className={styles.emptyState}><h2>Корзина пуста</h2><p>Добавьте хотя бы один товар. Цена и доступность будут проверены при оформлении.</p><Link className={styles.primaryAction} href="/catalog">Перейти в каталог</Link></div>
+      {error ? <div className={styles.formError} role="alert"><strong>Заявка не создана</strong><p>{error}</p></div> : null}
+      {!hydrated ? <div className={commerce.empty} role="status"><h2>Открываем корзину</h2></div> : itemCount === 0 ? (
+        <section className={commerce.empty}><h2>Корзина пуста</h2><Link className={`${styles.primaryAction} ${commerce.action}`} href="/catalog">Перейти в каталог</Link></section>
       ) : (
-        <div className={styles.checkoutLayout}>
-          <form className={styles.checkoutForm} onSubmit={submit}>
-            <fieldset><legend>1. Контактные данные</legend>
-              <label className={styles.field}>Имя<input name="name" required minLength={2} maxLength={160} value={contact.name} onChange={(event) => setContact((current) => ({ ...current, name: event.target.value }))} autoComplete="name" /></label>
-              <label className={styles.field}>Email<input name="email" type="email" required maxLength={254} value={contact.email} onChange={(event) => setContact((current) => ({ ...current, email: event.target.value }))} autoComplete="email" /></label>
-              <label className={styles.field}>Телефон<input name="phone" type="tel" required pattern="\+[1-9][0-9]{6,14}" placeholder="+79240000000" value={contact.phone} onChange={(event) => setContact((current) => ({ ...current, phone: event.target.value }))} autoComplete="tel" /></label>
-            </fieldset>
-            <fieldset><legend>2. Получение</legend>
-              <label className={styles.radioField}><input type="radio" name="deliveryMethod" value="pickup" checked={deliveryMethod === "pickup"} onChange={() => setDeliveryMethod("pickup")} /> Самовывоз из магазина</label>
-              <label className={styles.radioField}><input type="radio" name="deliveryMethod" value="needs_quote" checked={deliveryMethod === "needs_quote"} onChange={() => setDeliveryMethod("needs_quote")} /> Нужна доставка, условия согласует менеджер</label>
-              {deliveryMethod === "needs_quote" ? <label className={styles.field}>Адрес доставки<textarea name="address" required minLength={5} maxLength={1000} autoComplete="street-address" /></label> : null}
-            </fieldset>
-            <fieldset><legend>3. Комментарий</legend><label className={styles.field}>Комментарий к заказу<textarea name="customerNote" maxLength={2000} placeholder="Например, удобное время звонка" /></label></fieldset>
-            <label className={styles.checkboxField}><input name="termsAccepted" type="checkbox" required /> Я принимаю <Link href="/terms" target="_blank">условия публичной оферты</Link>.</label>
-            <label className={styles.checkboxField}><input name="personalDataConsent" type="checkbox" required /> {CHECKOUT_PERSONAL_DATA_CONSENT_TEXT} <Link href="/checkout-personal-data-consent" target="_blank">Открыть документ</Link>.</label>
-            <button className={styles.submitButton} type="submit" disabled={pending || !online}>{pending ? "Проверяем и резервируем..." : "Создать заказ"}</button>
+        <div className={commerce.columns}>
+          <form id="checkout-request" className={commerce.checkoutSteps} onSubmit={submit}>
+            {guest ? <div className={`${commerce.panel} ${commerce.signIn}`}>
+              <Person24Regular aria-hidden="true" /><p>Войдите, чтобы заполнить контакты из личного кабинета.</p><Link href="/auth?mode=login">Войти</Link>
+            </div> : null}
+            <section className={`${commerce.panel} ${commerce.step}`}>
+              <fieldset className={commerce.stepFields}>
+                <legend><span><i className={commerce.stepNumber} aria-hidden="true">1</i>Способ получения</span></legend>
+                <div className={commerce.optionCards}>
+                  <label className={commerce.option}>
+                    <Location24Regular aria-hidden="true" /><span><strong>Самовывоз</strong><small>Из магазина АН‑30</small></span>
+                    <input type="radio" name="deliveryMethod" value="pickup" checked={deliveryMethod === "pickup"} onChange={() => setDeliveryMethod("pickup")} />
+                  </label>
+                  <label className={commerce.option}>
+                    <VehicleTruck24Regular aria-hidden="true" /><span><strong>Доставка</strong><small>Условия уточнит менеджер</small></span>
+                    <input type="radio" name="deliveryMethod" value="needs_quote" checked={deliveryMethod === "needs_quote"} onChange={() => setDeliveryMethod("needs_quote")} />
+                  </label>
+                </div>
+                {deliveryMethod === "needs_quote" ? <label className={styles.field}>Адрес доставки<textarea name="address" required minLength={5} maxLength={1000} autoComplete="street-address" /></label> : null}
+              </fieldset>
+            </section>
+
+            <section className={`${commerce.panel} ${commerce.step}`}>
+              <fieldset className={commerce.stepFields}>
+                <legend><span><i className={commerce.stepNumber} aria-hidden="true">2</i>Контактные данные</span></legend>
+                <div className={commerce.contactGrid}>
+                  <label className={styles.field}>Имя<input name="name" required minLength={2} maxLength={160} value={contact.name} onChange={(event) => setContact((current) => ({ ...current, name: event.target.value }))} autoComplete="name" /></label>
+                  <label className={styles.field}>Email<input name="email" type="email" required maxLength={254} value={contact.email} onChange={(event) => setContact((current) => ({ ...current, email: event.target.value }))} autoComplete="email" /></label>
+                  <label className={styles.field}>Телефон<input name="phone" type="tel" required pattern="\+[1-9][0-9]{6,14}" placeholder="+79240000000" value={contact.phone} onChange={(event) => setContact((current) => ({ ...current, phone: event.target.value }))} autoComplete="tel" /></label>
+                </div>
+              </fieldset>
+            </section>
+
+            <section className={`${commerce.panel} ${commerce.step}`}>
+              <fieldset className={commerce.stepFields}>
+                <legend><span><i className={commerce.stepNumber} aria-hidden="true">3</i>Подтверждение</span></legend>
+                <p className={commerce.notice}>Оплату и получение согласует менеджер после заявки.</p>
+                <label className={styles.field}>Комментарий к заказу<textarea name="customerNote" maxLength={2000} placeholder="Например, удобное время звонка" /></label>
+                <label className={commerce.consent}><input name="termsAccepted" type="checkbox" required /><span>Я принимаю <Link href="/terms" target="_blank">условия публичной оферты</Link>.</span></label>
+                <label className={commerce.consent}><input name="personalDataConsent" type="checkbox" required /><span>{CHECKOUT_PERSONAL_DATA_CONSENT_TEXT} <Link href="/checkout-personal-data-consent" target="_blank">Открыть документ</Link>.</span></label>
+              </fieldset>
+            </section>
           </form>
-          <aside className={styles.checkoutAside} aria-labelledby="checkout-cart-title">
-            <h2 id="checkout-cart-title">Корзина · {itemCount} шт.</h2>
-            {cart.hasUnavailable ? <p className={styles.serverPriceNote} role="status">Часть позиций снята с продажи. Удалите их, иначе сервер отклонит заказ.</p> : null}
-            <div className={styles.checkoutLines}>{cart.lines.map((line, index) => (
-              <div key={line.productId}>
-                <CartLineIdentity line={line} position={index + 1} />
-                <label>Количество<input type="number" min={1} max={100} value={line.quantity} onChange={(event) => updateQuantity(line.productId, Number(event.target.value))} /></label>
-                <span className={styles.checkoutLineTotal}>{line.subtotalKopeks === null ? "Цена уточняется" : formatRubles(line.subtotalKopeks)}</span>
-                <button type="button" onClick={() => removeItem(line.productId)}>Удалить</button>
-              </div>
-            ))}</div>
-            <p className={styles.checkoutSubtotal}>
+
+          <aside className={`${commerce.panel} ${commerce.summary}`} aria-labelledby="checkout-cart-title">
+            <h2 id="checkout-cart-title">Ваш заказ</h2>
+            <ul className={commerce.orderRows}>{cart.lines.map((line, index) => (
+              <li className={commerce.orderRow} key={line.productId}>
+                <CartLineThumbnail line={line} />
+                <div className={commerce.lineIdentity}>
+                  <CartLineIdentity line={line} position={index + 1} />
+                  <small className={commerce.linePhotoNote}>Фото товара пока нет</small>
+                </div>
+                <span className={commerce.lineTotal}>{line.quantity} шт. · {line.subtotalKopeks === null ? "Цена уточняется" : formatRubles(line.subtotalKopeks)}</span>
+              </li>
+            ))}</ul>
+            <div className={commerce.grandTotal}>
               <span>Предварительно</span>
-              <strong>{formatRubles(cart.knownSubtotalKopeks)}{cart.pricesComplete ? "" : " и выше"}</strong>
-            </p>
-            <p className={styles.serverPriceNote}>Это ориентир по текущему каталогу. Итоговая сумма фиксируется только после проверки актуальной цены и остатка на сервере.</p>
+              <strong>{cart.pricesComplete ? formatRubles(cart.knownSubtotalKopeks) : cart.knownSubtotalKopeks > 0 ? `от ${formatRubles(cart.knownSubtotalKopeks)}` : "Уточняется"}</strong>
+            </div>
+            <Link className={commerce.remove} href="/cart">Изменить корзину</Link>
+            {cart.hasUnavailable ? <p className={commerce.notice} role="status">Удалите недоступные позиции в корзине.</p> : null}
+            <button className={`${styles.submitButton} ${commerce.action}`} form="checkout-request" type="submit" disabled={pending || !online || cart.hasUnavailable}>{pending ? "Отправляем заявку…" : "Отправить заявку"}</button>
           </aside>
         </div>
       )}

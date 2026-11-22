@@ -1,0 +1,107 @@
+/* Design board «Помощь специалиста». */
+.page { display: grid; gap: 28px; }
+.breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--store-muted); font-size: .82rem; }
+.breadcrumbs a { display: inline-flex; align-items: center; min-height: 32px; color: inherit; text-decoration: none; }
+.breadcrumbs a:hover { color: var(--store-brand); }
+.breadcrumbs [aria-current] { color: var(--store-text); }
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 40px;
+  padding: clamp(22px, 3.4vw, 44px);
+  border-radius: 28px;
+  background: var(--store-header-bg);
+  color: #fff;
+}
+.heroText { display: grid; align-content: center; gap: 14px; }
+.eyebrow { justify-self: start; padding: 5px 12px; border-radius: var(--store-radius-full); background: rgb(245 196 0 / 16%); color: var(--store-accent); font-size: .82rem; font-weight: 700; }
+.heroText h1 { margin: 0; font-family: var(--store-font-display); font-size: clamp(1.75rem, 1.1rem + 2vw, 2.65rem); font-weight: 800; line-height: 1.12; text-wrap: balance; }
+.lead { max-width: 560px; margin: 0; color: #c9c6ff; font-size: clamp(.95rem, .9rem + .2vw, 1.06rem); line-height: 1.55; }
+.heroStatus p { flex-wrap: wrap; gap: 4px 8px; color: #b9b6e8; font-size: .88rem; }
+.heroStatus strong { color: #fff; white-space: nowrap; }
+
+.ways { display: grid; align-content: center; gap: 10px; }
+.way {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+  text-decoration: none;
+  transition: background var(--store-duration-fast) var(--store-ease), border-color var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
+}
+.way > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.way strong { font-family: var(--store-font-display); font-size: 1rem; font-weight: 800; }
+.way small { color: #b9b6e8; font-size: .85rem; }
+a.way:hover { border-color: rgb(255 255 255 / 34%); background: rgb(255 255 255 / 12%); }
+a.way:active { transform: scale(.985); }
+.way:focus-visible, .messengerRow a:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+.wayIcon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: rgb(255 255 255 / 10%); }
+.wayPrimary { border-color: transparent; background: var(--store-accent); color: #140f57; }
+.wayPrimary small { color: #3d3300; }
+.wayPrimary .wayIcon { background: rgb(20 15 87 / 10%); }
+a.wayPrimary:hover { border-color: transparent; background: color-mix(in srgb, var(--store-accent) 88%, #fff); }
+.wayMessengers { grid-template-columns: minmax(0, 1fr) auto; }
+.wayMessengers > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.messengerRow { display: flex !important; gap: 6px; }
+.messengerRow a { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: rgb(255 255 255 / 10%); color: #fff; transition: background var(--store-duration-fast) var(--store-ease); }
+.messengerRow a:hover { background: rgb(255 255 255 / 20%); }
+.messengerRow svg { width: 20px; height: 20px; }
+
+.steps { display: grid; gap: 14px; }
+.steps h2, .vinCard h2 { margin: 0; font-family: var(--store-font-display); font-size: clamp(1.3rem, 1.1rem + .6vw, 1.65rem); font-weight: 800; }
+.steps ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; gap: 12px; padding: 18px; border: 1px solid var(--store-border); border-radius: 18px; background: var(--store-surface); }
+.steps li > span:last-child { display: grid; gap: 4px; }
+.steps li strong { font-family: var(--store-font-display); font-size: 1rem; }
+.steps li span span { color: var(--store-muted); font-size: .9rem; line-height: 1.5; }
+.stepNumber { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--store-brand); color: var(--store-on-brand); font-family: var(--store-font-display); font-weight: 800; }
+
+.columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); align-items: start; gap: 20px; }
+.vinCard { display: grid; gap: 14px; padding: clamp(20px, 2.4vw, 26px); border: 1px solid var(--store-border); border-radius: 20px; background: var(--store-surface); }
+.vinCard p { margin: 0; color: var(--store-muted); font-size: .92rem; line-height: 1.5; }
+.vinCard ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: .92rem; line-height: 1.45; }
+.vinCard li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; }
+.vinCard li::before { content: "✓"; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--store-brand-soft); color: var(--store-brand); font-size: .8rem; font-weight: 800; }
+.vinCard .note { padding: 12px 14px; border-radius: 14px; background: #fff8dc; color: #5a4600; font-size: .86rem; }
+.selfService { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 56px; padding: 12px 16px; border-radius: 14px; background: var(--store-brand-soft); color: var(--store-brand); text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
+.selfService > span { display: grid; gap: 2px; }
+.selfService strong { font-family: var(--store-font-display); font-size: .95rem; }
+.selfService small { color: var(--store-text); font-size: .85rem; }
+.selfService:hover { background: color-mix(in srgb, var(--store-brand) 14%, var(--store-surface)); }
+.selfService:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+
+.formCard { margin: 0; border: 0; border-radius: 20px; box-shadow: 0 18px 48px rgb(16 30 60 / 8%); }
+.formOff { display: grid; gap: 12px; padding: 18px; border: 1px dashed var(--store-border-strong, #cfd3e3); border-radius: 16px; background: var(--store-bg); }
+.formOff strong { font-family: var(--store-font-display); font-size: 1rem; }
+.formOff > span:not(.formOffActions) { color: var(--store-muted); font-size: .92rem; line-height: 1.5; }
+.formOffActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.primaryButton, .secondaryButton { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 18px; border-radius: 12px; font-weight: 700; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease), border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.primaryButton { background: var(--store-brand); color: var(--store-on-brand); font-family: var(--store-font-display); font-weight: 800; }
+.primaryButton:hover { background: var(--store-brand-strong); }
+.secondaryButton { border: 1.5px solid var(--store-border); color: var(--store-text); }
+.secondaryButton:hover { border-color: var(--store-brand); color: var(--store-brand); }
+.primaryButton:focus-visible, .secondaryButton:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+
+/* Phone: ways to ask and the form come first, then how it works and VIN tips. */
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 22px; border-radius: 22px; }
+  .steps ol { grid-template-columns: minmax(0, 1fr); }
+  .columns { grid-template-columns: minmax(0, 1fr); }
+  .page { gap: 18px; }
+}
+@media (max-width: 760px) {
+  .page { display: flex; flex-direction: column; }
+  .columns { display: contents; }
+  .formCard { order: 1; }
+  .steps { order: 2; }
+  .vinCard { order: 3; }
+  .formOffActions > * { flex: 1 1 140px; }
+}

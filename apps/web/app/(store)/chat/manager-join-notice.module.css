@@ -1,38 +1,41 @@
 /* ============================================================
-   "Manager is joining" banner, shared by the widget and the full
-   /chat page. Reads only the `--store-*` custom properties already
-   defined on `.storefront` — no new colour or radius scale.
+   "Manager is joining" note, shared by the widget and /chat. Drawn
+   as a centred muted system pill between the conversation and the
+   composer, the way messengers show service notes.
    ============================================================ */
 
 .notice {
   display: grid;
+  justify-items: center;
   gap: 2px;
-  margin-bottom: var(--store-space-xs);
-  padding: 9px 12px;
-  border-left: 3px solid var(--store-brand);
-  border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0;
-  background: color-mix(in srgb, var(--store-brand) 7%, var(--store-surface));
-  color: var(--store-text);
-  font-size: 0.82rem;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  margin: 6px auto;
+  padding: 7px 14px;
+  border-radius: 16px;
+  background: rgb(20 15 87 / 7%);
+  color: #3f4362;
+  font-size: 0.8rem;
   line-height: 1.4;
+  text-align: center;
 }
 
 .headline {
-  display: flex;
+  display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--store-space-sm);
+  justify-content: center;
+  gap: 4px 8px;
 }
 
 .notice[data-state="elapsed"],
 .notice[data-state="outOfHours"] {
-  border-left-color: var(--store-accent);
-  background: color-mix(in srgb, var(--store-accent) 12%, var(--store-surface));
+  background: color-mix(in srgb, var(--store-accent) 18%, var(--store-surface));
 }
 
 .notice[data-state="assigned"] {
-  border-left-color: var(--store-success);
-  background: color-mix(in srgb, var(--store-success) 10%, var(--store-surface));
+  background: color-mix(in srgb, var(--store-success) 11%, var(--store-surface));
+  color: #145c3c;
 }
 
 .notice strong {
@@ -40,20 +43,19 @@
 }
 
 .notice p {
-  margin: 2px 0 0;
+  margin: 0;
   color: var(--store-muted);
+  font-size: 0.76rem;
 }
 
 .countdown {
-  flex: 0 0 auto;
-  min-width: 44px;
-  padding: 2px 8px;
+  padding: 1px 8px;
   border-radius: var(--store-radius-full);
   background: var(--store-surface);
   color: var(--store-brand);
   font-variant-numeric: tabular-nums;
   font-weight: var(--store-weight-black);
-  text-align: center;
+  font-family: var(--store-font-display);
 }
 
 .visuallyHidden {

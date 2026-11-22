@@ -1,3 +1,5 @@
+import { randomUuid, sha256Hex } from "../../_lib/browser-crypto";
+
 interface StorageLike {
   getItem: (key: string) => string | null;
   removeItem: (key: string) => void;
@@ -28,14 +30,8 @@ function stableValue(value: unknown): unknown {
     .map(([key, entry]) => [key, stableValue(entry)]));
 }
 
-function toHex(bytes: ArrayBuffer): string {
-  return Array.from(new Uint8Array(bytes), (value) => value.toString(16).padStart(2, "0")).join("");
-}
-
 export async function payloadHash(payload: unknown): Promise<string> {
-  const canonical = JSON.stringify(stableValue(payload));
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
-  return toHex(digest);
+  return sha256Hex(JSON.stringify(stableValue(payload)));
 }
 
 export async function stableIdempotencyKey(
@@ -58,7 +54,7 @@ export async function stableIdempotencyKey(
       storage.removeItem(storageKey);
     }
   }
-  const key = (options.createUuid ?? (() => crypto.randomUUID()))();
+  const key = (options.createUuid ?? randomUuid)();
   if (!UUID_PATTERN.test(key)) throw new Error("Генератор вернул некорректный UUID");
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
   if (!Number.isSafeInteger(ttlMs) || ttlMs < 1) throw new Error("Некорректный TTL идемпотентности");

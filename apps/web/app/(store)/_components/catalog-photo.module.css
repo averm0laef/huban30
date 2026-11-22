@@ -1,0 +1,29 @@
+.frame { position: relative; display: grid; place-items: center; min-width: 0; overflow: hidden; }
+.emptyIcon { width: 24px; height: 24px; color: color-mix(in srgb, var(--store-brand) 72%, var(--store-muted)); }
+.note {
+  display: block;
+  margin-top: 3px;
+  color: var(--store-muted);
+  font-size: .7rem;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.noteInside {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 1;
+  max-width: calc(100% - 12px);
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 92%);
+  color: var(--store-muted);
+  font-size: .75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}

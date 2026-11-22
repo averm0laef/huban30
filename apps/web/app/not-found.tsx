@@ -1,11 +1,17 @@
-import Link from "next/link";
+import { cookies } from "next/headers";
 
-export default function NotFound() {
+import { NotFoundView } from "./(store)/_components/not-found-view";
+import { StoreShell } from "./(store)/_components/store-shell";
+import { getCategoryTree } from "./(store)/_lib/catalog-api";
+import { catalogMenuSections } from "./(store)/_lib/store-categories";
+
+/** URLs outside every route (e.g. /a/b/c) get the same shop page as the storefront 404. */
+export default async function NotFound() {
+  const cookieStore = await cookies();
+  const catalogMenu = catalogMenuSections(await getCategoryTree().catch(() => []));
   return (
-    <main className="empty-workspace">
-      <h1>Страница не найдена</h1>
-      <p>Проверьте адрес или вернитесь на главную страницу.</p>
-      <Link href="/">На главную</Link>
-    </main>
+    <StoreShell catalogMenu={catalogMenu} initialSessionPresent={cookieStore.has("an30_session")}>
+      <NotFoundView />
+    </StoreShell>
   );
 }

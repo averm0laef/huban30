@@ -1,8 +1,12 @@
-FROM node:24.12.0-alpine AS build
+FROM node:24.22.3-alpine AS build
 RUN npm install --global pnpm@11.9.0
 WORKDIR /workspace
 ARG APP_BASE_URL=http://localhost
 ENV APP_BASE_URL=$APP_BASE_URL
+# next.config.ts decides at build time whether the site may be indexed:
+# only DEPLOYMENT_ENVIRONMENT=production is; any other value answers noindex.
+ARG DEPLOYMENT_ENVIRONMENT=development
+ENV DEPLOYMENT_ENVIRONMENT=$DEPLOYMENT_ENVIRONMENT
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
@@ -14,7 +18,7 @@ COPY apps/web ./apps/web
 COPY packages/contracts ./packages/contracts
 RUN pnpm --filter @an30/contracts build && pnpm --filter @an30/web build
 
-FROM node:24.12.0-alpine AS runtime
+FROM node:24.22.3-alpine AS runtime
 ENV HOSTNAME=0.0.0.0
 ENV NODE_ENV=production
 ENV PORT=3000

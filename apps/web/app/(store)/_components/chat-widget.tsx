@@ -1,5 +1,6 @@
 "use client";
 
+import { Chat24Regular } from "@fluentui/react-icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -11,24 +12,20 @@ import {
   type FormEvent,
 } from "react";
 
-import type { ChatIntake } from "@an30/contracts";
+import type { ChatIntake, ChatIntakeIntent } from "@an30/contracts";
+
+import { MESSENGERS, STORE_PHONE, STORE_PHONE_DISPLAY } from "../../site-config";
 
 import { errorText, readSession } from "../_lib/storefront-api";
-import { ChatAttachmentMedia } from "../chat/attachment-preview";
-import { ChatIntakeForm } from "../chat/chat-intake-form";
+import { ChatAvatar, ChatComposer, ChatMessageLog, ChatSystemPill, presenceLine } from "../chat/chat-conversation";
 import {
-  CHAT_ATTACHMENT_ACCEPT,
-  CONNECTION_LABELS,
   GUEST_CHAT_STORAGE_KEY,
   chatRequest,
   chatThreadCreateBody,
-  formatDate,
   isChatThread,
-  isOwnMessage,
-  isPreviewableMedia,
   parseStoredGuestThreads,
-  senderLabel,
   serializeGuestThreads,
+  threadNumberLabel,
   upsertThread,
   type ChatAccess,
   type ChatThread,
@@ -36,6 +33,8 @@ import {
 import { ManagerJoinNotice } from "../chat/manager-join-notice";
 import { useChatThread } from "../chat/use-chat-thread";
 import styles from "./chat-widget.module.css";
+import { MessengerIcon } from "./messenger-icon";
+import { computeShopStatusNow, type ShopStatus } from "./shop-status";
 
 type Viewer =
   | { kind: "customer" }
@@ -46,17 +45,45 @@ type Viewer =
 
 interface GuestThreadResponse extends ChatThread { guestToken: string }
 
+/**
+ * The four intake topics as short chips, in the order customers most often
+ * need them. The manager still reads the full contract wording
+ * (`CHAT_INTAKE_INTENT_LABELS`) in the opening message, built server-side.
+ */
+const INTAKE_TOPICS: Array<{
+  hint: string;
+  intent: ChatIntakeIntent;
+  label: string;
+  placeholder: string;
+}> = [
+  { hint: "Автомобиль и нужная деталь", intent: "advice", label: "Подобрать деталь", placeholder: "Например: Toyota Corolla 2012, передние тормозные колодки" },
+  { hint: "Артикул или название", intent: "part", label: "Есть артикул", placeholder: "Например: W914/2 или 0 986 494 104" },
+  { hint: "Номер заказа и вопрос", intent: "order", label: "Мой заказ", placeholder: "Например: АН-1024, когда можно забрать?" },
+  { hint: "Ваш вопрос", intent: "other", label: "Другое", placeholder: "Опишите, с чем помочь" },
+];
+
+/** Phone and messenger links, for whoever would rather not wait in the chat. */
+function OtherChannels() {
+  return (
+    <div className={styles.channels}>
+      <p>Удобнее в мессенджере или по телефону</p>
+      <ul>
+        {MESSENGERS.map((messenger) => (
+          <li key={messenger.id}>
+            <a aria-label={messenger.label} href={messenger.href} rel="noreferrer" target="_blank" title={messenger.label}>
+              <MessengerIcon id={messenger.id} />
+            </a>
+          </li>
+        ))}
+        <li className={styles.channelPhone}><a href={`tel:${STORE_PHONE}`}>{STORE_PHONE_DISPLAY}</a></li>
+      </ul>
+    </div>
+  );
+}
+
 function isHiddenRoute(pathname: string): boolean {
   return pathname === "/chat" || pathname.startsWith("/chat/")
     || pathname === "/admin" || pathname.startsWith("/admin/");
-}
-
-function ChatBubbleIcon() {
-  return (
-    <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z" />
-    </svg>
-  );
 }
 
 function CloseIcon() {
@@ -75,30 +102,18 @@ function ExpandIcon() {
   );
 }
 
-function SendIcon() {
+function BackIcon() {
   return (
-    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 2 11 13" />
-      <path d="M22 2 15 22l-4-9-9-4Z" />
+    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m15 5-7 7 7 7" />
     </svg>
   );
 }
 
-function RetryIcon() {
-  return (
-    <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12a9 9 0 1 1-3-6.7" />
-      <path d="M21 3v6h-6" />
-    </svg>
-  );
-}
-
-function AttachImageIcon() {
+function PhoneIcon() {
   return (
     <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="2.5" />
-      <circle cx="8.5" cy="9.5" r="1.5" />
-      <path d="m5 18 5-5 3 3 3-4 4 6" />
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />
     </svg>
   );
 }
@@ -124,13 +139,18 @@ export function ChatWidget() {
   const [draft, setDraft] = useState("");
   const [bootstrapPending, setBootstrapPending] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
+  const [requestIntent, setRequestIntent] = useState<ChatIntakeIntent>("advice");
+  const [requestDetails, setRequestDetails] = useState("");
+  const [startingNewConversation, setStartingNewConversation] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  // Read on open (not at render) so server and client HTML match.
+  const [shopStatus, setShopStatus] = useState<ShopStatus | null>(null);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const focusComposerOnOpenRef = useRef(false);
   const previousUnreadRef = useRef(0);
   const titleId = useId();
 
@@ -142,6 +162,7 @@ export function ChatWidget() {
   const {
     assignedStaffId,
     assignedStaffName,
+    managerWaitSince,
     connection,
     connectionError,
     downloadAttachment,
@@ -253,9 +274,71 @@ export function ChatWidget() {
     if (!dialog) return;
     if (isOpen && !dialog.open) {
       dialog.showModal();
-      textareaRef.current?.focus();
     }
     if (!isOpen && dialog.open) dialog.close();
+    const initialField = textareaRef.current
+      ?? dialog.querySelector<HTMLElement>("select:not(:disabled), input:not(:disabled), textarea:not(:disabled)");
+    if (isOpen && dialog.open && focusComposerOnOpenRef.current && initialField) {
+      initialField.focus({ preventScroll: true });
+      focusComposerOnOpenRef.current = false;
+    }
+  }, [isOpen, viewer.kind, threadLoading, thread]);
+
+  // Mobile browsers keep the layout viewport tall when the software
+  // keyboard opens. Follow the visual viewport so the composer stays above it.
+  useEffect(() => {
+    if (!isOpen) return;
+    const dialog = dialogRef.current;
+    const viewport = window.visualViewport;
+    if (!dialog || !viewport || window.matchMedia("(min-width: 641px)").matches) return;
+    let frame = 0;
+    const updateViewport = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        dialog.style.setProperty("--chat-viewport-height", `${viewport.height}px`);
+        dialog.style.setProperty("--chat-viewport-top", `${viewport.offsetTop}px`);
+        if (document.activeElement === textareaRef.current && viewingLatest) {
+          messageEndRef.current?.scrollIntoView({ block: "end" });
+        }
+      });
+    };
+    updateViewport();
+    viewport.addEventListener("resize", updateViewport);
+    viewport.addEventListener("scroll", updateViewport);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", updateViewport);
+      viewport.removeEventListener("scroll", updateViewport);
+      dialog.style.removeProperty("--chat-viewport-height");
+      dialog.style.removeProperty("--chat-viewport-top");
+    };
+  }, [isOpen, viewingLatest]);
+
+  // iOS Safari keeps scrolling the page under a modal <dialog>: the page slid
+  // into the gap above the keyboard and could carry the sheet off screen.
+  // Pin the page in place while the full-screen chat is open and put it back
+  // exactly where it was on close.
+  useEffect(() => {
+    if (!isOpen || window.matchMedia("(min-width: 641px)").matches) return;
+    const { body, documentElement: root } = document;
+    const scrollY = window.scrollY;
+    const previous = {
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyWidth: body.style.width,
+      rootOverflow: root.style.overflow,
+    };
+    root.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      root.style.overflow = previous.rootOverflow;
+      body.style.position = previous.bodyPosition;
+      body.style.top = previous.bodyTop;
+      body.style.width = previous.bodyWidth;
+      window.scrollTo({ top: scrollY, behavior: "instant" });
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -272,11 +355,17 @@ export function ChatWidget() {
   }, [unreadCount]);
 
   const handleOpen = useCallback(() => {
+    setShopStatus(computeShopStatusNow());
+    focusComposerOnOpenRef.current = true;
     setHasOpenedOnce(true);
     setIsOpen(true);
   }, []);
 
   const handleClose = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  const handleDialogClose = useCallback(() => {
     setIsOpen(false);
     launcherRef.current?.focus();
   }, []);
@@ -316,6 +405,9 @@ export function ChatWidget() {
     try {
       const { created } = await createConversation(intake);
       setThread(created);
+      setStartingNewConversation(false);
+      setRequestIntent("advice");
+      setRequestDetails("");
     } catch (caught) {
       setBootstrapError(errorText(caught));
     } finally {
@@ -334,36 +426,33 @@ export function ChatWidget() {
     if (result.closed) setThread((current) => current ? { ...current, status: "closed" } : current);
   }
 
-  async function handleFileChange(file: File | null): Promise<void> {
-    if (!file || !online || !thread || thread.status === "closed") return;
-    if (viewer.kind !== "guest" && viewer.kind !== "customer") return;
-    await submitAttachment(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  async function handleFile(file: File): Promise<boolean> {
+    if (!online || !thread || thread.status === "closed") return false;
+    if (viewer.kind !== "guest" && viewer.kind !== "customer") return false;
+    return submitAttachment(file);
   }
 
   if (hidden) return null;
 
   const canChat = viewer.kind === "guest" || viewer.kind === "customer";
   const hasOpenThread = Boolean(thread) && thread?.status !== "closed";
+  const showStartForm = !thread || (thread.status === "closed" && startingNewConversation);
   const attachDisabled = !hasOpenThread || filePending || !online;
   const sendDisabled = !hasOpenThread || !draft.trim() || !online || sendPending;
   const isRetry = Boolean(sendAttemptId) && !sendPending;
-  const statusVariant = viewer.kind === "loading" || threadLoading ? "busy"
-    : viewer.kind === "error" ? "error"
-      : viewer.kind === "staff" ? "muted"
-        : !online ? "error"
-          : bootstrapPending ? "busy"
-            : !thread ? "muted"
-              : connection === "live" ? "live"
-                : connection === "error" || connection === "offline" ? "error"
-                  : "busy";
-  const statusText = viewer.kind === "loading" || threadLoading ? "Открываем чат…"
-    : viewer.kind === "error" ? "Чат недоступен"
-      : viewer.kind === "staff" ? "Только для покупателей"
-        : !online ? "Нет сети"
-          : bootstrapPending ? "Отправляем…"
-            : !thread ? "Новое обращение"
-              : CONNECTION_LABELS[connection];
+  const presence = viewer.kind === "loading" || threadLoading ? { text: "открываем чат…", tone: "busy" as const }
+    : viewer.kind === "error" ? { text: "чат недоступен", tone: "offline" as const }
+      : viewer.kind === "staff" ? { text: "только для покупателей", tone: "away" as const }
+        : bootstrapPending ? { text: "отправляем…", tone: "busy" as const }
+          : presenceLine({
+            assignedStaffId: thread ? assignedStaffId ?? thread.assignedStaffId : null,
+            assignedStaffName,
+            connection: thread && !showStartForm ? connection : null,
+            online,
+            shopStatus,
+            threadClosed: thread?.status === "closed" && !startingNewConversation,
+          });
+  const topic = INTAKE_TOPICS.find((item) => item.intent === requestIntent) ?? INTAKE_TOPICS[0]!;
 
   return (
     <>
@@ -378,7 +467,8 @@ export function ChatWidget() {
           ? `Открыть чат с магазином. Непрочитанных сообщений: ${unreadCount}`
           : "Открыть чат с магазином"}
       >
-        <ChatBubbleIcon />
+        <Chat24Regular aria-hidden="true" />
+        <span className={styles.mobileLabel} aria-hidden="true">Чат</span>
         {unreadCount > 0 ? <span className={styles.badge} aria-hidden="true">{unreadCount > 9 ? "9+" : unreadCount}</span> : null}
       </button>
 
@@ -391,21 +481,26 @@ export function ChatWidget() {
         aria-modal="true"
         aria-labelledby={titleId}
         onCancel={handleClose}
-        onClose={handleClose}
+        onClose={handleDialogClose}
       >
         <header className={styles.header}>
+          <button type="button" className={`${styles.headerButton} ${styles.backButton}`} onClick={handleClose} aria-label="Назад к сайту">
+            <BackIcon />
+          </button>
+          <ChatAvatar online={presence.tone === "online"} />
           <div className={styles.headerText}>
-            <h2 id={titleId}>Чат с магазином</h2>
-            <span className={styles.headerStatus} data-state={statusVariant}>
-              <span aria-hidden="true" className={styles.statusDot} data-state={statusVariant} />
-              {statusText}
-            </span>
+            <h2 id={titleId}>Магазин АН-30</h2>
+            <span className={styles.presence} data-tone={presence.tone}>{presence.text}</span>
+            {thread && !showStartForm && threadNumberLabel(thread) ? <span className={styles.threadNumber}>{threadNumberLabel(thread)}</span> : null}
           </div>
           <div className={styles.headerActions}>
-            <Link className={styles.headerButton} href="/chat" onClick={handleClose} aria-label="Открыть чат на отдельной странице">
+            <a className={`${styles.headerButton} ${styles.mobileOnly}`} href={`tel:${STORE_PHONE}`} aria-label={`Позвонить в магазин: ${STORE_PHONE_DISPLAY}`}>
+              <PhoneIcon />
+            </a>
+            <Link className={`${styles.headerButton} ${styles.desktopOnly}`} href="/chat" onClick={handleClose} aria-label="Открыть чат на отдельной странице" title="Открыть на отдельной странице">
               <ExpandIcon />
             </Link>
-            <button type="button" className={styles.headerButton} onClick={handleClose} aria-label="Закрыть чат">
+            <button type="button" className={`${styles.headerButton} ${styles.desktopOnly}`} onClick={handleClose} aria-label="Закрыть чат">
               <CloseIcon />
             </button>
           </div>
@@ -413,7 +508,7 @@ export function ChatWidget() {
 
         <div className={styles.body}>
           {viewer.kind === "loading" ? (
-            <div className={styles.state} role="status">Проверяем сессию…</div>
+            <div className={styles.state} role="status">Подключаемся…</div>
           ) : viewer.kind === "error" ? (
             <div className={styles.state} role="alert">
               <p>{viewer.message}</p>
@@ -424,9 +519,9 @@ export function ChatWidget() {
               <p>Этот чат — для покупателей. Обращения от сотрудников обрабатываются в рабочем месте.</p>
               <Link href="/admin/chats" onClick={handleClose}>Открыть рабочее место</Link>
             </div>
-          ) : (
+          ) : canChat ? (
             <>
-              {!online ? <div className={styles.notice} role="status">Нет подключения. Сообщения отправятся, когда сеть вернётся.</div> : null}
+              {!online ? <div className={styles.notice} role="status">Нет подключения. Отправка вернётся, когда появится сеть.</div> : null}
               {historyError ? (
                 <div className={styles.notice} role="alert">
                   <span>{historyError}</span>
@@ -436,161 +531,121 @@ export function ChatWidget() {
               {connectionError ? <div className={styles.notice} role="alert">{connectionError}</div> : null}
               {downloadError ? <div className={styles.notice} role="alert">Файл не скачан: {downloadError}</div> : null}
 
-              {threadLoading || historyLoading ? (
+              {showStartForm ? (
+                <div className={styles.startScreen}>
+                  <form
+                    className={styles.startCard}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleIntakeSubmit({
+                        articleNumber: null,
+                        comment: requestDetails.trim() || null,
+                        intent: requestIntent,
+                        vehicle: null,
+                      });
+                    }}
+                  >
+                    <h3>С чем помочь?</h3>
+                    <p>Выберите тему — менеджер увидит её сразу. VIN или артикул ускорят подбор.</p>
+                    <fieldset className={styles.topics} disabled={!online || bootstrapPending}>
+                      <legend className={styles.visuallyHidden}>Тема обращения</legend>
+                      <div>
+                        {INTAKE_TOPICS.map((item) => (
+                          <label className={styles.topic} key={item.intent}>
+                            <input
+                              checked={requestIntent === item.intent}
+                              name={`${titleId}-intent`}
+                              onChange={() => setRequestIntent(item.intent)}
+                              type="radio"
+                              value={item.intent}
+                            />
+                            <span>{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <label htmlFor={`${titleId}-details`}>{topic.hint} <span>— можно оставить пустым</span></label>
+                    <textarea
+                      disabled={!online || bootstrapPending}
+                      id={`${titleId}-details`}
+                      maxLength={1_000}
+                      onChange={(event) => setRequestDetails(event.target.value)}
+                      placeholder={topic.placeholder}
+                      rows={3}
+                      value={requestDetails}
+                    />
+                    {bootstrapError ? <p className={styles.inlineError} role="alert">{bootstrapError}</p> : null}
+                    <button className={styles.primaryButton} disabled={!online || bootstrapPending} type="submit">
+                      {bootstrapPending ? "Открываем чат…" : "Написать магазину"}
+                    </button>
+                    {!online ? <p className={styles.hint} role="status">Для начала обращения нужно подключение к интернету.</p> : null}
+                    <p className={styles.legalNote}>
+                      Отправляя сообщение, вы соглашаетесь с <Link href="/privacy" onClick={handleClose}>политикой конфиденциальности</Link>.
+                    </p>
+                  </form>
+                  <OtherChannels />
+                </div>
+              ) : threadLoading || historyLoading || !thread ? (
                 <div className={styles.state} role="status">Загружаем сообщения…</div>
               ) : (
-                <div
-                  aria-busy={olderHistoryLoading || undefined}
-                  aria-live={viewingLatest ? "polite" : "off"}
-                  aria-relevant="additions text"
-                  className={styles.messages}
-                  id={`${titleId}-message-log`}
-                  role="log"
-                >
-                  {hasOlderMessages || !viewingLatest ? (
-                    <div className={styles.historyControls}>
-                      {hasOlderMessages ? (
-                        <button
-                          aria-controls={`${titleId}-message-log`}
-                          disabled={olderHistoryLoading}
-                          onClick={() => void showOlderMessages()}
-                          type="button"
-                        >
-                          {olderHistoryLoading
-                            ? "Загружаем предыдущие..."
-                            : olderHistoryError
-                              ? "Повторить загрузку предыдущих"
-                              : "Показать предыдущие"}
-                        </button>
-                      ) : <span>Это начало переписки.</span>}
-                      {!viewingLatest ? (
-                        <button aria-controls={`${titleId}-message-log`} onClick={showLatestMessages} type="button">
-                          {newerMessageCount > 0 ? `К последним (${newerMessageCount})` : "К последним"}
-                        </button>
-                      ) : null}
-                      {olderHistoryError ? <span role="alert">{olderHistoryError}</span> : null}
-                    </div>
-                  ) : null}
-                  <article className={styles.welcomeMessage}>
-                    <header><strong>АН-30</strong></header>
-                    <p>Здравствуйте! Поможем подобрать нужную деталь.</p>
-                    <p>Отправьте VIN или марку, модель и год автомобиля, затем название детали или артикул. Фото или короткое видео можно прикрепить кнопкой ниже.</p>
-                  </article>
-                  {renderedMessages.map((message) => (
-                    <article
-                      className={styles.message}
-                      data-chat-message-id={message.id}
-                      data-own={isOwnMessage(message) || undefined}
-                      key={message.id}
-                    >
-                      <header>
-                        <strong>{senderLabel(message.senderKind)}</strong>
-                        <time dateTime={message.createdAt}>{formatDate(message.createdAt)}</time>
-                      </header>
-                      {message.body && message.messageType !== "attachment" ? <p>{message.body}</p> : null}
-                      {message.attachments.map((attachment) => (
-                        isPreviewableMedia(attachment) && thread && viewerKind ? (
-                          <ChatAttachmentMedia
-                            attachment={attachment}
-                            key={attachment.id}
-                            onDownload={() => void downloadAttachment(attachment)}
-                            thread={thread}
-                            viewerKind={viewerKind}
-                          />
-                        ) : (
-                          <button className={styles.attachment} key={attachment.id} onClick={() => void downloadAttachment(attachment)} type="button">
-                            <strong>{attachment.originalName}</strong>
-                            <span>{Math.max(1, Math.ceil(attachment.byteSize / 1024))} КБ, скачать</span>
-                          </button>
-                        )
-                      ))}
-                      {isOwnMessage(message) && lastStaffReadMessageId === message.id ? <small>Прочитано магазином</small> : null}
-                    </article>
-                  ))}
-                  {thread?.status === "closed" ? (
-                    <div className={styles.systemNotice}>Обращение закрыто. Заполните форму ниже, чтобы начать новое.</div>
-                  ) : null}
-                  <div ref={messageEndRef} />
-                </div>
+                <ChatMessageLog
+                  empty={<><strong>Здравствуйте!</strong>Напишите, что нужно: марку, модель и год автомобиля или артикул детали.</>}
+                  footer={thread.status === "closed" ? <ChatSystemPill>Обращение завершено</ChatSystemPill> : null}
+                  hasOlderMessages={hasOlderMessages}
+                  lastStaffReadMessageId={lastStaffReadMessageId}
+                  logId={`${titleId}-message-log`}
+                  messageEndRef={messageEndRef}
+                  messages={messages}
+                  newerMessageCount={newerMessageCount}
+                  olderHistoryError={olderHistoryError}
+                  olderHistoryLoading={olderHistoryLoading}
+                  onDownload={(attachment) => void downloadAttachment(attachment)}
+                  onShowLatest={showLatestMessages}
+                  onShowOlder={() => void showOlderMessages()}
+                  renderedMessages={renderedMessages}
+                  thread={thread}
+                  viewerKind={viewerKind}
+                  viewingLatest={viewingLatest}
+                />
               )}
             </>
-          )}
+          ) : null}
         </div>
 
-        {canChat ? (
-          <div className={styles.composer}>
-            {thread && thread.status !== "closed" ? (
-              <>
-                <ManagerJoinNotice
-                  assignedStaffId={assignedStaffId}
-                  assignedStaffName={assignedStaffName}
-                  messages={messages}
-                  status={threadStatus ?? thread.status}
-                />
-                <form onSubmit={(event) => void handleSubmit(event)}>
-                  <label className={styles.visuallyHidden} htmlFor={`${titleId}-message`}>Сообщение магазину</label>
-                  <div className={styles.composerRow}>
-                    <button
-                      type="button"
-                      className={styles.iconButton}
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={attachDisabled}
-                      aria-label="Прикрепить фото или видео"
-                    >
-                      <AttachImageIcon />
-                    </button>
-                    <input
-                      accept={CHAT_ATTACHMENT_ACCEPT}
-                      className={styles.visuallyHidden}
-                      id={`${titleId}-file`}
-                      onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
-                      ref={fileInputRef}
-                      tabIndex={-1}
-                      type="file"
-                    />
-                    <textarea
-                      className={styles.textarea}
-                      id={`${titleId}-message`}
-                      maxLength={4_000}
-                      onChange={(event) => {
-                        if (event.target.value !== draft) resetSendAttempt();
-                        setDraft(event.target.value);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                          event.preventDefault();
-                          event.currentTarget.form?.requestSubmit();
-                        }
-                      }}
-                      placeholder="Введите сообщение..."
-                      ref={textareaRef}
-                      rows={1}
-                      value={draft}
-                    />
-                    <button
-                      aria-label={isRetry ? "Повторить отправку сообщения" : "Отправить сообщение"}
-                      className={styles.sendButton}
-                      data-pending={sendPending || undefined}
-                      disabled={sendDisabled}
-                      type="submit"
-                    >
-                      {isRetry ? <RetryIcon /> : <SendIcon />}
-                    </button>
-                  </div>
-                  {sendError ? <p className={styles.inlineError} role="alert">{sendError}</p> : null}
-                  {fileError ? <p className={styles.inlineError} role="alert">{fileError}</p> : null}
-                  <p className={styles.hint}>Фото до 5 МБ. Видео до 15 МБ и до 2 минут.</p>
-                  {filePending ? <p className={styles.hint} role="status">Загружаем файл…</p> : null}
-                </form>
-              </>
-            ) : (
-              <ChatIntakeForm
-                disabled={!online}
-                error={bootstrapError}
-                onSubmit={(intake) => void handleIntakeSubmit(intake)}
-                pending={bootstrapPending}
-              />
-            )}
+        {canChat && thread && thread.status !== "closed" ? (
+          <div className={styles.footer}>
+            <ManagerJoinNotice
+              key={thread.id}
+              assignedStaffId={assignedStaffId}
+              assignedStaffName={assignedStaffName}
+              managerWaitSince={managerWaitSince}
+              messages={messages}
+              status={threadStatus ?? thread.status}
+            />
+            <ChatComposer
+              attachDisabled={attachDisabled}
+              draft={draft}
+              fileError={fileError}
+              filePending={filePending}
+              idPrefix={titleId}
+              isRetry={isRetry}
+              onDraftChange={(value) => {
+                if (value !== draft) resetSendAttempt();
+                setDraft(value);
+              }}
+              onFile={handleFile}
+              onSubmit={(event) => void handleSubmit(event)}
+              sendDisabled={sendDisabled}
+              sendError={sendError}
+              sendPending={sendPending}
+              textareaRef={textareaRef}
+            />
+          </div>
+        ) : canChat && thread?.status === "closed" && !startingNewConversation ? (
+          <div className={styles.closedBar}>
+            <p>Если остался вопрос или нужен новый подбор, начните новое обращение.</p>
+            <button className={styles.primaryButton} type="button" onClick={() => setStartingNewConversation(true)}>Новое обращение</button>
+            <OtherChannels />
           </div>
         ) : null}
       </dialog>

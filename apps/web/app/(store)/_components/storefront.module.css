@@ -1,33 +1,28 @@
-/* ============================================================
-   АН-30 storefront design system
-   One light theme only — there is no dark variant. Tokens live on
-   `.storefront`; everything else in this file consumes them —
-   avoid hardcoded color/shadow/spacing values.
-
-   Direction: rounded, calm and dense, closer to a parts-catalog
-   reference (rossko.ru) than to the sharper-cornered previous pass —
-   but in the shop's own ink-blue/white palette with the yellow used
-   only for small emphasis, never as a second structural color.
-   ============================================================ */
+/* АН-30 storefront tokens. Inter for running copy, Montserrat for display. */
 
 .storefront {
   /* Brand & surface colors */
-  --store-bg: #eef2f9;
+  --store-bg: #f4f5f7;
   --store-surface: #ffffff;
-  --store-surface-strong: #e4eaf5;
-  --store-text: #142038;
-  --store-muted: #5b6679;
-  --store-brand: #1743ad;
-  --store-brand-strong: #0d2d83;
+  --store-surface-strong: #edeff4;
+  --store-text: #191b24;
+  --store-muted: #545b6a;
+  --store-brand: #1800e0;
+  --store-brand-strong: #1200b0;
+  --store-brand-soft: #efeefe;
+  --store-on-brand: #ffffff;
   --store-accent: #f5c400;
-  --store-accent-text: #1a2338;
-  --store-border: #d7deec;
+  --store-accent-hover: #ffd43b;
+  --store-accent-text: #12132b;
+  --store-border: #e1e3eb;
   --store-danger: #b42318;
   --store-success: #18794e;
 
-  /* Header "signage" band — the structural blue anchor */
-  --store-header-bg: #0f2d66;
-  --store-header-bg-strong: #0a2150;
+  /* Header "signage" band — the structural ink-indigo anchor, the logo's
+     hue taken down to a near-black so white type and the yellow CTA read
+     cleanly on it. */
+  --store-header-bg: #140f57;
+  --store-header-bg-strong: #0e0b3d;
   --store-header-text: #f5f8ff;
   --store-header-muted: rgb(245 248 255 / 74%);
   --store-header-border: rgb(245 248 255 / 16%);
@@ -36,10 +31,10 @@
   --store-header-control-border: rgb(245 248 255 / 30%);
 
   /* Elevation — soft, low-contrast; calm rather than punchy */
-  --store-shadow-xs: 0 1px 2px rgb(16 30 60 / 6%);
-  --store-shadow-sm: 0 1px 2px rgb(16 30 60 / 5%), 0 8px 20px -10px rgb(16 30 60 / 16%);
-  --store-shadow-md: 0 6px 16px -6px rgb(16 30 60 / 12%), 0 20px 40px -14px rgb(16 30 60 / 16%);
-  --store-shadow-lg: 0 16px 32px -12px rgb(16 30 60 / 18%), 0 36px 72px -22px rgb(16 30 60 / 22%);
+  --store-shadow-xs: 0 1px 2px rgb(18 16 70 / 6%);
+  --store-shadow-sm: 0 1px 2px rgb(18 16 70 / 5%), 0 8px 20px -10px rgb(18 16 70 / 16%);
+  --store-shadow-md: 0 6px 16px -6px rgb(18 16 70 / 12%), 0 20px 40px -14px rgb(18 16 70 / 16%);
+  --store-shadow-lg: 0 16px 32px -12px rgb(18 16 70 / 18%), 0 36px 72px -22px rgb(18 16 70 / 22%);
 
   /* Radii — generous and rounded throughout; the single biggest lever
      for the "rounded" direction the owner keeps pointing at. */
@@ -59,26 +54,26 @@
   --store-space-2xl: 48px;
   --store-space-3xl: 64px;
 
-  /* Typography — Golos Text (self-hosted variable font, full Cyrillic
-     coverage) with a system fallback stack that also covers Cyrillic,
-     so text never breaks before the webfont loads or if it fails. */
-  --store-font-sans: "Golos Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --store-font-sans: "Inter Storefront", "Golos Text", system-ui, sans-serif;
+  --store-font-display: "Montserrat", var(--store-font-sans);
   --store-font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", monospace;
-  --store-weight-medium: 650;
-  --store-weight-bold: 750;
-  --store-weight-black: 850;
-  --store-tracking-tight: -0.03em;
-  --store-tracking-tighter: -0.045em;
+  --store-weight-medium: 550;
+  --store-weight-bold: 650;
+  --store-weight-black: 750;
+  /* Montserrat is a wide face, so it wants far less negative tracking
+     than Golos did at display sizes. */
+  --store-tracking-tight: -0.015em;
+  --store-tracking-tighter: -0.025em;
   --store-tracking-wide: 0.09em;
 
-  /* Motion — short and purposeful, never decorative (MOTION_INTENSITY 3) */
+  /* Motion: responsive controls and one-time entrances, transform/opacity only. */
   --store-ease: cubic-bezier(0.22, 0.7, 0.24, 1);
   --store-duration-fast: 140ms;
   --store-duration-base: 200ms;
   --store-duration-slow: 320ms;
 
   /* Layout */
-  --store-container: min(1180px, calc(100% - 32px));
+  --store-container: min(1344px, calc(100% - clamp(24px, 4vw, 48px)));
 
   min-height: 100dvh;
   display: flex;
@@ -102,6 +97,45 @@
 .storefront textarea {
   font: inherit;
 }
+
+.storefront input:is([type="checkbox"], [type="radio"]) { accent-color: var(--store-brand); }
+.storefront select:not([multiple], [size]) {
+  appearance: none;
+  padding-inline-end: 37px;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%3E%3Cpath%20d='m4%206%204%204%204-4'%20stroke='%231800e0'%20stroke-width='1.7'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+@media (forced-colors: active) {
+  .storefront select:not([multiple], [size]) { appearance: auto; background-image: none; }
+}
+
+/* Display face for everything that has to be read at a glance: headings,
+   prices, buttons, short labels. The class names inside `:is()` lift this
+   rule to (0,2,0), above the `font: inherit` reset just above (0,1,1), so
+   links and buttons styled as CTAs pick it up too. */
+.storefront :is(
+  h1, h2, h3, legend,
+  .primaryAction, .secondaryAction, .submitButton, .promoSlideCta, .quickBlockCta,
+  .supplierWaitlistButton, .helpPhone, .headerTopPhone,
+  .productPrice, .supplierStockPrice, .searchSuggestionPrice, .checkoutSubtotal strong, .checkoutLineTotal,
+  .categoryTileLabel, .eyebrow, .deliveryQuickLabel, .supplierCrossLabel, .resultsSourceHeading,
+  .benefitTitle, .statusBadge
+) {
+  font-family: var(--store-font-display);
+}
+/* The same lift for the weight of the three call-to-action classes: set by one class further down, it lost to the
+   `font: inherit` reset, and «Применить» in the catalogue filters was drawn at the regular weight. */
+.storefront :is(.primaryAction, .secondaryAction, .submitButton) { font-weight: var(--store-weight-bold); }
+.storefront :global(.storefront-add-cart),
+.storefront :global(.storefront-cart-subtotal strong),
+.storefront :global(.storefront-cart-actions a),
+.searchForm button,
+.footerGrid h2 {
+  font-family: var(--store-font-display);
+}
+.storefront :is(h1, h2, h3) { font-weight: var(--store-weight-black); text-wrap: balance; }
 
 /* Focus ring starts at 0 offset/transparent and eases outward on focus,
    instead of popping in — a small, purposeful motion rather than a
@@ -131,7 +165,7 @@
 .storefront select:focus-visible,
 .storefront textarea:focus-visible,
 .storefront summary:focus-visible {
-  outline-color: var(--store-accent);
+  outline-color: var(--store-brand);
   outline-offset: 3px;
 }
 
@@ -152,29 +186,16 @@
 
 .skipLink:focus { transform: translateY(0); }
 
-/* ---------------- Header ----------------
-   A single ink-blue panel, inset from the viewport edges with rounded
-   bottom corners so the page background shows down both sides — the
-   rossko.ru reference's "по бокам дизайн" detail. `.headerInset` carries
-   the background/radius/shadow; the sticky `.header` wrapper around it
-   stays transparent, so the gutter shows the ordinary page background
-   (not a hard-coded colour) at every scroll position.
-
-   Two rows share that one panel:
-   - `.headerTopRow` ("row 1", thin): store location, a couple of
-     secondary links and, on the right, the help phone number followed by
-     the messenger icons. ≥768px only — that boundary is shared with the
-     bottom tab bar's appearance (see `.mobileNav` in the 767px block
-     below), so cart/account access never has a dead zone between the two.
-   - `.headerMainRow` ("row 2", tall): brand lockup, the wide rounded
-     search field, and — ≥768px — the cart/account actions, each an icon
-     with a small caption beneath it (`.headerActions`). Below 768px row 1
-     disappears and this row instead shows the brand, a condensed
-     locality+address link (`.mobileHeaderAddress`), and a phone icon
-     (`.mobileHeaderActions`) — see the 767px block further down. Mobile
-     also gets one more row below this, `.mobileSearchRow` (the search
-     field alone) — two rows total on a phone, down from an earlier
-     four-row stack that ate most of the screen before any content. */
+/* Header and footer share light navigation surfaces. */
+.headerInset,
+.footer {
+  --store-header-text: var(--store-text);
+  --store-header-muted: var(--store-muted);
+  --store-header-border: var(--store-border);
+  --store-header-control-bg-hover: var(--store-brand-soft);
+  width: var(--store-container);
+  margin-inline: auto;
+}
 
 .header {
   position: sticky;
@@ -183,11 +204,9 @@
 }
 
 .headerInset {
-  /* Full-bleed: the owner asked for no white gutters beside the header.
-     The rounded bottom corners stay, so the band still reads as a panel. */
-  margin-inline: 0;
+  position: relative;
   border-radius: 0 0 var(--store-radius-lg) var(--store-radius-lg);
-  background: var(--store-header-bg);
+  background: var(--store-surface);
   color: var(--store-header-text);
   box-shadow: var(--store-shadow-sm);
 }
@@ -205,42 +224,113 @@
   }
 }
 
-.headerRowInner { display: flex; align-items: center; box-sizing: border-box; width: min(100%, var(--store-container)); margin: 0 auto; padding-inline: clamp(14px, 3vw, 28px); gap: var(--store-space-md); }
+.headerRowInner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding-inline: clamp(11px, 2vw, 24px);
+  gap: var(--store-space-md);
+}
 
-/* Row 1 — thin utility row: location, secondary links, phone + messengers.
-   Hidden below 768px; see the file-header comment above for why. */
-.headerTopRow { display: none; border-bottom: 1px solid var(--store-header-border); }
+/* Desktop utility row below the primary navigation. */
+.headerTopRow { display: none; border-top: 1px solid var(--store-header-border); }
 .headerTopRow .headerRowInner { min-height: 48px; padding-block: 4px; gap: var(--store-space-lg); }
 
 .headerTopLocation { display: flex; align-items: center; min-height: 44px; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.84rem; line-height: 1.3; text-decoration: none; transition: color var(--store-duration-fast) var(--store-ease); }
 .headerTopLocation svg { flex: 0 0 auto; }
-.headerTopLocation span { overflow-wrap: anywhere; }
+.headerTopLocation span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .headerTopLocation:hover { color: var(--store-header-text); }
 
-/* Opening hours — same thin utility row as the address, but the least
-   essential fact there, so it is the first to go below 1280px (see the
-   1279px block further down). */
-.headerTopHours { display: flex; align-items: center; min-height: 44px; gap: 6px; min-width: 0; color: var(--store-header-muted); font-size: 0.84rem; line-height: 1.3; white-space: nowrap; }
-.headerTopHours svg { flex: 0 0 auto; }
-
-.headerTopLinks { display: flex; align-items: center; gap: var(--store-space-md); }
-.headerTopLinks a {
+.headerTopLinks { display: flex; flex: 0 0 auto; align-items: center; gap: var(--store-space-3xs); }
+.headerTopLinks > a, .headerMenuTrigger {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   min-height: 44px;
-  color: var(--store-header-muted);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--store-radius-sm);
+  background: transparent;
+  color: var(--store-text);
   font-size: 0.84rem;
-  font-weight: var(--store-weight-medium);
+  font-weight: var(--store-weight-bold);
   text-decoration: none;
   white-space: nowrap;
   transition: color var(--store-duration-fast) var(--store-ease);
 }
-.headerTopLinks a:hover { color: var(--store-header-text); }
+.headerMenuTrigger { cursor: pointer; font-family: inherit; }
+.headerMenuTrigger svg { transition: transform var(--store-duration-base) var(--store-ease); }
+/* The storefront's `font: inherit` reset for links and buttons (0,1,1) beats a one-class rule: the two menu
+   buttons were drawn at the body size and weight next to the bold links of the same row. */
+.headerTopLinks .headerMenuTrigger { font-size: 0.84rem; font-weight: var(--store-weight-bold); }
+.headerTopLinks > a:hover,
+.headerMenuTrigger:hover,
+.headerMenuTrigger[aria-expanded="true"] { background: var(--store-brand-soft); color: var(--store-brand); }
+.headerMenuTrigger:focus-visible, .headerMenuLinks a:focus-visible { outline: 3px solid var(--store-brand); outline-offset: -2px; }
+.headerMenuTrigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.headerMenuPanel {
+  position: absolute;
+  z-index: 6;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-start: clamp(16px, calc((100% - 700px) / 2), 124px);
+  display: grid;
+  gap: 12px;
+  width: min(452px, calc(100% - 32px));
+  padding: 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+  box-shadow: var(--store-shadow-lg);
+}
+.headerMenuPanel[hidden] { display: none; }
+.headerMenu:not([data-help]) { position: relative; }
+.headerMenuPanel:not([data-help]) {
+  inset-block-start: calc(100% + 13px);
+  inset-inline-start: -120px;
+  width: min(452px, calc(100vw - 40px));
+}
+.headerMenuPanel[data-help] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, .48fr);
+  width: min(680px, calc(100% - 32px));
+}
+.headerMenuPanel::before { content: ""; position: absolute; inset: -14px 0 100%; }
+.headerMenuLinks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 0; padding: 0; list-style: none; }
+.headerMenuLinks a {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  height: 100%;
+  padding: 10px;
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  line-height: 1.35;
+  text-decoration: none;
+}
+.headerMenuLinks a:hover, .headerMenuLinks a:focus-visible { background: var(--store-bg); color: var(--store-brand); }
+.headerMenuLinks strong { font-size: .87rem; }
+.headerMenuLinks span { color: var(--store-muted); font-size: .77rem; }
+.headerMenuHelp {
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-header-bg);
+  color: var(--store-on-brand);
+}
+.headerMenuHelp strong { font-family: var(--store-font-display); font-size: .96rem; line-height: 1.2; }
+.headerMenuHelp p { margin: 6px 0 0; color: #dfdcff; font-size: .8rem; line-height: 1.45; }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes store-menu-enter { from { opacity: 0; transform: translateY(-6px); } }
+  .headerMenuPanel:not([hidden]),
+  .catalogMenuPanel:not([hidden]) { animation: store-menu-enter 180ms var(--store-ease) both; }
+}
 
 /* Pinned right regardless of which siblings survive the breakpoints below —
    the phone number and messengers are the one part of row 1 the reference
    requires at every width row 1 itself is shown. */
-.headerTopRight { display: flex; align-items: center; gap: var(--store-space-md); margin-left: auto; }
+.headerTopRight { display: flex; flex: 0 0 auto; align-items: center; gap: var(--store-space-md); margin-left: auto; }
 .headerTopPhone {
   display: inline-flex;
   align-items: center;
@@ -253,8 +343,8 @@
   white-space: nowrap;
   transition: color var(--store-duration-fast) var(--store-ease);
 }
-.headerTopPhone svg { color: var(--store-accent); }
-.headerTopPhone:hover { color: var(--store-accent); }
+.headerTopPhone svg,
+.headerTopPhone:hover { color: var(--store-brand); }
 
 .headerMessengers { display: flex; align-items: center; gap: 2px; }
 .headerMessengerLink {
@@ -267,17 +357,12 @@
   color: var(--store-header-muted);
   transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
 }
-.headerMessengerLink:hover { background: var(--store-header-control-bg-hover); color: var(--store-accent); }
+.headerMessengerLink:hover { background: var(--store-header-control-bg-hover); color: var(--store-brand); }
 
-/* Row 2 — brand, search, cart/account (desktop) or brand, search, burger (mobile) */
-
-.headerMainRow .headerRowInner { min-height: 56px; padding-block: 10px; padding-top: max(10px, env(safe-area-inset-top)); gap: var(--store-space-sm); }
+.headerMainRow .headerRowInner { min-height: 56px; padding-block: 12px; padding-top: max(12px, env(safe-area-inset-top)); gap: var(--store-space-sm); }
 
 .brand { flex: 0 0 auto; display: flex; align-items: center; min-height: 44px; color: inherit; text-decoration: none; }
-/* Logo height climbs with the row: 34px on the phone-width single-row
-   header up to 48px on desktop — the owner's earlier "логотип больше
-   сделай" ask — see the 768px/1280px steps further down. */
-.brandLockup { height: 34px; width: auto; display: block; }
+.brandLockup { height: clamp(36px, 9.35vw, 44px); width: auto; display: block; }
 
 /* Cart/account: icon-above-caption, each a single 44px focusable target
    (the icon renders *inside* the button/link — see cart-actions.tsx and
@@ -308,19 +393,204 @@
 .headerActions :global(a) svg,
 .headerActions :global(.storefront-cart-button) svg { flex: 0 0 auto; color: var(--store-header-muted); }
 .headerActions :global(.storefront-cart-button-label),
-.headerActions :global(.storefront-account-label) { font-size: 0.72rem; font-weight: var(--store-weight-bold); white-space: nowrap; }
+.headerActions :global(.storefront-account-label),
+.headerActions :global(.storefront-vehicle-label) { font-size: .75rem; font-weight: var(--store-weight-bold); white-space: nowrap; }
+/* The chosen car keeps one width whether a car is chosen or not («Выбрать авто» / «Toyota Caldina»): the car is
+   known only once the browser's storage is read, and a width that followed the name would push the search field
+   aside on every page load. A longer name ends in an ellipsis; the whole of it is in the link's title. */
+.headerActions :global(.storefront-vehicle-button) { width: 104px; }
+.headerActions :global(.storefront-vehicle-label) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.headerActions :global(.storefront-vehicle-button[data-chosen]) svg { color: var(--store-brand); }
 .headerActions :global(.storefront-cart-count) {
   display: inline-block;
   min-width: 17px;
   margin-left: 4px;
   padding: 1px 5px;
   border-radius: var(--store-radius-full);
-  background: var(--store-accent);
-  color: var(--store-accent-text);
+  background: var(--store-brand-soft);
+  color: var(--store-brand-strong);
   font-size: 0.66rem;
   font-weight: var(--store-weight-black);
   font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+/* "Каталог" — the primary route into the shop, as a filled brand pill
+   right before search. ≥768px only (see the 768px block): on a phone the
+   bottom tab bar carries the same link. */
+/* The same reset took the display face from «Каталог», the main button of the header. */
+.header .headerCatalogButton { font-family: var(--store-font-display); font-size: 0.92rem; font-weight: 700; }
+.headerCatalogButton {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px 0 16px;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  font-family: var(--store-font-display);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
+}
+.headerCatalogButton:hover { background: var(--store-brand-strong); }
+.headerCatalogButton:active { transform: scale(0.97); }
+
+/* The catalogue menu: the «Каталог» link and, from 1101px, an arrow button that opens the panel of every section
+   with its subsections. The panel hangs from the row the button is in (`.headerMainRow`, positioned from 1101px),
+   right under the button: hung from the whole header it sat a row lower, and the menu closed while the mouse
+   travelled across that row to reach it. */
+.catalogMenu { flex: 0 0 auto; display: none; align-items: stretch; }
+.catalogMenu .headerCatalogButton { display: inline-flex; }
+.catalogMenuToggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 48px;
+  margin-inline-start: 1px;
+  border: 0;
+  border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0;
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  cursor: pointer;
+  transition: background var(--store-duration-fast) var(--store-ease);
+}
+.catalogMenuToggle:hover,
+.catalogMenuToggle[aria-expanded="true"] { background: var(--store-brand-strong); }
+.catalogMenuToggle svg { transition: transform var(--store-duration-fast) var(--store-ease); }
+.catalogMenuToggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.catalogMenuPanel {
+  --catalog-menu-list: 320px;
+  position: absolute;
+  z-index: 6;
+  inset-block-start: 100%;
+  inset-inline: clamp(11px, 2vw, 24px);
+  display: grid;
+  grid-template-columns: var(--catalog-menu-list);
+  /* One row no taller than the panel: the list of sections scrolls inside it instead of spilling over the page. */
+  grid-template-rows: minmax(0, 1fr);
+  min-height: min(360px, 80vh);
+  max-height: min(80vh, 700px);
+  padding: 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+  box-shadow: var(--store-shadow-lg);
+}
+.catalogMenuPanel[hidden] { display: none; }
+/* The strip between the button and the panel belongs to the menu, so the pointer never leaves it on the way. */
+.catalogMenuPanel::before { content: ""; position: absolute; inset: -16px 0 100%; }
+/* The sections, in one column: a second column would lie between the first and the subsections, and a mouse on
+   its way to the subsections would pick another section. */
+.catalogMenuSections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 4px 0 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--store-border) transparent;
+}
+/* More sections than fit: the bottom edge fades for as long as there is more below. */
+.catalogMenuSections::after {
+  content: "";
+  position: sticky;
+  bottom: 0;
+  flex: 0 0 28px;
+  background: linear-gradient(to bottom, transparent, var(--store-surface));
+  pointer-events: none;
+}
+.catalogMenuSections > li { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; border-radius: var(--store-radius-sm); }
+.catalogMenuSections > li[data-active] { background: var(--store-brand-soft); }
+.catalogMenuSections > li > a {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 4px 4px 10px;
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  font-size: .9rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-decoration: none;
+}
+.catalogMenuSections > li > a img { width: 32px; height: 32px; object-fit: contain; }
+.catalogMenuSections > li > a > svg { justify-self: center; color: var(--store-muted); }
+.catalogMenuSections > li > a:hover,
+.catalogMenuSections > li[data-active] > a { color: var(--store-brand); }
+.catalogMenuSections > li > button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--store-radius-sm);
+  background: transparent;
+  color: var(--store-muted);
+  cursor: pointer;
+}
+.catalogMenuSections > li > button:hover,
+.catalogMenuSections > li > button[aria-expanded="true"] { color: var(--store-brand); }
+.catalogMenuPanel a:focus-visible,
+.catalogMenuPanel button:focus-visible { outline: 3px solid var(--store-brand); outline-offset: -2px; }
+/* The subsections of the section in hand. In the markup they follow their section's row, so the keyboard walks
+   from the row into them; on the screen they fill the panel to the right of the list. */
+.catalogMenuDetail {
+  position: absolute;
+  inset-block: 12px;
+  inset-inline: calc(12px + var(--catalog-menu-list) + 20px) 12px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.catalogMenuDetailTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  text-decoration: none;
+}
+.catalogMenuDetailTitle strong { font-family: var(--store-font-display); font-size: 1.1rem; font-weight: 750; }
+.catalogMenuDetailTitle span { color: var(--store-brand); font-size: .84rem; font-weight: 600; }
+.catalogMenuDetailTitle:hover { background: var(--store-brand-soft); }
+.catalogMenuDetail ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 12px; margin: 0; padding: 0; list-style: none; }
+.catalogMenuDetail li a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 10px;
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  font-size: .9rem;
+  line-height: 1.3;
+  text-decoration: none;
+}
+.catalogMenuDetail li a:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+@media (min-width: 1101px) {
+  .headerMainRow { position: relative; }
+  .catalogMenuToggle { display: inline-flex; }
+  .catalogMenu .headerCatalogButton { padding-inline-end: 14px; border-radius: var(--store-radius-sm) 0 0 var(--store-radius-sm); }
+}
+/* Narrower than that the page is one column and the sections are a tap away on /catalog: no hover panel. */
+@media (max-width: 1100px) {
+  .catalogMenuPanel { display: none; }
 }
 
 /* Wraps the desktop search field so it can be hidden below 768px (the
@@ -331,41 +601,8 @@
    flex child of `.headerRowInner`, exactly as before this wrapper existed. */
 .headerDesktopSearch { display: none; }
 
-/* Mobile-only row 2 content: brand stays put, `.mobileHeaderAddress` +
-   this call button take the desktop search + actions' place on the right —
-   cart and account moved to the fixed bottom tab bar (`.mobileNav`), so this
-   row only ever has to carry "who/where/call". Hidden ≥768px alongside the
-   other mobile-only row content, see the 768px block further down. */
-
-/* Locality + street address, condensed onto one truncated line instead of
-   its own row (that former `.mobileLocationRow` cost a full 44px-floored
-   band by itself). `flex: 1 1 auto` + `min-width: 0` let it absorb
-   whatever width the brand and phone-icon columns leave behind and clip
-   with an ellipsis rather than wrap or push the row taller — the row's
-   height stays governed by the 44px tap targets on either side of it, not
-   by this text. Still a real link to the map, so the information survives
-   the redesign, just without a row of its own. */
-.mobileHeaderAddress {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  flex: 1 1 auto;
-  min-width: 0;
-  gap: 6px;
-  overflow: hidden;
-  color: var(--store-header-muted);
-  font-size: 0.74rem;
-  font-weight: var(--store-weight-medium);
-  line-height: 1.25;
-  text-decoration: none;
-  transition: color var(--store-duration-fast) var(--store-ease);
-}
-.mobileHeaderAddress svg { flex: 0 0 auto; }
-.mobileHeaderAddress span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mobileHeaderAddress:hover,
-.mobileHeaderAddress:focus-visible { color: var(--store-header-text); }
-
-.mobileHeaderActions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.mobileHeaderActions { display: flex; align-items: center; justify-self: end; }
+.mobileMenu,
 .mobileHeaderActions a {
   min-width: 44px;
   min-height: 44px;
@@ -377,21 +614,249 @@
   text-decoration: none;
   transition: background var(--store-duration-fast) var(--store-ease);
 }
+.mobileMenu { justify-self: start; border: 0; background: transparent; cursor: pointer; }
+.mobileMenu:hover,
 .mobileHeaderActions a:hover { background: var(--store-header-control-bg-hover); }
+.mobileHeaderActions svg { width: 19px; height: 19px; flex: none; }
+.mobileMenu svg,
+.mobileHeaderActions svg,
+.headerTopLocation svg { color: var(--store-brand); }
 
-.searchBox { position: relative; flex: 1 1 auto; min-width: 0; max-width: 860px; }
+:global(html):has(.mobileDrawer[open]) { overflow: hidden; }
+.mobileDrawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(360px, 90vw);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: 0 22px 22px 0;
+  background: var(--store-surface);
+  color: var(--store-text);
+}
+.mobileDrawer[open] { animation: drawer-in 220ms var(--store-ease) both; }
+.mobileDrawer[open]::backdrop { animation: drawer-fade 220ms ease both; }
+@keyframes drawer-in { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes drawer-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .mobileDrawer[open],
+  .mobileDrawer[open]::backdrop { animation: none; }
+}
+.mobileDrawer::backdrop { background: rgb(17 20 33 / 48%); }
+.mobileDrawerContent { min-height: 100%; display: flex; flex-direction: column; }
+/* The logo row stays pinned while the list scrolls, and starts below the
+   phone's status bar / camera cut-out instead of running under it. */
+.drawerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 10px) 10px 10px max(16px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--store-border);
+  background: rgb(255 255 255 / 96%);
+  backdrop-filter: blur(8px);
+}
+.drawerHeader > a { display: grid; align-items: center; min-height: 44px; }
+.drawerHeader > button {
+  display: grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--store-bg);
+  color: var(--store-text);
+  cursor: pointer;
+}
+.drawerHeader > button:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+.drawerBrand { display: block; width: auto; height: 36px; }
+.drawerBody {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.drawerAccount {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--store-bg);
+  color: var(--store-text);
+  text-decoration: none;
+}
+.drawerAccount:hover { background: var(--store-brand-soft); }
+.drawerAccountIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--store-brand-soft);
+  color: var(--store-brand);
+}
+.drawerAccount > svg,
+.drawerCatalog li a > svg { color: var(--store-muted); }
+.drawerAccount strong { display: block; font-size: .875rem; font-weight: 650; line-height: 1.3; }
+.drawerAccount small { display: block; margin-top: 2px; color: var(--store-muted); font-size: .76rem; line-height: 1.3; }
+.drawerLocation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  margin-block: 6px 10px;
+  padding: 4px 2px;
+  color: var(--store-text);
+  text-decoration: none;
+}
+.drawerLocation > svg { color: var(--store-brand); }
+.drawerLocation strong { display: block; font-size: .875rem; font-weight: 600; line-height: 1.3; }
+.drawerLocation small { display: block; color: var(--store-muted); font-size: .76rem; line-height: 1.35; }
+.drawerLocation:hover strong { color: var(--store-brand); }
+.drawerCatalog,
+.drawerCustomer { margin-bottom: 14px; }
+.drawerCatalog h2,
+.drawerCustomer h2 { margin: 0 0 6px; font-family: var(--store-font-display); font-size: 1.08rem; font-weight: 750; line-height: 1.3; }
+.drawerCatalog ul,
+.drawerCustomer ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.drawerCatalog li a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 4px 0;
+  color: var(--store-text);
+  font-size: .92rem;
+  font-weight: 500;
+  line-height: 1.3;
+  text-decoration: none;
+}
+.drawerCatalog img { width: 44px; height: 44px; padding: 5px; box-sizing: border-box; border-radius: 12px; background: var(--store-bg); object-fit: contain; }
+/* A section of the drawer: the link to the section and, when it has subsections, a button that unfolds them. */
+.drawerSectionRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.drawerSectionIcon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--store-bg); color: var(--store-muted); }
+.drawerSectionToggle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--store-muted);
+  cursor: pointer;
+}
+.drawerSectionToggle:hover,
+.drawerSectionToggle[aria-expanded="true"] { background: var(--store-brand-soft); color: var(--store-brand); }
+.drawerSectionToggle svg { transition: transform var(--store-duration-fast) var(--store-ease); }
+.drawerSectionToggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.drawerCatalog .drawerSubsections { margin: 0 0 6px 56px; }
+.drawerCatalog .drawerSubsections li a { display: flex; min-height: 44px; padding: 4px 0; font-size: .875rem; font-weight: 400; }
+.drawerMore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--store-bg);
+  color: var(--store-brand);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.drawerAll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  margin-top: 8px;
+  border: 1.5px solid var(--store-brand);
+  border-radius: 12px;
+  color: var(--store-brand);
+  font-family: var(--store-font-display);
+  font-size: .9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.drawerAll:hover { background: var(--store-brand); color: var(--store-on-brand, #fff); }
+.drawerCustomer { padding-top: 14px; border-top: 1px solid var(--store-border); }
+.drawerCustomer a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--store-text);
+  font-size: .92rem;
+  text-decoration: none;
+}
+.drawerCustomer a:hover,
+.drawerCatalog li a:hover { color: var(--store-brand); }
+.drawerContact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--store-border);
+}
+.drawerPhone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--store-text);
+  font-family: var(--store-font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.drawerPhone svg { color: var(--store-brand); }
+.drawerMessengers { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.drawerMessengers a {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--store-bg);
+  color: var(--store-text);
+}
+.drawerMessengers a:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+
+.searchBox { position: relative; flex: 1 1 auto; min-width: 0; }
 
 .searchForm {
   height: 52px;
   display: flex;
   align-items: center;
-  border: 0;
-  border-radius: var(--store-radius-full);
-  background: var(--store-surface);
-  box-shadow: var(--store-shadow-sm);
+  border: 1px solid var(--store-header-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
   transition: box-shadow var(--store-duration-fast) var(--store-ease);
 }
-.searchForm:focus-within { box-shadow: var(--store-shadow-md), 0 0 0 3px color-mix(in srgb, var(--store-accent) 55%, transparent); }
+.searchForm:focus-within { border-color: var(--store-brand); box-shadow: 0 0 0 2px var(--store-brand-soft); }
+.storefront .searchForm input:focus-visible { outline: none; }
 .searchForm svg { flex: 0 0 auto; margin-left: var(--store-space-lg); color: var(--store-muted); }
 .searchForm input {
   flex: 1;
@@ -412,16 +877,17 @@
   margin-right: 6px;
   padding: 0 var(--store-space-md);
   border: 0;
-  border-radius: var(--store-radius-full);
-  background: var(--store-accent);
-  color: var(--store-accent-text);
+  border-radius: 9px;
+  background: var(--store-brand);
+  color: var(--store-on-brand);
   font-size: 0.86rem;
   font-weight: var(--store-weight-bold);
   cursor: pointer;
   transition: filter var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
 }
-.searchForm button:hover { filter: brightness(1.06); }
+.searchForm button:hover { background: var(--store-brand-strong); }
 .searchForm button:active { transform: scale(0.97); }
+.searchAssist { display: none; }
 
 /* Search suggestions — real catalog results only, debounced from
    search-box.tsx. Loading/empty/error states are plain text, never a
@@ -434,7 +900,7 @@
   z-index: 30;
   display: grid;
   gap: 2px;
-  max-height: min(60vh, 420px);
+  max-height: min(64dvh, 520px, calc(100dvh - 156px));
   overflow-y: auto;
   padding: var(--store-space-xs);
   border: 1px solid var(--store-border);
@@ -448,52 +914,55 @@
   to { opacity: 1; transform: none; }
 }
 .searchSuggestionStatus { margin: 0; padding: var(--store-space-sm); color: var(--store-muted); font-size: 0.9rem; }
+.searchSuggestionEmpty { display: grid; gap: 2px; padding: 4px; }
+.searchSuggestionEmpty .searchSuggestionStatus { padding: 8px var(--store-space-sm) 10px; line-height: 1.45; }
+.searchSuggestionEmpty .searchSuggestionAll { margin-top: 0; border-top: 0; background: var(--store-brand); color: #f8faff; text-align: center; }
+.searchSuggestions .searchSuggestionEmpty .searchSuggestionAll:hover { background: var(--store-brand-strong); color: #f8faff; filter: none; }
+.searchSuggestionHelp { display: block; padding: 10px var(--store-space-sm); border-radius: var(--store-radius-sm); color: var(--store-brand); font-size: 0.86rem; font-weight: var(--store-weight-bold); text-align: center; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
+.searchSuggestionHelp:hover { background: var(--store-surface-strong); }
+.searchSuggestions a:focus-visible { outline: 3px solid var(--store-brand); outline-offset: 2px; }
+.searchSuggestionList { display: grid; gap: 2px; }
 .searchSuggestion {
   display: grid;
-  grid-template-columns: 1fr auto;
-  column-gap: var(--store-space-sm);
-  padding: 8px var(--store-space-sm);
+  grid-template-columns: 42px minmax(0, 1fr) minmax(0, auto);
+  grid-template-areas: "image identity price";
+  column-gap: 9px;
+  padding: 7px 8px;
   border-radius: var(--store-radius-sm);
   color: var(--store-text);
   text-decoration: none;
-  transition: background var(--store-duration-fast) var(--store-ease);
 }
 .searchSuggestion:hover,
-.searchSuggestion[data-active] { background: var(--store-surface-strong); }
-.searchSuggestionName { grid-column: 1 / 2; font-weight: var(--store-weight-bold); font-size: 0.92rem; line-height: 1.3; }
-.searchSuggestionMeta { grid-column: 1 / 2; color: var(--store-muted); font-size: 0.78rem; font-family: var(--store-font-mono); }
-.searchSuggestionPrice { grid-column: 2 / 3; grid-row: 1 / span 2; align-self: center; font-variant-numeric: tabular-nums; font-weight: var(--store-weight-black); white-space: nowrap; }
+.searchSuggestion[data-active] { background: var(--store-brand-soft); }
+.searchSuggestionFigure { grid-area: image; align-self: start; min-width: 0; }
+.searchSuggestionMedia { position: relative; width: 42px; height: 42px; background: var(--store-bg); border-radius: 6px; }
+.searchSuggestionMedia img { border-radius: 6px; object-fit: contain; }
+.searchSuggestionIdentity { grid-area: identity; display: grid; align-content: start; gap: 2px; min-width: 0; }
+.searchSuggestionName { font-weight: 650; font-size: .88rem; line-height: 1.3; overflow-wrap: anywhere; }
+.searchSuggestionMeta { color: var(--store-muted); font-size: .76rem; line-height: 1.3; overflow-wrap: anywhere; }
+.searchSuggestionPrice {
+  grid-area: price;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+  font-size: .85rem;
+  font-weight: 650;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.searchSuggestionPrice small { display: block; margin-top: 3px; color: var(--store-muted); font-size: .7rem; font-weight: 500; }
+@media (max-width: 550px) {
+  .searchSuggestion {
+    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-areas: "image identity" "image price";
+    row-gap: 3px;
+  }
+  .searchSuggestionPrice { text-align: start; }
+  .searchSuggestionPrice small { display: inline; margin: 0 0 0 6px; }
+}
 .searchSuggestionAll { display: block; margin-top: 2px; padding: 10px var(--store-space-sm); border-top: 1px solid var(--store-border); border-radius: var(--store-radius-sm); color: var(--store-brand); font-size: 0.86rem; font-weight: var(--store-weight-bold); text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .searchSuggestionAll:hover { background: var(--store-surface-strong); }
 
-/* ---------------- Mobile-only header rows (<768px) ----------------
-   Two stacked rows inside one panel, down from an earlier four (secondary
-   links / brand+phone / locality+address / search) that the owner
-   flagged a third time as "eating most of the phone screen before any
-   content appears". Padding on those four rows had already been trimmed
-   to 1-4px in an earlier pass — the floor was three separate 44px tap
-   targets stacked in three separate rows (3 x 44 = 132px, non-negotiable
-   on its own), so the only way to cut further was structural: merge the
-   secondary-links row and the locality/address row into the brand row
-   instead of giving each its own band. What remains:
-   - `.headerMainRow` (shared with desktop — see `.mobileHeaderAddress` /
-     `.mobileHeaderActions` above): brand, condensed address, phone icon,
-     all sharing one 44px-tall content band.
-   - `.mobileSearchRow`: the search field alone (the second row, an
-     expert-CTA, was removed outright in an earlier pass — see
-     `StoreHeader`'s own docstring in store-shell.tsx).
-   Both hidden ≥768px in the 768px block below, where the two-row desktop
-   layout (`.headerTopRow` / `.headerMainRow`) takes over instead.
-
-   Every row's content is still floored by a real 44px tap target (the
-   brand link, the address/phone link, or the 52px search field) — that
-   floor is non-negotiable (WCAG 2.2 AA target size). `padding-block` stays
-   trimmed to the bare minimum that still reads as a row rather than the
-   target bleeding into its neighbour: 2px on the brand row (now carrying
-   the safe-area-inset-top padding that used to live on the removed links
-   row, since this is the panel's actual first row again), 4px on the
-   search row. */
-
+/* The mobile search stays visible when the main row collapses. */
 .mobileSearchRow { display: block; }
 .mobileSearchRow .headerRowInner { padding-block: 4px; }
 
@@ -502,18 +971,26 @@
 
 .main { flex: 1; }
 
-.page { width: var(--store-container); margin: 0 auto; }
+/* Same breathing room under the header as the catalog pages
+   (catalog-layout.module.css .page), so no page title sits flush against it. */
+.page { width: var(--store-container); margin: 0 auto; padding-block: clamp(20px, 3vw, 42px) clamp(44px, 6vw, 68px); }
 
+/* One heading scale for every content page — the same order of size as the
+   catalog's h1, not a poster-sized display line, small enough on a phone
+   that «конфиденциальности» fits whole instead of pushing the page sideways. */
+.pageTitle { margin-bottom: clamp(20px, 3vw, 32px); }
 .pageTitle h1,
 .productInfo h1 {
   margin: 0;
-  max-width: 780px;
+  max-width: 820px;
   color: var(--store-text);
-  font-size: clamp(2.25rem, 5.5vw, 4.8rem);
+  font-size: clamp(1.4rem, 1rem + 2.2vw, 2.6rem);
   font-weight: var(--store-weight-black);
-  line-height: 1;
-  letter-spacing: var(--store-tracking-tighter);
+  line-height: 1.12;
+  letter-spacing: var(--store-tracking-tight);
+  overflow-wrap: break-word;
 }
+.pageTitle > p:not(.eyebrow) { max-width: 680px; margin: 12px 0 0; color: var(--store-muted); font-size: 1rem; line-height: 1.55; }
 
 .heroActions { display: flex; flex-wrap: wrap; gap: var(--store-space-sm); margin-top: var(--store-space-lg); }
 .primaryAction,
@@ -525,7 +1002,7 @@
   justify-content: center;
   padding: 0 var(--store-space-lg);
   border: 1px solid transparent;
-  border-radius: var(--store-radius-sm);
+  border-radius: var(--store-radius-full);
   font-weight: var(--store-weight-bold);
   text-decoration: none;
   transition: background var(--store-duration-fast) var(--store-ease), border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
@@ -547,10 +1024,12 @@
 
 /* ---------------- Home ---------------- */
 
-.home { display: flex; flex-direction: column; gap: clamp(40px, 6vw, 96px); padding: var(--store-space-lg) 0 clamp(56px, 8vw, 112px); }
+.home { display: flex; flex-direction: column; gap: clamp(44px, 5.5vw, 76px); padding: var(--store-space-lg) 0 clamp(56px, 8vw, 96px); }
+.home [data-reveal] { transition: opacity 580ms var(--store-ease), transform 580ms var(--store-ease); }
+.home [data-reveal-state="pending"] { opacity: 0; transform: translateY(24px); }
+.home [data-reveal-state="visible"] { opacity: 1; transform: none; }
 
-/* Promo carousel: dot-indicated, swipe/scroll-snap, no autoplay (so it
-   never fights prefers-reduced-motion or WCAG 2.2.2). */
+/* Native swipe carousel; rotation is controlled by visibility and user intent. */
 .promo { width: var(--store-container); margin: 0 auto; }
 .promoViewport { position: relative; }
 .promoTrack {
@@ -560,7 +1039,8 @@
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   border-radius: var(--store-radius-lg);
-  touch-action: pan-y;
+  touch-action: pan-x pan-y pinch-zoom;
+  overscroll-behavior-x: contain;
 }
 .promoTrack::-webkit-scrollbar { display: none; }
 
@@ -600,29 +1080,29 @@ button.promoControl {
   position: relative;
   flex: 0 0 100%;
   min-width: 0;
-  /* Matches the source banners exactly (1600x450 = 32/9), so `cover` has
-     nothing to crop and the whole artwork is visible. A taller box such as
-     16/6 silently cut about a quarter off the sides — which is what the
-     owner saw as the banner "не влезает". */
   aspect-ratio: 32 / 9;
+  min-height: 320px;
   scroll-snap-align: start;
-  display: block;
+  display: grid;
+  align-items: center;
   overflow: hidden;
   border-radius: var(--store-radius-lg);
   color: var(--store-header-text);
   text-decoration: none;
   background: var(--store-header-bg-strong);
 }
-.promoSlide img { object-fit: cover; }
+.promoSlide img { object-fit: cover; object-position: right center; }
 .promoSlideScrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(0deg, color-mix(in srgb, var(--store-header-bg-strong) 88%, transparent) 0%, color-mix(in srgb, var(--store-header-bg-strong) 45%, transparent) 46%, transparent 75%);
+  background: linear-gradient(90deg, rgb(14 11 61 / 72%) 0%, rgb(14 11 61 / 34%) 48%, transparent 75%);
 }
-.promoSlideBody { position: absolute; inset: auto var(--store-space-lg) var(--store-space-lg) var(--store-space-lg); display: grid; gap: 6px; max-width: 560px; }
-.promoSlideBody h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 1.9rem); font-weight: var(--store-weight-black); line-height: 1.12; letter-spacing: var(--store-tracking-tight); }
-.promoSlideBody p { margin: 0; color: var(--store-header-muted); font-size: 0.92rem; line-height: 1.45; }
-.promoSlideCta { justify-self: start; margin-top: 6px; padding: 8px 16px; border-radius: var(--store-radius-full); background: var(--store-accent); color: var(--store-accent-text); font-size: 0.84rem; font-weight: var(--store-weight-bold); }
+.promoSlideBody { position: relative; display: grid; justify-items: start; align-content: center; gap: 14px; width: 57%; padding: 40px 48px; }
+.promoSlideBody h2 { margin: 0; font-size: clamp(1.75rem, 3vw, 2.5rem); font-weight: 800; line-height: 1.12; letter-spacing: var(--store-tracking-tight); text-wrap: balance; }
+.promoSlideBody p { margin: 0; max-width: 44ch; color: rgb(236 236 255 / 88%); font-size: 0.98rem; line-height: 1.55; }
+.promoSlideCta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; margin-top: 8px; padding: 10px 22px 10px 24px; border-radius: var(--store-radius-full); background: var(--store-accent); color: var(--store-accent-text); font-size: 0.9rem; font-weight: 700; box-shadow: 0 8px 22px -10px rgb(245 196 0 / 70%); transition: transform 220ms var(--store-ease), background 220ms var(--store-ease); }
+.promoSlideCta svg { flex: 0 0 auto; transition: transform 220ms var(--store-ease); }
+.promoSlide:active .promoSlideCta { transform: scale(0.97); }
 /* Owner: "кружки под каруселью меньше" — the dot glyph itself shrinks
    (8px -> 5px) and the row sits tighter (no inter-button gap), but the
    44px tap target is untouched: each button keeps a 44px min box via
@@ -633,6 +1113,47 @@ button.promoControl {
 .promoDot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--store-border); transition: background var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease); }
 .promoDot[data-active="true"]::before { background: var(--store-brand); transform: scale(1.3); }
 
+/* Promo + benefit strip read as one lead block, tighter than the
+   section rhythm below it. */
+/* `minmax(0, 1fr)` matters: an `auto` track would size to the carousel
+   track's max-content (every slide side by side) and push it off-screen. */
+.homeLead { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--store-space-sm); }
+
+/* Benefit strip — four compact, linked facts under the hero, the way
+   parts retailers put "why us" right under the banner. */
+.benefits { width: var(--store-container); margin: 0 auto; }
+/* One panel split by hairlines — an info bar, not four floating cards,
+   and the icon is a plain inline glyph, not a tinted tile. */
+.benefitList {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+  list-style: none;
+}
+.benefitList li { min-width: 0; display: flex; }
+.benefitList li + li { border-left: 1px solid var(--store-border); }
+.benefit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  color: var(--store-text);
+  text-decoration: none;
+  transition: background var(--store-duration-base) var(--store-ease);
+}
+.benefitIcon { flex: 0 0 auto; display: block; margin-top: 1px; color: var(--store-brand); }
+.benefitIcon svg { display: block; }
+.benefitCopy { min-width: 0; display: grid; gap: 3px; }
+.benefitTitle { font-size: 0.9rem; font-weight: 700; line-height: 1.3; }
+.benefitText { color: var(--store-muted); font-size: 0.82rem; line-height: 1.4; }
+
 /* Category tiles — the site's main navigation pattern. Light-grey rounded
    cards, a real product-group photo on top (public/categories/*.webp),
    label centred beneath. 3 across on phones and tablets per the
@@ -641,53 +1162,71 @@ button.promoControl {
 .categorySection { width: var(--store-container); margin: 0 auto; }
 .categoryGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--store-space-md); }
 .categoryTile {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--store-space-sm);
-  padding: var(--store-space-lg) var(--store-space-sm);
-  border: 1px solid transparent;
-  border-radius: var(--store-radius-lg);
-  background: var(--store-surface-strong);
+  gap: var(--store-space-md);
+  padding: 24px 16px 22px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
   color: var(--store-text);
   text-align: center;
   text-decoration: none;
-  transition: background var(--store-duration-base) var(--store-ease), box-shadow var(--store-duration-base) var(--store-ease), transform var(--store-duration-base) var(--store-ease);
+  transition: border-color 250ms var(--store-ease), box-shadow 250ms var(--store-ease);
 }
-.categoryTile:hover { background: var(--store-surface); box-shadow: var(--store-shadow-md); transform: translateY(-3px); }
-.categoryTileMedia { display: grid; place-items: center; width: 100%; max-width: 108px; aspect-ratio: 1 / 1; }
-.categoryTileMedia img { width: 100%; height: 100%; object-fit: contain; }
-.categoryTileLabel { font-size: 0.86rem; font-weight: var(--store-weight-bold); line-height: 1.3; }
-.categoryMore { display: flex; justify-content: center; margin-top: var(--store-space-md); }
+/* The product photo stands on the card itself — no tinted tile behind it. */
+.categoryTileMedia {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 150px;
+  aspect-ratio: 1 / 1;
+}
+.categoryTileMedia img {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 320ms var(--store-ease);
+}
+.categoryTileLabel {
+  display: grid;
+  align-items: center;
+  min-height: 2.7em;
+  max-width: 22ch;
+  font-size: 0.94rem;
+  font-weight: 700;
+  line-height: 1.35;
+  transition: color 200ms var(--store-ease);
+}
+.categoryMore { display: flex; justify-content: center; margin-top: var(--store-space-lg); }
 
-.sectionHead { max-width: 640px; margin: 0 0 var(--store-space-xl); }
-.sectionHead h2 { margin: 0; color: var(--store-text); font-size: clamp(1.6rem, 3.4vw, 2.35rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); line-height: 1.12; }
-.sectionHead p { margin: 10px 0 0; color: var(--store-muted); font-size: 1rem; line-height: 1.55; }
+.sectionHead { max-width: 680px; margin: 0 0 var(--store-space-xl); }
+.sectionHead h2 { margin: 0; color: var(--store-text); font-size: clamp(1.7rem, 3.2vw, 2.5rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); line-height: 1.15; }
+.sectionHead p { margin: 12px 0 0; color: var(--store-muted); font-size: 1rem; line-height: 1.55; }
 
-/* Ink-blue feature panel, like the header band, so it reads as a distinct
-   "signage" surface against the rest of the (light) page. Three blocks
-   that each do something (live open/closed status, a real VIN/article
-   search, a real link to expert help — see `FeaturePanel` in
-   home-sections.tsx) replaced the old 2x3 grid of icon-in-a-circle claim
-   tiles here; `.quickBlock*` below is that replacement. */
-.featurePanel { background: var(--store-header-bg-strong); color: var(--store-header-text); }
-.featurePanelInner { width: var(--store-container); margin: 0 auto; padding: clamp(28px, 5vw, 48px) 0; }
-.featurePanelHead { margin: 0 0 var(--store-space-lg); color: var(--store-header-muted); font-size: 0.76rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
-
-.quickBlocks { display: grid; grid-template-columns: 1fr; gap: var(--store-space-md); }
-.quickBlock { display: flex; flex-direction: column; align-items: flex-start; gap: var(--store-space-2xs); padding: var(--store-space-lg); border: 1px solid var(--store-header-border); border-radius: var(--store-radius); background: var(--store-header-control-bg); }
-
-.quickBlockTitle { margin: 0; font-size: 1.02rem; font-weight: var(--store-weight-black); line-height: 1.3; }
-.quickBlockText { margin: 0; color: var(--store-header-muted); font-size: 0.88rem; line-height: 1.4; }
-.quickBlockHint { margin: 2px 0 0; color: var(--store-header-muted); font-size: 0.78rem; line-height: 1.42; }
+/* A local store with clear conditions, kept on the same light surface. */
+.featurePanel { width: var(--store-container); margin: 0 auto; border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); color: var(--store-text); }
+.featurePanelInner { display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(32px, 6vw, 88px); padding: clamp(28px, 4vw, 44px) clamp(24px, 4vw, 48px); }
+.featurePanelHead { margin: 0 0 22px; font-size: clamp(1.7rem, 3vw, 2.3rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); line-height: 1.15; }
+.featureIntro { min-width: 0; }
+.quickBlocks { display: grid; grid-template-columns: 1fr; gap: var(--store-space-lg); }
+.quickBlock { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.quickBlocks .quickBlock + .quickBlock { padding-top: var(--store-space-lg); border-top: 1px solid var(--store-border); }
+.quickBlockTitle { margin: 0; font-size: 1.12rem; font-weight: var(--store-weight-bold); line-height: 1.35; }
+.quickBlockText { margin: 0; max-width: 52ch; color: var(--store-muted); font-size: 0.94rem; line-height: 1.65; }
+.quickBlockHint { margin: 2px 0 0; color: var(--store-muted); font-size: 0.82rem; line-height: 1.5; }
 
 /* Live status dot — real-time state, not decoration, so it stays a plain
    colour rather than an icon-in-a-circle: grey while closed, the shop's
    `--store-success` green the instant `ShopStatusBlock` computes "open". */
 .quickBlockStatusLine { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
-.statusDot { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%; background: var(--store-header-muted); }
+.statusDot { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%; background: var(--store-muted); }
 .statusDot[data-open="true"] { background: var(--store-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--store-success) 30%, transparent); }
-.quickBlockStatusDetail { color: var(--store-header-muted); font-size: 0.88rem; }
+.quickBlockStatusDetail { color: var(--store-muted); font-size: 0.88rem; }
 
 .quickBlockSearch { width: 100%; margin: 2px 0; }
 
@@ -701,77 +1240,29 @@ button.promoControl {
   font-weight: var(--store-weight-bold);
   text-decoration: none;
 }
-.quickBlockLink { padding-top: var(--store-space-2xs); color: var(--store-accent); font-size: 0.88rem; text-decoration: underline; text-underline-offset: 2px; }
+.quickBlockLink { padding-top: var(--store-space-2xs); color: var(--store-brand); font-size: 0.88rem; text-decoration: underline; text-underline-offset: 2px; }
 .quickBlockCta { justify-content: center; padding: 0 22px; border-radius: var(--store-radius-full); background: var(--store-accent); color: var(--store-accent-text); font-size: 0.88rem; transition: filter var(--store-duration-fast) var(--store-ease); }
 .quickBlockCta:hover { filter: brightness(1.06); }
 
-/* The former `.catalogTeaser*` block is gone: it and `.helpBlock` sat next to
-   each other on the home page making the same "we'll help you find the part"
-   point, so they were merged into one section. Its only rule worth keeping
-   was the action row, which lives on below as `.helpBlockActions`. */
+/* Editorial help panel: image proportions are reserved before lazy loading. */
+.helpBlock { width: var(--store-container); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(28px, 4vw, 56px); align-items: center; padding: 24px; border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
+.helpBlockMedia { position: relative; aspect-ratio: 3 / 2; border-radius: var(--store-radius); overflow: hidden; background: var(--store-surface-strong); }
+.helpBlockMedia img { object-fit: cover; }
+.helpBlockBody { min-width: 0; display: grid; gap: var(--store-space-md); padding: 12px 20px 12px 0; }
+.helpBlockBody h2 { margin: 0; max-width: 16ch; font-size: clamp(1.7rem, 3vw, 2.5rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); line-height: 1.12; text-wrap: balance; }
+.helpBlockBody p { margin: 0; max-width: 44ch; color: var(--store-muted); font-size: 1rem; line-height: 1.7; }
+.helpBlockActions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 8px; }
+.helpPhone { display: inline-flex; align-items: center; min-height: 44px; color: var(--store-brand); font-size: 0.94rem; font-weight: var(--store-weight-bold); text-decoration-thickness: 1px; text-underline-offset: 5px; }
 
-/* Help block — light, full-width primary CTA. */
-.helpBlock { width: var(--store-container); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: clamp(28px, 5vw, 56px); align-items: center; padding: clamp(24px, 4vw, 40px); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
-
-/* Brand panel, not a photo: an ink-blue gradient (the same brand tokens as
-   the header/feature-panel signage) carrying the shop's own logotype, a
-   faint diagonal hatch and an accent-gold glow for texture so it reads as
-   deliberate signage rather than an empty rectangle. */
-.helpBlockMedia {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  border-radius: var(--store-radius);
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--store-brand) 0%, var(--store-header-bg-strong) 100%);
+@media (hover: hover) and (pointer: fine) {
+  .categoryTile:hover { border-color: color-mix(in srgb, var(--store-brand) 38%, var(--store-border)); box-shadow: var(--store-shadow-sm); }
+  .categoryTile:hover .categoryTileMedia img { transform: scale(1.04); }
+  .categoryTile:hover .categoryTileLabel { color: var(--store-brand); }
+  .promoSlide:hover .promoSlideCta { background: var(--store-accent-hover); }
+  .promoSlide:hover .promoSlideCta svg { transform: translateX(3px); }
+  .benefit:hover { background: var(--store-surface-strong); }
+  .benefit:hover .benefitTitle { color: var(--store-brand); }
 }
-.helpBlockMedia::before {
-  content: "";
-  position: absolute;
-  inset: -30%;
-  background: radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--store-accent) 30%, transparent) 0%, transparent 55%);
-}
-.helpBlockMedia::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--store-header-text) 7%, transparent) 0 1px, transparent 1px 26px);
-}
-.helpBlockMark { position: relative; width: 62%; color: color-mix(in srgb, var(--store-header-text) 88%, transparent); }
-.helpBlockBody { display: grid; gap: var(--store-space-sm); }
-.helpBlockBody h2 { margin: 0; font-size: clamp(1.4rem, 3vw, 2rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); line-height: 1.15; }
-.helpBlockBody p { margin: 0; color: var(--store-muted); line-height: 1.55; }
-.helpBlockActions { display: flex; flex-wrap: wrap; gap: var(--store-space-sm); margin-top: 6px; }
-
-.page { padding: 34px 0 80px; }
-.pageTitle { margin-bottom: var(--store-space-xl); }
-.pageTitle h1 { font-size: clamp(2.1rem, 5vw, 3.8rem); }
-.pageTitle p { max-width: 720px; margin: 14px 0 0; color: var(--store-muted); line-height: 1.6; }
-
-/* Category tree browsing — the chip grid of child categories shown at every
-   level of /catalog and /catalog/[...slug] (no per-category photography
-   exists for arbitrary 1C categories, unlike the home page's photo tiles, so
-   these are plain text chips with a roll-up product count). */
-.categoryChipSection { margin-bottom: var(--store-space-xl); }
-.categoryChipGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--store-space-sm); }
-.categoryChip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--store-space-sm);
-  min-height: 52px;
-  padding: 12px var(--store-space-md);
-  border: 1px solid var(--store-border);
-  border-radius: var(--store-radius-sm);
-  background: var(--store-surface);
-  color: var(--store-text);
-  font-weight: var(--store-weight-bold);
-  text-decoration: none;
-  transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
-}
-.categoryChip:hover { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); box-shadow: var(--store-shadow-xs); transform: translateY(-2px); }
-.categoryChipCount { flex: 0 0 auto; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-medium); font-variant-numeric: tabular-nums; }
 
 /* ---------------- Catalog: filter rail + results ----------------
    `/catalog` and `/catalog/[...slug]` share a two-column layout: a left
@@ -791,9 +1282,31 @@ button.promoControl {
 .filterRailSummary span:first-child { display: flex; align-items: center; gap: 8px; }
 .filterRailSummary svg { flex: 0 0 auto; color: var(--store-muted); transition: transform var(--store-duration-fast) var(--store-ease); }
 .filterRailPanel[open] > .filterRailSummary svg { transform: rotate(180deg); }
-.filterRailBadge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--store-radius-full); background: var(--store-brand); color: #f8faff; font-size: 0.72rem; font-weight: var(--store-weight-black); font-variant-numeric: tabular-nums; }
+.filterRailBadge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--store-radius-full); background: var(--store-brand); color: #f8faff; font-size: .75rem; font-weight: var(--store-weight-black); font-variant-numeric: tabular-nums; }
 .filterRailBody { display: grid; gap: var(--store-space-lg); padding: 0 var(--store-space-md) var(--store-space-md); }
 .catalogMain { min-width: 0; display: grid; gap: var(--store-space-lg); align-content: start; }
+
+/* Section list inside the filter rail: one link per row, product count on
+   the right, so the tree reads like a catalog menu. */
+.categoryChipSection { margin-top: 4px; }
+.categoryChipGrid { display: grid; gap: 2px; }
+.categoryChip {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--store-space-sm);
+  padding: 6px 10px;
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.3;
+  text-decoration: none;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.categoryChip:hover { background: var(--store-surface-strong); color: var(--store-brand); }
+.categoryChipCount { flex: 0 0 auto; min-width: 26px; padding: 1px 8px; border-radius: var(--store-radius-full); background: var(--store-surface-strong); color: var(--store-muted); font-size: 0.76rem; font-variant-numeric: tabular-nums; text-align: center; }
 
 .ownResultsSection,
 .supplierSection { display: grid; gap: var(--store-space-md); }
@@ -816,7 +1329,7 @@ button.promoControl {
 .supplierPartList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); align-items: start; gap: var(--store-space-md); }
 .supplierPartCard { min-width: 0; display: grid; align-content: start; gap: var(--store-space-sm); padding: var(--store-space-md); border: 1px dashed var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
 .supplierPartHead { display: grid; align-content: start; gap: 4px; }
-.supplierBadge { justify-self: start; align-self: start; padding: 3px 10px; border-radius: var(--store-radius-full); background: color-mix(in srgb, var(--store-accent) 24%, var(--store-surface)); color: var(--store-accent-text); font-size: 0.68rem; font-weight: var(--store-weight-black); letter-spacing: 0.03em; text-transform: uppercase; }
+.supplierBadge { justify-self: start; align-self: start; padding: 3px 10px; border-radius: var(--store-radius-full); background: color-mix(in srgb, var(--store-accent) 24%, var(--store-surface)); color: var(--store-accent-text); font-size: .75rem; font-weight: var(--store-weight-black); letter-spacing: 0.03em; text-transform: uppercase; }
 .supplierPartMeta { margin: 0; color: var(--store-muted); font-size: 0.86rem; overflow-wrap: anywhere; }
 .supplierPartName { margin: 0; color: var(--store-text); font-size: 1.02rem; font-weight: var(--store-weight-medium); line-height: 1.35; }
 
@@ -825,7 +1338,7 @@ button.promoControl {
 .supplierStockPrice { font-variant-numeric: tabular-nums; font-size: 1.05rem; font-weight: var(--store-weight-black); color: var(--store-text); }
 .supplierStockQuantity,
 .supplierStockDelivery { color: var(--store-muted); font-size: 0.8rem; }
-.supplierWaitlistButton { min-height: 44px; margin-left: auto; padding: 0 var(--store-space-md); border: 1px solid var(--store-brand); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-brand); font-weight: var(--store-weight-bold); cursor: pointer; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.supplierWaitlistButton { min-height: 44px; margin-left: auto; padding: 0 20px; border: 1px solid var(--store-brand); border-radius: var(--store-radius-full); background: var(--store-surface); color: var(--store-brand); font-weight: var(--store-weight-bold); cursor: pointer; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
 .supplierWaitlistButton:hover { background: var(--store-brand); color: #f8faff; }
 
 /* The "Ещё N предложений" disclosure that collapses every stock line past
@@ -841,15 +1354,16 @@ button.promoControl {
 .supplierMoreBody { display: grid; gap: var(--store-space-sm); padding-top: var(--store-space-sm); }
 
 .supplierCrossList { display: grid; gap: var(--store-space-sm); padding-top: var(--store-space-sm); border-top: 1px solid var(--store-border); }
-.supplierCrossLabel { margin: 0; color: var(--store-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.supplierCrossLabel { margin: 0; color: var(--store-muted); font-size: .75rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
 .supplierCrossItem { display: grid; gap: 4px; padding-left: var(--store-space-sm); border-left: 3px solid var(--store-surface-strong); }
 .supplierCrossNoStock { margin: 0; color: var(--store-muted); font-size: 0.82rem; }
 
-.supplierWaitlistDialog { width: min(480px, calc(100% - 24px)); margin: auto; padding: var(--store-space-lg); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); color: var(--store-text); box-shadow: var(--store-shadow-lg); }
-.supplierWaitlistDialog::backdrop { background: rgb(9 16 31 / 62%); }
+.supplierWaitlistDialog { width: min(500px, calc(100% - 28px)); max-height: calc(100dvh - 32px); margin: auto; padding: 28px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); color: var(--store-text); box-shadow: var(--store-shadow-lg); }
+.supplierWaitlistDialog[open] { animation: storeDialogAppear 160ms var(--store-ease); }
+.supplierWaitlistDialog::backdrop { background: rgb(18 19 43 / 48%); }
 .supplierWaitlistDialogHead { display: flex; align-items: center; justify-content: space-between; gap: var(--store-space-md); margin-bottom: var(--store-space-sm); }
 .supplierWaitlistDialogHead h2 { margin: 0; font-weight: var(--store-weight-black); }
-.supplierWaitlistDialogHead button { min-height: 42px; padding: 0 var(--store-space-sm); border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface-strong); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease); }
+.supplierWaitlistDialogHead button { min-height: 44px; padding: 0 17px; border: 1px solid var(--store-border); border-radius: var(--store-radius-full); background: var(--store-surface); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease); }
 .supplierWaitlistDialogHead button:hover { border-color: var(--store-brand); }
 .supplierWaitlistDialogPart { margin: 0; color: var(--store-text); font-weight: var(--store-weight-bold); line-height: 1.4; }
 .supplierWaitlistDialogPrice { margin: 4px 0 var(--store-space-md); color: var(--store-muted); font-size: 0.9rem; }
@@ -859,10 +1373,12 @@ button.promoControl {
 .field label { font-size: 0.82rem; font-weight: var(--store-weight-bold); }
 .field input,
 .field select,
-.field textarea { width: 100%; min-height: 44px; padding: 0 var(--store-space-sm); border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); font-size: 1rem; transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease); }
+.field textarea { width: 100%; min-width: 0; min-height: 48px; padding: 0 var(--store-space-sm); border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); font-size: 1rem; transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease); }
 .field input:hover,
 .field select:hover,
 .field textarea:hover { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); }
+.field :is(input,select,textarea):focus { border-color: var(--store-brand); background-color: var(--store-surface); }
+.field input:disabled { background: var(--store-surface-strong); color: var(--store-muted); }
 .field textarea { min-height: 116px; padding-block: 11px; resize: vertical; line-height: 1.45; }
 .field input::placeholder { color: var(--store-muted); opacity: 1; }
 .field textarea::placeholder { color: var(--store-muted); opacity: 1; }
@@ -903,11 +1419,13 @@ button.promoControl {
   text-align: center;
   text-transform: uppercase;
 }
-.productVisualLarge { aspect-ratio: 1 / 1; border-radius: var(--store-radius-lg); }
+.productVisualLarge { aspect-ratio: 1 / 1; border-radius: var(--store-radius-lg); background: var(--store-bg); }
 .productVisual img,
-.productVisualLarge img { object-fit: contain; padding: var(--store-space-md); background: var(--store-surface); }
+.productVisualLarge img { object-fit: contain; padding: var(--store-space-md); }
+.productVisualLarge > svg { width: 42px; height: 42px; }
+.productGallery > small { margin-top: 0; font-size: .83rem; }
 .productBody { min-width: 0; display: grid; align-content: start; gap: var(--store-space-2xs); padding: var(--store-space-md); }
-.productMeta { margin: 0; color: var(--store-muted); font-family: var(--store-font-mono); font-size: 0.78rem; overflow-wrap: anywhere; }
+.productMeta { margin: 0; color: var(--store-muted); font-size: 0.78rem; overflow-wrap: anywhere; }
 .productBrandArticle { margin: 0; color: var(--store-muted); font-size: 0.88rem; font-weight: var(--store-weight-bold); letter-spacing: 0.01em; overflow-wrap: anywhere; }
 .productBrandArticle strong { color: var(--store-brand); font-weight: var(--store-weight-black); }
 .productName { margin: 0; color: var(--store-text); font-size: 1.05rem; font-weight: var(--store-weight-medium); line-height: 1.35; }
@@ -926,10 +1444,7 @@ button.promoControl {
 .emptyState,
 .errorState,
 .loadingState { position: relative; min-height: 280px; display: grid; place-content: center; gap: 10px; padding: var(--store-space-xl); border: 1px dashed var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); text-align: center; }
-.emptyState::before,
-.errorState::before,
 .loadingState::before { content: ""; justify-self: center; width: 30px; height: 3px; border-radius: var(--store-radius-full); background: var(--store-brand); }
-.errorState::before { background: var(--store-danger); }
 .loadingState::before { background: var(--store-muted); animation: store-pulse 1.4s var(--store-ease) infinite; }
 .emptyState h2,
 .errorState h2,
@@ -948,12 +1463,40 @@ button.promoControl {
 .breadcrumbs a { color: inherit; }
 .breadcrumbs a:hover { color: var(--store-brand); }
 .breadcrumbs span[aria-current] { overflow-wrap: anywhere; }
-.productLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 0.85fr); gap: clamp(30px, 6vw, 70px); align-items: start; }
-.productInfo { display: grid; gap: var(--store-space-lg); }
-.productInfo h1 { font-size: clamp(2rem, 4vw, 3.25rem); overflow-wrap: anywhere; }
-.productInfo .productPrice { font-size: clamp(1.8rem, 4vw, 2.7rem); }
-.productNote { margin: 0; padding: var(--store-space-md); border-left: 4px solid var(--store-accent); border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0; background: var(--store-surface-strong); color: var(--store-muted); line-height: 1.55; }
-.productFulfillment { display: grid; gap: var(--store-space-sm); margin: 0; padding: 0; border-top: 1px solid var(--store-border); }
+.productLayout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr); gap: clamp(28px, 5vw, 64px); align-items: start; }
+.productInfo { display: grid; align-content: start; gap: var(--store-space-md); }
+.productInfo h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.1rem); overflow-wrap: anywhere; line-height: 1.08; letter-spacing: var(--store-tracking-tight); }
+.productInfo .productBrandArticle { font-size: 0.92rem; }
+.productInfo .productPrice { margin-top: 0; font-size: clamp(1.8rem, 4vw, 2.55rem); line-height: 1.1; }
+.productNote { margin: 0; padding: var(--store-space-md); border: 1px solid color-mix(in srgb, var(--store-accent) 50%, var(--store-border)); border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-accent) 9%, var(--store-surface)); color: var(--store-muted); line-height: 1.55; }
+.productHelp { display: grid; gap: 4px; padding: var(--store-space-md); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
+.productHelp > strong { font-size: 0.96rem; }
+.productHelp > span { color: var(--store-muted); font-size: 0.88rem; line-height: 1.4; }
+.productHelp .secondaryAction { justify-self: start; min-height: 42px; margin-top: 2px; }
+.breadcrumbStep { display: inline-flex; gap: var(--store-space-xs); }
+.productGallery { min-width: 0; display: grid; gap: var(--store-space-sm); }
+.productThumbs { display: flex; flex-wrap: wrap; gap: var(--store-space-xs); }
+.productThumb { position: relative; width: 72px; height: 72px; padding: 0; overflow: hidden; border: 1.5px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease); }
+.productThumb img { object-fit: contain; padding: 6px; }
+.productThumb:hover { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); }
+.productThumb[aria-pressed="true"] { border-color: var(--store-brand); }
+.productSku { font-family: var(--store-font-mono); color: var(--store-text); }
+.productBuyBox { display: grid; gap: var(--store-space-md); padding: clamp(18px, 2.5vw, 24px); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); box-shadow: var(--store-shadow-sm); }
+.productBuyRow { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px var(--store-space-md); }
+.productBuyBox .primaryAction { width: 100%; min-height: 52px; border-radius: var(--store-radius-full); }
+.productInfo .productBuyBox :global(.storefront-add-cart) { margin-top: 0; border-radius: var(--store-radius-sm); }
+.productBuyBox .productFulfillment { border-top: 1px solid var(--store-border); }
+.productBuyBox .productFulfillmentItem:last-child { padding-bottom: 0; border-bottom: 0; }
+.productDetails { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--store-space-lg); margin-top: clamp(32px, 5vw, 56px); }
+.productSection { min-width: 0; padding: clamp(20px, 3vw, 28px); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
+.productSection h2 { margin: 0 0 var(--store-space-md); font-size: 1.3rem; }
+.productSpecs { margin: 0; }
+.productSpecs div { display: grid; grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr); gap: var(--store-space-md); padding: 10px 0; border-bottom: 1px solid var(--store-border); }
+.productSpecs div:last-child { border-bottom: 0; }
+.productSpecs dt { color: var(--store-muted); font-size: 0.9rem; }
+.productSpecs dd { margin: 0; color: var(--store-text); font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; }
+.productDescription { margin: 0; color: var(--store-text); line-height: 1.7; white-space: pre-line; }
+.productFulfillment { display: grid; gap: var(--store-space-sm); margin: 0; padding: 0; border-top: 1px solid var(--store-border); list-style: none; }
 .productFulfillmentItem { display: flex; align-items: flex-start; gap: var(--store-space-sm); padding: var(--store-space-md) 0; border-bottom: 1px solid var(--store-border); }
 .productFulfillmentItem svg { flex: 0 0 auto; margin-top: 2px; color: var(--store-brand); }
 .productFulfillmentItem strong { display: block; color: var(--store-text); font-size: 0.94rem; }
@@ -964,6 +1507,24 @@ button.promoControl {
 .contentPage p,
 .contentPage li { color: var(--store-muted); line-height: 1.65; }
 .contentPage a { color: var(--store-brand); }
+.deliveryQuickInfo { margin: 24px 0 12px; padding: clamp(18px, 3vw, 28px); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
+.deliveryQuickGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border-radius: var(--store-radius-sm); background: var(--store-border); }
+.deliveryQuickItem { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 20px; background: var(--store-surface); }
+.deliveryQuickItem strong { color: var(--store-text); font-size: 1.08rem; line-height: 1.35; }
+.deliveryQuickItem > span:not(.deliveryQuickLabel) { color: var(--store-muted); font-size: 0.92rem; line-height: 1.45; }
+.deliveryQuickLabel { color: var(--store-brand); font-size: 0.76rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.deliveryQuickActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.deliveryQuickActions a { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 0 16px; border-radius: 999px; font-size: 0.91rem; font-weight: var(--store-weight-bold); text-decoration: none; }
+.deliveryQuickActions a.primaryAction { color: var(--store-on-brand); }
+.deliveryQuickActions a.secondaryAction { border: 1px solid var(--store-border); background: var(--store-surface); color: var(--store-text); }
+@media (max-width: 640px) {
+  .deliveryQuickInfo { margin: 18px 0 8px; padding: 12px; border-radius: var(--store-radius-sm); }
+  .deliveryQuickGrid { grid-template-columns: 1fr; }
+  .deliveryQuickItem { padding: 16px; }
+  .deliveryQuickActions { display: grid; grid-template-columns: 1fr 1fr; }
+  .deliveryQuickActions a { min-height: 46px; padding: 0 10px; font-size: 0.84rem; text-align: center; }
+  .deliveryQuickActions a:first-child { grid-column: 1 / -1; }
+}
 
 /* /map's real Yandex embed (`/[page]/page.tsx`) — the text address and the
    "Открыть в Яндекс Картах" link stay in the section below it as a
@@ -991,7 +1552,7 @@ button.promoControl {
 .checkList { display: grid; gap: var(--store-space-sm); margin: 30px 0 0; padding: 0; list-style: none; }
 .checkList li { position: relative; padding-left: 26px; color: var(--store-muted); line-height: 1.5; }
 .checkList li::before { content: ""; position: absolute; top: 0.48em; left: 2px; width: 9px; height: 9px; border: 3px solid var(--store-brand); border-radius: 50%; }
-.formPanel { padding: clamp(22px, 4vw, 34px); border: 1px solid var(--store-border); border-top: 5px solid var(--store-brand); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-md); }
+.formPanel { padding: clamp(22px, 4vw, 34px); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-md); }
 .formPanel > h2 { margin: 0; font-size: clamp(1.45rem, 3vw, 2rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .formPanel > p { color: var(--store-muted); line-height: 1.55; }
 .segmentedNav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 0 0 var(--store-space-xl); padding: 3px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); }
@@ -1003,18 +1564,173 @@ button.promoControl {
 .formLinks { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 20px; margin-top: var(--store-space-xl); padding-top: var(--store-space-md); border-top: 1px solid var(--store-border); }
 .formLinks a,
 .devNotice a { color: var(--store-brand); }
-.devNotice { padding: var(--store-space-sm); border-left: 4px solid var(--store-accent); background: var(--store-surface-strong); color: var(--store-text) !important; font-size: 0.9rem; }
+.devNotice { padding: var(--store-space-sm) var(--store-space-md); border: 1px solid color-mix(in srgb, var(--store-accent) 50%, var(--store-border)); border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-accent) 9%, var(--store-surface)); color: var(--store-text) !important; font-size: 0.9rem; }
 .formError,
 .formSuccess,
 .offlineNotice,
-.unsavedNotice { margin: 0 0 var(--store-space-lg); padding: var(--store-space-sm) var(--store-space-md); border-left: 4px solid var(--store-danger); border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0; background: color-mix(in srgb, var(--store-danger) 8%, var(--store-surface)); box-shadow: var(--store-shadow-xs); }
-.formSuccess { border-left-color: var(--store-success); background: color-mix(in srgb, var(--store-success) 9%, var(--store-surface)); }
-.offlineNotice { border-left-color: var(--store-danger); }
-.unsavedNotice { border-left-color: var(--store-accent); background: color-mix(in srgb, var(--store-accent) 13%, var(--store-surface)); }
+.unsavedNotice { margin: 0 0 var(--store-space-lg); color: var(--store-text); padding: var(--store-space-sm) var(--store-space-md); border: 1px solid color-mix(in srgb, var(--store-danger) 32%, var(--store-border)); border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-danger) 8%, var(--store-surface)); box-shadow: var(--store-shadow-xs); }
+.formSuccess { border-color: color-mix(in srgb, var(--store-success) 40%, var(--store-border)); background: color-mix(in srgb, var(--store-success) 9%, var(--store-surface)); }
+.offlineNotice { border-color: color-mix(in srgb, var(--store-danger) 40%, var(--store-border)); }
+.unsavedNotice { border-color: color-mix(in srgb, var(--store-accent) 40%, var(--store-border)); background: color-mix(in srgb, var(--store-accent) 13%, var(--store-surface)); }
 .formError strong,
 .formSuccess strong { display: block; font-weight: var(--store-weight-black); }
 .formError p,
 .formSuccess p { margin: 5px 0 0; color: var(--store-muted); line-height: 1.45; }
+
+/* ---------------- Account (личный кабинет) ----------------
+   Sidebar with the customer card and section list, one section at a time
+   on the right. Below 980px the sidebar becomes a compact card plus a
+   horizontally scrollable row of section pills. */
+.accountPage { padding-block: var(--store-space-lg) clamp(56px, 8vw, 96px); }
+.accountPage .breadcrumbs { margin-bottom: var(--store-space-lg); }
+.accountLayout { display: grid; grid-template-columns: 290px minmax(0, 1fr); align-items: start; gap: var(--store-space-lg); }
+.accountAside { position: sticky; top: 164px; display: grid; gap: var(--store-space-sm); padding: var(--store-space-md); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
+.accountCard { display: flex; align-items: center; gap: var(--store-space-sm); padding: 4px 4px var(--store-space-md); border-bottom: 1px solid var(--store-border); }
+.accountAvatar { flex: 0 0 auto; width: 52px; height: 52px; object-fit: cover; display: grid; place-items: center; border-radius: 50%; background: var(--store-header-bg); color: var(--store-header-text); font-family: var(--store-font-display); font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; }
+.accountIdentity { min-width: 0; display: grid; gap: 2px; }
+.accountIdentity h1 { margin: 0; font-size: 1.12rem; line-height: 1.25; overflow-wrap: anywhere; }
+.accountIdentity p { margin: 0; color: var(--store-muted); font-size: 0.84rem; overflow-wrap: anywhere; }
+.accountIdentity .accountSince { font-size: 0.76rem; }
+.accountNav { display: grid; gap: 2px; }
+.accountNav a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--store-space-sm);
+  padding: 0 12px;
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  font-family: var(--store-font-display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.accountNav a:hover { background: var(--store-surface-strong); }
+.accountNav a[aria-current="page"] { background: var(--store-brand-soft); color: var(--store-brand); font-weight: 700; }
+.accountNavCount { min-width: 24px; padding: 2px 8px; border-radius: var(--store-radius-full); background: var(--store-surface-strong); color: var(--store-muted); font-size: .75rem; font-variant-numeric: tabular-nums; text-align: center; }
+.accountNav a[aria-current="page"] .accountNavCount { background: var(--store-surface); color: var(--store-brand); }
+.accountLogout { min-height: 44px; margin-top: 4px; border: 0; border-top: 1px solid var(--store-border); border-radius: 0; background: none; color: var(--store-muted); font-size: 0.88rem; font-weight: 600; text-align: left; padding: 10px 12px 0; cursor: pointer; }
+.accountLogout:hover { color: var(--store-danger); }
+
+.accountMain { min-width: 0; display: grid; gap: var(--store-space-md); }
+.accountMain > .formError,
+.accountMain > .formSuccess,
+.accountMain > .offlineNotice,
+.accountMain > .unsavedNotice { margin: 0; overflow-wrap: anywhere; }
+.accountPanel { min-width: 0; padding: clamp(20px, 3vw, 32px); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
+.accountPanel form label { min-width: 0; }
+.accountContactForm input:read-only { background: var(--store-bg); color: var(--store-muted); }
+.accountContactForm small a { color: var(--store-brand); }
+.accountPanelHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px var(--store-space-md); margin-bottom: var(--store-space-lg); }
+.accountPanelHead h2 { margin: 0; font-size: clamp(1.4rem, 2.4vw, 1.75rem); letter-spacing: var(--store-tracking-tight); }
+.accountPanelHead p { margin: 0; color: var(--store-muted); font-size: 0.9rem; }
+.accountPanelHead .secondaryAction { min-height: 42px; border-radius: var(--store-radius-full); }
+
+.accountEmpty { display: grid; justify-items: center; gap: 10px; padding: clamp(28px, 5vw, 48px) var(--store-space-md); border: 1px dashed var(--store-border); border-radius: var(--store-radius); background: var(--store-bg); text-align: center; }
+.accountEmpty h3 { margin: 0; font-size: 1.12rem; }
+.accountEmpty p { max-width: 42ch; margin: 0; color: var(--store-muted); line-height: 1.5; }
+.accountEmpty .primaryAction { margin-top: 6px; border-radius: var(--store-radius-full); }
+
+.accountOrders,
+.accountProducts,
+.accountAddresses { display: grid; gap: var(--store-space-sm); margin: 0; padding: 0; list-style: none; }
+.accountOrder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 18px;
+  align-items: center;
+  gap: var(--store-space-md);
+  min-height: 76px;
+  padding: 14px 18px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  color: var(--store-text);
+  text-decoration: none;
+  transition: border-color var(--store-duration-fast) var(--store-ease), background var(--store-duration-fast) var(--store-ease);
+}
+.accountOrder:hover { border-color: color-mix(in srgb, var(--store-brand) 40%, var(--store-border)); background: var(--store-bg); }
+.accountOrderId { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.accountOrderId strong { font-family: var(--store-font-display); font-weight: 700; }
+.accountOrderId small { color: var(--store-muted); font-size: 0.84rem; }
+.accountOrderStatus { max-width: 100%; padding: 5px 12px; border-radius: var(--store-radius-sm); background: var(--store-surface-strong); color: var(--store-muted); font-size: 0.8rem; font-weight: 600; overflow-wrap: anywhere; }
+.accountOrderStatus[data-tone="brand"] { background: var(--store-brand-soft); color: var(--store-brand); }
+.accountOrderStatus[data-tone="success"] { background: color-mix(in srgb, var(--store-success) 12%, var(--store-surface)); color: var(--store-success); }
+.accountOrderStatus[data-tone="warning"] { background: color-mix(in srgb, var(--store-accent) 22%, var(--store-surface)); color: #6b5300; }
+.accountOrderTotal { font-family: var(--store-font-display); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: end; overflow-wrap: anywhere; }
+.accountOrderChevron { color: var(--store-muted); }
+
+.accountProduct {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) minmax(0, max-content);
+  grid-template-areas: "media body side";
+  align-items: center;
+  gap: var(--store-space-md);
+  padding: 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+}
+.accountProduct:has(.accountProductPhotoNote) { grid-template-areas: "media body side" "media note side"; row-gap: 5px; }
+.accountProductMedia { grid-area: media; align-self: start; position: relative; width: 72px; height: 72px; overflow: hidden; border-radius: var(--store-radius-sm); background: var(--store-bg); }
+.accountProductPhotoNote { grid-area: note; align-self: start; margin-top: 0; }
+.accountProductMedia img { object-fit: contain; padding: 6px; }
+.accountProductBody { grid-area: body; min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.accountProduct:has(.accountProductPhotoNote) .accountProductBody { align-self: end; }
+.accountProductBody h3 { margin: 0; font-family: var(--store-font-sans); font-size: 0.98rem; font-weight: var(--store-weight-medium); line-height: 1.35; text-wrap: pretty; }
+.accountProductBody h3 a { color: var(--store-text); text-decoration: none; }
+.accountProductBody h3 a:hover { color: var(--store-brand); }
+.accountProductMeta { margin: 0; color: var(--store-muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+.accountProductMeta strong { color: var(--store-text); font-weight: 600; }
+.accountStockIn,
+.accountStockOut { margin: 0; font-size: 0.8rem; font-weight: 600; }
+.accountStockIn { color: var(--store-success); }
+.accountStockOut { color: var(--store-muted); }
+.accountProductSide { grid-area: side; display: grid; min-width: 0; justify-items: end; gap: 8px; }
+.accountProductPrice { font-family: var(--store-font-display); font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.accountProductActions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--store-space-sm); }
+.accountProductActions :global(.storefront-add-cart) { margin-top: 0; }
+.accountProductHelp { display: inline-flex; min-height: 44px; align-items: center; padding: 0 6px; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; text-underline-offset: 3px; }
+.accountTextButton,
+.accountTextButtonDanger { min-height: 40px; padding: 0 6px; border: 0; background: none; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; cursor: pointer; }
+.accountTextButtonDanger { color: var(--store-danger); }
+.accountTextButton:hover,
+.accountTextButtonDanger:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.accountAddress { display: flex; justify-content: space-between; gap: var(--store-space-md); padding: 16px 18px; border: 1px solid var(--store-border); border-radius: var(--store-radius); overflow-wrap: anywhere; }
+.accountAddress > div:first-child { min-width: 0; }
+.accountAddress[data-default] { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); }
+.accountAddress h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 1rem; }
+.accountAddress p { margin: 2px 0 0; color: var(--store-muted); font-size: 0.9rem; line-height: 1.45; }
+.accountDefaultBadge { padding: 2px 9px; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand); font-family: var(--store-font-sans); font-size: .75rem; font-weight: 600; }
+.accountAddressActions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px; }
+.accountPanel .addressForm { margin-top: var(--store-space-lg); padding: clamp(12px, 3vw, 24px); background: var(--store-bg); overflow-wrap: anywhere; }
+.accountNarrowForm { max-width: 440px; }
+
+@media (max-width: 980px) {
+  .accountLayout { grid-template-columns: minmax(0, 1fr); }
+  .accountAside { position: static; padding: var(--store-space-sm); }
+  .accountCard { padding: 4px 4px var(--store-space-sm); }
+  .accountNav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .accountNav a { min-width: 0; min-height: 44px; padding: 6px 10px; gap: 4px; border: 1px solid var(--store-border); white-space: normal; }
+  .accountNav a > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+  .accountNav a[aria-current="page"] { border-color: transparent; }
+  .accountLogout { padding-top: 8px; }
+}
+
+@media (max-width: 640px) {
+  .accountPanel { padding: clamp(14px, 4vw, 20px); }
+  .accountNav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .accountOrder { grid-template-columns: minmax(0, 1fr) auto; gap: 8px var(--store-space-sm); padding: 14px; }
+  .accountOrderStatus { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+  .accountOrderTotal { grid-column: 2; grid-row: 1; }
+  .accountOrderChevron { display: none; }
+  .accountProduct { grid-template-columns: 64px minmax(0, 1fr); grid-template-areas: "media body" "side side"; gap: 8px 12px; }
+  .accountProduct:has(.accountProductPhotoNote) { grid-template-areas: "media body" "media note" "side side"; }
+  .accountProductMedia { width: 64px; height: 64px; }
+  .accountProductSide { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--store-border); }
+  .accountAddress { flex-direction: column; }
+}
 
 .profileHeading,
 .orderHeading { display: flex; justify-content: space-between; align-items: end; gap: var(--store-space-lg); margin-bottom: var(--store-space-xl); padding-bottom: var(--store-space-xl); border-bottom: 1px solid var(--store-border); }
@@ -1054,7 +1770,7 @@ button.promoControl {
 .orderList small { color: var(--store-muted); }
 .addressList article { display: flex; justify-content: space-between; gap: var(--store-space-lg); padding: var(--store-space-lg) 4px; border-bottom: 1px solid var(--store-border); }
 .addressList h3 { margin: 0; font-weight: var(--store-weight-black); }
-.addressList h3 small { margin-left: var(--store-space-xs); color: var(--store-success); font-size: 0.72rem; text-transform: uppercase; }
+.addressList h3 small { margin-left: var(--store-space-xs); color: var(--store-success); font-size: .75rem; text-transform: uppercase; }
 .addressList p { margin: 7px 0 0; color: var(--store-muted); line-height: 1.45; }
 .addressList article > div:last-child { display: flex; align-items: flex-start; gap: var(--store-space-xs); }
 .addressList button,
@@ -1067,7 +1783,7 @@ button.promoControl {
 .compactProductList h3 a:hover { color: var(--store-brand); }
 .compactProductList small { color: var(--store-muted); }
 .compactProductActions { display: flex; align-items: center; gap: var(--store-space-md); white-space: nowrap; }
-.emptyInline { margin: 0; padding: var(--store-space-lg); border-left: 4px solid var(--store-border); background: var(--store-surface); color: var(--store-muted); line-height: 1.5; }
+.emptyInline { margin: 0; padding: var(--store-space-lg); border: 1px dashed var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-muted); line-height: 1.5; }
 .statusBadge { padding: 9px 12px; border: 1px solid var(--store-border); border-radius: var(--store-radius-full); background: var(--store-surface); font-size: 0.88rem; font-weight: var(--store-weight-bold); }
 .lineList { border-top: 1px solid var(--store-border); }
 .orderLine { display: grid; grid-template-columns: minmax(220px, 1fr) 70px 120px 120px; align-items: center; gap: var(--store-space-md); padding: var(--store-space-md) 0; border-bottom: 1px solid var(--store-border); }
@@ -1080,24 +1796,25 @@ button.promoControl {
 .orderTotals div:nth-last-child(-n + 2) { font-weight: var(--store-weight-black); }
 .orderTotals dd { margin: 0; font-variant-numeric: tabular-nums; }
 
-.checkoutLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 0.55fr); align-items: start; gap: clamp(28px, 6vw, 72px); }
-.checkoutForm { display: grid; gap: var(--store-space-xl); }
+.checkoutLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 0.55fr); grid-template-areas: "form summary"; align-items: start; gap: clamp(28px, 6vw, 72px); }
+.checkoutForm { grid-area: form; display: grid; gap: var(--store-space-xl); }
 .checkoutForm fieldset { display: grid; gap: 17px; margin: 0; padding: 0 0 var(--store-space-xl); border: 0; border-bottom: 1px solid var(--store-border); }
 .checkoutForm legend { margin-bottom: var(--store-space-lg); padding: 0; font-size: 1.3rem; font-weight: var(--store-weight-black); }
-.checkoutAside { position: sticky; top: 164px; padding: var(--store-space-lg); border: 1px solid var(--store-border); border-top: 5px solid var(--store-accent); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-md); }
+.checkoutAside { position: sticky; top: 164px; padding: var(--store-space-lg); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); box-shadow: var(--store-shadow-md); }
+.checkoutLayout > .checkoutAside { grid-area: summary; }
 .checkoutAside h2 { margin: 0 0 var(--store-space-md); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .checkoutAside p { color: var(--store-muted); line-height: 1.55; }
 .checkoutLines { border-top: 1px solid var(--store-border); }
 .checkoutLines > div { display: grid; grid-template-columns: 1fr auto; gap: var(--store-space-sm); padding: var(--store-space-md) 0; border-bottom: 1px solid var(--store-border); }
 .checkoutLines > div > div { min-width: 0; display: grid; gap: 5px; }
 .checkoutLines small { overflow-wrap: anywhere; color: var(--store-muted); font-size: 0.7rem; }
-.checkoutLines label { display: grid; gap: 5px; color: var(--store-muted); font-size: 0.72rem; }
+.checkoutLines label { display: grid; gap: 5px; color: var(--store-muted); font-size: .75rem; }
 .checkoutLines input { width: 74px; min-height: 44px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); text-align: center; }
 .checkoutLines button { grid-column: 1 / -1; justify-self: start; border: 0; background: none; color: var(--store-danger); cursor: pointer; }
 .checkoutLineTotal { grid-column: 1 / -1; justify-self: end; color: var(--store-text); font-variant-numeric: tabular-nums; font-weight: var(--store-weight-bold); }
 .checkoutSubtotal { display: flex; align-items: baseline; justify-content: space-between; gap: var(--store-space-sm); margin: var(--store-space-md) 0; }
 .checkoutSubtotal strong { color: var(--store-text); font-variant-numeric: tabular-nums; font-size: 1.2rem; }
-.serverPriceNote { margin-bottom: 0 !important; padding-left: 13px; border-left: 3px solid var(--store-accent); }
+.serverPriceNote { margin-bottom: 0 !important; padding: 10px 12px; border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-accent) 12%, var(--store-surface)); }
 .confirmationLayout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; align-items: start; gap: clamp(32px, 7vw, 90px); padding-top: clamp(50px, 8vw, 90px); }
 .confirmationLayout h1 { margin: 0; font-size: clamp(2.5rem, 6vw, 5rem); font-weight: var(--store-weight-black); line-height: 0.95; letter-spacing: var(--store-tracking-tighter); }
 .confirmationLayout section > p:not(.eyebrow) { max-width: 680px; color: var(--store-muted); font-size: 1.08rem; line-height: 1.55; }
@@ -1108,7 +1825,7 @@ button.promoControl {
 
 .contactLayout { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(390px, 0.7fr); align-items: start; gap: clamp(36px, 8vw, 100px); }
 .contactDetails { padding-top: 14px; }
-.contactDetails h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.4rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
+.contactDetails h2 { margin: 0 0 12px; font-size: clamp(1.25rem, 2vw, 1.6rem); line-height: 1.2; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .contactDetails > p:not(.eyebrow) { color: var(--store-muted); line-height: 1.55; }
 .contactDetails dl { margin: var(--store-space-xl) 0; border-top: 1px solid var(--store-border); }
 .contactDetails dl div { display: grid; grid-template-columns: 110px 1fr; gap: var(--store-space-lg); padding: 14px 0; border-bottom: 1px solid var(--store-border); }
@@ -1118,30 +1835,89 @@ button.promoControl {
 .contactLinks { display: flex; flex-wrap: wrap; gap: 10px 18px; }
 .numberedList { display: grid; gap: 0; margin: var(--store-space-xl) 0; padding: 0; counter-reset: expert; list-style: none; border-top: 1px solid var(--store-border); }
 .numberedList li { position: relative; display: grid; gap: 5px; padding: 17px 0 17px 48px; border-bottom: 1px solid var(--store-border); counter-increment: expert; }
-.numberedList li::before { content: counter(expert, decimal-leading-zero); position: absolute; top: 18px; left: 0; color: var(--store-brand); font-family: var(--store-font-mono); font-size: 0.78rem; font-weight: var(--store-weight-black); }
+.numberedList li::before { content: counter(expert, decimal-leading-zero); position: absolute; top: 18px; left: 0; color: var(--store-brand); font-variant-numeric: tabular-nums; font-size: 0.78rem; font-weight: var(--store-weight-black); }
 .numberedList span { color: var(--store-muted); line-height: 1.5; }
 .splitFields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--store-space-sm); }
 
+/* Expert-help request: one buyer-focused flow, scoped so shared contact forms
+   keep their existing layout and copy. */
+.expertHelpTitle { max-width: 820px; margin-bottom: clamp(28px, 4vw, 48px); }
+.expertHelpTitle .eyebrow { margin-bottom: 12px; }
+.expertHelpTitle h1 { max-width: 820px; }
+.expertHelpTitle > p:last-child { max-width: 660px; margin: 16px 0 0; color: var(--store-muted); font-size: clamp(1rem, 1.4vw, 1.1rem); line-height: 1.55; }
+.expertHelpDetails { padding-top: 8px; }
+.expertHelpDetails h2 { max-width: 430px; font-size: clamp(1.5rem, 3vw, 2.25rem); line-height: 1.12; }
+.expertHelpDetails .numberedList { margin: var(--store-space-lg) 0; }
+.expertHelpDetails .numberedList li { padding-block: 14px; }
+.expertHelp .formPanel { padding: clamp(20px, 3vw, 30px); border-top-width: 3px; box-shadow: var(--store-shadow-sm); }
+.expertHelp .formPanel > h2 { font-size: clamp(1.5rem, 2.4vw, 1.85rem); }
+.expertHelp .formPanel > p { margin: 9px 0 20px; }
+.expertHelp .stackForm { gap: 14px; }
+.expertHelp .field { gap: 6px; }
+.expertHelp .field > input,
+.expertHelp .field > textarea { background: var(--store-surface); }
+.expertHelp .fieldNote { margin-top: -8px; font-size: 0.84rem; }
+.expertHelp .checkboxField { font-size: 0.88rem; line-height: 1.45; }
+.expertHelp .submitButton { min-height: 50px; }
+@media (max-width: 767px) {
+  .expertHelpTitle { margin-bottom: 26px; }
+  .expertHelpTitle h1 { max-width: 560px; font-size: clamp(2rem, 9vw, 2.65rem); line-height: 1.06; }
+  .expertHelpTitle > p:last-child { margin-top: 12px; font-size: 1rem; }
+  .expertHelpDetails { padding-top: 0; }
+  .expertHelpDetails h2 { font-size: 1.55rem; }
+  .expertHelpDetails .numberedList { margin: 12px 0 16px; }
+  .expertHelpDetails .numberedList li { padding-block: 12px; }
+  .expertHelp .formPanel { padding: 19px 16px; }
+  .expertHelp .formPanel > p { margin-bottom: 16px; }
+}
+
 /* ---------------- Footer ---------------- */
 
-.footer { margin-top: auto; background: var(--store-header-bg-strong); color: var(--store-header-text); }
-.footerGrid { width: var(--store-container); margin: 0 auto; padding: var(--store-space-2xl) 0 var(--store-space-xl); display: grid; grid-template-columns: 1.35fr 1fr 1fr 0.85fr; gap: var(--store-space-xl); }
-.footerBrand { display: flex; align-items: center; gap: var(--store-space-sm); margin-bottom: var(--store-space-md); }
-/* `.footerWordmark` now sizes the real `<BrandLockup>` mark (see
-   store-shell.tsx) instead of styling a plain-text wordmark — the section's
-   accessible name moved to a visually-hidden `<h2>` alongside it. */
-.footerWordmark { height: 30px; width: auto; display: block; color: var(--store-header-text); }
-.footerGrid h2 { margin: 0 0 var(--store-space-sm); color: var(--store-header-muted); font-size: 0.72rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
+.footer {
+  margin-top: auto;
+  padding: clamp(12px, 2vw, 24px);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-lg) var(--store-radius-lg) 0 0;
+  background: var(--store-surface-strong);
+  color: var(--store-header-text);
+}
+.footerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 8px clamp(12px, 2vw, 24px);
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+}
+.footerTop nav { display: flex; flex-wrap: wrap; gap: 0 clamp(12px, 3vw, 40px); }
+.footerTop a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: none;
+}
+.footerTop nav a { font-weight: 650; font-size: .87rem; }
+.footerTop nav a:hover { color: var(--store-brand); }
+.footerBrand { flex: none; width: fit-content; }
+.footerWordmark { height: 38px; width: auto; display: block; }
+.footerGrid {
+  padding: clamp(18px, 3vw, 32px) 0 var(--store-space-lg);
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, 1fr)) minmax(0, .8fr);
+  gap: 22px clamp(14px, 2.5vw, 32px);
+}
+.footerGrid h2 { margin: 0 0 var(--store-space-sm); color: var(--store-header-muted); font-size: .75rem; font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-wide); text-transform: uppercase; }
 .footerGrid p { margin: 6px 0; color: var(--store-header-muted); font-size: 0.9rem; line-height: 1.5; }
 .footerGrid nav,
 .footerGrid section { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .footerGrid a { min-height: 44px; display: inline-flex; align-items: center; color: var(--store-header-muted); font-size: 0.9rem; text-decoration: none; transition: color var(--store-duration-fast) var(--store-ease); }
-.footerGrid a:hover { color: var(--store-accent); }
+.footerGrid a:hover { color: var(--store-brand); }
 .footerContactList { display: grid; gap: 9px; margin: var(--store-space-sm) 0 0; padding: 0; list-style: none; }
 .footerContactList li { display: flex; align-items: flex-start; gap: 8px; color: var(--store-header-muted); font-size: 0.9rem; line-height: 1.4; overflow-wrap: anywhere; }
-.footerContactList svg { flex: 0 0 auto; margin-top: 2px; color: var(--store-accent); }
+.footerContactList svg { flex: 0 0 auto; margin-top: 2px; color: var(--store-brand); }
 .footerContactList a { min-height: 0; display: inline; color: var(--store-header-text); }
-.footerContactList a:hover { color: var(--store-accent); }
+.footerContactList a:hover { color: var(--store-brand); }
 .footerMessengers { display: flex; flex-wrap: wrap; gap: var(--store-space-xs); }
 .footerMessengerLink {
   min-width: 44px;
@@ -1149,26 +1925,28 @@ button.promoControl {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--store-header-control-border);
+  border: 1px solid var(--store-border);
   border-radius: var(--store-radius-sm);
-  background: var(--store-header-control-bg);
+  background: var(--store-surface);
   color: var(--store-header-text);
   font-size: 0.76rem;
   font-weight: var(--store-weight-black);
   text-decoration: none;
   transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
 }
-.footerMessengerLink:hover { background: var(--store-accent); color: var(--store-accent-text); }
-.legal { width: var(--store-container); margin: 0 auto; padding: var(--store-space-md) 0 var(--store-space-lg); border-top: 1px solid var(--store-header-border); color: var(--store-header-muted); font-size: 0.82rem; }
+.footerMessengerLink:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+.legal { padding-top: var(--store-space-md); border-top: 1px solid var(--store-header-border); color: var(--store-header-muted); font-size: 0.82rem; line-height: 1.5; }
 
-.mobileNav { display: none; }
+.mobileNav { display: contents; }
+.mobileNavItem { display: none; }
 
-.storefront :global(.storefront-cart-storage-notice) { margin: var(--store-space-sm) 0 0; padding: 10px 12px; border-left: 3px solid var(--store-accent); border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0; background: color-mix(in srgb, var(--store-accent) 12%, var(--store-surface)); color: var(--store-text); font-size: 0.82rem; line-height: 1.4; }
-.storefront :global(.storefront-cart-dialog) { width: min(440px, calc(100% - 24px)); margin: auto; padding: var(--store-space-lg); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); color: var(--store-text); box-shadow: var(--store-shadow-lg); }
-.storefront :global(.storefront-cart-dialog::backdrop) { background: rgb(9 16 31 / 62%); }
+.storefront :global(.storefront-cart-storage-notice) { margin: var(--store-space-sm) 0 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--store-accent) 50%, var(--store-border)); border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-accent) 9%, var(--store-surface)); color: var(--store-text); font-size: 0.82rem; line-height: 1.4; }
+.storefront :global(.storefront-cart-dialog) { width: min(480px, calc(100% - 28px)); max-height: calc(100dvh - 32px); margin: auto; padding: 28px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); color: var(--store-text); box-shadow: var(--store-shadow-lg); }
+.storefront :global(.storefront-cart-dialog[open]) { animation: storeDialogAppear 160ms var(--store-ease); }
+.storefront :global(.storefront-cart-dialog::backdrop) { background: rgb(18 19 43 / 48%); }
 .storefront :global(.storefront-cart-dialog-head) { display: flex; align-items: center; justify-content: space-between; gap: var(--store-space-md); margin-bottom: var(--store-space-md); }
 .storefront :global(.storefront-cart-dialog-head h2) { margin: 0; font-weight: var(--store-weight-black); }
-.storefront :global(.storefront-cart-dialog button) { min-height: 42px; padding: 0 var(--store-space-sm); border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface-strong); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease); }
+.storefront :global(.storefront-cart-dialog button) { min-height: 44px; padding: 0 17px; border: 1px solid var(--store-border); border-radius: var(--store-radius-full); background: var(--store-surface); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease); }
 .storefront :global(.storefront-cart-dialog button):hover { border-color: var(--store-brand); }
 .storefront :global(.storefront-cart-dialog p) { color: var(--store-muted); line-height: 1.55; }
 .storefront :global(.storefront-cart-lines) { max-height: min(45dvh, 360px); margin: var(--store-space-md) 0; overflow-y: auto; border-top: 1px solid var(--store-border); }
@@ -1177,12 +1955,16 @@ button.promoControl {
 .storefront :global(.storefront-cart-line-identity) { display: grid; gap: 2px; min-width: 0; }
 .storefront :global(.storefront-cart-line-identity a) { color: var(--store-text); font-weight: var(--store-weight-bold); text-decoration: none; overflow-wrap: anywhere; }
 .storefront :global(.storefront-cart-line-identity a:hover) { text-decoration: underline; }
-.storefront :global(.storefront-cart-line-identity small) { color: var(--store-muted); font-family: var(--store-font-mono); font-size: 0.82rem; overflow-wrap: anywhere; }
+.storefront :global(.storefront-cart-line-identity small) { color: var(--store-muted); font-size: 0.82rem; overflow-wrap: anywhere; }
 .storefront :global(.storefront-cart-subtotal) { display: flex; align-items: baseline; justify-content: space-between; gap: var(--store-space-sm); margin: var(--store-space-md) 0 0; }
 .storefront :global(.storefront-cart-subtotal strong) { color: var(--store-text); font-variant-numeric: tabular-nums; font-size: 1.15rem; }
 .storefront :global(.storefront-cart-actions) { display: flex; justify-content: space-between; gap: var(--store-space-sm); margin-top: var(--store-space-md); }
-.storefront :global(.storefront-cart-actions a) { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--store-space-md); border-radius: var(--store-radius-sm); background: var(--store-brand); color: #f8faff; font-weight: var(--store-weight-bold); text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
+.storefront :global(.storefront-cart-actions a) { min-height: 44px; display: inline-flex; align-items: center; padding: 0 22px; border-radius: var(--store-radius-full); background: var(--store-brand); color: #f8faff; font-weight: var(--store-weight-bold); text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .storefront :global(.storefront-cart-actions a):hover { background: var(--store-brand-strong); }
+
+@keyframes storeDialogAppear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .supplierWaitlistDialog[open], .storefront :global(.storefront-cart-dialog[open]) { animation: none; } }
+@media (max-width: 500px) { .supplierWaitlistDialog, .storefront :global(.storefront-cart-dialog) { padding: 22px 18px; } }
 
 /* Row 1 + the bottom tab bar trade off at the exact same 768px boundary on
    purpose (see the file-header comment above `.headerTopRow`), so cart and
@@ -1190,13 +1972,13 @@ button.promoControl {
    and the logo also step up here and again at 1024/1280 — generous on a
    wide screen, modest enough on a phone not to crowd the search field. */
 @media (min-width: 768px) {
-  /* Desktop keeps the same visual row structure as before, but now the
-     utility row and the controls flanking search can collapse too. Search is
-     the persistent VIN/article row at every width. The utility row uses a
-     measured grid track, while the side controls fade and give their width
-     back to search; no fixed header-height guess is involved. */
+  /* Collapse the utility track and give the search the space from the side controls. */
   .headerTopRow {
     display: grid;
+    /* The column may be narrower than its contents: left to the implicit `auto`, the row took the width its
+       contents asked for, the address never shortened to an ellipsis, and between 1180 and 1216 px the page
+       scrolled sideways. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 1fr;
     transition:
       grid-template-rows var(--store-duration-slow) var(--store-ease),
@@ -1205,7 +1987,6 @@ button.promoControl {
   }
   .headerTopRow > .headerRowInner {
     min-height: 0;
-    overflow: hidden;
   }
   .headerMainRow .headerRowInner {
     transition:
@@ -1227,7 +2008,7 @@ button.promoControl {
   }
   .headerInset[data-collapsed="true"] .headerTopRow {
     grid-template-rows: 0fr;
-    border-bottom-color: transparent;
+    border-top-color: transparent;
     visibility: hidden;
     transition:
       grid-template-rows var(--store-duration-slow) var(--store-ease),
@@ -1236,13 +2017,11 @@ button.promoControl {
   }
   .headerInset[data-collapsed="true"] .headerTopRow > .headerRowInner {
     padding-block: 0;
+    overflow: hidden;
   }
   .headerInset[data-collapsed="true"] .headerMainRow .headerRowInner {
     padding-block: 4px;
     padding-top: max(4px, env(safe-area-inset-top));
-  }
-  .headerInset[data-collapsed="true"] .headerMainRow .searchBox {
-    max-width: 100%;
   }
   .headerInset[data-collapsed="true"] .brand,
   .headerInset[data-collapsed="true"] .headerActions {
@@ -1259,18 +2038,26 @@ button.promoControl {
       transform var(--store-duration-slow) var(--store-ease),
       visibility 0s linear var(--store-duration-slow);
   }
-  .headerActions { display: flex; }
+  /* Three actions (the car, the cart, the account) need more room than the logo's 220 px. */
+  .headerActions { display: flex; max-width: 340px; }
+  .headerCatalogButton { display: inline-flex; }
+  .catalogMenu { display: inline-flex; }
   .headerDesktopSearch { display: contents; }
   .mobileSearchRow,
   .mobileHeaderActions,
-  .mobileHeaderAddress { display: none; }
-  .headerInset { margin-inline: 0; }
+  .mobileMenu { display: none; }
   .brandLockup { height: 40px; }
-  .quickBlocks { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+  .quickBlocks { align-content: center; }
+}
+
+@media (max-width: 1023px) {
+  .benefitList { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .benefitList li + li { border-left: 0; }
+  .benefitList li:nth-child(even) { border-left: 1px solid var(--store-border); }
+  .benefitList li:nth-child(n + 3) { border-top: 1px solid var(--store-border); }
 }
 
 @media (min-width: 1024px) {
-  .headerInset { margin-inline: 22px; }
   .brandLockup { height: 44px; }
   /* 4 across for the category tiles — fixed at its phone/tablet column
      count before, which is the "stretched mobile layout" the desktop
@@ -1279,46 +2066,45 @@ button.promoControl {
 }
 
 @media (min-width: 1280px) {
-  .headerInset { margin-inline: 28px; }
   .brandLockup { height: 48px; }
 }
 
-/* Filter rail becomes a real left column here instead of the mobile
-   collapsible control: the rail's `<details>` content is forced visible
-   regardless of its `open` attribute (`!important` beats the UA stylesheet
-   that hides a closed `<details>`'s body), and the disclosure affordance
-   is hidden since there is nothing left to disclose. */
+/* Filter rail becomes a real left column here. Its native <details> state is
+   opened by the breakpoint enhancement, keeping visibility and accessibility
+   semantics in sync. */
 @media (min-width: 981px) {
   .catalogLayout { grid-template-columns: 272px minmax(0, 1fr); }
-  .filterRailBody { display: grid !important; }
   .filterRailSummary { cursor: default; }
   .filterRailSummary svg { display: none; }
 }
 
-/* Hours is the least essential fact on row 1 (the address it sits next to
-   already implies "shop", and the phone/messengers cover urgent contact),
-   so it is the first thing to go as the row's content budget tightens —
-   before the secondary links below, and well before location itself. */
-@media (max-width: 1279px) {
-  .headerTopHours { display: none; }
+@media (768px <= width < 1180px) {
+  .headerTopLocation { display: none; }
+  /* The car's caption would take 104 px from the search field, which is down to 282 px at 1024 and 177 px at 900:
+     the icon alone here, its name stays in the link's title and for screen readers. */
+  .headerActions :global(.storefront-vehicle-label) { font-size: 0; }
+  .headerActions :global(.storefront-vehicle-button) { width: auto; }
+  .headerTopRow .headerRowInner { gap: var(--store-space-xs); }
+}
+@media (768px <= width < 1000px) {
+  .headerTopRight .headerMessengers { display: none; }
 }
 
-/* Row 1's content budget (location + secondary links + phone + messengers)
-   only fits the full-text layout once the container is roughly 1180px+
-   wide, so the secondary links — the least essential item — drop first. */
-@media (max-width: 1179px) {
-  .headerTopLinks { display: none; }
-}
-
-/* Below this the location text is next to go, and the cart/account
+/* Below this the location text is hidden, and the cart/account
    captions shed their text for icon-only — the badge count stays legible
    on its own. The accessible name is untouched in both cases, only the
    rendered glyphs shrink to zero. */
 @media (max-width: 899px) {
   .headerTopLocation { display: none; }
   .headerActions :global(.storefront-cart-button-label),
-  .headerActions :global(.storefront-account-label) { font-size: 0; }
+  .headerActions :global(.storefront-account-label),
+  .headerActions :global(.storefront-vehicle-label) { font-size: 0; }
+  .headerActions :global(.storefront-vehicle-button) { width: auto; }
   .headerActions :global(.storefront-cart-count) { font-size: 0.66rem; }
+  /* Icon-only on narrow tablets; the visible word stays in the
+     accessibility tree, only its glyphs shrink to zero. */
+  .headerCatalogButton { gap: 0; padding: 0 14px; }
+  .headerCatalogButton span { font-size: 0; }
 }
 
 @media (max-width: 980px) {
@@ -1328,25 +2114,17 @@ button.promoControl {
   .authLayout,
   .contactLayout { grid-template-columns: 1fr; }
   .authIntro { position: static; }
-  .checkoutLayout,
+  .checkoutLayout { grid-template-columns: 1fr; grid-template-areas: "summary" "form"; gap: var(--store-space-lg); }
   .confirmationLayout { grid-template-columns: 1fr; }
   .checkoutAside { position: static; }
 }
 
 @media (max-width: 767px) {
-  /* Row 2 here is brand + condensed address (`.mobileHeaderAddress`) + the
-     phone icon (the desktop search field is hidden — see
-     `.headerDesktopSearch` — in favour of its own full-width row,
-     `.mobileSearchRow`, further down the panel). This is the panel's
-     actual first row (the former secondary-links row that used to sit
-     above it is gone outright, not merely hidden — see the doc comment
-     above `.mobileSearchRow`), so the safe-area-inset-top padding lives
-     here now. A border-bottom stands in for the divider the removed
-     locality row used to provide before the search field. */
   .headerMainRow .headerRowInner {
-    gap: var(--store-space-2xs);
-    min-height: 44px;
-    padding-block: max(2px, env(safe-area-inset-top)) 2px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 4px;
+    padding-block: max(7px, env(safe-area-inset-top)) 7px;
   }
 
   /* Scroll collapse: `data-collapsed` is set by store-shell.tsx after a
@@ -1390,31 +2168,87 @@ button.promoControl {
     padding-block: 0;
   }
 
-  .searchForm svg { margin-left: var(--store-space-sm); }
-  .promo { width: 100%; padding: 0 16px; }
-  /* Shorter still on a phone, relative to the narrower width — never
-     taller than 16/9 (see the base rule's 16/6 for ≥768px). */
-  /* Same 32/9 source ratio; cropping it taller hid the subject. */
-  .promoSlide { aspect-ratio: 2 / 1; }
-  .categorySection,
-  .featurePanelInner,
-  .helpBlock { padding-inline: 0; }
-  .categoryGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--store-space-sm); }
-  .categoryTile { padding: var(--store-space-md) var(--store-space-2xs); }
-  .categoryTileMedia { max-width: 64px; }
-  .categoryTileLabel { font-size: 0.76rem; }
-  .helpBlock { grid-template-columns: 1fr; }
-  .helpBlockMedia { aspect-ratio: 16 / 9; }
-  .main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-  .helpBlockActions { justify-content: center; }
+  .searchForm svg { margin-left: 13px; }
+  .mobileSearchRow .headerRowInner { padding-bottom: 7px; }
+  .mobileSearchRow .searchForm { height: 48px; }
+  .mobileSearchRow .searchForm input { padding-inline: 12px 6px; }
+  /* On a phone the «Найти» button already says what the field is for, so the
+     leading magnifier goes and the placeholder gets the room instead. */
+  .mobileSearchRow .searchForm > svg { display: none; }
+  .mobileSearchRow .searchForm button { padding-inline: 14px; height: 38px; font-family: var(--store-font-display); }
+  /* VIN selection as a real control under the search, not bare underlined text. */
+  .searchAssist {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    min-height: 36px;
+    margin: 8px 0 0;
+    padding: 0 14px 0 10px;
+    border-radius: var(--store-radius-full);
+    background: var(--store-brand-soft);
+    color: var(--store-brand);
+    font-family: var(--store-font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+    transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+  }
+  .searchAssist img { width: 28px; height: auto; flex: none; }
+  .searchAssist:active { background: var(--store-brand); color: var(--store-on-brand); }
+  .searchAssist:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+  .home { gap: 40px; padding-top: 18px; }
+  .promo { width: var(--store-container); padding: 0; }
+  .promoSlide { aspect-ratio: auto; min-height: 0; padding-top: 176px; align-items: stretch; }
+  .promoSlide > img { height: 176px !important; object-fit: cover; object-position: right center; }
+  .promoSlideScrim { height: 177px; background: linear-gradient(0deg, var(--store-header-bg-strong), transparent 50%); }
+  .promoSlideBody { width: 100%; padding: 10px 24px 26px; gap: 12px; align-content: start; }
+  .promoSlideBody h2 { max-width: 21ch; font-size: clamp(1.5rem, 6.8vw, 1.95rem); line-height: 1.13; }
+  .promoSlideBody p { font-size: 0.9rem; line-height: 1.55; }
+  .promoSlideCta { margin-top: 4px; min-height: 44px; }
+  button.promoControl { top: 88px; opacity: 1; }
+  .benefit { flex-direction: column; gap: 8px; padding: 14px; }
+  .benefitTitle { font-size: 0.8rem; }
+  .benefitText { font-size: .75rem; }
+  .featurePanelInner { padding: 24px 20px; }
+  .categoryGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .categoryTile { padding: 14px 6px; gap: 10px; border-radius: 16px; }
+  .categoryTileMedia { max-width: 96px; }
+  .categoryTileLabel { min-height: 3.9em; font-size: .75rem; line-height: 1.3; overflow-wrap: anywhere; }
+  .sectionHead { margin-bottom: 24px; }
+  .sectionHead p { font-size: 0.94rem; }
+  .featurePanelInner { grid-template-columns: 1fr; padding-block: 30px; gap: 28px; }
+  .quickBlockText { font-size: 0.9rem; }
+  .featureIntro { padding-bottom: 24px; border-bottom: 1px solid var(--store-border); }
+  .featurePanelHead { margin-bottom: 18px; }
+  .helpBlock { grid-template-columns: 1fr; gap: 24px; padding: 16px; }
+  .helpBlockMedia { aspect-ratio: 3 / 2; }
+  .helpBlockBody { padding: 0 8px 12px; }
+  .helpBlockBody h2 { max-width: 20ch; }
+  .helpBlockBody p { font-size: 0.94rem; }
+  .helpBlockActions { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .storefront { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
   .page { padding: 28px 0 56px; }
-  .catalogForm { grid-template-columns: 1fr; padding: 14px; }
-  .catalogForm .field:first-child { grid-column: auto; }
-  .catalogForm .submitButton { width: 100%; }
+  .catalogForm { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 12px; }
+  .catalogForm .field:first-child { grid-column: 1; grid-row: 1; }
+  .catalogForm .field:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .catalogForm .submitButton { grid-column: 2; grid-row: 1; align-self: end; padding-inline: 12px; min-height: 44px; }
   .supplierWaitlistButton { width: 100%; margin-left: 0; }
   .supplierPartList { grid-template-columns: 1fr; }
-  .productLayout { grid-template-columns: 1fr; }
-  .footerGrid { grid-template-columns: 1fr; padding-bottom: 30px; }
+  .productLayout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .productVisualLarge { width: 100%; max-height: 340px; aspect-ratio: 4 / 3; border-radius: var(--store-radius); }
+  .productInfo { gap: 12px; }
+  .productInfo h1 { font-size: clamp(1.75rem, 8vw, 2.25rem); }
+  .productInfo .productPrice { font-size: 2rem; }
+  .productHelp { padding: 14px; }
+  .productDetails { grid-template-columns: 1fr; gap: var(--store-space-md); }
+  .productSpecs div { grid-template-columns: 1fr 1fr; }
+  .footerTop { align-items: stretch; flex-direction: column; gap: 4px; padding-block: 12px 6px; }
+  /* Three equal links in one row on a phone — no orphaned third link. */
+  .footerTop nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .footerTop nav a { justify-content: center; min-height: 44px; padding: 4px 6px; border-radius: 10px; background: var(--store-bg); font-size: .78rem; line-height: 1.2; text-align: center; }
+  .footerStore, .footerSocials { grid-column: 1 / -1; }
   .profileHeading,
   .orderHeading { align-items: flex-start; flex-direction: column; }
   .profileNav { top: 0; margin-inline: -16px; border-right: 0; border-left: 0; border-radius: 0; }
@@ -1462,29 +2296,45 @@ button.promoControl {
     color: var(--store-text);
     text-decoration: none;
   }
-  .mobileNavItem svg { flex: 0 0 auto; color: var(--store-muted); }
-  .mobileNavItem span,
-  .mobileNavItem :global(button),
-  .mobileNavItem :global(a) {
+  button.mobileNavItem {
     border: 0;
     background: transparent;
-    color: var(--store-text);
-    font-size: 0.68rem;
+    cursor: pointer;
+  }
+  .mobileNavItem svg { flex: 0 0 auto; color: var(--store-muted); }
+  .mobileNavItem span {
+    max-width: 100%;
+    font-size: .75rem;
     font-weight: var(--store-weight-bold);
     line-height: 1.15;
     text-align: center;
-    text-decoration: none;
-    cursor: pointer;
+    overflow-wrap: anywhere;
   }
-  .mobileNavItem :global(button),
-  .mobileNavItem :global(a) { padding: 0; min-height: 0; }
+  .mobileNavItem { position: relative; }
+  .mobileNavItem[aria-current="page"],
+  .mobileNavItem[aria-current="page"] svg { color: var(--store-brand); }
+  .mobileNavItem[aria-current="page"]::before {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 28px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--store-brand);
+    content: "";
+    transform: translateX(-50%);
+  }
 }
 
-/* Small phones: category tiles are cramped at 3-across below ~375px, so
-   they reflow to 2-across there instead of shrinking past legibility. */
-@media (max-width: 374px) {
+/* Phone-sized screens need two readable columns for long part names. */
+@media (max-width: 480px) {
   .categoryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .brandLockup { height: 28px; }
+}
+
+@media (max-width: 350px) {
+  .headerMainRow .headerRowInner { grid-template-columns: minmax(44px, 1fr) auto minmax(80px, 1fr); }
+  .mobileHeaderActions a { min-width: 40px; }
+  .footerGrid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1499,4 +2349,298 @@ button.promoControl {
 
   .headerInset { animation: none !important; }
   .promoTrack { scroll-behavior: auto; }
+  .home [data-reveal] { opacity: 1; transform: none; }
+  .categoryTile:hover .categoryTileMedia img,
+  .promoSlide:hover .promoSlideCta,
+  .promoSlide:hover .promoSlideCta svg { transform: none; }
+}
+
+.searchRecentHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 0 8px;
+}
+.searchRecentHead strong,
+.searchExtra strong {
+  color: var(--store-muted);
+  font-size: .81rem;
+  font-weight: 660;
+}
+.searchRecentHead button {
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--store-brand);
+  font-size: .82rem;
+  cursor: pointer;
+}
+.searchExtra {
+  display: grid;
+  gap: 2px;
+}
+.searchExtra > strong { padding: 8px 8px 2px; }
+.searchExtraLink {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 7px 8px;
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  font-size: .88rem;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.searchExtraLink:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+.searchExtraLink svg { flex: none; color: var(--store-brand); }
+
+/* ---------------- Header search popup: start state, sections, empty state ---------------- */
+.searchStartHint { margin: 0; padding: 10px var(--store-space-sm) 4px; color: var(--store-muted); font-size: .86rem; line-height: 1.5; }
+.searchSectionBlock { display: grid; gap: 2px; padding: 8px 4px 4px; }
+.searchSectionBlock + .searchSectionBlock,
+.searchSectionBlock + .searchExtra,
+.searchSectionBlock + .searchSuggestionList { border-top: 1px solid var(--store-border); }
+.searchSectionBlock > strong,
+.searchExtra > strong { padding: 2px var(--store-space-xs) 6px; color: var(--store-muted); font-size: .75rem; font-weight: var(--store-weight-bold); letter-spacing: .04em; text-transform: uppercase; }
+.searchChips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px var(--store-space-xs) 6px; }
+.searchChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-bg);
+  color: var(--store-text);
+  font-size: .84rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease);
+}
+.searchChip:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+.searchSectionLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px var(--store-space-xs);
+  border-radius: var(--store-radius-sm);
+  color: var(--store-text);
+  font-size: .9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.searchSectionLink small { display: block; color: var(--store-muted); font-size: .75rem; font-weight: 500; }
+.searchSectionLink:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+.searchSectionCount { flex: none; min-width: 28px; padding: 2px 8px; border-radius: var(--store-radius-full); background: var(--store-surface-strong); color: var(--store-muted); font-size: .75rem; font-variant-numeric: tabular-nums; text-align: center; }
+.searchSuggestions mark { background: transparent; color: var(--store-brand); font-weight: 750; }
+.searchSuggestionPrice small[data-in-stock] { color: var(--store-success); }
+.searchEmptyTitle { margin: 0; padding: 12px var(--store-space-sm) 2px; color: var(--store-text); font-size: .95rem; font-weight: var(--store-weight-bold); line-height: 1.4; overflow-wrap: anywhere; }
+.searchEmptyText,
+.searchLayoutHint { margin: 0; padding: 2px var(--store-space-sm) 8px; color: var(--store-muted); font-size: .86rem; line-height: 1.5; }
+.searchLayoutHint button { padding: 0; border: 0; background: none; color: var(--store-brand); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.searchSuggestionEmpty .searchSuggestionHelp {
+  margin: 4px var(--store-space-xs) 4px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--store-brand);
+  border-radius: var(--store-radius-sm);
+  font-family: var(--store-font-display);
+}
+.searchSuggestionEmpty .searchSuggestionHelp:hover { background: var(--store-brand); color: var(--store-on-brand); }
+.searchSuggestions .searchSuggestionAll {
+  margin: 6px 4px 2px;
+  border: 0;
+  background: var(--store-bg);
+  color: var(--store-text);
+  font-family: var(--store-font-display);
+  text-align: center;
+}
+.searchSuggestions .searchSuggestionAll:hover { background: var(--store-brand-soft); color: var(--store-brand); }
+
+/* ---------------- Motion layer ----------------
+   Short, physical, and only where it confirms something: a card answers the
+   pointer, a new result settles in, the cart counter acknowledges an add.
+   No parallax, no tilt, no looping decoration; all of it is skipped for
+   people who asked their system for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .storefront :global(.storefront-add-cart[data-added]) { background: var(--store-success); animation: store-add-confirm 360ms var(--store-ease); }
+  .storefront :global(.storefront-cart-count) { animation: store-badge-pop 420ms cubic-bezier(.34, 1.4, .64, 1); }
+}
+@keyframes store-add-confirm { 0% { transform: scale(.97); } 55% { transform: scale(1.02); } 100% { transform: none; } }
+@keyframes store-badge-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: none; } }
+
+/* ---------------- Mobile header: edge to edge, search-only when scrolled ----------------
+   Like the big parts retailers' apps: the header runs the full screen width
+   with only its bottom corners rounded, and once the visitor scrolls down
+   just the search stays — no logo, no VIN chip. */
+@media (max-width: 767px) {
+  .header .headerInset {
+    width: 100%;
+    border-radius: 0 0 22px 22px;
+  }
+  .searchAssist { transition: opacity var(--store-duration-base) var(--store-ease), margin var(--store-duration-slow) var(--store-ease), min-height var(--store-duration-slow) var(--store-ease); }
+  .headerInset[data-collapsed="true"] .searchAssist {
+    min-height: 0;
+    height: 0;
+    margin-top: 0;
+    padding-block: 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+  }
+  /* With the logo row gone the search row sits right under the status bar. */
+  .headerInset[data-collapsed="true"] .mobileSearchRow .headerRowInner { padding-top: max(8px, env(safe-area-inset-top)); }
+}
+
+/* Burger next to the search: shown only on a phone and only while the
+   header is collapsed, so the menu is always one tap away. */
+.compactMenu { display: none; }
+@media (max-width: 767px) {
+  .mobileSearchRow .headerRowInner { display: flex; align-items: flex-start; gap: 8px; }
+  .mobileSearchRow .searchBox { flex: 1 1 auto; min-width: 0; }
+  .compactMenu {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 0;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    border-radius: 14px;
+    background: var(--store-bg);
+    color: var(--store-brand);
+    opacity: 0;
+    overflow: hidden;
+    visibility: hidden;
+    margin-right: -8px;
+    transition: width var(--store-duration-slow) var(--store-ease), opacity var(--store-duration-base) var(--store-ease), margin var(--store-duration-slow) var(--store-ease);
+  }
+  .headerInset[data-collapsed="true"] .compactMenu { width: 48px; margin-right: 0; opacity: 1; visibility: visible; }
+  .compactMenu:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+}
+
+/* ---------------- Footer v2 ----------------
+   One ink-indigo block (design canvas «Подвал v2»): brand line and phone
+   first, messengers and chat as buttons, four link columns, legal line. */
+.footerV2 { margin-top: auto; padding-top: clamp(24px, 4vw, 48px); }
+.footerV2Inner {
+  width: var(--store-container);
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(22px, 3vw, 32px);
+  padding: clamp(24px, 3.4vw, 40px) clamp(18px, 3.4vw, 44px) 22px;
+  border-radius: 28px 28px 0 0;
+  background: var(--store-header-bg);
+  color: #fff;
+}
+.footerV2 a { color: #e8e7ff; text-decoration: none; transition: color var(--store-duration-fast) var(--store-ease); }
+.footerV2 a:hover { color: #fff; }
+.footerV2 a:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 3px; border-radius: 6px; }
+.footerV2Top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px 40px; }
+.footerV2Brand { display: grid; gap: 12px; max-width: 380px; }
+.footerV2Logo { display: block; width: auto; height: 44px; color: #fff; }
+.footerV2Brand p { margin: 0; color: #b9b6e8; font-size: .95rem; line-height: 1.55; }
+.footerV2Contact { display: grid; justify-items: end; gap: 8px; }
+.footerV2Phone { display: inline-flex; align-items: center; gap: 10px; font-family: var(--store-font-display); font-size: clamp(1.45rem, 1.1rem + 1.2vw, 1.9rem); letter-spacing: -.01em; font-weight: 800; color: #fff !important; }
+.footerV2Phone svg { color: var(--store-accent); }
+.footerV2Contact > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #b9b6e8; font-size: .88rem; }
+.footerV2Contact > span svg { width: 16px; height: 16px; color: #8f8bd0; }
+.footerV2Channels { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.footerV2Channels a { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; border-radius: 12px; background: rgb(255 255 255 / 10%); font-size: .88rem; font-weight: 600; }
+.footerV2Channels a:hover { background: rgb(255 255 255 / 18%); }
+.footerV2Channels svg { width: 18px; height: 18px; }
+.footerV2 .footerV2Chat { background: var(--store-accent); color: var(--store-accent-text); min-height: 44px; }
+.footerV2 .footerV2Chat:hover { background: var(--store-accent-hover); color: var(--store-accent-text); }
+.footerV2Nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; padding-top: 24px; border-top: 1px solid rgb(255 255 255 / 14%); }
+.footerV2Nav > div { display: grid; align-content: start; gap: 4px; }
+.footerV2Nav h2 { margin: 0 0 6px; color: #8f8bd0; font-family: var(--store-font-sans); font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.footerV2Nav a { display: inline-flex; align-items: center; min-height: 34px; font-size: .92rem; line-height: 1.3; }
+.footerV2Legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; padding-top: 16px; border-top: 1px solid rgb(255 255 255 / 14%); color: #8f8bd0; font-size: .8rem; line-height: 1.5; }
+.footerV2Legal span:last-child { display: inline-flex; flex-wrap: wrap; gap: 6px 18px; }
+.footerV2Legal a { color: #8f8bd0; }
+@media (max-width: 900px) {
+  .footerV2Nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .footerV2Contact { justify-items: start; }
+  .footerV2Channels { justify-content: flex-start; }
+}
+@media (max-width: 767px) {
+  .footerV2Inner { width: 100%; border-radius: 24px 24px 0 0; padding-bottom: calc(24px + 72px + env(safe-area-inset-bottom)); }
+  .footerV2Channels a span { display: none; }
+  .footerV2Channels a { width: 44px; justify-content: center; padding: 0; }
+  .footerV2 .footerV2Chat { width: auto; padding: 0 16px; }
+}
+
+/* Dropdown entrance: a short fade and 6px drop, as on the design board. */
+@media (prefers-reduced-motion: no-preference) {
+  .headerMenuPanel:not([hidden]) { animation: header-menu-in 180ms var(--store-ease) both; }
+}
+@keyframes header-menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* VIN / vehicle entry under the mobile search: a clean full-width row with
+   a crisp car picture (served at 2x/3x, not resampled by the image proxy),
+   a two-line label and a chevron — not a tinted pill with a blurry icon. */
+@media (max-width: 767px) {
+  /* Design board «Кнопка Подбор по VIN», variant A: an ink banner with the
+     АН-30 car driving out of the right edge and one yellow action. It is
+     the second strongest action after search, so it stays one tap and
+     folds away with the header on scroll. */
+  .mobileSearchRow .searchAssist {
+    position: relative;
+    display: grid;
+    align-items: center;
+    width: 100%;
+    min-height: 84px;
+    margin-top: 8px;
+    padding: 9px 14px 9px 16px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 18px;
+    background:
+      radial-gradient(ellipse 70px 10px at calc(100% - 61px) 84%, rgb(4 2 30 / 75%), transparent 70%),
+      radial-gradient(ellipse 120px 60px at calc(100% - 61px) 55%, rgb(168 160 255 / 42%), transparent 70%),
+      linear-gradient(105deg, var(--store-header-bg) 0%, #1a1170 100%);
+    color: #fff;
+    font-family: var(--store-font-sans);
+    line-height: 1.2;
+    isolation: isolate;
+  }
+  .mobileSearchRow .searchAssist:active { color: #fff; transform: scale(.99); }
+  .searchAssistText { position: relative; z-index: 1; display: grid; justify-items: start; gap: 1px; min-width: 0; max-width: 58%; }
+  .searchAssistText strong { font-family: var(--store-font-display); font-size: 1rem; font-weight: 800; color: #fff; }
+  .searchAssistText small { color: #c9c6ff; font-size: .8rem; }
+  .searchAssistAction { display: inline-flex; align-items: center; gap: 2px; height: 26px; margin-top: 4px; padding: 0 8px 0 12px; border-radius: var(--store-radius-full); background: var(--store-accent); color: #140f57; font-family: var(--store-font-display); font-size: .78rem; font-weight: 800; }
+  .searchAssistAction svg { width: 14px; height: 14px; }
+  /* The whole car fits the banner at any phone width: sized by the banner's
+     height, never wider than half of it, nothing cut off. */
+  .mobileSearchRow .searchAssist .searchAssistCar { position: absolute; top: 50%; right: 12px; z-index: 0; width: auto; max-width: 38%; height: calc(100% - 24px); object-fit: contain; object-position: right center; transform: translateY(-50%); filter: drop-shadow(0 6px 8px rgb(0 0 0 / 30%)); pointer-events: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .mobileSearchRow .searchAssist .searchAssistCar { transition: transform var(--store-duration-slow) var(--store-ease); }
+    .mobileSearchRow .searchAssist:active .searchAssistCar { transform: translate(-4px, -50%); }
+  }
+  .mobileSearchRow .searchAssist > svg { color: var(--store-brand); }
+}
+
+/* Hover = bold for section rows in the burger menu and the header dropdowns. */
+.drawerCatalog li a span, .drawerCustomer a { transition: font-weight var(--store-duration-fast) var(--store-ease); }
+.drawerCatalog li a:hover span, .drawerCustomer a:hover { font-weight: 700; }
+.headerMenuLinks a span { transition: color var(--store-duration-fast) var(--store-ease); }
+.headerMenuLinks a:hover strong { color: var(--store-brand); }
+
+/* ---------- Touch targets (UI/UX Pro Max: touch-target-size, web-target-size) ----------
+   On a phone every control gets at least a 44px tap zone; small text links in
+   breadcrumbs and the footer get at least 32px. Visual size stays the same where
+   the hit area can grow invisibly. */
+@media (max-width: 760px) {
+  .mobileSearchRow .searchForm button { position: relative; }
+  .mobileSearchRow .searchForm button::after { content: ""; position: absolute; inset: -5px -5px; }
+  .breadcrumbs a { display: inline-flex; align-items: center; min-height: 32px; }
+  .footerV2Legal a, .footerV2Phone { display: inline-flex; align-items: center; min-height: 32px; }
+  .footerV2Nav a { min-height: 40px; }
 }

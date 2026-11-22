@@ -1,0 +1,31 @@
+.services {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 3vw, 36px);
+  padding-block: clamp(24px, 4vw, 42px);
+  border-block: 1px solid var(--store-border);
+}
+.service {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: start;
+  align-content: space-between;
+  padding: 4px clamp(4px, 1.6vw, 24px);
+  gap: 16px;
+}
+.service h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.15rem, 2.2vw, 1.45rem);
+  letter-spacing: var(--store-tracking-tight);
+}
+.service p {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--store-muted);
+  line-height: 1.55;
+}
+.service p a { color: var(--store-brand); font-weight: 700; }
+@media (max-width: 600px) {
+  .services { grid-template-columns: 1fr; }
+  .service + .service { padding-top: 20px; border-top: 1px solid var(--store-border); }
+}

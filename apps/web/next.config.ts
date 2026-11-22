@@ -9,7 +9,8 @@ const internalApiUrl = process.env.INTERNAL_API_URL ?? "http://127.0.0.1:4000";
 const indexingAllowed = process.env.DEPLOYMENT_ENVIRONMENT === "production";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: ["127.0.0.1", "192.168.1.92", "*.local"],
+  devIndicators: false,
   images: {
     // The only SVG served through next/image is the trusted local brand
     // mark (apps/web/public/brand/logo.svg), never user- or CMS-supplied

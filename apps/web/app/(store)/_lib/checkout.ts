@@ -4,6 +4,7 @@ import {
 } from "@an30/contracts";
 
 import type { CartLine } from "../_components/cart-provider";
+import type { ShopStatus } from "../_components/shop-status";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -52,4 +53,18 @@ export function checkoutPayload(
     personalDataConsentVersion: CHECKOUT_PERSONAL_DATA_CONSENT_VERSION,
     termsAccepted: legalAcceptance.termsAccepted,
   };
+}
+
+/**
+ * There is no payment step left to confirm and no reservation timer left to
+ * count down (see checkout.service.ts) -- the only thing left to promise the
+ * customer honestly is when a manager will call. The shop's own promise
+ * (see MANAGER_WAITING_TEXT in chat-state.ts) is "about 10 minutes", but
+ * only while someone is actually on shift to keep it -- `shop` comes from
+ * `computeShopStatusNow` so this never claims a 10-minute callback at 2am.
+ */
+export function checkoutConfirmationMessage(shop: ShopStatus): string {
+  return shop.open
+    ? "Заявка принята. Менеджер перезвонит вам в течение 10 минут, чтобы подтвердить заказ."
+    : `Заявка принята. Магазин ${shop.detail} — мы позвоним вам, как только начнём работать, чтобы подтвердить заказ.`;
 }

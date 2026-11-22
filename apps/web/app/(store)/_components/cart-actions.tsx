@@ -1,12 +1,16 @@
 "use client";
 
+import { Add20Regular, Subtract20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { formatRubles } from "../_lib/catalog-format";
-import { summariseCart, useCartProducts } from "../_lib/cart-products";
 import type { CartLineView } from "../_lib/cart-products";
+import { catalogCategoryPhoto } from "../_lib/store-categories";
+import { CatalogPhoto } from "./catalog-photo";
+import commerce from "./commerce.module.css";
 import { useCart } from "./cart-provider";
 
 /** Renders the catalog identity of one cart line, or an honest fallback state. */
@@ -45,84 +49,74 @@ export function CartLineIdentity({ line, position }: { line: CartLineView; posit
   );
 }
 
-/**
- * `icon` is rendered *inside* the button (not as a sibling) so the whole
- * icon+label stack is one focusable/clickable region — required for the
- * header's icon-above-caption action buttons to hit the 44px target rule
- * with the icon included, not just the text underneath it.
- */
-export function CartButton({ icon }: { icon?: ReactNode } = {}) {
-  const { itemCount, openCart } = useCart();
+export function CartButton({ className, icon }: { className?: string; icon?: ReactNode } = {}) {
+  const { itemCount } = useCart();
+  const pathname = usePathname();
 
   return (
-    <button type="button" className="storefront-cart-button" onClick={openCart} aria-haspopup="dialog">
+    <Link className={["storefront-cart-button", className].filter(Boolean).join(" ")} href="/cart"
+      aria-current={pathname === "/cart" ? "page" : undefined}>
       {icon}
-      <span className="storefront-cart-button-label">Корзина <span aria-label={`${itemCount} товаров`} className="storefront-cart-count">{itemCount}</span></span>
-    </button>
+      <span className="storefront-cart-button-label">Корзина <span aria-label={`${itemCount} товаров`} className="storefront-cart-count" key={itemCount}>{itemCount}</span></span>
+    </Link>
   );
 }
 
-export function MobileCartButton() {
-  const { itemCount, openCart } = useCart();
-  return <button type="button" onClick={openCart}>Корзина <span aria-label={`${itemCount} товаров`}>{itemCount}</span></button>;
-}
-
-export function CartPanel() {
-  const { cartOpen, clear, closeCart, hydrated, itemCount, items, persistenceAvailable, removeItem, updateQuantity } = useCart();
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const products = useCartProducts(items);
-  const { hasUnavailable, knownSubtotalKopeks, lines, pricesComplete } = summariseCart(items, products);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (cartOpen && !dialog.open) dialog.showModal();
-    if (!cartOpen && dialog.open) dialog.close();
-  }, [cartOpen]);
-
+export function CartQuantity({ productId, quantity }: { productId: string; quantity: number }) {
+  const { updateQuantity } = useCart();
   return (
-    <dialog ref={dialogRef} className="storefront-cart-dialog" onClose={closeCart} onCancel={closeCart} aria-labelledby="cart-title">
-      <div className="storefront-cart-dialog-head">
-        <h2 id="cart-title">Корзина</h2>
-        <button type="button" onClick={closeCart} aria-label="Закрыть корзину">Закрыть</button>
-      </div>
-      <strong>{itemCount > 0 ? `Товаров: ${itemCount}` : "Корзина пуста"}</strong>
-      <p>{itemCount > 0 ? "Цена и наличие будут заново проверены сервером при оформлении." : "Добавьте товары из каталога."}</p>
-      {hydrated && !persistenceAvailable ? <p className="storefront-cart-storage-notice" role="status">Корзина работает в этой вкладке, но браузер не разрешил сохранить её после закрытия.</p> : null}
-      {hasUnavailable ? <p className="storefront-cart-storage-notice" role="status">Часть позиций больше не продаётся. Удалите их перед оформлением.</p> : null}
-      {itemCount > 0 ? <div className="storefront-cart-lines">{lines.map((line, index) => (
-        <div key={line.productId}>
-          <CartLineIdentity line={line} position={index + 1} />
-          <input aria-label={`Количество позиции ${index + 1}`} type="number" min={1} max={100} value={line.quantity} onChange={(event) => updateQuantity(line.productId, Number(event.target.value))} />
-          <button type="button" aria-label={`Удалить позицию ${index + 1} из корзины`} onClick={() => removeItem(line.productId)}>Удалить</button>
-        </div>
-      ))}</div> : null}
-      {itemCount > 0 ? (
-        <p className="storefront-cart-subtotal">
-          <span>Предварительно</span>
-          <strong>{formatRubles(knownSubtotalKopeks)}{pricesComplete ? "" : " и выше"}</strong>
-        </p>
-      ) : null}
-      {itemCount > 0 ? <div className="storefront-cart-actions"><button type="button" aria-label="Очистить всю корзину" onClick={clear}>Очистить</button><Link href="/checkout" onClick={closeCart}>Оформить заказ</Link></div> : null}
-    </dialog>
+    <div className={commerce.quantity} role="group" aria-label="Количество товара">
+      <button type="button" disabled={quantity <= 1} onClick={() => updateQuantity(productId, quantity - 1)}
+        aria-label="Уменьшить количество"><Subtract20Regular aria-hidden="true" /></button>
+      <output aria-live="polite" aria-label="Количество">{quantity}</output>
+      <button type="button" disabled={quantity >= 100} onClick={() => updateQuantity(productId, quantity + 1)}
+        aria-label="Увеличить количество"><Add20Regular aria-hidden="true" /></button>
+    </div>
   );
+}
+
+export function CartLineThumbnail({ line }: { line: CartLineView }) {
+  const item = line.state.status === "ready" ? line.state.product : null;
+  if (!item) return <span className={commerce.lineThumbnail} aria-hidden="true" />;
+  return <CatalogPhoto className={commerce.lineThumbnail} sizes="72px" src={item.imageUrl}
+    categoryImage={catalogCategoryPhoto(item.category)} showNote={false} />;
 }
 
 export function AddToCartButton({ disabled, productId }: { disabled?: boolean; productId: string }) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
+  const timerRef = useRef<number | undefined>(undefined);
+
+  // "Добавлено" is a short confirmation, then the button is ready to add
+  // another one; the header counter keeps the lasting signal.
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
   return (
     <button
       type="button"
       className="storefront-add-cart"
+      data-added={added || undefined}
       disabled={disabled}
       onClick={() => {
         addItem(productId);
         setAdded(true);
+        window.clearTimeout(timerRef.current);
+        timerRef.current = window.setTimeout(() => setAdded(false), 1600);
       }}
     >
       {disabled ? "Нет в наличии" : added ? "Добавлено" : "В корзину"}
     </button>
+  );
+}
+
+export function ProductBuyButton({ productId }: { productId: string }) {
+  const { items } = useCart();
+  const line = items.find(item => item.productId === productId);
+  if (!line) return <AddToCartButton productId={productId} />;
+  return (
+    <div className={commerce.productCartActions}>
+      <CartQuantity productId={productId} quantity={line.quantity} />
+      <Link href="/cart">В корзине</Link>
+    </div>
   );
 }

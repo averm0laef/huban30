@@ -28,9 +28,11 @@ export default async function AuthPage({ searchParams }: AuthPageProps) {
 
   return (
     <AuthClient
+      key={mode}
       initialMode={mode}
-      initialSuccess={accepted ? "Приглашение принято. Войдите и настройте TOTP" : ""}
+      initialSuccess={accepted ? "Приглашение принято. Войдите и подключите вход по коду из приложения" : ""}
       registrationEnabled={process.env.LEGAL_DOCUMENTS_APPROVED === "true"}
+      socialStatus={typeof query.social === "string" ? query.social : undefined}
     />
   );
 }

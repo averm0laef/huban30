@@ -18,6 +18,7 @@ import { StorefrontApiError, apiRequest } from "./storefront-api";
 export interface CartProductView {
   availableQuantity: number;
   brandName: string | null;
+  category?: { name: string; slug: string } | null;
   imageUrl: string | null;
   name: string;
   priceKopeks: number | null;
@@ -53,6 +54,7 @@ function toView(parsed: ReturnType<typeof CatalogProductDetailSchema.parse>): Ca
   return {
     availableQuantity: parsed.availableQuantity,
     brandName: parsed.brand?.name ?? null,
+    category: parsed.category,
     imageUrl: parsed.primaryImage?.url ?? parsed.images[0]?.url ?? null,
     name: parsed.name,
     priceKopeks: parsed.priceKopeks,
