@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { partTypeKey } from "../catalog/catalog-part-dictionary.js";
-import { sameNumberIsSamePart, sideFromName, type PartSide } from "./same-part-number.js";
+import { partSpecs } from "../catalog/catalog-part-specs.js";
+import { crossFits, sameNumberIsSamePart, sideFromName, type PartSide } from "./same-part-number.js";
 
-const side = (brand: string | null, section: string | null, name: string): PartSide => ({ brand, section, type: partTypeKey(name) });
+const side = (brand: string | null, section: string | null, name: string): PartSide => ({ brand, section, specs: partSpecs(name), type: partTypeKey(name) });
 
 const osramLamp = side("OSRAM", "avtolampy", "3930 Лампа T4W 24V BA9s Osram");
 const osramLampTwin = side("OSRAM", "avtolampy", "Лампа OSRAM 3930");
@@ -63,10 +64,36 @@ describe("a number shared by two products is one part only when the products agr
   });
 
   it("reads a side known only by its name: a parts catalogue's description", () => {
-    expect(sideFromName("OSRAM", "Лампа накаливания")).toEqual({ brand: "OSRAM", section: "avtolampy", type: partTypeKey("Лампа") });
-    expect(sideFromName(null, "")).toEqual({ brand: null, section: null, type: null });
+    expect(sideFromName("OSRAM", "Лампа накаливания T4W 24V")).toEqual({ brand: "OSRAM", section: "avtolampy", specs: { lampType: "T4W", voltage: 24 }, type: partTypeKey("Лампа") });
+    expect(sideFromName(null, "")).toEqual({ brand: null, section: null, specs: {}, type: null });
     expect(sameNumberIsSamePart("7506ULT", sideFromName("OSRAM", "Лампа накаливания"), side(null, "avtolampy", "Лампа P21W 7506ULT"))).toBe(true);
     expect(sameNumberIsSamePart("7506ULT", sideFromName("OSRAM", "Лампа накаливания"), side(null, "motornye-masla", "Масло 7506ULT"))).toBe(false);
     expect(sameNumberIsSamePart("3930", sideFromName("OSRAM", "Лампа накаливания"), side(null, "avtolampy", "Лампа 3930 24V"))).toBe(false);
+  });
+});
+
+describe("features the names disagree on", () => {
+  const lamp24 = side(null, "avtolampy", "Лампа T4W 24V BA9s");
+  const lamp12 = side(null, "avtolampy", "Лампа T4W 12V BA9s");
+  const left = side(null, "podveska", "Опора амортизационной стойки перед лев");
+  const right = side(null, "podveska", "Опора амортизационной стойки перед прав");
+
+  it("make a product of the same number another part, unless one maker's own part", () => {
+    expect(sameNumberIsSamePart("A39301", lamp24, lamp12)).toBe(false);
+    expect(sameNumberIsSamePart("MA1172", left, right)).toBe(false);
+    expect(sameNumberIsSamePart("A39301", { ...lamp24, brand: "OSRAM" }, { ...lamp12, brand: "OSRAM" })).toBe(true);
+  });
+
+  it("keep a cross from a part of another kind, side or voltage off the page", () => {
+    expect(crossFits(lamp24, lamp12)).toBe(false);
+    expect(crossFits(left, right)).toBe(false);
+    expect(crossFits(side("OSRAM", "avtolampy", "Лампа OSRAM 3930"), side("LIQUI MOLY", "motornye-masla", "Масло моторное 10W-40"))).toBe(false);
+    expect(crossFits(side("MANN", "filtry", "Фильтр масляный W 914/2"), side("KNECHT", "filtry", "Фильтр масляный OC 90"))).toBe(true);
+    expect(crossFits(side(null, "podveska", "Опора стойки перед лев"), side("FEBEST", "podveska", "Опора стойки"))).toBe(true);
+  });
+
+  it("let a cross through when the request says nothing to compare with", () => {
+    expect(crossFits(null, lamp12)).toBe(true);
+    expect(crossFits({ brand: "TOYOTA", section: null, type: null }, lamp12)).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import { HIDDEN_CATEGORY_SLUG, UNCATEGORIZED_CATEGORY_SLUG, decideStorefrontCategory, storefrontParentSlug } from "../catalog/catalog-known-categories.js";
 import { partTypeKey } from "../catalog/catalog-part-dictionary.js";
+import { partSpecs, specsConflict, type PartSpecs } from "../catalog/catalog-part-specs.js";
 
 /** What is known of one product (or one requested part) beyond its number. */
 export interface PartSide {
@@ -9,6 +10,8 @@ export interface PartSide {
   section: string | null;
   /** The kind of part its name is about (partTypeKey); null when the name has no noun. */
   type: string | null;
+  /** What its name says of side, axle, voltage, size… (catalog-part-specs.ts); none when unknown. */
+  specs?: PartSpecs;
   /**
    * Its own article is a vehicle maker's original number («13265-74030», «TG-48815-60121»: originalPartCode in catalog-original-numbers.ts).
    * In the owner's base no such number is shared by products of two sections (checked 23.11.2026 on 42 723 items).
@@ -33,8 +36,8 @@ export function sectionFromRoot(rootSlug: string | null | undefined): string | n
 /** A part known only by its brand and name, e.g. a parts catalogue's row: placed by the same rules as our products. */
 export function sideFromName(brand: string | null, name: string | null | undefined): PartSide {
   const text = name?.trim() ?? "";
-  if (!text) return { brand, section: null, type: null };
-  return { brand, section: sectionOf(decideStorefrontCategory({ groupNames: [], productName: text }).slug), type: partTypeKey(text) };
+  if (!text) return { brand, section: null, specs: {}, type: null };
+  return { brand, section: sectionOf(decideStorefrontCategory({ groupNames: [], productName: text }).slug), specs: partSpecs(text), type: partTypeKey(text) };
 }
 
 /**
@@ -42,14 +45,27 @@ export function sideFromName(brand: string | null, name: string | null | undefin
  * product that happens to share the digits (docs/CATALOG_MATCHING.md, «Совпадение номера»):
  *  - nothing is known of the request (a customer typed only the number): every product of the number is shown;
  *  - both brands known: they must be one brand;
- *  - a brand unknown on either side: never for a short number of digits; a vehicle maker's original number standing as
- *    our product's article is that part; otherwise the same section and the same kind of part.
+ *  - a brand unknown on either side: never for a short number of digits nor when the names disagree on a feature
+ *    (side, axle, voltage, size: catalog-part-specs.ts); a vehicle maker's original number standing as our product's
+ *    article is that part; otherwise the same section and the same kind of part.
  * Anything else reaches a product only through a confirmed cross.
  */
 export function sameNumberIsSamePart(article: string, asked: PartSide | null, offered: PartSide): boolean {
   if (asked === null) return true;
   if (asked.brand && offered.brand) return asked.brand === offered.brand;
-  if (SHORT_DIGITS.test(article)) return false;
+  if (SHORT_DIGITS.test(article) || specsConflict(asked.specs ?? {}, offered.specs ?? {})) return false;
   if (offered.originalNumber) return true;
   return asked.section !== null && asked.section === offered.section && asked.type !== null && asked.type === offered.type;
+}
+
+/**
+ * Whether a product a cross leads to may be shown for the request (docs/CATALOG_MATCHING.md, «Предохранители»): a
+ * pair named by any source is still wrong for a part of another section or kind, or of another side, axle,
+ * voltage or size. What the request does not know is not held against the pair.
+ */
+export function crossFits(asked: PartSide | null, offered: PartSide): boolean {
+  if (asked === null) return true;
+  if (asked.section !== null && offered.section !== null && asked.section !== offered.section) return false;
+  if (asked.type !== null && offered.type !== null && asked.type !== offered.type) return false;
+  return !specsConflict(asked.specs ?? {}, offered.specs ?? {});
 }

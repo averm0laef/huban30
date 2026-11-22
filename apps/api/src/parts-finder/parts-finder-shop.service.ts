@@ -6,7 +6,8 @@ import { originalPartCode } from "../catalog/catalog-original-numbers.js";
 import { partTypeKey } from "../catalog/catalog-part-dictionary.js";
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
-import { sameNumberIsSamePart, sectionFromRoot, sideFromName, type PartSide } from "./same-part-number.js";
+import { partSpecs } from "../catalog/catalog-part-specs.js";
+import { crossFits, sameNumberIsSamePart, sectionFromRoot, sideFromName, type PartSide } from "./same-part-number.js";
 
 export interface ShopOfferRequest {
   article: string;
@@ -54,7 +55,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
  *  0 `exact`    product.sku_normalized equals the article. A number alone is
  *               not an identity: every candidate comes back with its brand and
  *               section, and sameNumberIsSamePart (same-part-number.ts) keeps
- *               only the requested part itself;
+ *               only the requested part itself; a product a cross leads to
+ *               must be of the same section, kind and features (crossFits);
  *  1 `cross`    one confirmed pair of app.article_crosses, either direction;
  *  2 `possible` two confirmed pairs that meet in a vehicle maker's own
  *               number (X → OE ← Y): the parts replace the same original,
@@ -215,13 +217,15 @@ export class PartsFinderShopService {
     for (const row of result.rows) {
       const [key, request] = byIdx[row.req_idx] ?? [];
       if (!key || !request) continue;
-      if (row.via === 0) {
-        if (!asked.has(row.req_idx)) asked.set(row.req_idx, askedSide(row, request.name));
-        const offered: PartSide = {
-          brand: row.offered_brand, originalNumber: originalPartCode(row.sku) !== null, section: sectionFromRoot(row.offered_root), type: partTypeKey(row.name),
-        };
-        // The product the request is about is always itself.
-        if (row.product_id !== request.product_id && !sameNumberIsSamePart(request.article, asked.get(row.req_idx)!, offered)) continue;
+      if (!asked.has(row.req_idx)) asked.set(row.req_idx, askedSide(row, request.name));
+      const offered: PartSide = {
+        brand: row.offered_brand, originalNumber: originalPartCode(row.sku) !== null, section: sectionFromRoot(row.offered_root),
+        specs: partSpecs(row.name), type: partTypeKey(row.name),
+      };
+      // The product the request is about is always itself; any other passes the rules of its step.
+      if (row.product_id !== request.product_id) {
+        const fits = row.via === 0 ? sameNumberIsSamePart(request.article, asked.get(row.req_idx)!, offered) : crossFits(asked.get(row.req_idx)!, offered);
+        if (!fits) continue;
       }
       const list = offers.get(key) ?? [];
       if (list.length >= perPart || list.some((offer) => offer.productId === row.product_id)) continue;
@@ -244,7 +248,10 @@ export class PartsFinderShopService {
 
 /** What the request says of the part besides its number; null when it says nothing (a customer typed only the number). */
 function askedSide(row: OfferRow, name: string): PartSide | null {
-  if (row.asked_known) return { brand: row.asked_brand, section: sectionFromRoot(row.asked_root), type: row.asked_name ? partTypeKey(row.asked_name) : null };
+  if (row.asked_known) {
+    const named = row.asked_name ?? "";
+    return { brand: row.asked_brand, section: sectionFromRoot(row.asked_root), specs: partSpecs(named), type: named ? partTypeKey(named) : null };
+  }
   if (name) return sideFromName(row.asked_brand, name);
   return row.asked_brand ? { brand: row.asked_brand, section: null, type: null } : null;
 }

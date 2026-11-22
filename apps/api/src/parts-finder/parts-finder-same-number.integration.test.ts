@@ -7,6 +7,7 @@ import type { ConfigService } from "@nestjs/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { DatabaseService } from "../infrastructure/database.service.js";
+import { PartsFinderCrossStore } from "./parts-finder-crosses.store.js";
 import { PartsFinderShopService, type ShopOfferRequest } from "./parts-finder-shop.service.js";
 
 const url = process.env.CATALOG_SEARCH_DATABASE_URL;
@@ -24,6 +25,9 @@ const PRODUCTS = [
   { key: "element-mesh", sku: "74051012040", name: "Элемент масляного фильтра 7405-1012040 м/сетка ДФВ 4803 Евро \"ДЗАФ\" (2317)", brand: null, category: "maslyanye-filtry" },
   { key: "element-kamaz", sku: "7405 1012040", name: "Элемент масляного фильтра КамАЗ 7405-1012040 (сетка)", brand: null, category: "maslyanye-filtry" },
   { key: "element-queued", sku: "7405-1012040", name: "Эл-т МФ ЕВРО (сетка) (Челны) Камаз 7405-1012040 74051012040", brand: null, category: "bez-kategorii" },
+  // Two analogs the catalogue might name for the 24 V lamp: one of them is a 12 V lamp.
+  { key: "lamp-24v-analog", sku: "17131", name: "Лампа T4W 24V BA9s Narva 17131", brand: "NARVA", category: "signalnye-lampy" },
+  { key: "lamp-12v-analog", sku: "12929", name: "Лампа T4W 12V BA9s Philips 12929", brand: "PHILIPS", category: "signalnye-lampy" },
 ] as const;
 
 type Key = (typeof PRODUCTS)[number]["key"];
@@ -34,6 +38,7 @@ describe.skipIf(!url)("a shared number alone is not an analog (real PostgreSQL)"
   const ids = new Map<Key, string>();
 
   const remove = async () => {
+    await database.query("DELETE FROM app.article_crosses WHERE article_a IN ('3930','17131','12929') OR article_b IN ('3930','17131','12929')");
     await database.query("DELETE FROM app.products WHERE external_id LIKE $1", [`${PREFIX}%`]);
     await database.query("DELETE FROM app.brands WHERE external_id LIKE $1", [`${PREFIX}%`]);
   };
@@ -65,8 +70,8 @@ describe.skipIf(!url)("a shared number alone is not an analog (real PostgreSQL)"
     await database?.onModuleDestroy?.();
   });
 
-  const found = async (request: ShopOfferRequest): Promise<Key[]> => {
-    const offers = (await shop.lookup([request], 10)).for(request);
+  const found = async (request: ShopOfferRequest, only?: "exact"): Promise<Key[]> => {
+    const offers = (await shop.lookup([request], 10)).for(request).filter((offer) => !only || offer.matchedVia === only);
     return offers.map((offer) => PRODUCTS.find((product) => ids.get(product.key) === offer.productId)!.key).sort();
   };
   const card = (key: Key, brand: string | null = null): ShopOfferRequest => ({
@@ -99,7 +104,15 @@ describe.skipIf(!url)("a shared number alone is not an analog (real PostgreSQL)"
     expect(await found({ article: "7405-1012040", brand: "КАМАЗ" })).toEqual([]);
   });
 
+  it("a confirmed cross to a lamp of another voltage stays off the card; one of the same voltage is shown", async () => {
+    await new PartsFinderCrossStore(database).remember({
+      part: { article: "3930", brand: "OSRAM" },
+      groups: { analogs: [{ article: "17131", brand: "NARVA", manufacturer_verified: true }, { article: "12929", brand: "PHILIPS", manufacturer_verified: true }] },
+    });
+    expect(await found(card("lamp", "OSRAM"))).toEqual(["lamp", "lamp-24v-analog", "lamp-twin"]);
+  });
+
   it("a customer who typed only the number sees every product of that number", async () => {
-    expect(await found({ article: "3930", brand: null })).toEqual(["lamp", "lamp-twin", "oil"]);
+    expect(await found({ article: "3930", brand: null }, "exact")).toEqual(["lamp", "lamp-twin", "oil"]);
   });
 });
