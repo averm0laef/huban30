@@ -17,7 +17,9 @@ import {
   type CatalogProductsResponse,
 } from "@an30/contracts";
 
+import { fetchWithOneRetry } from "./api-fetch";
 import { publicSectionName } from "./store-categories";
+import { StorefrontApiError } from "./storefront-api-error";
 import { timedMemo } from "./timed-memo";
 
 export type CatalogImage = CatalogImageView;
@@ -27,12 +29,7 @@ export type CatalogSearchResponse = CatalogProductsResponse;
 export type CatalogBrand = CatalogBrandView;
 export type { CatalogCategoryNode };
 
-export class StorefrontApiError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-    this.name = "StorefrontApiError";
-  }
-}
+export { StorefrontApiError };
 
 function parseCatalogResponse(value: unknown): CatalogSearchResponse {
   const parsed = CatalogProductsResponseSchema.safeParse(value);
@@ -77,7 +74,7 @@ async function clientIpHeader(): Promise<Record<string, string>> {
 async function getJson(path: string): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(`${internalApiOrigin()}/api/v1${path}`, {
+    response = await fetchWithOneRetry(`${internalApiOrigin()}/api/v1${path}`, {
       cache: "no-store",
       headers: { Accept: "application/json", ...await clientIpHeader() },
     });
@@ -87,7 +84,7 @@ async function getJson(path: string): Promise<unknown> {
   if (!response.ok) {
     throw new StorefrontApiError(
       response.status === 429
-        ? "Слишком много запросов. Подождите минуту и повторите поиск."
+        ? "Слишком много запросов. Подождите минуту и обновите страницу."
         : response.status === 404
           ? "Товар не найден."
           : "Каталог временно недоступен. Попробуйте ещё раз позже.",

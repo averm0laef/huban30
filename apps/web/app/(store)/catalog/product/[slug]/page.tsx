@@ -13,12 +13,14 @@ import { categoryPath, findCategorySlugPath } from "../../../_lib/catalog-tree";
 import { breadcrumbJsonLd, pageMetadata, privatePageMetadata, productJsonLd } from "../../../_lib/seo";
 import { catalogCategoryPhoto, publicSectionName } from "../../../_lib/store-categories";
 import { productCompatibilityPrefillMessage } from "../../../_lib/expert-help-prefill";
+import { catalogFailureText } from "../../catalog-query";
 import { ExpertHelpQueryLink } from "../../expert-help-query-link";
 import { ProductAnalogs } from "./product-analogs";
 import { ProductFitment } from "./product-fitment";
 import { ProductDetails } from "./product-details";
 import { ProductFavourite } from "./product-favourite";
 import { ProductGallery } from "./product-gallery";
+import { loadProduct } from "./product-load";
 import layout from "./product-page.module.css";
 
 interface ProductPageProps {
@@ -32,8 +34,10 @@ function productDescription(name: string, sku: string, brandName: string | null)
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await findCatalogItem(slug);
-  if (!product) return privatePageMetadata("Товар не найден", "Запрошенный товар отсутствует в каталоге АН-30.");
+  const load = await loadProduct(slug, findCatalogItem);
+  if (load.kind === "busy") return privatePageMetadata("Слишком много запросов", catalogFailureText(429).message);
+  if (load.kind === "missing") return privatePageMetadata("Товар не найден", "Запрошенный товар отсутствует в каталоге АН-30.");
+  const { product } = load;
   return pageMetadata({
     description: productDescription(product.name, product.sku, product.brand?.name ?? null),
     path: `/catalog/product/${product.slug}`,
@@ -61,8 +65,10 @@ function visibleAttributes(attributes: Record<string, unknown>): Array<[string, 
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = await findCatalogItem(slug);
-  if (!product) notFound();
+  const load = await loadProduct(slug, findCatalogItem);
+  if (load.kind === "missing") notFound();
+  if (load.kind === "busy") return <ProductBusy slug={slug} />;
+  const { product } = load;
   const available = product.availableQuantity > 0;
   const priced = product.priceKopeks !== null;
 
@@ -180,6 +186,21 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <ProductDetails panels={detailPanels} key={product.id} />
       <ProductAnalogs article={product.sku} brand={product.brand?.name ?? null} productId={product.id} key={`analogs-${product.id}`} />
       <ProductFitment key={`fitment-${product.id}`} productId={product.id} productName={product.name} />
+    </div>
+  );
+}
+
+/** Too many requests from the visitor's address: the page says so and how long to wait, instead of a site error. */
+function ProductBusy({ slug }: { slug: string }) {
+  const { heading, message } = catalogFailureText(429);
+  return (
+    <div className={styles.page}>
+      <section className={styles.errorState} role="alert">
+        <h2>{heading}</h2>
+        <p>{message}</p>
+        {/* A full reload of the same address: a client navigation would only repeat the same refused call. */}
+        <a className={styles.submitButton} href={`/catalog/product/${encodeURIComponent(slug.trim().toLowerCase())}`}>Обновить страницу</a>
+      </section>
     </div>
   );
 }
