@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseStoredCart } from "./cart-provider";
+import { parseStoredCart, subscribeToStoredCart } from "./cart-provider";
 
 const productId = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -22,5 +22,75 @@ describe("parseStoredCart", () => {
       { productId, quantity: 500 },
     ]));
     expect(result).toEqual([{ productId, quantity: 100 }]);
+  });
+});
+
+describe("subscribeToStoredCart", () => {
+  const other = "650e8400-e29b-41d4-a716-446655440000";
+
+  function fakeTab(initial: string | null) {
+    const listeners = new Map<string, Set<(event: Event) => void>>();
+    let value = initial;
+    return {
+      emit(type: string, event: object = {}) {
+        for (const listener of listeners.get(type) ?? []) listener(event as Event);
+      },
+      listenerCount: () => Array.from(listeners.values()).reduce((total, set) => total + set.size, 0),
+      storage: {
+        getItem: () => value,
+        removeItem: () => { value = null; },
+        setItem: (_key: string, next: string) => { value = next; },
+      },
+      target: {
+        addEventListener(type: string, listener: (event: Event) => void) {
+          if (!listeners.has(type)) listeners.set(type, new Set());
+          listeners.get(type)!.add(listener);
+        },
+        removeEventListener(type: string, listener: (event: Event) => void) {
+          listeners.get(type)?.delete(listener);
+        },
+      },
+      write(next: string | null) { value = next; },
+    };
+  }
+
+  it("takes over the cart another tab stored", () => {
+    const tab = fakeTab(null);
+    const seen: unknown[] = [];
+    subscribeToStoredCart(tab.target, tab.storage, (items) => seen.push(items));
+
+    tab.write(JSON.stringify([{ productId, quantity: 1 }, { productId: other, quantity: 3 }]));
+    tab.emit("storage", { key: "an30_cart_v1" });
+    expect(seen).toEqual([[{ productId, quantity: 1 }, { productId: other, quantity: 3 }]]);
+
+    // The order was sent from the other tab: this one must stop offering it.
+    tab.write(null);
+    tab.emit("storage", { key: null });
+    expect(seen.at(-1)).toEqual([]);
+  });
+
+  it("ignores other keys and re-reads when the tab comes back", () => {
+    const tab = fakeTab(null);
+    const seen: unknown[] = [];
+    const unsubscribe = subscribeToStoredCart(tab.target, tab.storage, (items) => seen.push(items));
+
+    tab.write(JSON.stringify([{ productId, quantity: 2 }]));
+    tab.emit("storage", { key: "an30_guest_chat" });
+    expect(seen).toEqual([]);
+    tab.emit("pageshow");
+    tab.emit("focus");
+    expect(seen).toEqual([[{ productId, quantity: 2 }], [{ productId, quantity: 2 }]]);
+
+    unsubscribe();
+    expect(tab.listenerCount()).toBe(0);
+  });
+
+  it("keeps the cart on the page when storage cannot be read", () => {
+    const tab = fakeTab(null);
+    const seen: unknown[] = [];
+    const storage = { ...tab.storage, getItem: () => { throw new Error("blocked"); } };
+    subscribeToStoredCart(tab.target, storage, (items) => seen.push(items));
+    tab.emit("storage", { key: "an30_cart_v1" });
+    expect(seen).toEqual([]);
   });
 });

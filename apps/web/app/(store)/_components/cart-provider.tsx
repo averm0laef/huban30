@@ -68,6 +68,49 @@ export function persistStoredCart(storage: CartStorage, items: CartLine[]): bool
   }
 }
 
+function sameCart(left: CartLine[], right: CartLine[]): boolean {
+  return left.length === right.length && left.every((line, index) => (
+    line.productId === right[index]?.productId && line.quantity === right[index]?.quantity
+  ));
+}
+
+interface CartSyncTarget {
+  addEventListener: (type: string, listener: (event: Event) => void) => void;
+  removeEventListener: (type: string, listener: (event: Event) => void) => void;
+}
+
+/**
+ * Keeps one tab's cart equal to what another tab of the same browser stored.
+ * Without it every tab keeps the cart it loaded with and its next change
+ * overwrites the others: parts added in two product tabs leave one line, and a
+ * checkout tab still offers an order that was already sent from another tab.
+ * The `storage` event covers a live tab; a tab restored from the back/forward
+ * cache or brought back to the front re-reads, since it may have missed it.
+ */
+export function subscribeToStoredCart(
+  target: CartSyncTarget,
+  storage: CartStorage,
+  onChange: (items: CartLine[]) => void,
+): () => void {
+  const reread = () => {
+    const stored = readStoredCart(storage);
+    if (stored.available) onChange(stored.items);
+  };
+  const onStorage = (event: Event) => {
+    const { key } = event as StorageEvent;
+    // `key` is null when the whole storage was cleared.
+    if (key === null || key === STORAGE_KEY) reread();
+  };
+  target.addEventListener("storage", onStorage);
+  target.addEventListener("pageshow", reread);
+  target.addEventListener("focus", reread);
+  return () => {
+    target.removeEventListener("storage", onStorage);
+    target.removeEventListener("pageshow", reread);
+    target.removeEventListener("focus", reread);
+  };
+}
+
 function browserStorage(): CartStorage | null {
   try {
     return window.localStorage;
@@ -98,6 +141,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const storage = browserStorage();
     setPersistenceAvailable(storage ? persistStoredCart(storage, items) : false);
   }, [hydrated, items]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const storage = browserStorage();
+    if (!storage) return;
+    return subscribeToStoredCart(window, storage, (stored) => {
+      setItems((current) => (sameCart(current, stored) ? current : stored));
+    });
+  }, [hydrated]);
 
   const addItem = useCallback((productId: string, quantity = 1) => {
     if (!PRODUCT_ID_PATTERN.test(productId)) return;

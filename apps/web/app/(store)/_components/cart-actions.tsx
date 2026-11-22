@@ -82,10 +82,26 @@ export function CartLineThumbnail({ line }: { line: CartLineView }) {
     categoryImage={catalogCategoryPhoto(item.category)} showNote={false} />;
 }
 
-export function AddToCartButton({ disabled, productId }: { disabled?: boolean; productId: string }) {
+/**
+ * A double click is one intent. The second click of a double click lands
+ * within this window, on the same button or on whatever replaced it.
+ */
+const REPEAT_CLICK_WINDOW_MS = 500;
+
+/** True when `now` is still inside the double-click window opened at `lastAt`. */
+export function isRepeatClick(lastAt: number | null, now: number): boolean {
+  return lastAt !== null && now - lastAt < REPEAT_CLICK_WINDOW_MS;
+}
+
+export function AddToCartButton({ disabled, onAdded, productId }: {
+  disabled?: boolean;
+  onAdded?: (at: number) => void;
+  productId: string;
+}) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
+  const lastAddAt = useRef<number | null>(null);
 
   // "Добавлено" is a short confirmation, then the button is ready to add
   // another one; the header counter keeps the lasting signal.
@@ -97,8 +113,12 @@ export function AddToCartButton({ disabled, productId }: { disabled?: boolean; p
       className="storefront-add-cart"
       data-added={added || undefined}
       disabled={disabled}
-      onClick={() => {
+      onClick={(event) => {
+        // Keyboard activation reports timeStamp too, so a held Enter is covered.
+        if (isRepeatClick(lastAddAt.current, event.timeStamp)) return;
+        lastAddAt.current = event.timeStamp;
         addItem(productId);
+        onAdded?.(event.timeStamp);
         setAdded(true);
         window.clearTimeout(timerRef.current);
         timerRef.current = window.setTimeout(() => setAdded(false), 1600);
@@ -111,10 +131,17 @@ export function AddToCartButton({ disabled, productId }: { disabled?: boolean; p
 
 export function ProductBuyButton({ productId }: { productId: string }) {
   const { items } = useCart();
+  const addedAt = useRef<number | null>(null);
   const line = items.find(item => item.productId === productId);
-  if (!line) return <AddToCartButton productId={productId} />;
+  if (!line) return <AddToCartButton productId={productId} onAdded={(at) => { addedAt.current = at; }} />;
   return (
-    <div className={commerce.productCartActions}>
+    // The stepper and the cart link take the place of «В корзину»: the second
+    // click of a double click must not change the quantity or leave the page.
+    <div className={commerce.productCartActions} onClickCapture={(event) => {
+      if (!isRepeatClick(addedAt.current, event.timeStamp)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }}>
       <CartQuantity productId={productId} quantity={line.quantity} />
       <Link href="/cart">В корзине</Link>
     </div>
