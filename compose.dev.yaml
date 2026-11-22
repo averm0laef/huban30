@@ -1,6 +1,12 @@
 # Local-only override. Values here are intentionally public and must never be
 # used outside a developer workstation.
 services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+      - "127.0.0.1:443:443/udp"
+
   postgres:
     environment:
       POSTGRES_PASSWORD: an30-local-development-only
@@ -36,7 +42,6 @@ services:
       ENABLE_PUBLIC_CHECKOUT: "true"
       GEMINI_API_KEY_FILE: !reset null
       LEGAL_DOCUMENTS_APPROVED: "true"
-      PAYMENTS_PROVIDER: sandbox
       POSTGRES_PASSWORD: an30-app-local-development-only
       REDIS_PASSWORD: an30-local-development-only
       # This override mounts no secrets, and config.ts resolves every *_FILE
@@ -45,17 +50,19 @@ services:
       # at startup even though ROSSKO_ENABLED defaults to false.
       ROSSKO_KEY1_FILE: !reset null
       ROSSKO_KEY2_FILE: !reset null
-      SANDBOX_PAYMENT_WEBHOOK_SECRET: an30-local-sandbox-webhook-secret-public-only
+      REEFAPI_KEY_FILE: !reset null
       SESSION_SECRET: an30-local-session-hmac-secret-public-only
     secrets: !reset []
 
   web:
     environment:
+      DEPLOYMENT_ENVIRONMENT: development
       ENABLE_PUBLIC_CHECKOUT: "true"
       LEGAL_DOCUMENTS_APPROVED: "true"
 
   worker:
     environment:
+      DEPLOYMENT_ENVIRONMENT: development
       DATA_ENCRYPTION_KEY: an30-local-data-encryption-key-public-only
       POSTGRES_PASSWORD: an30-app-local-development-only
       REDIS_PASSWORD: an30-local-development-only
@@ -88,4 +95,33 @@ services:
           memory: 512M
         reservations:
           memory: 64M
+    networks: [backend]
+
+  # Optional search engine for local trials only (docs/SEARCH_ENGINE.md).
+  # Not started by default: `docker compose -f compose.yaml -f compose.dev.yaml
+  # --profile search up -d opensearch`, then set SEARCH_ENGINE=opensearch and
+  # OPENSEARCH_URL=http://opensearch:9200 for api/worker and run
+  # `corepack pnpm --filter @an30/worker search:reindex`. Security plugin is
+  # off because the port is bound to localhost and the data is a dev copy.
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    profiles: [search]
+    restart: "no"
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+      bootstrap.memory_lock: "false"
+    ports:
+      - "127.0.0.1:9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     networks: [backend]

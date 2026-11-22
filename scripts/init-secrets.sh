@@ -30,12 +30,12 @@ generate_secret app_database_password.txt
 generate_secret redis_password.txt
 generate_secret session_secret.txt
 generate_secret data_encryption_key.txt
-generate_secret sandbox_payment_webhook_secret.txt
 
 # Optional integration credentials are intentionally empty until the owner
 # enables the matching adapter and supplies the real value.
 for optional_secret in smtp_password.txt telegram_bot_token.txt vk_access_token.txt \
-  rossko_key1.txt rossko_key2.txt gemini_api_key.txt; do
+  rossko_key1.txt rossko_key2.txt gemini_api_key.txt reefapi_key.txt fapi_key.txt api_ninjas_key.txt \
+  tecdoc_api_key.txt; do
   target="$secrets_dir/$optional_secret"
   if [ ! -e "$target" ]; then
     : > "$target"

@@ -11,6 +11,18 @@
 		max_size 17MB
 	}
 
+	# Optional password on the whole site (a closed test stand before launch).
+	# Off unless SITE_PASSWORD_ENABLED=true. The 1С exchange keeps its own
+	# login, password and IP allow-list in the same Authorization header, and
+	# health probes and the chat socket carry no browser password prompt.
+	@site_password {
+		expression {$SITE_PASSWORD_ENABLED:false}
+		not path /api/v1/integrations/1c/* /ws* /health/live /health/ready /proxy-health
+	}
+	basic_auth @site_password bcrypt "АН-30" {
+		{$SITE_PASSWORD_USER} {$SITE_PASSWORD_HASH}
+	}
+
 	@api path /api/v1/* /ws*
 	handle @api {
 		reverse_proxy api:4000

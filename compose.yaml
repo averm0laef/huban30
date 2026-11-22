@@ -138,13 +138,15 @@ services:
     environment:
       AI_ENABLED: ${AI_ENABLED:-false}
       AI_MODEL: ${AI_MODEL:-gemini-2.5-flash}
+      API_BIND_HOST: 0.0.0.0
       APP_ORIGIN: ${APP_BASE_URL:-http://localhost}
       AUTH_DEBUG_TOKENS: "false"
       CLAMAV_CONNECT_TIMEOUT_MS: "2000"
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
       CLAMAV_SCAN_TIMEOUT_MS: "60000"
-      COOKIE_SECURE: "true"
+      # false only for a closed stand reached by bare IP over plain HTTP (no certificate yet).
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
       DB_HOST: postgres
@@ -157,31 +159,61 @@ services:
       FFPROBE_PATH: /usr/bin/ffprobe
       GEMINI_API_KEY_FILE: /run/secrets/gemini_api_key
       LEGAL_DOCUMENTS_APPROVED: ${LEGAL_DOCUMENTS_APPROVED:-false}
+      YANDEX_ID_CLIENT_ID: ${YANDEX_ID_CLIENT_ID:-}
+      VK_ID_CLIENT_ID: ${VK_ID_CLIENT_ID:-}
       MEDIA_PROBE_TIMEOUT_MS: "10000"
-      PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-disabled}
+      ONE_C_PRICE_TYPE: ${ONE_C_PRICE_TYPE:-}
+      ONE_C_PRICE_TYPE_SECONDARY: ${ONE_C_PRICE_TYPE_SECONDARY:-}
       PORT: 4000
+      # «Подбор по автомобилю» (docs/PARTS_FINDER.md). Provider keys are optional
+      # secret files: empty = that provider is off, the rest keeps working.
+      PARTS_FINDER_ENABLED: ${PARTS_FINDER_ENABLED:-true}
+      FAPI_KEY_FILE: /run/secrets/fapi_key
+      FAPI_FITMENT_ENABLED: ${FAPI_FITMENT_ENABLED:-false}
+      FAPI_DAILY_CREDIT_LIMIT: ${FAPI_DAILY_CREDIT_LIMIT:-1000}
+      API_NINJAS_KEY_FILE: /run/secrets/api_ninjas_key
+      # TecDoc (tecdoc.site): the vehicle and applicability catalogue; see docs/TECDOC.md.
+      TECDOC_API_KEY_FILE: /run/secrets/tecdoc_api_key
+      TECDOC_ENABLED: ${TECDOC_ENABLED:-true}
+      TECDOC_MONTHLY_LIMIT: ${TECDOC_MONTHLY_LIMIT:-150000}
+      TECDOC_PERIOD_START: ${TECDOC_PERIOD_START:-}
+      TECDOC_DAILY_LIMIT: ${TECDOC_DAILY_LIMIT:-0}
+      TECDOC_HOURLY_LIMIT: ${TECDOC_HOURLY_LIMIT:-0}
+      TECDOC_VISITOR_DAILY_LIMIT: ${TECDOC_VISITOR_DAILY_LIMIT:-150}
+      TECDOC_CACHE_TTL_SECONDS: ${TECDOC_CACHE_TTL_SECONDS:-86400}
+      TECDOC_CACHE_MAX_ENTRIES: ${TECDOC_CACHE_MAX_ENTRIES:-20000}
+      API_NINJAS_MODE: ${API_NINJAS_MODE:-off}
       POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
       REDIS_HOST: redis
       REDIS_PASSWORD_FILE: /run/secrets/redis_password
       REDIS_PORT: 6379
-      RESERVATION_TTL_MINUTES: ${RESERVATION_TTL_MINUTES:-20}
       ROSSKO_ENABLED: ${ROSSKO_ENABLED:-false}
       ROSSKO_DELIVERY_ID: ${ROSSKO_DELIVERY_ID:-000000001}
       ROSSKO_KEY1_FILE: /run/secrets/rossko_key1
       ROSSKO_KEY2_FILE: /run/secrets/rossko_key2
-      SANDBOX_PAYMENT_WEBHOOK_SECRET_FILE: /run/secrets/sandbox_payment_webhook_secret
+      REEFAPI_ENABLED: ${REEFAPI_ENABLED:-false}
+      REEFAPI_KEY_FILE: /run/secrets/reefapi_key
+      REEFAPI_MARKET: ${REEFAPI_MARKET:-de}
+      REEFAPI_DAILY_CREDITS: ${REEFAPI_DAILY_CREDITS:-30}
       SESSION_SECRET_FILE: /run/secrets/session_secret
+      # Read only by the staff dashboard to show whether mail is configured;
+      # the worker is the service that actually sends mail.
+      SMTP_HOST: ${SMTP_HOST:-}
       STORAGE_ROOT: /data/uploads
-      TRUST_PROXY_HOPS: "1"
+      SUPPLIER_MARKUP_PERCENT: ${SUPPLIER_MARKUP_PERCENT:-30}
+      TRUST_PROXY_CIDRS: "${AN30_CADDY_PROXY_IP:-172.30.30.10}/32,${AN30_WEB_PROXY_IP:-172.30.30.11}/32"
     secrets:
       - app_database_password
       - redis_password
       - session_secret
       - data_encryption_key
-      - sandbox_payment_webhook_secret
       - rossko_key1
       - rossko_key2
+      - reefapi_key
       - gemini_api_key
+      - fapi_key
+      - api_ninjas_key
+      - tecdoc_api_key
     depends_on:
       clamav:
         condition: service_healthy
@@ -229,6 +261,7 @@ services:
       dockerfile: apps/worker/Dockerfile
     restart: unless-stopped
     environment:
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
       DB_HOST: postgres
       DB_NAME: an30
       DB_PORT: 5432
@@ -281,9 +314,11 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         APP_BASE_URL: ${APP_BASE_URL:-http://localhost}
+        DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
     restart: unless-stopped
     environment:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
       ENABLE_PUBLIC_CHECKOUT: ${ENABLE_PUBLIC_CHECKOUT:-false}
       INTERNAL_API_URL: http://api:4000
       LEGAL_DOCUMENTS_APPROVED: ${LEGAL_DOCUMENTS_APPROVED:-false}
@@ -298,7 +333,9 @@ services:
           memory: 1G
         reservations:
           memory: 128M
-    networks: [backend]
+    networks:
+      backend:
+        ipv4_address: ${AN30_WEB_PROXY_IP:-172.30.30.11}
 
   caddy:
     build:
@@ -310,6 +347,10 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:-admin@an30.ru}
       CANONICAL_ORIGIN: ${APP_BASE_URL:-https://an30.ru}
       SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+      # Closed stand: one login and password for the whole site (infra/caddy/Caddyfile).
+      SITE_PASSWORD_ENABLED: ${SITE_PASSWORD_ENABLED:-false}
+      SITE_PASSWORD_HASH: ${SITE_PASSWORD_HASH:-$$2y$$10$$SGlRcgXW1uKEMxTMijjME.11M52ibS5DFfgsEMXJy3ne4bNxcYMPi}
+      SITE_PASSWORD_USER: ${SITE_PASSWORD_USER:-an30}
       WWW_SITE_ADDRESS: ${WWW_SITE_ADDRESS:-http://www.localhost}
     ports:
       - "80:80"
@@ -336,7 +377,9 @@ services:
           memory: 256M
         reservations:
           memory: 64M
-    networks: [backend]
+    networks:
+      backend:
+        ipv4_address: ${AN30_CADDY_PROXY_IP:-172.30.30.10}
 
 secrets:
   postgres_password:
@@ -349,8 +392,6 @@ secrets:
     file: ${AN30_SECRETS_DIR:-./secrets}/session_secret.txt
   data_encryption_key:
     file: ${AN30_SECRETS_DIR:-./secrets}/data_encryption_key.txt
-  sandbox_payment_webhook_secret:
-    file: ${AN30_SECRETS_DIR:-./secrets}/sandbox_payment_webhook_secret.txt
   smtp_password:
     file: ${AN30_SECRETS_DIR:-./secrets}/smtp_password.txt
   telegram_bot_token:
@@ -361,8 +402,16 @@ secrets:
     file: ${AN30_SECRETS_DIR:-./secrets}/rossko_key1.txt
   rossko_key2:
     file: ${AN30_SECRETS_DIR:-./secrets}/rossko_key2.txt
+  reefapi_key:
+    file: ${AN30_SECRETS_DIR:-./secrets}/reefapi_key.txt
   gemini_api_key:
     file: ${AN30_SECRETS_DIR:-./secrets}/gemini_api_key.txt
+  fapi_key:
+    file: ${AN30_SECRETS_DIR:-./secrets}/fapi_key.txt
+  api_ninjas_key:
+    file: ${AN30_SECRETS_DIR:-./secrets}/api_ninjas_key.txt
+  tecdoc_api_key:
+    file: ${AN30_SECRETS_DIR:-./secrets}/tecdoc_api_key.txt
 
 volumes:
   caddy_config:
@@ -376,3 +425,6 @@ volumes:
 networks:
   backend:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${AN30_BACKEND_SUBNET:-172.30.30.0/24}
