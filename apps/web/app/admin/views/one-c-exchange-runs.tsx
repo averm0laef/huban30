@@ -22,6 +22,8 @@ interface ExchangeRun {
   createdAt: string;
   errorMessage: string | null;
   filename: string;
+  /** A full catalogue named less than half of the shop's products and hid none of the missing ones. */
+  hidingSkipped: boolean;
   id: string;
   imagesAttached: number;
   imagesSkipped: number;
@@ -29,6 +31,8 @@ interface ExchangeRun {
   phase: string;
   /** The 1С price type an offers file's prices were taken from; null for catalog files. */
   priceTypeName: string | null;
+  /** Products a full catalogue no longer lists and hid from the shop. */
+  productsHidden: number;
   rowsInFile: number;
   rowsRejected: number;
   rowsTouched: number;
@@ -125,6 +129,10 @@ export function OneCExchangeRuns({ source }: { source: OneCSource }) {
               : "все записи приняты"}
             {row.original.kind === "catalog" && row.original.rowsUncategorized > 0
               ? ` · ${row.original.rowsUncategorized} без категории` : ""}
+            {row.original.productsHidden > 0
+              ? ` · снято с витрины: ${row.original.productsHidden} (их больше нет в выгрузке)` : ""}
+            {row.original.hidingSkipped
+              ? " · в файле меньше половины товаров сайта: товары, которых в нём нет, остались на витрине" : ""}
             {row.original.imagesAttached + row.original.imagesSkipped > 0
               ? ` · фото: ${row.original.imagesAttached} добавлено, ${row.original.imagesSkipped} пропущено` : ""}
             {row.original.kind === "offers"
