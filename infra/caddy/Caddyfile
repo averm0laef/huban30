@@ -1,6 +1,16 @@
 {
 	email {$ACME_EMAIL}
 	admin off
+	# The limiter stands before the site password: a flood is turned away before any password is checked.
+	order rate_limit before basic_auth
+	servers {
+		# A connection that opens and then says nothing (or drips its headers) is dropped; an idle one is closed.
+		timeouts {
+			read_header 10s
+			idle 2m
+		}
+		max_header_size 32KB
+	}
 }
 
 {$SITE_ADDRESS} {
@@ -9,6 +19,37 @@
 		# 15 MiB chat media plus multipart framing; the API remains the final
 		# authority with its exact 16 MiB body limit.
 		max_size 17MB
+	}
+
+	# Frequent requests from one address. Measured on the full catalogue (23.11.2026): one brisk visitor makes about
+	# 12 page renders and 25 API calls a minute, and ~500 link prefetches — those are answered in a few hundred bytes
+	# without touching the database, so they are not counted. The limits leave room for a dozen customers behind one
+	# address of a mobile carrier and stop one address from taking the server's whole capacity. Windows are short
+	# and counts small on purpose: the limiter keeps `events` timestamps per address, and a flood from many addresses
+	# must not be able to fill the proxy's memory. The API keeps its own, finer limits per route behind this.
+	# Not counted here: the 1С exchange (its own account, networks and limits; it polls hundreds of times a minute),
+	# static files, health probes and the chat socket.
+	rate_limit {
+		zone renders {
+			match {
+				not path /api/* /ws* /_next/* /health/* /proxy-health /categories/* /brand/* /avatars/* /fonts/* /email/* /editorial/* *.png *.jpg *.webp *.avif *.svg *.ico *.woff2 *.webmanifest *.txt *.xml
+				not header Next-Router-Prefetch 1
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 60
+			window 10s
+		}
+		zone api {
+			match {
+				path /api/*
+				not path /api/v1/integrations/1c/*
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 150
+			window 10s
+		}
 	}
 
 	# Optional password on the whole site (a closed test stand before launch).
