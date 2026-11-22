@@ -68,6 +68,15 @@ export function crossEquivalentsCte(article: string): string {
 
 // Brands are compared by identity (app.canonical_brand, migration 0042):
 // 1С may call the brand «MANN» while the cross names «MANN-FILTER».
+/** The name starts with the product's own article («3930 Лампа T4W …»): 5 780 names of the owner's base do. */
+const STARTS_WITH_ARTICLE = "lower(left(product.name,length(product.sku)+1))=lower(product.sku::text)||' '";
+
+/**
+ * The order «по названию»: the name as the storefront shows it — without the article it starts with
+ * (publicProductName with the article) — in the Russian alphabet (migration 0050).
+ */
+export const NAME_ORDER = `lower(CASE WHEN ${STARTS_WITH_ARTICLE} THEN substr(product.name,length(product.sku)+2) ELSE product.name END) COLLATE app.russian_names ASC`;
+
 export const CROSS_MATCH = `(product.sku_normalized<>'' AND EXISTS (
   SELECT 1 FROM cross_equivalents
   WHERE cross_equivalents.article=product.sku_normalized
@@ -255,6 +264,6 @@ export function catalogSearchRelevanceOrder(p: SqlParameters, input: CatalogSear
     floor(LEAST(relevance.score,1)*4) DESC,
     (stock.available_quantity>0) DESC,
     relevance.score DESC,
-    lower(product.name) COLLATE app.russian_names ASC`;
+    ${NAME_ORDER}`;
   return { join, order };
 }

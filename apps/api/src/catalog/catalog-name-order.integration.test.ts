@@ -11,7 +11,10 @@ import { CatalogPublicService } from "./catalog-public.service.js";
 
 const url = process.env.CATALOG_SEARCH_DATABASE_URL;
 const PREFIX = "name-order-fixture:";
-const NAMES = ["Яблоко на присоске", "abc клипса", "Bcd втулка", "ёлочка ароматизатор", "Ель ароматизатор", "Абажур плафона"];
+const NAMES = ["Яблоко на присоске", "abc клипса", "Bcd втулка", "ёлочка ароматизатор", "Ель ароматизатор", "Абажур плафона", "0443E Бампер передний"];
+// The storefront shows «0443E Бампер передний» as «Бампер передний» (publicProductName with the article): it is
+// ordered so too.
+const SKUS = new Map([["0443E Бампер передний", "0443E"]]);
 
 describe.skipIf(!url)("products in the order of their names (real PostgreSQL)", () => {
   let database: DatabaseService;
@@ -32,7 +35,7 @@ describe.skipIf(!url)("products in the order of their names (real PostgreSQL)", 
     for (const [index, name] of NAMES.entries()) {
       await database.query(
         "INSERT INTO app.products (external_id,sku,name,slug,category_id) VALUES ($1,$2,$3,$4,$5)",
-        [`${PREFIX}${index}`, `NO-${index}`, name, `name-order-${index}`, category.rows[0]!.id],
+        [`${PREFIX}${index}`, SKUS.get(name) ?? `NO-${index}`, name, `name-order-${index}`, category.rows[0]!.id],
       );
     }
   }, 60_000);
@@ -42,8 +45,8 @@ describe.skipIf(!url)("products in the order of their names (real PostgreSQL)", 
     await database?.onModuleDestroy?.();
   });
 
-  it("reads the alphabet as a Russian customer does: case does not matter, «ё» is read as «е» (as in a dictionary), Cyrillic before Latin", async () => {
+  it("reads the alphabet as a Russian customer does: case does not matter, «ё» is read as «е» (as in a dictionary), Cyrillic before Latin, the leading article aside", async () => {
     const page = await service.products({ category: "name-order-fixture", sort: "name" });
-    expect(page.items.map((item) => item.name)).toEqual(["Абажур плафона", "ёлочка ароматизатор", "Ель ароматизатор", "Яблоко на присоске", "abc клипса", "Bcd втулка"]);
+    expect(page.items.map((item) => item.name)).toEqual(["Абажур плафона", "Бампер передний", "Ёлочка ароматизатор", "Ель ароматизатор", "Яблоко на присоске", "abc клипса", "Bcd втулка"]);
   });
 });

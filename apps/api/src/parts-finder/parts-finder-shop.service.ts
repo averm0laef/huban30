@@ -230,7 +230,7 @@ export class PartsFinderShopService {
         brand: row.brand_name,
         matchedVia: row.via === 0 ? "exact" : row.via === 1 ? "cross" : "possible",
         // Without the staff's notes typed into the name in 1С («(Ш)», «+++», the shelf box): product-name.ts.
-        name: publicProductName(row.name),
+        name: publicProductName(row.name, row.sku),
         priceKopeks: safeInteger(row.price_kopeks),
         productId: row.product_id,
         sku: row.sku,

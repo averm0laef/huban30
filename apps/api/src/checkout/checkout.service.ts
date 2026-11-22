@@ -279,7 +279,7 @@ export class CheckoutService {
       lines.push({
         amountKopeks,
         // The order is a document the customer reads: without the staff's notes typed into the name in 1С.
-        name: publicProductName(product.name),
+        name: publicProductName(product.name, product.sku),
         productId: item.productId,
         quantity: item.quantity,
         sku: product.sku,

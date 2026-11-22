@@ -39,6 +39,7 @@ import {
   CROSS_MATCH,
   type CatalogSearchInput,
   escapeLike,
+  NAME_ORDER,
   SqlParameters,
 } from "./catalog-search-sql.js";
 import { searchTokenPlan } from "./catalog-search-tokens.js";
@@ -647,7 +648,7 @@ export class CatalogPublicService {
       id: row.id,
       matchedVia,
       // Without the staff's notes typed into the name in 1С («(Ш)», «+++», the shelf box): product-name.ts.
-      name: publicProductName(row.name),
+      name: publicProductName(row.name, row.sku),
       priceKopeks: row.price_kopeks === null ? null : safeInteger(row.price_kopeks, "price"),
       primaryImage: image,
       sku: row.sku,
@@ -659,7 +660,7 @@ export class CatalogPublicService {
   private productOrder(p: SqlParameters, input: CatalogSearchInput, article: string): { join: string; order: string } {
     switch (input.query.sort) {
       case "newest": return { join: "", order: "product.created_at DESC" };
-      case "name": return { join: "", order: "lower(product.name) COLLATE app.russian_names ASC" };
+      case "name": return { join: "", order: NAME_ORDER };
       case "price_asc": return { join: "", order: "price.amount_kopeks ASC NULLS LAST" };
       case "price_desc": return { join: "", order: "price.amount_kopeks DESC NULLS LAST" };
       // Ranking never lets a fuzzy match outrank an exact one: an exact
@@ -669,7 +670,7 @@ export class CatalogPublicService {
         ? catalogSearchRelevanceOrder(p, input, article)
         // Browsing a section: what can be bought today first, then priced
         // items, then alphabetical — never "last touched by the import".
-        : { join: "", order: "(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) COLLATE app.russian_names ASC" };
+        : { join: "", order: `(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,${NAME_ORDER}` };
     }
   }
 

@@ -86,3 +86,41 @@ describe("the name of a product as a customer sees it", () => {
     expect(publicProductName("+++")).toBe("+++");
   });
 });
+
+describe("the name of a product read with its article", () => {
+  it.each([
+    // 5 780 names of the owner's base start with the article, which the page already shows on a line of its own.
+    ["3930 Лампа T4W 24V BA9s Osram", "3930", "Лампа T4W 24V BA9s Osram"],
+    ["LC-341 Фильтр масляный LYNXauto Union C-341", "LC-341", "Фильтр масляный LYNXauto Union C-341"],
+    ["20-22 Хомут силовой 20-22мм", "20-22", "Хомут силовой 20-22мм"],
+    ["AF0258W Фильтр воздушный Avantech AVANTECH", "af0258w", "Фильтр воздушный Avantech AVANTECH"],
+    // The article said twice at the end.
+    ["Набор резиновых колец 404 шт (ЦЕНА ЗА ШТУКУ!!!) DA-00997 DA-00997", "DA00997", "Набор резиновых колец 404 шт (ЦЕНА ЗА ШТУКУ!!!) DA-00997"],
+    ["10PK1620 Ремень поликлиновый DONGIL 10PK1620 10PK1620", "10PK1620", "Ремень поликлиновый DONGIL 10PK1620"],
+    // Typed all in small letters: the first letter is a capital, a shorthand all capitals.
+    ["лента изоляционная ПВХ 19мм", "LI-19", "Лента изоляционная ПВХ 19мм"],
+    ["элемент масляного фильтра 7405-1012040 бумага", "7405-1012040", "Элемент масляного фильтра 7405-1012040 бумага"],
+    ["акб BARS Silver - 60а/ч о.п.", "0602110188", "АКБ BARS Silver - 60а/ч о.п."],
+    ["р/к суппорта переднего", "RK-1", "Р/к суппорта переднего"],
+    ["3930 лампа 24V", "3930", "Лампа 24V"],
+  ])("«%s» (article %s) is shown as «%s»", (name, sku, shown) => {
+    expect(publicProductName(name, sku)).toBe(shown);
+  });
+
+  it.each([
+    ["Лампа OSRAM 3930", "3930"],
+    // The article is the start of a longer number, not the number itself.
+    ["39301 Лампа накаливания", "3930"],
+    // Nothing but codes would be left.
+    ["3930 24V", "3930"],
+    // A brand or a code in small letters, a name in capitals: as typed.
+    ["masuma MFC-112 фильтр", "MFC-112"],
+    ["ФИЛЬТР САЛОНА SHAANXI 81.61910.0011 CREATEK CK5655", "CK5655"],
+  ])("«%s» (article %s) is shown as it is", (name, sku) => {
+    expect(publicProductName(name, sku)).toBe(name);
+  });
+
+  it("leaves the leading article alone when the article is not given: the exchange stores the name so", () => {
+    expect(publicProductName("3930 Лампа T4W 24V BA9s Osram")).toBe("3930 Лампа T4W 24V BA9s Osram");
+  });
+});

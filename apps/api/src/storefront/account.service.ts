@@ -114,7 +114,7 @@ function productView(row: ProductListRow) {
     id: row.id,
     imageUrl: row.primary_image_id ? `/api/v1/catalog/media/${row.primary_image_id}` : null,
     // Without the staff's notes typed into the name in 1С («(Ш)», «+++», the shelf box): product-name.ts.
-    name: publicProductName(row.name),
+    name: publicProductName(row.name, row.sku),
     price: row.amount_kopeks === null ? null : {
       amountKopeks: safeInteger(row.amount_kopeks, "цена"),
       currency: "RUB",

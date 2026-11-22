@@ -11,6 +11,7 @@ import type { DatabaseService } from "../infrastructure/database.service.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { CatalogPublicController } from "./catalog-public.controller.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
+import { NAME_ORDER } from "./catalog-search-sql.js";
 import { normalizeArticleNumber } from "./catalog-search-normalize.js";
 
 const PRODUCT_ID = "019bf9ea-0d3e-7def-9c9a-000000000010";
@@ -155,7 +156,7 @@ describe("CatalogPublicService", () => {
     const exactTier = ranking.search(/product\.sku_normalized=\$\d+\) DESC/u);
     const prefixTier = ranking.search(/product\.sku_normalized LIKE \$\d+\) DESC/u);
     const fuzzyTier = ranking.indexOf("relevance.score");
-    const nameTiebreak = ranking.indexOf("lower(product.name) COLLATE app.russian_names ASC");
+    const nameTiebreak = ranking.indexOf(NAME_ORDER);
     expect(exactTier).toBeGreaterThan(-1);
     expect(prefixTier).toBeGreaterThan(exactTier);
     expect(fuzzyTier).toBeGreaterThan(prefixTier);
@@ -699,7 +700,7 @@ describe("CatalogPublicService word-by-word search", () => {
     query.mockResolvedValueOnce({ rows: [] });
     await service.products({ category: "filters" });
     const [sql] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) COLLATE app.russian_names ASC");
+    expect(sql).toContain(`(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,${NAME_ORDER}`);
   });
 });
 
