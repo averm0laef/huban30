@@ -130,6 +130,16 @@ export function sectionLinkState(state: CatalogPageQuery): CatalogPageQuery {
   return { ...state, brands: [], maxPriceRubles: null, minPriceRubles: null, page: 1, priceRangeValid: true, query: "" };
 }
 
+/**
+ * What a catalogue page says when the catalogue did not answer, by the status it answered with. «Too many requests
+ * from your address» passes in a minute and is said as such; anything else is the catalogue being unavailable.
+ */
+export function catalogFailureText(status: number | null): { heading: string; message: string } {
+  return status === 429
+    ? { heading: "Слишком много запросов", message: "С вашего адреса пришло слишком много запросов подряд. Подождите минуту и обновите страницу." }
+    : { heading: "Каталог не отвечает", message: "Каталог временно недоступен. Попробуйте ещё раз позже." };
+}
+
 export function clearCatalogFiltersHref(basePath: string, state: CatalogPageQuery): string {
   return catalogPageHref(basePath, {
     ...state,

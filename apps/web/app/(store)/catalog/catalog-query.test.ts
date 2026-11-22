@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CATALOG_LAST_PAGE,
+  catalogFailureText,
   catalogPageHref,
   catalogPageNumbers,
   clearCatalogFiltersHref,
@@ -131,5 +132,22 @@ describe("the page numbers under a list", () => {
     expect(CATALOG_LAST_PAGE).toBe(201);
     expect(parseCatalogPageQuery({ page: String(CATALOG_LAST_PAGE) }).page).toBe(CATALOG_LAST_PAGE);
     expect(parseCatalogPageQuery({ page: String(CATALOG_LAST_PAGE + 1) }).page).toBe(1);
+  });
+});
+
+// Seen in a chaotic run: visitors sharing one address were told «Каталог не отвечает» when it was the limit of
+// requests per address that had answered. The two are different things to a customer: one passes in a minute.
+describe("what a catalogue page says when the catalogue did not answer", () => {
+  it("says there were too many requests when that is what the catalogue answered", () => {
+    expect(catalogFailureText(429)).toEqual({
+      heading: "Слишком много запросов",
+      message: "С вашего адреса пришло слишком много запросов подряд. Подождите минуту и обновите страницу.",
+    });
+  });
+
+  it("says the catalogue is unavailable for anything else", () => {
+    for (const status of [500, 502, 503, 0, null]) {
+      expect(catalogFailureText(status)).toEqual({ heading: "Каталог не отвечает", message: "Каталог временно недоступен. Попробуйте ещё раз позже." });
+    }
   });
 });

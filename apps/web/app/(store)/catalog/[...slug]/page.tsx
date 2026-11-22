@@ -21,6 +21,7 @@ import { ExpertHelpQueryLink } from "../expert-help-query-link";
 import type { CatalogEmptyState } from "../catalog-search-panel";
 import {
   CATALOG_PAGE_SIZE,
+  catalogFailureText,
   catalogPageHref,
   catalogProductCount,
   hasActiveCatalogFilters,
@@ -111,7 +112,8 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       total = response.total;
       matchMode = response.matchMode ?? "all";
     } catch (error) {
-      errorMessage = error instanceof StorefrontApiError ? error.message : "Не удалось прочитать ответ каталога.";
+      if (error instanceof StorefrontApiError) ({ heading: errorHeading, message: errorMessage } = catalogFailureText(error.status));
+      else errorMessage = "Не удалось прочитать ответ каталога.";
     }
   }
   const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));

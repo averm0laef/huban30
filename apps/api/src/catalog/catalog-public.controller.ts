@@ -8,6 +8,11 @@ import { CatalogSearchLogService } from "./catalog-search-log.service.js";
 
 const MEDIA_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 
+// Reads of the catalogue from one address, per minute. A visitor opens 10–15 lists a minute and a dozen customers
+// may share one address of a mobile carrier; at 60 they were told «Каталог не отвечает». A flood is stopped at the
+// proxy (infra/caddy/Caddyfile), so this only has to stop what gets past it.
+const CATALOG_READS_PER_MINUTE = 240;
+
 @Public()
 @Controller("catalog")
 export class CatalogPublicController {
@@ -19,25 +24,25 @@ export class CatalogPublicController {
 
   @Get("categories")
   async categories(@Req() request: FastifyRequest) {
-    await this.rateLimit.consume("catalog-categories", request.ip, 60, 60);
+    await this.rateLimit.consume("catalog-categories", request.ip, CATALOG_READS_PER_MINUTE, 60);
     return this.catalog.categories();
   }
 
   @Get("categories/tree")
   async categoryTree(@Req() request: FastifyRequest) {
-    await this.rateLimit.consume("catalog-categories-tree", request.ip, 60, 60);
+    await this.rateLimit.consume("catalog-categories-tree", request.ip, CATALOG_READS_PER_MINUTE, 60);
     return this.catalog.categoryTree();
   }
 
   @Get("brands")
   async brands(@Req() request: FastifyRequest, @Query("category") category?: string) {
-    await this.rateLimit.consume("catalog-brands", request.ip, 60, 60);
+    await this.rateLimit.consume("catalog-brands", request.ip, CATALOG_READS_PER_MINUTE, 60);
     return this.catalog.brands(category);
   }
 
   @Get("products")
   async products(@Query() query: unknown, @Req() request: FastifyRequest) {
-    await this.rateLimit.consume("catalog-products", request.ip, 60, 60);
+    await this.rateLimit.consume("catalog-products", request.ip, CATALOG_READS_PER_MINUTE, 60);
     const result = await this.catalog.products(query);
     this.searchLog.record(query, (result as { total?: unknown }).total);
     return result;
@@ -45,13 +50,13 @@ export class CatalogPublicController {
 
   @Get("products/:idOrSlug")
   async product(@Param("idOrSlug") idOrSlug: string, @Req() request: FastifyRequest) {
-    await this.rateLimit.consume("catalog-product", request.ip, 120, 60);
+    await this.rateLimit.consume("catalog-product", request.ip, CATALOG_READS_PER_MINUTE, 60);
     return this.catalog.product(idOrSlug);
   }
 
   @Get("featured")
   async featured(@Query() query: unknown, @Req() request: FastifyRequest) {
-    await this.rateLimit.consume("catalog-featured", request.ip, 60, 60);
+    await this.rateLimit.consume("catalog-featured", request.ip, CATALOG_READS_PER_MINUTE, 60);
     return this.catalog.featured(query);
   }
 
