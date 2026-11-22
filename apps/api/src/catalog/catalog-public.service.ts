@@ -162,6 +162,16 @@ function withSingleLineSearchText(rawQuery: unknown): unknown {
   return { ...(rawQuery as Record<string, unknown>), q };
 }
 
+/**
+ * The key of a section's first page without a search or filters — what every visitor opening the section asks
+ * for, kept for half a minute (CatalogCategoryTreeCache.readFirstPage); null for anything else.
+ */
+function firstPageKey(query: CatalogProductsQuery): string | null {
+  if (query.q || query.brand.length > 0 || query.availability !== "all" || query.offset !== 0) return null;
+  if (query.minPriceKopeks !== undefined || query.maxPriceKopeks !== undefined) return null;
+  return JSON.stringify([query.category ?? "", query.sort, query.limit]);
+}
+
 @Injectable()
 export class CatalogPublicService {
   private readonly engine: CatalogSearchEngine | null;
@@ -292,6 +302,18 @@ export class CatalogPublicService {
       throw new BadRequestException({ error: "invalid_catalog_query", issues: parsed.error.issues });
     }
     const query = parsed.data;
+    const firstPage = firstPageKey(query);
+    if (firstPage) {
+      const kept = this.categoryTreeCache.readFirstPage(firstPage);
+      if (kept) return kept as Awaited<ReturnType<CatalogPublicService["searchProducts"]>>;
+      const page = await this.searchProducts(query);
+      this.categoryTreeCache.writeFirstPage(firstPage, page);
+      return page;
+    }
+    return this.searchProducts(query);
+  }
+
+  private async searchProducts(query: CatalogProductsQuery) {
     // Free text is ё/Ё-folded before it reaches SQL, matching app.fold_yo on
     // the stored name_folded/search_text_folded columns (migration 0025).
     // The article key has its own homoglyph fold (normalizeArticleNumber).

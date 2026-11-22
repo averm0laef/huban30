@@ -702,3 +702,56 @@ describe("CatalogPublicService word-by-word search", () => {
     expect(sql).toContain("(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) COLLATE app.russian_names ASC");
   });
 });
+
+describe("CatalogPublicService first page of a section", () => {
+  // The catalogue's root without filters cost about half a second of the database on the owner's 42 723 items
+  // (23.11.2026); every visitor who opens a section asks for the same page.
+  const query = vi.fn();
+  const cache = new CatalogCategoryTreeCache();
+  const service = new CatalogPublicService(
+    cache,
+    {
+      query,
+      transaction: async <T>(work: (client: { query: typeof query }) => Promise<T>) => work({
+        query: vi.fn((text: string, values?: unknown[]) => (
+          text.startsWith("SET LOCAL") ? Promise.resolve({ rows: [] }) : query(text, values)
+        )),
+      }),
+    } as unknown as DatabaseService,
+    { name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() },
+  );
+
+  beforeEach(() => {
+    query.mockReset();
+    query.mockResolvedValue({ rows: [productRow()] });
+    cache.invalidate();
+  });
+
+  it("answers the same unfiltered first page from memory for half a minute", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    const first = await service.products({ category: "filters" });
+    expect(await service.products({ category: "filters" })).toEqual(first);
+    expect(await service.products({ category: "filters", limit: "24", sort: "relevance" })).toEqual(first);
+    expect(query).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(1_000_000 + 30_001);
+    await service.products({ category: "filters" });
+    expect(query).toHaveBeenCalledTimes(2);
+    now.mockRestore();
+  });
+
+  it("asks the database again once a 1С exchange changed the catalogue", async () => {
+    await service.products({});
+    cache.invalidate();
+    await service.products({});
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("never keeps a search, a filter or a further page", async () => {
+    for (const filters of [{ q: "фильтр" }, { brand: "ngk" }, { availability: "in_stock" }, { minPriceKopeks: "100" }, { offset: "48" }]) {
+      query.mockClear();
+      await service.products({ category: "filters", ...filters });
+      await service.products({ category: "filters", ...filters });
+      expect(query.mock.calls.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
