@@ -19,6 +19,19 @@ describe("the maker of a part, read from its name", () => {
     ["Лампа автомобильная Skyway Спутник W1.2W, 12 В, 1.2 Вт", "SKYWAY"],
     ["Клипса крепежная TORSO, универсальная, КП-0012 1293458", "TORSO"],
     ["Сальник NOK 90311-38034", "NOK"],
+    // Read by eye from the most frequent Latin words of names without a brand (makers-in-names.mjs --candidates).
+    ["Стабилизатор TG-SL016/CLS-12 * Ti·GUAR CLS-12 46630-60B01", "Ti-Guar"],
+    ["Амортизатор 7403413-GT Ti•GUAR", "Ti-Guar"],
+    ["Масло моторное ENEOS Premium TOURING SN 5W-30 4Л", "ENEOS"],
+    ["Масло моторное РОСНЕФТЬ Magnum Ultratec 5W-40 4л", "Роснефть"],
+    ["ШРУС внешний 26/27 INKO 329097", "INKO"],
+    ["Колодки тормозные NISSHINBO PF-1234", "NISSHINBO"],
+    ["Tochka opory 7-06-364 Сайлентблок полиуретановый задней подвески", "Точка опоры"],
+    ["Wv52bc-78 термостат tama", "TAMA"],
+    ["Щетки генератора \"FCC\" 6х7х20mm, к-т2шт (1/20)", "FCC"],
+    ["Эл.фильтр.оч. масла LUXE LХ-202-M ГАЗ-53", "LUXE"],
+    ["антифриз TCL LLC -40С зелёный 4л. Япония 1*6", "TCL"],
+    ["Ароматизатор на торпеду Yammy гелевый Blue Squash G017 66931", "Yammy"],
   ])("«%s» → %s", (name, maker) => {
     expect(partMakerInName(name)).toBe(maker);
   });
@@ -50,6 +63,10 @@ describe("the maker of a part, read from its name", () => {
   it("still takes the maker standing outside the brackets", () => {
     expect(partMakerInName("CVKD-9 Сайлентблок рычага подвески | перед прав/лев | 09319-12039 CTR   (Febest SZAB-036)")).toBe("CTR");
     expect(partMakerInName("GS8714 Колодки тормозные барабанные | зад | TRW (ST-46550-33010  SAT)")).toBe("TRW");
+  });
+
+  it("reads «LUXE» only in capitals: «Ножницы Spark Luxe» are Spark's", () => {
+    expect(partMakerInName("Ножницы хозяйственные Spark Luxe 230 мм")).toBeNull();
   });
 
   it("reads «SAT» only as a whole word in capitals", () => {
