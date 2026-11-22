@@ -20,6 +20,8 @@
 #   AN30_BACKUP_DIR    destination                 (default /var/backups/an30)
 #   AN30_APP_DIR       compose project directory   (default /opt/an30/app)
 #   AN30_RETAIN_DAYS   how long to keep archives   (default 14)
+#   AN30_KEEP_ALL_HOURS  archives younger than this are all kept; older ones
+#                        are thinned to the last one of each day (default 48)
 
 set -euo pipefail
 
@@ -28,6 +30,7 @@ secrets_dir=${AN30_SECRETS_DIR:-/etc/an30/secrets}
 backup_dir=${AN30_BACKUP_DIR:-/var/backups/an30}
 app_dir=${AN30_APP_DIR:-/opt/an30/app}
 retain_days=${AN30_RETAIN_DAYS:-14}
+keep_all_hours=${AN30_KEEP_ALL_HOURS:-48}
 passphrase_file="$secrets_dir/backup_passphrase.txt"
 
 log() { printf '{"level":"info","service":"backup","event":"%s","message":"%s"}\n' "$1" "$2"; }
@@ -111,6 +114,28 @@ docker run --rm -v "$uploads_volume:/data/uploads:ro" postgres:18-alpine \
 log "uploads.completed" "Attachment archive written"
 
 # ---- retention ------------------------------------------------------------
+# A copy every 15 minutes kept for the whole retention period fills the disk:
+# 96 archives a day. Recent archives stay as they are; past keep_all_hours only
+# the last archive of each UTC day survives, until retain_days removes it too.
+thin_before=$(date -u -d "-$keep_all_hours hours" +%Y%m%dT%H%M%SZ)
+thinned=0
+for kind in db uploads; do
+  kept_day=""
+  while IFS= read -r name; do
+    archive_stamp=${name#"an30-$kind-"}
+    archive_stamp=${archive_stamp%%.*}
+    [[ $archive_stamp =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || continue
+    [[ $archive_stamp < $thin_before ]] || continue
+    if [ "${archive_stamp%%T*}" = "$kept_day" ]; then
+      rm -f -- "$backup_dir/$name"
+      thinned=$((thinned + 1))
+    else
+      kept_day=${archive_stamp%%T*}
+    fi
+  done < <(find "$backup_dir" -maxdepth 1 -name "an30-$kind-*.gpg" -printf '%f\n' | sort -r)
+done
+log "retention.thinned" "Removed $thinned archive(s) older than $keep_all_hours hours, keeping the last one of each day"
+
 removed=$(find "$backup_dir" -maxdepth 1 -name 'an30-*.gpg' -mtime "+$retain_days" -print -delete | wc -l)
 log "retention.applied" "Removed $removed archive(s) older than $retain_days days"
 
