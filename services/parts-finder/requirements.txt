@@ -1,0 +1,4 @@
+certifi>=2025.1.31
+python-dotenv>=1.0.1,<2
+vininfo==2.0.0
+ultravin==3.0.2

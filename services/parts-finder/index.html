@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Каталог запчастей + VIN декодер</title>
+<style>
+  * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+  body { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; background: #f9fafb; color: #111827; }
+  h1 { font-size: 1.5rem; border-bottom: 2px solid #e5e7eb; padding-bottom: .5rem; }
+  h2 { font-size: 1.15rem; color: #1e40af; margin: 0 0 .75rem; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: .75rem; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  label { display: block; font-weight: 500; margin-bottom: .35rem; font-size: .9rem; }
+  input[type="text"], select { width: 100%; padding: .6rem .8rem; border: 1px solid #d1d5db; border-radius: .5rem; font-size: 1rem; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
+  .row > * { flex: 1; min-width: 160px; }
+  button { background: #2563eb; color: #fff; border: none; padding: .65rem 1.2rem; border-radius: .5rem; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #93c5fd; cursor: not-allowed; }
+  .hint { font-size: .8rem; color: #6b7280; margin: .25rem 0 .75rem; }
+  .meta { font-size: .8rem; color: #6b7280; margin: .75rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem; }
+  .part { border: 1px solid #e5e7eb; border-radius: .5rem; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+  .part img { width: 100%; height: 160px; object-fit: contain; background: #f3f4f6; }
+  .part-body { padding: .75rem; display: flex; flex-direction: column; gap: .35rem; flex: 1; }
+  .part-brand { font-weight: 600; font-size: .85rem; color: #1e40af; text-transform: uppercase; }
+  .part-title { font-size: .9rem; line-height: 1.3; flex: 1; }
+  .part-price { font-weight: 700; font-size: 1.1rem; }
+  .part-stock { font-size: .8rem; }
+  .in-stock { color: #059669; }
+  .out-stock { color: #dc2626; }
+  .part a { display: block; text-align: center; background: #f3f4f6; color: #1e40af; text-decoration: none; padding: .5rem; font-size: .85rem; font-weight: 500; border-top: 1px solid #e5e7eb; }
+  .part a:hover { background: #e5e7eb; }
+  .error { background: #fef2f2; border-color: #fecaca; color: #991b1b; padding: 1rem; border-radius: .5rem; font-family: monospace; font-size: .85rem; white-space: pre-wrap; margin-top: 1rem; }
+  .vin-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
+  .vin-table th, .vin-table td { padding: .4rem .6rem; border-bottom: 1px solid #e5e7eb; vertical-align: top; text-align: left; }
+  .vin-table th { font-weight: 500; color: #4b5563; width: 40%; }
+  .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .actions button + button { background: #e5e7eb; color: #1f2937; }
+  .actions button + button:disabled { opacity: .65; }
+  .lookup-block { margin-top: 1rem; }
+  .lookup-block h3 { margin: 0 0 .35rem; font-size: 1rem; }
+  .table-scroll { overflow-x: auto; }
+  .provider-table { border-collapse: collapse; width: 100%; margin-top: .75rem; font-size: .85rem; }
+  .provider-table th, .provider-table td { padding: .5rem .6rem; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+  .provider-table code { overflow-wrap: anywhere; }
+  .provider-card summary { cursor: pointer; color: #1e40af; font-weight: 600; }
+  .provider-card > summary { margin-bottom: .3rem; }
+  .provider-card[open] > summary { margin-bottom: 1rem; }
+  .fapi-choices { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .parts-step { max-width: 42rem; }
+  .parts-step .actions { margin-top: .75rem; }
+  .parts-step label { margin-top: .75rem; }
+  .part-context { font-weight: 650; margin: .75rem 0 .3rem; }
+  .parts-step button { max-width: 100%; text-align: left; white-space: normal; }
+  button.secondary { background: #e5e7eb; color: #1f2937; }
+  .parts-examples { margin-bottom: 0; }
+  .hidden { display: none; }
+  .loading { color: #6b7280; margin-top: 1rem; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>🔍 Каталог запчастей + VIN декодер</h1>
+
+<section class="card" aria-labelledby="fapiHeading">
+  <h2 id="fapiHeading">Найти запчасть</h2>
+  <form class="row" id="fapiForm">
+    <div style="flex:3">
+      <label for="fapiArticle">Деталь и машина или артикул</label>
+      <input type="text" id="fapiArticle" maxlength="140" placeholder="Масляный фильтр Пробокс" aria-describedby="fapiHelp" required>
+    </div>
+    <div><button type="submit" id="fapiSearchBtn">Найти</button></div>
+  </form>
+  <p class="hint parts-examples" id="fapiHelp">Например, «колодки Лада Веста 2020» или «масляный фильтр Пробокс 1.3». Можно указать год, кузов или объём двигателя.</p>
+  <p class="meta" id="fapiStatus" role="status"></p>
+  <div id="fapiResult"></div>
+  <div id="fapiError" class="error hidden" role="alert"></div>
+</section>
+
+<section class="card" aria-labelledby="vinHeading">
+  <h2 id="vinHeading">Поиск автомобиля по VIN или номеру кузова</h2>
+  <p class="hint" id="vinHelp">Введите VIN из 17 символов или японский номер с дефисом, например <code>MXPH14-0036630</code>. Для расчёта контрольного символа США поставьте <code>?</code> на девятом месте VIN.</p>
+  <form class="row" id="vinForm">
+    <div style="flex:2">
+      <label for="vinInput">VIN или номер кузова</label>
+      <input type="text" id="vinInput" placeholder="XTAGFK330JY144213" aria-describedby="vinHelp" spellcheck="false" autocapitalize="characters" required>
+    </div>
+    <div class="actions">
+      <button type="submit" id="decodeVinBtn">Декодировать</button>
+      <button type="button" id="checkDigitBtn" disabled>Контрольный символ США</button>
+    </div>
+  </form>
+  <p class="hint">Японский номер кузова отправляется в VINROKU. В локальном демо для результатов без модели может использоваться API Ninjas.</p>
+  <p id="vinStatus" class="meta" role="status"></p>
+  <div id="vinResult"></div>
+  <div id="vinError" class="error hidden" role="alert"></div>
+</section>
+
+<details class="card provider-card" id="otherParts">
+<summary>Другие каталоги запчастей</summary>
+<div class="card">
+  <h2>📦 Поиск в Autodoc</h2>
+  <p class="hint">Введите название детали, например «тормозные колодки». Добавьте машину и год, если нужен подбор по двигателю.</p>
+  <form class="row" id="autodocForm">
+    <div>
+      <label for="partQuery">Запрос</label>
+      <input type="text" id="partQuery" maxlength="140" placeholder="Тормозные колодки" required>
+    </div>
+    <div>
+      <label for="marketSelect">Рынок</label>
+      <select id="marketSelect">
+        <option value="uk">UK (autodoc.co.uk)</option>
+        <option value="de">DE (autodoc.de)</option>
+        <option value="es">ES (autodoc.es)</option>
+      </select>
+    </div>
+    <button type="submit" id="searchPartBtn">Найти в Autodoc</button>
+  </form>
+  <div id="partMeta" class="meta hidden"></div>
+  <div id="partGrid" class="grid"></div>
+  <div id="partError" class="error hidden"></div>
+</div>
+
+<section class="card" aria-labelledby="carPartHeading">
+  <h2 id="carPartHeading">Детали с разборок США · Car-Part</h2>
+  <p class="hint">Укажите марку, модель и название детали на английском. Поиск обращается к Apify и может расходовать кредиты.</p>
+  <form class="row" id="carPartForm">
+    <div>
+      <label for="carYear">Модельный год</label>
+      <input type="text" id="carYear" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="2019" required>
+    </div>
+    <div>
+      <label for="carModel">Марка и модель</label>
+      <input type="text" id="carModel" placeholder="Toyota Camry" maxlength="80" required>
+    </div>
+    <div>
+      <label for="carPartName">Деталь</label>
+      <input type="text" id="carPartName" placeholder="Engine" maxlength="80" required>
+    </div>
+    <div>
+      <label for="carZip">ZIP-код США</label>
+      <input type="text" id="carZip" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="90210" required>
+    </div>
+    <button type="submit" id="carPartBtn">Искать на Car-Part</button>
+  </form>
+  <p id="carPartStatus" class="meta" role="status"></p>
+  <div id="carPartGrid" class="grid"></div>
+  <div id="carPartError" class="error hidden" role="alert"></div>
+</section>
+</details>
+
+<details class="card provider-card" id="providerPanel">
+  <summary>Источники данных и лимиты API</summary>
+  <div class="actions">
+    <button type="button" id="fapiUsageBtn">Проверить остаток FAPI</button>
+    <button type="button" id="partAiBtn" title="Отправить введённую фразу в Groq">Уточнить запрос с ИИ</button>
+  </div>
+  <p class="meta" id="fapiUsage" role="status"></p>
+  <div id="providerList" class="table-scroll" aria-live="polite"></div>
+</details>
+
+<script>
+const API_BASE = location.port === '8000' && ['localhost', '127.0.0.1'].includes(location.hostname)
+  ? 'http://' + location.hostname + ':8001'
+  : '';
+
+async function requestJson(path, body, timeout = 16000) {
+  let response;
+  try {
+    const options = body === undefined ? {} : {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    };
+    response = await fetch(API_BASE + path, { ...options, signal: AbortSignal.timeout(timeout) });
+  } catch {
+    throw new Error('Локальный сервер не ответил. Проверьте, запущен ли proxy.py.');
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data || data.ok === false) {
+    const error = new Error(typeof data?.error === 'string' ? data.error : 'Ошибка сервера (HTTP ' + response.status + ').');
+    error.code = data?.code;
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+async function searchAutodoc(event) {
+  event.preventDefault();
+  const query = document.getElementById('partQuery').value.trim();
+  const btn = document.getElementById('searchPartBtn');
+  const grid = document.getElementById('partGrid');
+  const error = document.getElementById('partError');
+  const meta = document.getElementById('partMeta');
+  if (btn.disabled || !query) return;
+  btn.disabled = true;
+  grid.replaceChildren();
+  meta.classList.add('hidden');
+  error.classList.add('hidden');
+  try {
+    const result = await requestJson('/parts/search', { query, catalog: 'autodoc' });
+    if (result.status === 'article' || result.status === 'keyword') {
+      btn.disabled = false;
+      await searchAutodocOffers(result.article || result.query, result.status === 'keyword' ? 'keyword' : 'part');
+    } else if (result.status === 'choose' || result.status === 'confirm') {
+      const field = document.getElementById('fapiArticle');
+      field.value = query;
+      renderPartsStep({ result, query, confirmed: false, previous: null, catalog: 'autodoc' });
+      field.focus();
+    } else {
+      showError(error, result.message);
+    }
+  } catch (err) {
+    showError(error, err.status === 404 ? RESTART_HINT : err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function searchAutodocOffers(query, mode) {
+  const market = document.getElementById('marketSelect').value;
+  const btn = document.getElementById('searchPartBtn');
+  const grid = document.getElementById('partGrid');
+  const meta = document.getElementById('partMeta');
+  const errBox = document.getElementById('partError');
+
+  if (btn.disabled) return;
+  if (!query) { showError(errBox, 'Введите запрос.'); return; }
+
+  btn.disabled = true;
+  grid.innerHTML = '<div class="loading">Загрузка...</div>';
+  meta.classList.add('hidden');
+  errBox.classList.add('hidden');
+
+  try {
+    const json = await requestJson('/autodoc', { query, market, mode, max_results: 20 });
+
+    const parts = (json.data && json.data.parts) || [];
+    const m = json.meta || {};
+
+    const info = ['Найдено ' + parts.length, 'Списано кредитов: ' + (m.charged_credits ?? '—')];
+    if (m.cached) info.push('Из кеша');
+    if (mode === 'keyword') info.push('По всему каталогу. Совместимость зависит от автомобиля.');
+    meta.textContent = info.join(' · ');
+    meta.classList.remove('hidden');
+
+    if (!parts.length) {
+      grid.textContent = 'В этом магазине Autodoc совпадений нет. Можно выбрать другой рынок.';
+    } else {
+      grid.innerHTML = parts.map(renderPart).join('');
+    }
+  } catch (e) {
+    showError(errBox, e.message);
+    grid.innerHTML = '';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderPart(p) {
+  const img = safeWebUrl(p.image);
+  const price = typeof p.price === 'number' ? p.price.toFixed(2) + ' ' + (p.currency || '') : '—';
+  let stock = '<span style="color:#6b7280">—</span>';
+  if (p.in_stock === true) {
+    stock = '<span class="in-stock">В наличии' + (p.units_left != null ? ' (' + escapeHtml(p.units_left) + ')' : '') + '</span>';
+  } else if (p.in_stock === false) {
+    stock = '<span class="out-stock">Нет в наличии</span>';
+  }
+  const rating = typeof p.rating === 'number' ? '★ ' + p.rating.toFixed(1) + ' (' + escapeHtml(p.review_count ?? 0) + ')' : '';
+  const url = safeWebUrl(p.url);
+  const link = url ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Открыть на Autodoc →</a>' : '';
+
+  return '<div class="part">' +
+    (img ? '<img src="' + escapeHtml(img) + '" alt="" loading="lazy">' : '') +
+    '<div class="part-body">' +
+      '<div class="part-brand">' + escapeHtml(p.brand || '—') + '</div>' +
+      '<div class="part-title">' + escapeHtml(p.title || p.article_number || '') + '</div>' +
+      '<div class="part-price">' + escapeHtml(price) + '</div>' +
+      '<div class="part-stock">' + stock + '</div>' +
+      '<div style="font-size:.75rem;color:#6b7280">' + rating + '</div>' +
+    '</div>' + link + '</div>';
+}
+
+const VIN_LABELS = {
+  make: 'Марка', model: 'Модель', model_year: 'Модельный год', model_year_candidates: 'Возможные модельные годы',
+  trim: 'Комплектация', series: 'Серия', body: 'Кузов', vehicle_type: 'Тип ТС', doors: 'Двери',
+  engine_model: 'Код двигателя', engine_configuration: 'Конфигурация двигателя', engine_cylinders: 'Цилиндры',
+  engine_hp: 'Мощность, hp', displacement_l: 'Объём, л', fuel: 'Топливо', transmission: 'КПП',
+  transmission_speeds: 'Передач', drive: 'Привод', gvwr: 'Полная масса', manufacturer: 'Производитель',
+  plant_city: 'Город сборки', plant_state: 'Регион сборки', plant_country: 'Страна сборки',
+  manufacture_country: 'Страна производства'
+};
+const VIN_SOURCES = {
+  vininfo: 'vininfo', nhtsa_vpic_offline: 'NHTSA vPIC (офлайн)', nhtsa_vpic_online: 'NHTSA vPIC (онлайн)',
+  vinroku: 'VINROKU', api_ninjas: 'API Ninjas'
+};
+const VIN_WARNINGS = {
+  model_year_unconfirmed: 'Модельный год не подтверждён.',
+  vpic_decode_warning: 'vPIC сообщил об ограничениях при расшифровке.',
+  vpic_model_unavailable: 'В vPIC не найдена модель для этого VIN.',
+  check_digit_mismatch: 'Контрольный символ не совпал по правилу США.',
+  vpic_unavailable: 'База vPIC недоступна. Показаны локальные сведения.',
+  api_ninjas_unavailable: 'Резервный источник API Ninjas недоступен.',
+  api_ninjas_rate_limited: 'Достигнут лимит резервного источника API Ninjas.',
+  api_ninjas_partial: 'Резервный источник вернул основные сведения об автомобиле.',
+  provider_make_conflict: 'Источники расходятся по марке. Модель требует уточнения.'
+};
+const RESTART_HINT = 'Запущена предыдущая версия локального сервера. Перезапустите proxy.py и обновите страницу.';
+
+function updateCheckDigitButton() {
+  const vin = document.getElementById('vinInput').value.trim();
+  const vinTemplate = /^[A-HJ-NPR-Z0-9]{8}[A-HJ-NPR-Z0-9?][A-HJ-NPR-Z0-9]{8}$/i;
+  document.getElementById('checkDigitBtn').disabled =
+    document.getElementById('decodeVinBtn').disabled || !vinTemplate.test(vin);
+}
+
+async function decodeVin(checkDigit = false) {
+  const vin = document.getElementById('vinInput').value;
+  const decodeBtn = document.getElementById('decodeVinBtn');
+  const checkBtn = document.getElementById('checkDigitBtn');
+  const status = document.getElementById('vinStatus');
+  const out = document.getElementById('vinResult');
+  const errBox = document.getElementById('vinError');
+  if (decodeBtn.disabled) return;
+  errBox.classList.add('hidden');
+  out.replaceChildren();
+  decodeBtn.disabled = checkBtn.disabled = true;
+  status.textContent = checkDigit ? 'Вычисляем контрольный символ…' : 'Декодируем…';
+
+  try {
+    const data = await requestJson(checkDigit ? '/vin/check-digit' : '/vin', { vin });
+    if (checkDigit) {
+      status.textContent = data.matches === true ? 'Контрольный символ совпал.' :
+        data.matches === false ? 'Контрольный символ отличается.' : 'Контрольный символ вычислен.';
+      out.innerHTML = vinTable([
+        ['9-й символ по правилу США', data.expected_check_digit],
+        ['VIN с вычисленным символом', data.vin_with_check_digit]
+      ]);
+      return;
+    }
+
+    if (data.type === 'chassis') {
+      showChassis(data, status, out);
+      return;
+    }
+    const message = { decoded: 'Автомобиль определён', partial: 'Доступны частичные сведения', no_data: 'Автомобиль не найден в базе' };
+    status.textContent = [message[data.status], VIN_SOURCES[data.source]].filter(Boolean).join(' · ');
+    const rows = Object.entries(VIN_LABELS)
+      .filter(([key]) => Object.hasOwn(data.vehicle, key))
+      .map(([key, label]) => [label, data.vehicle[key]]);
+    rows.push(['Код производителя (WMI)', data.wmi]);
+    if (data.check_digit === 'match') rows.push(['Контрольный символ США', 'Совпал']);
+    if (data.check_digit === 'mismatch') rows.push(['Контрольный символ США', 'Не совпал']);
+    out.innerHTML = vinTable(rows);
+    for (const code of data.warnings || []) {
+      if (!VIN_WARNINGS[code]) continue;
+      const note = document.createElement('p');
+      note.className = 'hint';
+      note.textContent = VIN_WARNINGS[code];
+      out.append(note);
+    }
+    if (data.status === 'decoded' && data.source?.startsWith('nhtsa_vpic_')) {
+      const useVehicle = document.createElement('button');
+      useVehicle.type = 'button';
+      useVehicle.textContent = 'Подставить автомобиль в Car-Part';
+      useVehicle.addEventListener('click', () => {
+        const { make, model, model_year } = data.vehicle;
+        document.getElementById('otherParts').open = true;
+        document.getElementById('carYear').value = model_year;
+        document.getElementById('carModel').value = make + ' ' + model;
+        document.getElementById('carPartName').focus();
+      });
+      out.append(useVehicle);
+    }
+  } catch (e) {
+    status.textContent = '';
+    showError(errBox, !checkDigit && e.code === 'chassis_number' ? RESTART_HINT : e.message);
+  } finally {
+    decodeBtn.disabled = false;
+    updateCheckDigitButton();
+  }
+}
+
+function showChassis(data, status, out) {
+  const messages = {
+    matched: 'Найдено совпадение по серийному диапазону',
+    ambiguous: 'Найдено несколько возможных совпадений',
+    partial: 'Доступны сведения из каталога',
+    no_data: 'Номер кузова не найден в базе'
+  };
+  status.textContent = [messages[data.status], VIN_SOURCES[data.source]].filter(Boolean).join(' · ');
+  const rows = [['Номер кузова', data.chassis]];
+  for (const [key, label] of Object.entries(VIN_LABELS)) {
+    if (data.vehicle?.[key] != null) rows.push([label, data.vehicle[key]]);
+  }
+  out.innerHTML = vinTable(rows);
+  for (const match of data.matches || []) {
+    const block = document.createElement('section');
+    block.className = 'lookup-block';
+    const heading = document.createElement('h3');
+    heading.textContent = 'Возможный год выпуска ' + match.production_year;
+    block.append(heading);
+    const table = document.createElement('div');
+    const details = [['Производитель', match.manufacturer]];
+    if (match.registration_type) details.push(['Тип шасси', match.registration_type]);
+    if (match.serial_start && match.serial_end) details.push(['Диапазон номеров', match.serial_start + '–' + match.serial_end]);
+    table.innerHTML = vinTable(details);
+    block.append(table);
+    const source = safeWebUrl(match.source_url);
+    if (source) {
+      const link = document.createElement('a');
+      link.href = source;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = (match.publisher || 'Документ-источник') + (match.source_page ? ', стр. ' + match.source_page : '');
+      block.append(link);
+    }
+    out.append(block);
+  }
+  const labels = { engines: 'Двигатели в каталоге', drives: 'Привод в каталоге', gearboxes: 'КПП в каталоге',
+    displacements: 'Объём двигателя, л', fuels: 'Топливо в каталоге' };
+  for (const item of data.catalog_references || []) {
+    const block = document.createElement('section');
+    block.className = 'lookup-block';
+    const heading = document.createElement('h3');
+    heading.textContent = 'Справочник по коду кузова';
+    block.append(heading);
+    const details = [['Модель по каталогу', item.manufacturer + ' ' + item.model]];
+    for (const [key, label] of Object.entries(labels)) {
+      if (item[key]?.length) details.push([label, item[key]]);
+    }
+    const table = document.createElement('div');
+    table.innerHTML = vinTable(details);
+    block.append(table);
+    out.append(block);
+  }
+  for (const code of data.warnings || []) {
+    if (!VIN_WARNINGS[code]) continue;
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.textContent = VIN_WARNINGS[code];
+    out.append(note);
+  }
+}
+
+function vinTable(rows) {
+  const cells = rows.map(([name, value]) => '<tr><th scope="row">' + escapeHtml(name) + '</th><td>' +
+    escapeHtml(Array.isArray(value) ? value.join(', ') : value) + '</td></tr>');
+  return '<table class="vin-table"><tbody>' + cells.join('') + '</tbody></table>';
+}
+
+function fapiPartLabel(part) {
+  return part.brand + ' ' + part.article;
+}
+
+function fapiButton(label, action) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click', action);
+  return button;
+}
+
+function vehiclePartRows(parts, back) {
+  const table = document.createElement('div');
+  table.className = 'table-scroll';
+  table.innerHTML = '<table class="provider-table"><thead><tr><th scope="col">Артикул</th>' +
+    '<th scope="col">Модификация или описание</th><th scope="col">Источник</th>' +
+    '<th scope="col">Действия</th></tr></thead><tbody></tbody></table>';
+  const body = table.querySelector('tbody');
+  for (const part of parts) {
+    const row = body.insertRow();
+    row.insertCell().textContent = fapiPartLabel(part);
+    row.insertCell().textContent = part.description || '';
+    const sourceCell = row.insertCell();
+    const sourceUrl = safeWebUrl(part.source_url);
+    if (sourceUrl) {
+      const source = document.createElement('a');
+      source.textContent = part.source;
+      source.href = sourceUrl;
+      source.target = '_blank';
+      source.rel = 'noopener noreferrer';
+      sourceCell.append(source);
+    } else {
+      sourceCell.textContent = part.source || 'FAPI';
+    }
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    actions.append(
+      fapiButton('Аналоги', () => searchFapi(part.article, part.manufacturer_id, back)),
+      fapiButton('Цены в Autodoc', () => openAutodocOffers(part.article, part.oem ? 'oe' : 'part'))
+    );
+    row.insertCell().append(actions);
+  }
+  return table;
+}
+
+function openAutodocOffers(article, mode) {
+  document.getElementById('otherParts').open = true;
+  const field = document.getElementById('partQuery');
+  field.value = article;
+  field.focus();
+  return searchAutodocOffers(article, mode);
+}
+
+const PART_STEPS = {
+  make: 'Марка', model: 'Модель и годы выпуска', modification: 'Двигатель и комплектация',
+  node: 'Группа деталей', engine: 'Двигатель', version: 'Кузов и дата выпуска',
+  local_variant: 'Двигатель и комплектация', article: 'Артикул'
+};
+
+function partsBack(previous) {
+  const button = fapiButton('Назад', () => renderPartsStep(previous));
+  button.className = 'secondary';
+  return button;
+}
+
+function renderPartsStep(state) {
+  const { result, query, confirmed, previous } = state;
+  const out = document.getElementById('fapiResult');
+  const status = document.getElementById('fapiStatus');
+  out.replaceChildren();
+  document.getElementById('fapiError').classList.add('hidden');
+  status.textContent = result.message || '';
+  const context = [result.category, result.vehicle, result.engine].filter(Boolean);
+  if (context.length) {
+    const heading = document.createElement('p');
+    heading.className = 'part-context';
+    heading.textContent = context.join(' · ');
+    out.append(heading);
+  }
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  if (result.status === 'confirm') {
+    actions.append(fapiButton('Подтвердить и подобрать', () => searchVehicleParts(query, {}, true, state)));
+    actions.append(fapiButton('Исправить запрос', () => document.getElementById('fapiArticle').focus()));
+  } else if (result.status === 'choose') {
+    const form = document.createElement('form');
+    form.className = 'parts-step';
+    const next = itemId => searchVehicleParts(query, { ...result.choices, [result.field]: itemId }, confirmed, state);
+    if (result.options.length === 1) {
+      const label = document.createElement('p');
+      label.textContent = PART_STEPS[result.field];
+      form.append(label);
+      actions.append(fapiButton(result.options[0].label, () => next(result.options[0].id)));
+    } else {
+      const label = document.createElement('label');
+      label.htmlFor = 'partsChoice';
+      label.textContent = PART_STEPS[result.field];
+      const select = document.createElement('select');
+      select.id = 'partsChoice';
+      select.required = true;
+      select.add(new Option('Выберите вариант', ''));
+      for (const item of result.options) select.add(new Option(item.label, item.id));
+      const pick = document.createElement('button');
+      pick.type = 'submit';
+      pick.textContent = ['engine', 'model', 'make'].includes(result.field) ? 'Продолжить' : 'Показать детали';
+      actions.append(pick);
+      form.append(label, select);
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        next(Number(select.value));
+      });
+    }
+    if (previous) actions.append(partsBack(previous));
+    form.append(actions);
+    if (['engine', 'modification', 'version', 'local_variant'].includes(result.field)) {
+      const help = document.createElement('p');
+      help.className = 'hint';
+      const vinLink = document.createElement('a');
+      vinLink.href = '#vinInput';
+      vinLink.textContent = 'Уточнить данные по VIN или номеру кузова';
+      help.append(vinLink);
+      form.append(help);
+    }
+    out.append(form);
+    return;
+  }
+  if (result.parts?.length) {
+    out.append(vehiclePartRows(result.parts, () => renderPartsStep(state)));
+  } else if (result.status === 'found') {
+    status.textContent = 'Для выбранной машины в этой группе нет деталей.';
+  }
+  if (previous) actions.append(partsBack(previous));
+  if (actions.childElementCount) out.append(actions);
+}
+
+async function searchVehicleParts(query, choices = {}, confirmed = false, previous = null) {
+  const btn = document.getElementById('fapiSearchBtn');
+  const out = document.getElementById('fapiResult');
+  const status = document.getElementById('fapiStatus');
+  const error = document.getElementById('fapiError');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  out.replaceChildren();
+  error.classList.add('hidden');
+  status.textContent = 'Подбираем детали…';
+  try {
+    const catalog = previous?.catalog;
+    const result = await requestJson('/parts/search', { query, choices, confirmed, catalog }, 55000);
+    if (document.getElementById('fapiArticle').value.trim() !== query) return;
+    if (result.status === 'article') {
+      btn.disabled = false;
+      if (catalog === 'autodoc') await openAutodocOffers(result.article, 'part');
+      else await searchFapi(result.article);
+      return;
+    }
+    renderPartsStep({ result, query, confirmed, previous, catalog });
+  } catch (err) {
+    status.textContent = '';
+    showError(error, err.status === 404 ? RESTART_HINT : err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function suggestPartsQuery() {
+  const field = document.getElementById('fapiArticle');
+  if (!field.reportValidity()) return;
+  const btn = document.getElementById('partAiBtn');
+  const submit = document.getElementById('fapiSearchBtn');
+  if (btn.disabled || submit.disabled) return;
+  btn.disabled = true;
+  submit.disabled = true;
+  const out = document.getElementById('fapiResult');
+  const status = document.getElementById('fapiStatus');
+  const error = document.getElementById('fapiError');
+  out.replaceChildren();
+  error.classList.add('hidden');
+  status.textContent = 'Уточняем запрос…';
+  try {
+    const result = await requestJson('/parts/ai-suggest', { query: field.value.trim() });
+    status.textContent = result.message || 'Поиск по подсказке ИИ';
+    if (result.query) {
+      const label = document.createElement('p');
+      label.textContent = result.query;
+      out.append(label, fapiButton('Искать по этому запросу', () => {
+        field.value = result.query;
+        searchVehicleParts(result.query);
+      }));
+    }
+  } catch (err) {
+    status.textContent = '';
+    showError(error, err.status === 404 ? RESTART_HINT : err.message);
+  } finally {
+    btn.disabled = false;
+    submit.disabled = false;
+  }
+}
+
+async function searchFapi(article, manufacturerId, back) {
+  const btn = document.getElementById('fapiSearchBtn');
+  const out = document.getElementById('fapiResult');
+  const status = document.getElementById('fapiStatus');
+  const error = document.getElementById('fapiError');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  error.classList.add('hidden');
+  out.replaceChildren();
+  status.textContent = 'Ищем в FAPI…';
+  try {
+    const payload = { article };
+    if (manufacturerId != null) payload.manufacturer_id = manufacturerId;
+    const result = await requestJson('/fapi/part', payload, 25000);
+    if (result.status === 'no_data') {
+      status.textContent = 'FAPI не нашёл этот артикул.';
+      return;
+    }
+    if (result.status === 'choose_brand') {
+      status.textContent = 'Артикул есть у нескольких брендов. Выберите нужный. Уточнение стоит 1 кредит.';
+      const buttons = document.createElement('div');
+      buttons.className = 'fapi-choices';
+      for (const part of result.candidates) {
+        const choice = document.createElement('button');
+        choice.type = 'button';
+        choice.textContent = fapiPartLabel(part);
+        choice.addEventListener('click', () => {
+          if (!back) document.getElementById('fapiArticle').value = result.article;
+          searchFapi(result.article, part.manufacturer_id, back);
+        });
+        buttons.append(choice);
+      }
+      out.append(buttons);
+      return;
+    }
+    const { part, groups } = result;
+    status.textContent = 'Карточка FAPI';
+    const rows = [['Деталь', fapiPartLabel(part)]];
+    if (part.description) rows.push(['Наименование', part.description]);
+    if (result.part_status === 'replaced') rows.push(['Статус артикула', 'Заменён']);
+    if (result.current) rows.push(['Актуальный артикул', fapiPartLabel(result.current)]);
+    out.innerHTML = vinTable(rows);
+    const labels = { oe: 'Оригинальные номера OE', analogs: 'Аналоги',
+      replaced_by: 'Чем заменён артикул', replaces: 'Предыдущие номера' };
+    for (const [key, label] of Object.entries(labels)) {
+      if (groups[key].length) out.append(fapiPartGroup(label, groups[key]));
+    }
+    if (!Object.values(groups).some(parts => parts.length)) {
+      const note = document.createElement('p');
+      note.className = 'hint';
+      note.textContent = 'Для артикула нет аналогов и замен в FAPI.';
+      out.append(note);
+    }
+  } catch (err) {
+    status.textContent = '';
+    showError(error, err.status === 404 ? RESTART_HINT : err.message);
+  } finally {
+    btn.disabled = false;
+    if (back) out.append(fapiButton('Назад к деталям', back));
+  }
+}
+
+function fapiPartGroup(label, parts) {
+  const section = document.createElement('section');
+  section.className = 'lookup-block';
+  const heading = document.createElement('h3');
+  heading.textContent = label;
+  section.append(heading);
+  const container = document.createElement('div');
+  container.className = 'table-scroll';
+  const rows = parts.map(part => {
+    const evidence = [];
+    if (part.manufacturer_verified) evidence.push('Подтверждено производителем');
+    if (part.votes_for != null && part.votes_against != null) {
+      evidence.push('+' + part.votes_for + ' / −' + part.votes_against);
+    }
+    return '<tr>' + [part.brand, part.article, part.description || '', evidence.join(' · ')].map(
+      text => '<td>' + escapeHtml(text) + '</td>'
+    ).join('') + '</tr>';
+  });
+  container.innerHTML = '<table class="provider-table"><thead><tr><th scope="col">Бренд</th><th scope="col">Артикул</th>' +
+    '<th scope="col">Наименование</th><th scope="col">Подтверждение кросса</th></tr></thead><tbody>' +
+    rows.join('') + '</tbody></table>';
+  section.append(container);
+  return section;
+}
+
+async function showFapiUsage() {
+  const btn = document.getElementById('fapiUsageBtn');
+  const out = document.getElementById('fapiUsage');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  out.textContent = 'Проверяем остаток FAPI…';
+  try {
+    const data = await requestJson('/fapi/usage');
+    const info = [];
+    if (data.plan) info.push(data.plan === 'trial' ? 'Пробный доступ' : 'Тариф ' + data.plan);
+    if (data.remaining_credits != null) {
+      info.push('Остаток кредитов: ' + data.remaining_credits + (data.included_credits == null ? '' : ' из ' + data.included_credits));
+    }
+    const states = { unbilled: 'FAPI пока не указал пакет', denied_unpaid: 'Период не оплачен',
+      denied_quota: 'Пакет исчерпан', denied_balance: 'Недостаточно средств на балансе' };
+    if (states[data.status]) info.push(states[data.status]);
+    out.textContent = info.join(' · ') || 'FAPI принял ключ. Остаток пакета не указан.';
+  } catch (err) {
+    out.textContent = err.status === 404 ? RESTART_HINT : err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function searchCarPart(event) {
+  event.preventDefault();
+  const btn = document.getElementById('carPartBtn');
+  const grid = document.getElementById('carPartGrid');
+  const status = document.getElementById('carPartStatus');
+  const errBox = document.getElementById('carPartError');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  grid.replaceChildren();
+  errBox.classList.add('hidden');
+  status.textContent = 'Запускаем поиск…';
+  try {
+    const { run_id } = await requestJson('/car-part', {
+      year: Number(document.getElementById('carYear').value),
+      makeModel: document.getElementById('carModel').value,
+      part: document.getElementById('carPartName').value,
+      userZip: document.getElementById('carZip').value
+    });
+    status.textContent = 'Car-Part ищет предложения…';
+    const deadline = Date.now() + 125000;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await requestJson('/car-part/status', { run_id });
+      if (result.status === 'complete') {
+        status.textContent = result.items.length ? 'Найдено предложений: ' + result.items.length : 'Предложения не найдены.';
+        grid.innerHTML = result.items.map(renderCarPart).join('');
+        return;
+      }
+    }
+    throw new Error('Car-Part пока не вернул результат. Проверьте статус запуска в Apify.');
+  } catch (e) {
+    status.textContent = '';
+    showError(errBox, e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderCarPart(item) {
+  const title = [item.partName, item.year, item.makeModel].filter(Boolean).join(' · ');
+  const price = item.priceFormatted || (typeof item.price === 'number' ? [item.price.toFixed(2), item.currency].filter(Boolean).join(' ') : 'Цена не указана');
+  const supply = [item.supplierName, item.city, item.stateProvince].filter(Boolean).join(' · ');
+  const details = [item.partGrade ? 'Класс ' + item.partGrade : '', item.stockNumber ? '№ ' + item.stockNumber : '',
+    typeof item.distanceMiles === 'number' ? item.distanceMiles + ' миль' : ''].filter(Boolean).join(' · ');
+  const url = safeWebUrl(item.supplierWebsite);
+  return '<article class="part"><div class="part-body">' +
+    '<div class="part-brand">' + escapeHtml(title) + '</div>' +
+    '<div class="part-price">' + escapeHtml(price) + '</div>' +
+    '<div class="part-title">' + escapeHtml(item.description || '') + '</div>' +
+    '<div class="part-stock">' + escapeHtml(details) + '</div>' +
+    '<div class="part-stock">' + escapeHtml(supply) + '</div></div>' +
+    (url ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Сайт разборки →</a>' : '') + '</article>';
+}
+
+function safeWebUrl(value) {
+  if (typeof value !== 'string') return '';
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+async function showProviders() {
+  const panel = document.getElementById('providerPanel');
+  if (!panel.open) return;
+  const out = document.getElementById('providerList');
+  out.textContent = 'Читаем реестр…';
+  try {
+    const { providers } = await requestJson('/api-providers');
+    const states = { active: 'Подключён', fallback: 'Резерв', review: 'Изучен' };
+    const keys = { configured: 'Ключ задан', missing: 'Ключ не задан', no_key: 'Без ключа',
+      expired: 'Локальный срок истёк', expiry_invalid: 'Ошибка даты окончания' };
+    const modes = { off: 'выключен', demo: 'локальное демо', commercial: 'коммерческий режим' };
+    const dateFormat = new Intl.DateTimeFormat('ru', { dateStyle: 'short', timeStyle: 'short' });
+    const cells = providers.map(provider => {
+      const docs = safeWebUrl(provider.docs_url);
+      const label = escapeHtml(provider.name);
+      const title = docs ? '<a href="' + escapeHtml(docs) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>' : label;
+      const state = [states[provider.integration], modes[provider.mode], keys[provider.credential_status]].filter(Boolean);
+      if (provider.expires_at) state.push('до ' + dateFormat.format(new Date(provider.expires_at)));
+      const limit = [provider.allowance];
+      if (provider.remaining != null) {
+        limit.push('Остаток на ' + dateFormat.format(provider.observed_at * 1000) + ' — ' + provider.remaining);
+      }
+      return '<tr><th scope="row">' + title + '</th><td>' + escapeHtml(provider.purpose) +
+        '<br><code>' + escapeHtml(provider.endpoint) + '</code></td><td>' + escapeHtml(limit.join(' · ')) +
+        '</td><td>' + escapeHtml(state.join(' · ')) + '</td></tr>';
+    });
+    out.innerHTML = '<table class="provider-table"><thead><tr><th scope="col">Источник</th><th scope="col">Назначение и адрес</th>' +
+      '<th scope="col">Лимит или стоимость</th><th scope="col">Состояние</th></tr></thead><tbody>' + cells.join('') + '</tbody></table>';
+  } catch (e) {
+    out.textContent = e.status === 404 ? RESTART_HINT : e.message;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function showError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
+
+document.getElementById('autodocForm').addEventListener('submit', searchAutodoc);
+document.getElementById('fapiForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const query = document.getElementById('fapiArticle').value.trim();
+  if (query) searchVehicleParts(query);
+});
+document.getElementById('fapiArticle').addEventListener('input', () => {
+  document.getElementById('fapiStatus').textContent = '';
+  document.getElementById('fapiResult').replaceChildren();
+  document.getElementById('fapiError').classList.add('hidden');
+});
+document.getElementById('partAiBtn').addEventListener('click', suggestPartsQuery);
+document.getElementById('fapiUsageBtn').addEventListener('click', showFapiUsage);
+document.getElementById('carPartForm').addEventListener('submit', searchCarPart);
+document.getElementById('vinForm').addEventListener('submit', event => { event.preventDefault(); decodeVin(); });
+document.getElementById('checkDigitBtn').addEventListener('click', () => decodeVin(true));
+document.getElementById('vinInput').addEventListener('input', updateCheckDigitButton);
+updateCheckDigitButton();
+document.getElementById('providerPanel').addEventListener('toggle', showProviders);
+</script>
+</body>
+</html>

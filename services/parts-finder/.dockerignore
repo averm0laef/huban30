@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*
+.venv/
+__pycache__/
+test_*.py
+Dockerfile
+.dockerignore
+.gitignore
+.state/

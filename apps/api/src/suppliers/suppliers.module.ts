@@ -12,5 +12,7 @@ import { SupplierWaitlistService } from "./supplier-waitlist.service.js";
 @Module({
   controllers: [StaffSupplierWaitlistController, SupplierSearchController, SupplierWaitlistController],
   providers: [SupplierCrossQueueService, SupplierSearchService, SupplierWaitlistService],
+  // Reused by «Подбор по автомобилю» for "под заказ" offers on an article.
+  exports: [SupplierSearchService],
 })
 export class SuppliersModule {}

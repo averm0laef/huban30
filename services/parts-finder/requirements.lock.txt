@@ -1,0 +1,18 @@
+# Exact versions for the container image (see Dockerfile). requirements.txt
+# keeps the original ranges for a local venv. Regenerate both together.
+annotated-doc==0.0.7
+annotated-types==0.8.0
+certifi==2026.10.23
+markdown-it-py==4.3.0
+mdurl==0.1.2
+pydantic==2.14.4
+pydantic_core==2.50.5
+Pygments==2.21.0
+python-dotenv==1.2.4
+rich==15.0.0
+shellingham==1.5.4
+typer==0.29.2
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+ultravin==3.0.2
+vininfo==2.0.0
