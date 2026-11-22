@@ -191,6 +191,8 @@ export const SEARCH_REGRESSION_CASES: SearchCase[] = [
   { group: "hidden", q: "снятый бренд", expect: { empty: true } },
   { group: "ranking", q: "колодки тормозные дисковые передние", expect: { inStockFirst: true, top: ["bosch-0986494104"], topN: 24, pageNames: "^Колодки тормозные" } },
   { group: "ranking", q: "диск тормозной передний", expect: { inStockFirst: true, first: "trw-df4294", leadingNames: "Диск" } },
+  // The name starts with its article: it still starts with the part the customer named.
+  { group: "ranking", q: "диск тормозной задний", expect: { top: ["brembo-09a42511"], leadingNames: "Диск" } },
   { group: "ranking", q: "масло моторное", expect: { inStockFirst: true } },
   // Concrete part numbers never turn into a fuzzy neighbour.
   { group: "precision", q: "GDB1331", expect: { empty: true } },

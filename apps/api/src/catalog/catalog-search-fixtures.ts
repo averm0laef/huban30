@@ -77,6 +77,8 @@ export const CORE_PRODUCTS: FixtureProduct[] = [
   { key: "trw-gdb1550", sku: "GDB1550", name: "Колодки тормозные дисковые", brand: "TRW", category: "sf-tormoznaya-sistema", rubles: 2900, stock: 0 },
   { key: "trw-df4294", sku: "DF4294", name: "Диск тормозной передний", brand: "TRW", category: "sf-tormoznaya-sistema", rubles: 3500, stock: 2 },
   { key: "trw-df4294s", sku: "DF4294S", name: "Диск тормозной передний (комплект)", brand: "TRW", category: "sf-tormoznaya-sistema", rubles: 6900, stock: 1 },
+  // 5 780 names of the owner's base start with the article; the storefront shows them without it.
+  { key: "brembo-09a42511", sku: "09.A425.11", name: "09.A425.11 Диск тормозной задний Brembo", brand: "Brembo", category: "sf-tormoznaya-sistema", rubles: 4200, stock: 1 },
   { key: "trw-pfb401", sku: "PFB401", name: "Жидкость тормозная DOT 4 0,5 л", brand: "TRW", category: "sf-tormoznaya-sistema", rubles: 450, stock: 20 },
   { key: "brembo-09a72711", sku: "09.A727.11", name: "Диск тормозной передний вентилируемый", brand: "Brembo", category: "sf-tormoznaya-sistema", rubles: 4700, stock: 0 },
   { key: "brembo-p85020", sku: "P 85 020", name: "Колодка тормозная дисковая", brand: "Brembo", category: "sf-tormoznaya-sistema", rubles: 3100, stock: 4 },

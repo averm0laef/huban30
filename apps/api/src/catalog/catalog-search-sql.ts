@@ -75,6 +75,9 @@ const STARTS_WITH_ARTICLE = "lower(left(product.name,length(product.sku)+1))=low
  * The order «по названию»: the name as the storefront shows it — without the article it starts with
  * (publicProductName with the article) — in the Russian alphabet (migration 0050).
  */
+/** The ё-folded name without the article it starts with, for «the name starts with the part the customer named». */
+const NAME_FOLDED_AS_SHOWN = `(CASE WHEN ${STARTS_WITH_ARTICLE} THEN substr(product.name_folded,length(product.sku)+2) ELSE product.name_folded END)`;
+
 export const NAME_ORDER = `lower(CASE WHEN ${STARTS_WITH_ARTICLE} THEN substr(product.name,length(product.sku)+2) ELSE product.name END) COLLATE app.russian_names ASC`;
 
 export const CROSS_MATCH = `(product.sku_normalized<>'' AND EXISTS (
@@ -256,9 +259,10 @@ export function catalogSearchRelevanceOrder(p: SqlParameters, input: CatalogSear
     (${article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}) DESC,
     -- The name starts with the product type the customer named ("диски
     -- тормозные" -> "Диск тормозной ..." before "Колодки тормозные
-    -- дисковые"): 1C names lead with the part type.
+    -- дисковые"): 1C names lead with the part type, after the article if
+    -- they start with it ("09.A425.11 Диск тормозной ...").
     EXISTS (SELECT 1 FROM unnest(${leads}::text[]) AS lead(stem)
-      WHERE product.name_folded ILIKE lead.stem || '%') DESC,
+      WHERE ${NAME_FOLDED_AS_SHOWN} ILIKE lead.stem || '%') DESC,
     -- Text relevance in coarse steps, so that what can be bought today comes
     -- first among equally relevant rows, then the exact score.
     floor(LEAST(relevance.score,1)*4) DESC,
