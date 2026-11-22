@@ -1,4 +1,4 @@
-import type { CatalogCategoryNode } from "@an30/contracts";
+import { STOREFRONT_TAXONOMY, type CatalogCategoryNode } from "@an30/contracts";
 
 export interface CategoryBreadcrumbEntry {
   name: string;
@@ -34,9 +34,47 @@ export function resolveCategoryPath(
   return node ? { ancestors, node } : null;
 }
 
+/**
+ * A section of the shop's own taxonomy by its path, as a node with nothing in it. The public tree lists only the
+ * sections that have products, so a section that has none yet — the target of a link from /podbor, of a
+ * bookmark — would otherwise be a missing page. Only the taxonomy's own places count (a subsection under its own
+ * section); the staff's shelves are not part of the taxonomy and stay closed.
+ */
+export function resolveTaxonomyPath(slugs: readonly string[]): CategoryLocation | null {
+  const [sectionSlug, childSlug, ...deeper] = slugs;
+  if (!sectionSlug || deeper.length > 0) return null;
+  const section = STOREFRONT_TAXONOMY.find((entry) => entry.slug === sectionSlug);
+  if (!section) return null;
+  const empty = (slug: string, name: string): CatalogCategoryNode => ({
+    children: [], description: null, id: `taxonomy:${slug}`, name, productCount: 0, slug, sortOrder: 0,
+  });
+  if (childSlug === undefined) return { ancestors: [], node: empty(section.slug, section.label) };
+  const child = section.children.find((entry) => entry.slug === childSlug);
+  return child ? { ancestors: [empty(section.slug, section.label)], node: empty(child.slug, child.label) } : null;
+}
+
 /** The `/catalog/...` URL for a category given its root-to-self slug chain. */
 export function categoryPath(slugChain: readonly string[]): string {
   return `/catalog/${slugChain.map(encodeURIComponent).join("/")}`;
+}
+
+export interface CategoryParentLink {
+  name: string;
+  path: string;
+}
+
+/**
+ * "Up" target for `CatalogFilterRail` on a category page: the immediate
+ * parent category, or the catalog root once there is no parent left. Lets a
+ * customer climb back out of a deep category without returning to the site
+ * home page, which the breadcrumb above the page title also does — this is
+ * the same move, surfaced inside the rail itself, next to the "down into
+ * children" chips, so both directions live in one place.
+ */
+export function resolveParentLink(ancestors: readonly CatalogCategoryNode[]): CategoryParentLink {
+  const parent = ancestors.at(-1);
+  if (!parent) return { name: "Все категории", path: "/catalog" };
+  return { name: parent.name, path: categoryPath(ancestors.map((entry) => entry.slug)) };
 }
 
 /**

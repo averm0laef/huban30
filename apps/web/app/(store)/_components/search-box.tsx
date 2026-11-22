@@ -1,93 +1,150 @@
 "use client";
 
+import { ChevronRight16Regular, Clock20Regular, Search20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 
-import { CatalogProductsResponseSchema } from "@an30/contracts";
-import type { CatalogProductSummary } from "@an30/contracts";
+import { CatalogProductsResponseSchema, type CatalogProductSummary } from "@an30/contracts";
 
 import { formatRubles } from "../_lib/catalog-format";
+import { placeholderSequence, SEARCH_HINT, typingFrames } from "../_lib/search-placeholder";
+import { catalogSearchHref } from "../_lib/catalog-search-url";
+import { clearRecentCatalogSearches, readRecentCatalogSearches, rememberCatalogSearch } from "../_lib/recent-catalog-searches";
+import { searchServiceLinks, suggestedCatalogSections } from "../_lib/search-guidance";
+import { categoryHrefBySlug, exactCategoryMatch, highlightParts, matchCategories, swapKeyboardLayout, type FlatCategory } from "../_lib/search-assist";
+import { catalogCategoryPhoto, categoryTiles, featuredCategoryKeys } from "../_lib/store-categories";
+import { EXPERT_HELP_VIN_STORAGE_KEY, isValidVin } from "../_lib/vin";
+import { ExpertHelpQueryLink } from "../catalog/expert-help-query-link";
+import { CatalogPhoto } from "./catalog-photo";
 import styles from "./storefront.module.css";
 
 const DEBOUNCE_MS = 220;
+const popularSections = categoryTiles.filter(({ key }) => featuredCategoryKeys.has(key)).slice(0, 6);
+
+function Highlighted({ query, text }: { query: string; text: string }) {
+  return <>{highlightParts(text, query).map((part, index) => part.match ? <mark key={index}>{part.text}</mark> : part.text)}</>;
+}
 const SUGGESTION_LIMIT = 6;
-const MIN_QUERY_LENGTH = 2;
 
 type SuggestState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "empty" }
-  | { status: "ready"; items: CatalogProductSummary[] };
-
-function SearchIcon() {
-  return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
+  | { status: "idle" | "loading" | "error" | "empty" }
+  | { status: "ready"; items: CatalogProductSummary[]; total: number };
 
 /**
- * Header search: a real `GET /catalog?q=` form (works with JS disabled and
- * is what actually runs the search) enhanced with a debounced suggestions
- * dropdown against the live catalog endpoint. The dropdown never invents
- * results — "loading" / "nothing found" / a network error are all shown
- * honestly, and an empty catalog just means the dropdown says so.
+ * Types example queries into an empty, unfocused search field, the way big
+ * parts shops hint what can be searched. Stops while the customer types,
+ * when the tab is hidden and for prefers-reduced-motion (plain hint then).
  */
-export function HeaderSearchForm({ id }: { id: string }) {
-  const router = useRouter();
-  const [value, setValue] = useState("");
-  const [state, setState] = useState<SuggestState>({ status: "idle" });
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const listboxId = `${id}-listbox`;
-  const items = state.status === "ready" ? state.items : [];
-
+function useTypingPlaceholder(enabled: boolean, fallback: string): string {
+  const [text, setText] = useState<string | null>(null);
   useEffect(() => {
-    const query = value.trim();
-    if (query.length < MIN_QUERY_LENGTH) {
-      abortRef.current?.abort();
-      setState({ status: "idle" });
+    if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setText(null);
       return;
     }
+    const sequence = placeholderSequence();
+    let line = 0;
+    let frames = typingFrames(sequence[0]!);
+    let frame = 0;
+    let timer = window.setTimeout(function tick() {
+      if (document.hidden) {
+        timer = window.setTimeout(tick, 1000);
+        return;
+      }
+      const current = frames[frame]!;
+      setText(current.text);
+      frame += 1;
+      if (frame >= frames.length) {
+        line = (line + 1) % sequence.length;
+        frames = typingFrames(sequence[line]!);
+        frame = 0;
+      }
+      timer = window.setTimeout(tick, current.delay);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [enabled]);
+  return text === null ? fallback : `${text}▏`;
+}
+
+export function HeaderSearchForm({ id, compact = false }: { id: string; compact?: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const parameters = useSearchParams();
+  const routeQuery = pathname?.startsWith("/catalog") ? parameters?.get("q")?.trim().slice(0, 120) ?? "" : "";
+  const [value, setValue] = useState(routeQuery);
+  const [state, setState] = useState<SuggestState>({ status: "idle" });
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const placeholder = useTypingPlaceholder(!focused && value === "", compact ? "Артикул или название" : SEARCH_HINT);
+  const [history, setHistory] = useState<string[]>([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [categories, setCategories] = useState<FlatCategory[] | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listboxId = `${id}-listbox`;
+  const popupId = `${id}-suggestions`;
+  const query = value.trim();
+  const vin = isValidVin(query);
+  const items = state.status === "ready" ? state.items : [];
+  const serviceLinks = query.length >= 2 ? searchServiceLinks(query) : [];
+  const categoryLinks = state.status === "empty" ? suggestedCatalogSections(query) : [];
+  const sectionMatches = query.length >= 2 && categories ? matchCategories(categories, query) : [];
+  const layoutHint = state.status === "empty" ? swapKeyboardLayout(query) : null;
+  const showHistory = open && !query && history.length > 0;
+  const showStart = open && !query;
+  const showPanel = open && (showStart || (query.length >= 2 && !vin));
+
+  // Section names for the "Разделы" row, loaded once the field is first used.
+  useEffect(() => {
+    if (!open || categories !== null) return;
+    const controller = new AbortController();
+    fetch("/api/v1/catalog/categories", { headers: { Accept: "application/json" }, signal: controller.signal })
+      .then(async (response) => (response.ok ? (await response.json()) as { items?: unknown } : { items: [] }))
+      .then(({ items }) => {
+        const list = Array.isArray(items) ? items.filter((item): item is FlatCategory =>
+          typeof item === "object" && item !== null
+          && typeof (item as FlatCategory).id === "string" && typeof (item as FlatCategory).name === "string"
+          && typeof (item as FlatCategory).slug === "string" && typeof (item as FlatCategory).productCount === "number") : [];
+        setCategories(list);
+      })
+      .catch(() => { if (!controller.signal.aborted) setCategories([]); });
+    return () => controller.abort();
+  }, [open, categories]);
+
+  useEffect(() => {
+    setValue(routeQuery);
+    setOpen(false);
+    setActiveIndex(-1);
+    setState({ status: "idle" });
+  }, [pathname, routeQuery]);
+
+  useEffect(() => {
+    if (!open || query.length < 2 || vin) return;
     setState({ status: "loading" });
+    setActiveIndex(-1);
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const controller = new AbortController();
-      abortRef.current = controller;
-      const parameters = new URLSearchParams({ limit: String(SUGGESTION_LIMIT), q: query });
-      fetch(`/api/v1/catalog/products?${parameters.toString()}`, {
+      const params = new URLSearchParams({ limit: String(SUGGESTION_LIMIT), q: query });
+      fetch(`/api/v1/catalog/products?${params.toString()}`, {
         headers: { Accept: "application/json" },
         signal: controller.signal,
       })
-        .then((response) => (response.ok ? response.json() : Promise.reject(new Error("bad status"))))
-        .then((payload: unknown) => {
-          const parsed = CatalogProductsResponseSchema.safeParse(payload);
-          if (!parsed.success) {
-            setState({ status: "error" });
-            return;
-          }
-          setState(parsed.data.items.length > 0 ? { items: parsed.data.items, status: "ready" } : { status: "empty" });
+        .then(async response => {
+          if (!response.ok) throw new Error("Catalog unavailable");
+          return CatalogProductsResponseSchema.parse(await response.json());
         })
-        .catch((error: unknown) => {
-          if (error instanceof DOMException && error.name === "AbortError") return;
-          setState({ status: "error" });
-        });
+        .then(({ items, total }) => {
+          if (controller.signal.aborted) return;
+          setState(items.length ? { status: "ready", items, total } : { status: "empty" });
+        })
+        .catch(() => { if (!controller.signal.aborted) setState({ status: "error" }); });
     }, DEBOUNCE_MS);
-    // Cancels both an unfired debounce timer and any in-flight request from
-    // the previous keystroke — runs on every value change and on unmount.
     return () => {
       window.clearTimeout(timer);
-      abortRef.current?.abort();
+      controller.abort();
     };
-  }, [value]);
-
-  useEffect(() => setActiveIndex(-1), [state]);
+  }, [open, query, vin]);
 
   useEffect(() => {
     if (!open) return;
@@ -98,92 +155,222 @@ export function HeaderSearchForm({ id }: { id: string }) {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  function navigateResult() {
+    rememberCatalogSearch(query);
+    setHistory(readRecentCatalogSearches());
+    setOpen(false);
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "ArrowDown") {
-      if (items.length === 0) return;
+    if (event.nativeEvent.isComposing) return;
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && items.length) {
       event.preventDefault();
+      const next = event.key === "ArrowDown" ? (activeIndex + 1) % items.length : activeIndex <= 0 ? items.length - 1 : activeIndex - 1;
       setOpen(true);
-      setActiveIndex((index) => (index + 1) % items.length);
-    } else if (event.key === "ArrowUp") {
-      if (items.length === 0) return;
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex((index) => (index <= 0 ? items.length - 1 : index - 1));
-    } else if (event.key === "Escape") {
-      if (open) {
-        event.preventDefault();
-        setOpen(false);
-      }
-    } else if (event.key === "Enter" && open && activeIndex >= 0 && items[activeIndex]) {
+      setActiveIndex(next);
+      const item = items[next];
+      if (item) document.getElementById(`${id}-option-${item.id}`)?.scrollIntoView({ block: "nearest" });
+    } else if (event.key === "Escape" && showPanel) {
       event.preventDefault();
       setOpen(false);
+      setActiveIndex(-1);
+    } else if (event.key === "Enter" && showPanel && items[activeIndex]) {
+      event.preventDefault();
+      navigateResult();
       router.push(`/catalog/product/${encodeURIComponent(items[activeIndex].slug)}`);
     }
   }
 
-  const query = value.trim();
-  const showPanel = open && query.length >= MIN_QUERY_LENGTH;
+  function submit(event: FormEvent<HTMLFormElement>) {
+    if (query.length < 2) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    if (vin) {
+      setOpen(false);
+      try { window.sessionStorage.setItem(EXPERT_HELP_VIN_STORAGE_KEY, query.toUpperCase()); } catch { /* The form still opens. */ }
+      router.push(`/podbor?vin=${encodeURIComponent(query.toUpperCase())}`);
+      return;
+    }
+    navigateResult();
+    // "аккумулятор" names a section: open it rather than a word search.
+    const section = categories ? exactCategoryMatch(categories, query) : null;
+    const sectionHref = section && categories ? categoryHrefBySlug(categories, section.slug) : null;
+    if (sectionHref) {
+      router.push(sectionHref);
+      return;
+    }
+    void routeByResolve(query);
+  }
+
+  // One search pipeline: a chassis number opens the VIN decoder, a part number
+  // or «деталь + машина» opens /podbor (our stock, own crosses, then supplier
+  // offers or the guided steps); anything else stays a catalog search.
+  async function routeByResolve(text: string) {
+    try {
+      const response = await fetch("/api/v1/parts-finder/resolve", {
+        body: JSON.stringify({ query: text.slice(0, 140), supplier: false }),
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        method: "POST",
+        signal: AbortSignal.timeout(2_500),
+      });
+      if (response.ok) {
+        const data = await response.json() as { kind?: unknown };
+        if (data.kind === "vin") {
+          router.push(`/podbor?vin=${encodeURIComponent(text.toUpperCase())}`);
+          return;
+        }
+        if (data.kind === "article" || data.kind === "vehicle_part") {
+          router.push(`/podbor?q=${encodeURIComponent(text)}&from=header`);
+          return;
+        }
+      }
+    } catch {
+      // Slow or unavailable: the catalog search below still answers.
+    }
+    router.push(`${catalogSearchHref(text)}&direct=1`);
+  }
 
   return (
-    <div
-      className={styles.searchBox}
-      ref={rootRef}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
-      }}
-    >
-      <form action="/catalog" autoComplete="off" className={styles.searchForm} method="get" onSubmit={() => setOpen(false)} role="search">
+    <div className={styles.searchBox} ref={rootRef} onBlur={event => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+    }}>
+      <form action="/catalog" autoComplete="off" className={styles.searchForm} method="get" onSubmit={submit} role="search">
         <label className={styles.visuallyHidden} htmlFor={id}>Поиск по VIN, названию или артикулу</label>
-        <SearchIcon />
+        <Search20Regular aria-hidden="true" />
         <input
-          aria-activedescendant={activeIndex >= 0 && items[activeIndex] ? `${id}-option-${items[activeIndex].id}` : undefined}
+          aria-activedescendant={showPanel && items[activeIndex] ? `${id}-option-${items[activeIndex].id}` : undefined}
           aria-autocomplete="list"
-          aria-controls={listboxId}
+          aria-controls={showPanel ? (state.status === "ready" && !showHistory ? listboxId : popupId) : undefined}
           aria-expanded={showPanel}
+          aria-haspopup={state.status === "ready" && !showHistory ? "listbox" : "dialog"}
           id={id}
           maxLength={120}
           minLength={2}
           name="q"
-          onChange={(event) => {
+          onChange={event => {
             setValue(event.target.value);
+            if (!event.target.value.trim()) setHistory(readRecentCatalogSearches());
+            setState({ status: "idle" });
+            setActiveIndex(-1);
             setOpen(true);
           }}
-          onFocus={() => { if (query.length >= MIN_QUERY_LENGTH) setOpen(true); }}
+          onBlur={() => setFocused(false)}
+          onFocus={() => { setFocused(true); setHistory(readRecentCatalogSearches()); setOpen(true); }}
           onKeyDown={handleKeyDown}
-          placeholder="VIN, название или артикул"
+          placeholder={placeholder}
+          required
           role="combobox"
           type="search"
           value={value}
         />
         <button aria-label="Найти в каталоге" type="submit">Найти</button>
       </form>
+      <Link className={styles.searchAssist} href="/podbor">
+        <span className={styles.searchAssistText}>
+          <strong>Подбор по VIN</strong>
+          <small>или по марке и модели</small>
+          <span aria-hidden="true" className={styles.searchAssistAction}>Подобрать <ChevronRight16Regular /></span>
+        </span>
+        <img alt="" className={styles.searchAssistCar} height={111} src="/brand/car-an30-banner@2x.webp" srcSet="/brand/car-an30-banner@2x.webp 2x, /brand/car-an30-banner@3x.webp 3x" width={180} />
+      </Link>
       {showPanel ? (
-        <div aria-label="Подсказки поиска" className={styles.searchSuggestions} id={listboxId} role="listbox">
-          {state.status === "loading" ? <p className={styles.searchSuggestionStatus}>Ищем…</p> : null}
-          {state.status === "error" ? <p className={styles.searchSuggestionStatus}>Не удалось загрузить подсказки. Нажмите «Найти», чтобы открыть каталог.</p> : null}
-          {state.status === "empty" ? <p className={styles.searchSuggestionStatus}>Ничего не найдено</p> : null}
-          {state.status === "ready" ? items.map((item, index) => (
-            <Link
-              aria-selected={index === activeIndex}
-              className={styles.searchSuggestion}
-              data-active={index === activeIndex || undefined}
-              href={`/catalog/product/${encodeURIComponent(item.slug)}`}
-              id={`${id}-option-${item.id}`}
-              key={item.id}
-              onClick={() => setOpen(false)}
-              onMouseEnter={() => setActiveIndex(index)}
-              role="option"
-            >
-              <span className={styles.searchSuggestionName}>{item.name}</span>
-              <span className={styles.searchSuggestionMeta}>{item.brand ? `${item.brand.name} · ` : ""}Артикул {item.sku}</span>
-              <span className={styles.searchSuggestionPrice}>{item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}</span>
-            </Link>
-          )) : null}
-          {state.status === "ready" ? (
-            <Link className={styles.searchSuggestionAll} href={`/catalog?q=${encodeURIComponent(query)}`} onClick={() => setOpen(false)}>
-              Все результаты по запросу «{query}»
-            </Link>
-          ) : null}
+        <div aria-label={showStart ? (showHistory ? "Недавние запросы" : "С чего начать поиск") : "Подсказки поиска"}
+          className={styles.searchSuggestions} id={popupId} role={state.status === "ready" && !showHistory ? "group" : "dialog"}>
+          {showStart ? (
+            <>
+              {showHistory ? (
+                <>
+                  <div className={styles.searchRecentHead}>
+                    <strong>Недавние запросы</strong>
+                    <button type="button" onClick={() => { clearRecentCatalogSearches(); setHistory([]); document.getElementById(id)?.focus(); }}>Очистить</button>
+                  </div>
+                  {history.map(previous => <Link className={styles.searchExtraLink} href={catalogSearchHref(previous)} key={previous} onClick={() => setOpen(false)}><Clock20Regular aria-hidden="true" />{previous}</Link>)}
+                </>
+              ) : (
+                <p className={styles.searchStartHint}>Ищите по артикулу, названию детали или бренду. VIN из 17 символов откроет подбор у специалиста.</p>
+              )}
+              <div className={styles.searchSectionBlock}>
+                <strong>Популярные разделы</strong>
+                <div className={styles.searchChips}>
+                  {popularSections.map(({ key, label }) => (
+                    <Link className={styles.searchChip} href={(categories && categoryHrefBySlug(categories, key)) ?? `/catalog/${key}`} key={key} onClick={() => setOpen(false)}>{label}</Link>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {sectionMatches.length ? (
+                <div className={styles.searchSectionBlock}>
+                  <strong>Разделы каталога</strong>
+                  {sectionMatches.map((section) => (
+                    <Link className={styles.searchSectionLink} href={section.href} key={section.href} onClick={navigateResult}>
+                      <span><Highlighted query={query} text={section.name} />{section.parentName ? <small>{section.parentName}</small> : null}</span>
+                      <span className={styles.searchSectionCount}>{section.productCount}</span>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              {serviceLinks.length ? <div className={styles.searchExtra}>
+                <strong>Информация магазина</strong>
+                {serviceLinks.map(({ href, label }) => <Link className={styles.searchExtraLink} href={href} key={href} onClick={navigateResult}>{label}</Link>)}
+              </div> : null}
+              {state.status === "loading" ? <p className={styles.searchSuggestionStatus} role="status">Ищем в каталоге…</p> : null}
+              {state.status === "error" ? <p className={styles.searchSuggestionStatus} role="status">Подсказки недоступны. Поиск можно запустить кнопкой «Найти».</p> : null}
+              {state.status === "empty" ? (
+                <div className={styles.searchSuggestionEmpty}>
+                  <p className={styles.searchEmptyTitle} role="status">По запросу «{query}» ничего не нашлось</p>
+                  {layoutHint ? (
+                    <p className={styles.searchLayoutHint}>
+                      Возможно, вы имели в виду{" "}
+                      <button type="button" onClick={() => { setValue(layoutHint); setOpen(true); document.getElementById(id)?.focus(); }}>{layoutHint}</button>
+                    </p>
+                  ) : <p className={styles.searchEmptyText}>Проверьте написание или поищите по артикулу. Нужную деталь найдёт и привезёт специалист.</p>}
+                  {categoryLinks.length ? (
+                    <div className={styles.searchChips}>
+                      {categoryLinks.map(({ href, label }) => <Link className={styles.searchChip} href={href} key={href} onClick={navigateResult}>{label}</Link>)}
+                    </div>
+                  ) : null}
+                  <ExpertHelpQueryLink className={styles.searchSuggestionHelp} query={query}>Спросить специалиста</ExpertHelpQueryLink>
+                </div>
+              ) : null}
+              {state.status === "ready" ? (
+                <div aria-label="Найденные детали" className={styles.searchSuggestionList} id={listboxId} role="listbox">
+                  {state.items.map((item, index) => (
+                    <Link
+                      aria-selected={index === activeIndex}
+                      className={styles.searchSuggestion}
+                      data-active={index === activeIndex || undefined}
+                      href={`/catalog/product/${encodeURIComponent(item.slug)}`}
+                      id={`${id}-option-${item.id}`}
+                      key={item.id}
+                      onClick={navigateResult}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      role="option"
+                    >
+                      <span className={styles.searchSuggestionFigure}>
+                        <CatalogPhoto className={styles.searchSuggestionMedia} sizes="42px" src={item.primaryImage?.url}
+                          showNote={false} categoryImage={catalogCategoryPhoto(item.category)} />
+                      </span>
+                      <span className={styles.searchSuggestionIdentity}>
+                        <span className={styles.searchSuggestionName}><Highlighted query={query} text={item.name} /></span>
+                        <span className={styles.searchSuggestionMeta}>{item.brand ? `${item.brand.name} · ` : ""}<Highlighted query={query} text={item.sku} /></span>
+                      </span>
+                      <span className={styles.searchSuggestionPrice}>
+                        {item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}
+                        <small data-in-stock={item.availableQuantity > 0 || undefined}>{item.availableQuantity > 0 ? "В наличии" : "Под заказ"}</small>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              <Link className={styles.searchSuggestionAll} href={catalogSearchHref(query)} onClick={navigateResult}>
+                {state.status === "ready" ? `Показать все результаты · ${state.total}` : "Открыть результаты поиска"}
+              </Link>
+            </>
+          )}
         </div>
       ) : null}
     </div>

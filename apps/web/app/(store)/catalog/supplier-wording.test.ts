@@ -9,11 +9,9 @@ import { describe, expect, it } from "vitest";
  * `SupplierResults`, `SupplierWaitlistDialog`, and the static catalog page
  * copy). This scans the actual shipped source of every customer-facing
  * catalog file for the supplier's name or the Russian word "поставщик"
- * used the way a shopper would read it, after stripping the two allowed
- * exceptions called out in the task: block comments (JSDoc may still say
- * "Rossko" for future maintainers) and the internal `source: "rossko"`
- * field the API contract fixes literally — that value is never rendered,
- * only sent back to the server the customer already trusts.
+ * used the way a shopper would read it. Only comments are stripped: a source
+ * field in a browser request is visible in the network panel and must also
+ * remain server-side.
  *
  * English identifiers like `SupplierResults` or `.supplierPartCard` are
  * untouched by design (the task says not to rename the adapter or its
@@ -33,9 +31,7 @@ const CUSTOMER_FACING_FILES = [
 
 function customerVisibleSource(relativePath: string): string {
   const raw = readFileSync(path.join(here, relativePath), "utf8");
-  return raw
-    .replace(/\/\*[\s\S]*?\*\//g, "") // block comments, incl. JSDoc
-    .replace(/source:\s*"rossko"(\s+as\s+const)?/g, 'source: "<internal>"'); // allowed internal field
+  return raw.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 describe("catalog under-order copy never names the supplier", () => {

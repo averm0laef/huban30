@@ -84,7 +84,6 @@ export function SupplierWaitlistDialog({ onClose, target }: SupplierWaitlistDial
       policyVersion: SUPPLIER_WAITLIST_CONSENT_POLICY_VERSION,
       quantity: Number(form.get("quantity") ?? 1),
       query: target.query,
-      source: "rossko" as const,
       stockId: target.stockId,
     };
     setPending(true);

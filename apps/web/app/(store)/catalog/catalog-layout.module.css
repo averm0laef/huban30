@@ -1,0 +1,278 @@
+.page {
+  width: var(--store-container);
+  display: grid;
+  gap: 20px;
+  margin-inline: auto;
+  padding-block: clamp(20px, 3vw, 42px) clamp(44px, 6vw, 68px);
+}
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: var(--store-muted);
+  font-size: .82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.breadcrumbs a { color: inherit; text-decoration: none; }
+.breadcrumbs a:hover { color: var(--store-brand); }
+.breadcrumbs [aria-current="page"] { color: var(--store-text); }
+.breadcrumbs svg { flex: 0 0 auto; color: var(--store-muted); }
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.heading h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.7vw, 2rem);
+  line-height: 1.22;
+  color: var(--store-text);
+  overflow-wrap: anywhere;
+}
+.heading > span { color: var(--store-muted); font-size: .94rem; }
+.heading > p { flex-basis: 100%; margin: 5px 0 0; color: var(--store-muted); line-height: 1.5; }
+.categoryNav { display: grid; gap: 12px; min-width: 0; }
+.categoryTiles {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 12px;
+}
+/* A section without a picture of its own (the goods that have no section yet). */
+.categoryTileIcon { width: 40px; height: 40px; color: var(--store-muted); }
+/* «Все разделы»: only where the tiles are cut to the first eight (see the media queries below). */
+.categoryTilesMore {
+  display: none;
+  justify-self: center;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 18px;
+  border: 0;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-brand);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.categoryTilesMore:hover { box-shadow: 0 8px 20px rgb(24 0 224 / 9%); }
+.categoryTile {
+  min-width: 0;
+  min-height: 116px;
+  padding: 8px 8px 12px;
+  display: grid;
+  grid-template-rows: 60px 1fr;
+  place-items: center;
+  gap: 6px;
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+  color: var(--store-text);
+  text-decoration: none;
+  text-align: center;
+  font-size: .85rem;
+  line-height: 1.25;
+  /* Break long Russian words at a hyphen, never mid-word without one
+     ("стеклоочистител|я" was the bug); anywhere stays as a last resort. */
+  hyphens: auto;
+  overflow-wrap: break-word;
+  transition: color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
+}
+.categoryTile img { width: 90px; max-width: 100%; height: 60px; object-fit: contain; }
+.categoryTile:hover { color: var(--store-brand); box-shadow: 0 8px 20px rgb(24 0 224 / 9%); }
+.layout { display: grid; grid-template-columns: 296px minmax(0, 1fr); align-items: start; gap: 20px; }
+.main { min-width: 0; display: grid; align-content: start; gap: 16px; }
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+  padding: 9px;
+  background: var(--store-surface);
+  border-radius: var(--store-radius);
+}
+.sortSelect { position: relative; display: flex; flex: 0 1 auto; align-items: center; min-width: 0; }
+.sortSelect select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding-inline-start: 38px;
+  padding-inline-end: 35px;
+  border: 1px solid transparent;
+  border-radius: var(--store-radius-sm);
+  background-color: var(--store-bg);
+  color: var(--store-text);
+  font-size: .87rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.sortSelect select:hover { border-color: var(--store-border); }
+.sortIcon { position: absolute; inset-inline-start: 12px; pointer-events: none; color: var(--store-muted); }
+.quickFilter,
+.mobileFilter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* 44 px: «Фильтры» is tapped on a phone (it was 42). */
+  min-height: 44px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-text);
+  font-size: .875rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.quickFilter[data-active="true"] { background: var(--store-brand-soft); color: var(--store-brand); }
+.quickFilter:hover,
+.mobileFilter:hover { color: var(--store-brand); }
+.mobileFilter { display: none; }
+.filterCount {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  padding: 0 4px;
+  min-height: 20px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  font-size: .75rem;
+}
+.viewToggle {
+  display: flex;
+  gap: 1px;
+  margin-inline-start: auto;
+  padding: 3px;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+}
+.viewToggle a {
+  display: grid;
+  place-items: center;
+  width: 41px;
+  min-height: 36px;
+  border-radius: 9px;
+  color: var(--store-muted);
+  text-decoration: none;
+}
+.viewToggle a:hover,
+.viewToggle a[aria-current] { color: var(--store-brand); }
+.viewToggle a[aria-current] { background: var(--store-surface); box-shadow: var(--store-shadow-xs); }
+.subcategories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.subcategories a {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 5px 14px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-surface);
+  color: var(--store-text);
+  text-decoration: none;
+  font-size: .86rem;
+}
+.subcategories a:hover { color: var(--store-brand); }
+.subcategories small { color: var(--store-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 1280px) {
+  .categoryTiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  /* One column of content from here down: the first eight sections, the rest behind «Все разделы», so the
+     products are not pushed seven rows of tiles away. */
+  .categoryTiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .categoryTiles:not([data-expanded]) > .categoryTile:nth-child(n + 9) { display: none; }
+  .categoryTilesMore { display: inline-flex; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .mobileFilter { display: inline-flex; }
+}
+@media (max-width: 670px) {
+  .categoryTiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .categoryTile { min-height: 92px; grid-template-rows: 46px 1fr; font-size: .79rem; }
+  .categoryTile img { width: 76px; height: 46px; }
+  .toolbar { gap: 5px; padding: 6px; }
+  .sortSelect { flex: 1 1 110px; }
+  /* 16px keeps iOS from zooming the page when the select opens. */
+  .sortSelect select { padding-inline-start: 34px; padding-inline-end: 28px; font-size: 16px; }
+  .sortSelect > .sortIcon { inset-inline-start: 9px; }
+  .quickFilter { display: none; }
+  .mobileFilter { gap: 4px; padding-inline: 7px; font-size: .79rem; }
+  .viewToggle { padding: 2px; }
+  .viewToggle a { width: 40px; min-height: 40px; }
+}
+@media (max-width: 400px) {
+  /* Fluent's own atomic class sets the icon's display, so the hide needs the
+     parent in the selector to win — otherwise it paints over the text. */
+  .sortSelect > .sortIcon { display: none; }
+  .sortSelect select { padding-inline-start: 10px; }
+}
+@media (max-width: 350px) {
+  .toolbar { gap: 4px; }
+  .mobileFilter > svg { display: none; }
+  .sortSelect { flex-basis: 120px; }
+}
+
+/* Category tile: the picture lifts a little toward the pointer. */
+.categoryTile img { transition: transform var(--store-duration-slow) var(--store-ease); }
+@media (prefers-reduced-motion: no-preference) {
+  .categoryTile:hover img { transform: translateY(-3px) scale(1.05); }
+}
+
+/* ---------------- Subsection tiles ----------------
+   A section's subsections as picture tiles (retailer layout): picture on a
+   soft panel, name underneath, product count as a quiet second line. */
+.subsectionTiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--store-radius);
+  background: var(--store-surface);
+}
+.subsectionTile {
+  display: grid;
+  grid-template-rows: 96px auto auto;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 12px 14px;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-text);
+  text-align: center;
+  text-decoration: none;
+  transition: background var(--store-duration-base) var(--store-ease), box-shadow var(--store-duration-base) var(--store-ease);
+}
+.subsectionTile:hover { background: var(--store-surface); box-shadow: 0 0 0 1px var(--store-border), 0 10px 26px rgb(16 30 60 / 8%); color: var(--store-brand); }
+.subsectionTile:focus-visible { outline: 3px solid var(--store-accent); outline-offset: 2px; }
+.subsectionImage { display: grid; place-items: center; width: 100%; height: 96px; }
+.subsectionImage img { width: auto; max-width: 120px; height: 88px; object-fit: contain; mix-blend-mode: multiply; transition: transform var(--store-duration-slow) var(--store-ease); }
+.subsectionName { font-size: .95rem; font-weight: 600; line-height: 1.3; hyphens: auto; overflow-wrap: break-word; }
+.subsectionCount { color: var(--store-muted); font-size: .78rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .subsectionTile:hover .subsectionImage img { transform: translateY(-3px) scale(1.05); }
+}
+@media (max-width: 670px) {
+  .subsectionTiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 8px; }
+  .subsectionTile { grid-template-rows: 72px auto auto; padding: 10px 8px 12px; }
+  .subsectionImage { height: 72px; }
+  .subsectionImage img { height: 64px; max-width: 96px; }
+  .subsectionName { font-size: .86rem; }
+}
+
+/* Hovered tile label turns bold; labels are centred in fixed tiles, so the
+   surrounding grid never moves. */
+.categoryTile span, .subsectionName { transition: font-weight var(--store-duration-fast) var(--store-ease); }
+.categoryTile:hover span, .subsectionTile:hover .subsectionName { font-weight: 750; }

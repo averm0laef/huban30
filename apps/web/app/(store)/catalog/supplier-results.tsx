@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { SupplierSearchResponseSchema } from "@an30/contracts";
@@ -8,6 +7,7 @@ import type { SupplierPartView, SupplierSearchResponse, SupplierStockView } from
 
 import { STORE_PHONE, STORE_PHONE_DISPLAY } from "../../site-config";
 import { formatRubles } from "../_lib/catalog-format";
+import { supplierSearchFailure } from "../_lib/supplier-search-state";
 import { apiRequest, errorText } from "../_lib/storefront-api";
 import { filterSupplierParts } from "../_lib/supplier-results";
 import styles from "../_components/storefront.module.css";
@@ -15,6 +15,7 @@ import { CatalogResultRow, RowBadge } from "./catalog-result-row";
 import resultsStyles from "./catalog-results.module.css";
 import { SupplierWaitlistDialog } from "./supplier-waitlist-dialog";
 import type { SupplierWaitlistTarget } from "./supplier-waitlist-dialog";
+import { ExpertHelpQueryLink } from "./expert-help-query-link";
 
 type FetchState =
   | { status: "loading" }
@@ -119,7 +120,6 @@ function OfferRow({ offer, onWaitlist, query }: {
         badges={<OfferBadges offer={offer} />}
         brand={offer.brand}
         imageAlt={`Нет фото товара «${offer.name}»`}
-        imageUrl="/catalog/no-photo.webp"
         name={offer.name}
         note="Предложений пока нет."
         sku={offer.partNumber}
@@ -153,11 +153,10 @@ function OfferRow({ offer, onWaitlist, query }: {
       brand={offer.brand}
       deliveryNote={deliveryLabel(stock.deliveryTime)}
       imageAlt={`Нет фото товара «${offer.name}»`}
-      imageUrl="/catalog/no-photo.webp"
       name={offer.name}
       priceLabel={formatRubles(stock.priceKopeks)}
-      quantity={stock.quantity}
       sku={offer.partNumber}
+      underOrder
     />
   );
 }
@@ -184,7 +183,6 @@ function PartRows({ onWaitlist, part, query }: {
           badges={<RowBadge>Под заказ</RowBadge>}
           brand={part.brand}
           imageAlt={`Нет фото товара «${part.name}»`}
-          imageUrl="/catalog/no-photo.webp"
           name={part.name}
           note={part.crosses.length > 0 ? "Прямого предложения нет — есть аналоги ниже." : "Предложений пока нет."}
           sku={part.partNumber}
@@ -269,12 +267,14 @@ export function SupplierResults({
     || minPriceKopeks !== undefined
     || maxPriceKopeks !== undefined;
   const supplierUnavailable = Boolean(ready && !ready.success);
+  const supplierFailure = supplierUnavailable
+    ? supplierSearchFailure(ready?.message ?? "")
+    : null;
   const supplierEmpty = Boolean(ready?.success && parts.length === 0);
 
   return (
     <section aria-labelledby="supplier-results-heading" className={resultsStyles.sourceDivider}>
-      <h2 className={resultsStyles.sourceCaption} id="supplier-results-heading">Привезём под заказ</h2>
-      <p className={styles.supplierIntro}>Этой детали может не быть на складе прямо сейчас, но мы можем привезти её под заказ.</p>
+      <h2 className={resultsStyles.sourceCaption} id="supplier-results-heading">Под заказ</h2>
 
       {state.status === "loading" ? (
         <section aria-busy="true" aria-live="polite" className={styles.loadingState}>
@@ -292,10 +292,17 @@ export function SupplierResults({
       ) : null}
 
       {supplierUnavailable ? (
-        <section className={styles.errorState} role="alert">
-          <h3>Под заказ временно недоступен</h3>
-          <p>{ready?.message || "Попробуйте повторить запрос позже."}</p>
-          <button className={styles.submitButton} onClick={retry} type="button">Повторить</button>
+        <section
+          className={`${supplierFailure?.kind === "disabled" ? styles.emptyState : styles.errorState} ${resultsStyles.supplierUnavailable}`}
+          role={supplierFailure?.kind === "disabled" ? undefined : "alert"}
+        >
+          <h3>{supplierFailure?.heading}</h3>
+          <p>{supplierFailure?.body}</p>
+          {supplierFailure?.action === "contact" ? (
+            <ExpertHelpQueryLink className={resultsStyles.supplierHelpLink} query={query}>Уточнить у специалиста</ExpertHelpQueryLink>
+          ) : (
+            <button className={styles.submitButton} onClick={retry} type="button">Повторить</button>
+          )}
         </section>
       ) : null}
 
@@ -310,7 +317,7 @@ export function SupplierResults({
               </p>
               <div className={styles.heroActions}>
                 <a className={styles.primaryAction} href={`tel:${STORE_PHONE}`}>{STORE_PHONE_DISPLAY}</a>
-                <Link className={styles.secondaryAction} href="/expert-help">Спросить специалиста</Link>
+                <ExpertHelpQueryLink className={styles.secondaryAction} query={query}>Спросить специалиста</ExpertHelpQueryLink>
               </div>
             </>
           ) : (

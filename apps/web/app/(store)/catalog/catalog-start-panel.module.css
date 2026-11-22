@@ -1,0 +1,2 @@
+.fullWidthLayout { grid-template-columns: minmax(0, 1fr); }
+.compactForm { grid-template-columns: minmax(0, 1fr) auto; }

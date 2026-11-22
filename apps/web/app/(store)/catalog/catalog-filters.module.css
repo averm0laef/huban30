@@ -7,11 +7,83 @@
   border: 0;
 }
 
-.filterGroup legend {
-  margin-bottom: 9px;
+.railAside {
+  min-width: 0;
+  position: sticky;
+  top: 148px;
+}
+.desktopRail {
+  max-height: calc(100dvh - 166px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--store-radius-lg);
+  background: var(--store-surface);
+  scrollbar-width: thin;
+}
+.railBody { padding: 15px 18px; }
+.vehicle {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 9px;
+  min-height: 62px;
+  padding: 9px 10px;
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
   color: var(--store-text);
-  font-size: 0.82rem;
-  font-weight: var(--store-weight-bold);
+  text-decoration: none;
+}
+.vehicle svg { color: var(--store-brand); }
+.vehicle span { display: grid; gap: 2px; }
+.vehicle small { color: var(--store-muted); font-size: .75rem; }
+.vehicle strong { font-size: .86rem; font-weight: 650; line-height: 1.3; }
+.vehicle:hover { background: var(--store-brand-soft); }
+.railGroup { border-bottom: 1px solid var(--store-border); }
+.railGroup > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 47px;
+  color: var(--store-text);
+  font-size: .92rem;
+  font-weight: 660;
+  list-style: none;
+  cursor: pointer;
+}
+.railGroup > summary::-webkit-details-marker { display: none; }
+.railGroup > summary svg { color: var(--store-muted); }
+.railGroup[open] > summary svg { transform: rotate(180deg); }
+.groupBody { min-width: 0; padding-bottom: 12px; }
+.allCategories {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 5px 10px 5px 28px;
+  border-radius: 10px;
+  color: var(--store-muted);
+  text-decoration: none;
+  font-size: .88rem;
+}
+.allCategories[aria-current] { background: var(--store-brand-soft); color: var(--store-brand); font-weight: 620; }
+.allCategories:hover { color: var(--store-brand); }
+.pricePresets { display: flex; flex-wrap: wrap; gap: 5px; }
+.pricePresets a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 3px 9px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-bg);
+  color: var(--store-text);
+  text-decoration: none;
+  font-size: .75rem;
+}
+.pricePresets a:hover,
+.pricePresets a[aria-current] { background: var(--store-brand-soft); color: var(--store-brand); }
+@media (max-width: 1100px) {
+  .railAside { display: contents; }
+  .desktopRail { display: none; }
 }
 
 .brandOptions {
@@ -19,47 +91,54 @@
   gap: 3px;
 }
 
-.brandOption {
+/* Shared row shape for a brand checkbox and an availability radio alike —
+   same grid, same tap target, same hover language; only the input `type`
+   differs between callers. */
+.optionRow {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
-  min-height: 36px;
+  min-height: 44px;
   color: var(--store-text);
   cursor: pointer;
 }
 
-.brandOption input {
+.optionRow input {
   width: 18px;
   height: 18px;
   margin: 0;
   accent-color: var(--store-brand);
 }
 
-.brandOption span {
+.optionRow span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.brandOption small {
+.optionRow small {
   color: var(--store-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.moreBrands summary {
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  color: var(--store-brand);
-  font-weight: var(--store-weight-bold);
-  cursor: pointer;
+.brandEmpty {
+  margin: 0;
+  color: var(--store-muted);
+  font-size: 0.85rem;
 }
 
-.moreBrands[open] summary {
-  margin-bottom: 4px;
+.moreBrandsButton {
+  min-height: 44px;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--store-brand);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
+.moreBrandsButton:hover { text-decoration: underline; }
 
 .priceRange {
   display: grid;
@@ -78,7 +157,7 @@
 .priceRange input {
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 9px;
   border: 1px solid var(--store-border);
   border-radius: var(--store-radius-sm);
@@ -90,10 +169,11 @@
 .filterActions {
   display: grid;
   gap: 4px;
+  margin-top: 14px;
 }
 
 .filterActions a {
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -101,3 +181,124 @@
   font-size: 0.85rem;
   font-weight: var(--store-weight-bold);
 }
+
+/* "Up" link to the parent category, sitting above the child chips inside
+   the same "Разделы" group — see `resolveParentLink` in catalog-tree.ts. */
+.railParentLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: 2px;
+  color: var(--store-brand);
+  font-size: 0.85rem;
+  font-weight: var(--store-weight-bold);
+}
+
+.railParentLink:hover {
+  color: var(--store-brand-strong);
+}
+
+.mobileDialog {
+  box-sizing: border-box;
+  width: min(100%, 620px);
+  max-width: 100%;
+  max-height: min(88dvh, 760px);
+  margin: auto auto 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-lg) var(--store-radius-lg) 0 0;
+  background: var(--store-surface);
+  color: var(--store-text);
+  box-shadow: var(--store-shadow-lg);
+}
+.mobileDialog[open] { display: flex; flex-direction: column; animation: show-filter-sheet 180ms var(--store-ease) both; }
+.mobileDialog::backdrop { background: rgb(14 11 45 / 38%); }
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--store-border);
+}
+.dialogHeader button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--store-surface-strong);
+  color: var(--store-text);
+  font: inherit;
+  font-size: 1.45rem;
+  cursor: pointer;
+}
+.dialogScroll { overflow-y: auto; overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom); }
+:global(html):has(.mobileDialog[open]) { overflow: hidden; }
+@keyframes show-filter-sheet { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .mobileDialog[open] { animation: none; } }
+
+/* ---------------- Category tree ----------------
+   One indented list instead of "← parent" + a flat level: the branch being
+   viewed is open, siblings fold behind an arrow button, and the name itself
+   is always the link. Indentation is a thin guide line, not nested boxes. */
+.tree,
+.treeChildren { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; }
+.treeChildren { margin: 1px 0 4px 15px; padding-left: 6px; border-left: 1px solid var(--store-border); }
+.treeRow { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; border-radius: 10px; }
+.treeRow:hover { background: var(--store-bg); }
+.treeRow[data-current] { background: var(--store-brand-soft); }
+.treeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--store-muted);
+  cursor: pointer;
+}
+.treeToggle svg { transition: transform var(--store-duration-fast) var(--store-ease); }
+.treeToggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.treeToggle:hover { color: var(--store-brand); }
+.treeToggle:focus-visible { outline: 2px solid var(--store-brand); outline-offset: -2px; }
+.treeSpacer { width: 26px; }
+.treeLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 10px 6px 2px;
+  color: var(--store-text);
+  font-size: .9rem;
+  line-height: 1.3;
+  text-decoration: none;
+}
+.treeLink:hover { color: var(--store-brand); }
+.treeLink[aria-current] { color: var(--store-brand); font-weight: 650; }
+.treeName { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
+.treeCount {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 1px 7px;
+  border-radius: var(--store-radius-full);
+  background: var(--store-surface-strong);
+  color: var(--store-muted);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.treeLink[aria-current] .treeCount { background: var(--store-surface); color: var(--store-brand); }
+
+/* Hovered section reads bolder (rows are full width, nothing shifts). */
+.treeLink { transition: color var(--store-duration-fast) var(--store-ease), font-weight var(--store-duration-fast) var(--store-ease); }
+.treeLink:hover { font-weight: 700; }

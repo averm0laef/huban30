@@ -1,14 +1,25 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { STORE_HOURS, STORE_LOCALITY, STORE_STREET } from "../../../../site-config";
-import { AddToCartButton } from "../../../_components/cart-actions";
+import { ProductBuyButton } from "../../../_components/cart-actions";
+import { ChevronRight20Regular, Location24Regular, ShieldCheckmark20Regular, VehicleTruck24Regular } from "../../../_components/home-icons";
 import { JsonLd } from "../../../_components/json-ld";
+import buttons from "../../../_components/store-button.module.css";
 import styles from "../../../_components/storefront.module.css";
-import { findCatalogItem, formatRubles } from "../../../_lib/catalog-api";
+import { findCatalogItem, formatRubles, getCategoryTree } from "../../../_lib/catalog-api";
+import { categoryPath, findCategorySlugPath } from "../../../_lib/catalog-tree";
 import { breadcrumbJsonLd, pageMetadata, privatePageMetadata, productJsonLd } from "../../../_lib/seo";
+import { catalogCategoryPhoto, publicSectionName } from "../../../_lib/store-categories";
+import { productCompatibilityPrefillMessage } from "../../../_lib/expert-help-prefill";
+import { ExpertHelpQueryLink } from "../../expert-help-query-link";
+import { ProductAnalogs } from "./product-analogs";
+import { ProductFitment } from "./product-fitment";
+import { ProductDetails } from "./product-details";
+import { ProductFavourite } from "./product-favourite";
+import { ProductGallery } from "./product-gallery";
+import layout from "./product-page.module.css";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
@@ -16,27 +27,7 @@ interface ProductPageProps {
 
 function productDescription(name: string, sku: string, brandName: string | null): string {
   const brand = brandName ? `${brandName}, ` : "";
-  return `${name} — ${brand}артикул ${sku}. Цена и наличие из 1С, проверка совместимости сотрудником АН-30 в Чернышевске.`;
-}
-
-function PinIcon() {
-  return (
-    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 21s7-6.7 7-12.2A7 7 0 0 0 5 8.8C5 14.3 12 21 12 21Z" />
-      <circle cx="12" cy="8.8" r="2.4" />
-    </svg>
-  );
-}
-
-function TruckIcon() {
-  return (
-    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 7h11v10H2z" />
-      <path d="M13 10h4l4 3.2V17h-8" />
-      <circle cx="6" cy="18.5" r="1.6" />
-      <circle cx="16.5" cy="18.5" r="1.6" />
-    </svg>
-  );
+  return `${name} — ${brand}артикул ${sku}. Актуальная цена и наличие, самовывоз в Чернышевске, помощь с подбором по VIN.`;
 }
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
@@ -50,14 +41,80 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   });
 }
 
+/**
+ * Only human-readable characteristics from 1С reach the page: keys written in
+ * Russian with a short scalar value. Technical keys (ids, flags, hashes) that
+ * the import keeps for itself stay out of the customer's view.
+ */
+function visibleAttributes(attributes: Record<string, unknown>): Array<[string, string]> {
+  return Object.entries(attributes)
+    .filter(([key]) => /[А-Яа-яЁё]/u.test(key))
+    .map(([key, value]): [string, string] | null => {
+      if (typeof value === "number" && Number.isFinite(value)) return [key, String(value)];
+      if (typeof value === "boolean") return [key, value ? "Да" : "Нет"];
+      if (typeof value === "string" && value.trim() && value.length <= 200) return [key, value.trim()];
+      return null;
+    })
+    .filter((entry): entry is [string, string] => entry !== null)
+    .slice(0, 24);
+}
+
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
   const product = await findCatalogItem(slug);
   if (!product) notFound();
   const available = product.availableQuantity > 0;
+  const priced = product.priceKopeks !== null;
+
+  let categoryTrail: Array<{ name: string; path: string }> = [];
+  let categoryAncestors: string[] = [];
+  if (product.category) {
+    try {
+      const tree = await getCategoryTree();
+      const slugPath = findCategorySlugPath(tree, product.category.slug);
+      if (slugPath) {
+        categoryAncestors = slugPath;
+        let level = tree;
+        categoryTrail = slugPath.map((part, index) => {
+          const node = level.find((item) => item.slug === part);
+          level = node?.children ?? [];
+          return { name: node?.name ?? part, path: categoryPath(slugPath.slice(0, index + 1)) };
+        });
+      }
+    } catch {
+      // Breadcrumbs fall back to "Каталог" alone if the tree is unavailable.
+    }
+  }
+
+  const specs: Array<[string, string]> = [
+    ...(product.brand ? [["Бренд", product.brand.name] as [string, string]] : []),
+    ["Артикул", product.sku],
+    ...(product.category ? [["Раздел", publicSectionName(product.category)] as [string, string]] : []),
+    ...visibleAttributes(product.attributes),
+  ];
+  const images = product.images.length
+    ? product.images.map((image) => ({ altText: image.altText, id: image.id, url: image.url }))
+    : product.primaryImage ? [{ altText: product.primaryImage.altText, id: product.primaryImage.id, url: product.primaryImage.url }] : [];
+  const stockText = available
+    ? product.availableQuantity > 10 ? "В наличии, больше 10 шт." : `В наличии ${product.availableQuantity} шт.`
+    : "Нет в наличии";
+
+  const prefill = productCompatibilityPrefillMessage(product.name, product.sku);
+  const detailPanels = [
+    ...(product.description ? [{ id: "about", label: "Описание", content: <p className={layout.detailsText}>{product.description}</p> }] : []),
+    { id: "specs", label: "Характеристики", content: <SpecTable specs={specs} /> },
+    { id: "delivery", label: "Получение", content: <>
+      <h2>Как получить заказ</h2>
+      <p className={layout.detailsText}>Самовывоз по адресу {STORE_LOCALITY}, {STORE_STREET}. {STORE_HOURS}. Условия доставки согласует менеджер.</p>
+      <Link className={`${buttons.button} ${buttons.quiet} ${layout.detailAction}`} href="/delivery">
+        Подробнее о доставке и самовывозе
+        <ChevronRight20Regular aria-hidden="true" />
+      </Link>
+    </> },
+  ];
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${layout.productPage}`}>
       <JsonLd value={productJsonLd({
         availableQuantity: product.availableQuantity,
         brandName: product.brand?.name ?? null,
@@ -70,50 +127,67 @@ export default async function ProductPage({ params }: ProductPageProps) {
       <JsonLd value={breadcrumbJsonLd([
         { name: "Главная", path: "/" },
         { name: "Каталог", path: "/catalog" },
+        ...categoryTrail,
         { name: product.name, path: `/catalog/product/${product.slug}` },
       ])} />
-      <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
+      <nav className={`${styles.breadcrumbs} ${layout.crumbs}`} aria-label="Хлебные крошки">
         <Link href="/">Главная</Link><span aria-hidden="true">/</span>
         <Link href="/catalog">Каталог</Link><span aria-hidden="true">/</span>
-        <span aria-current="page">{product.name}</span>
+        {categoryTrail.map((crumb) => (
+          <span key={crumb.path} className={styles.breadcrumbStep}><Link href={crumb.path}>{crumb.name}</Link><span aria-hidden="true">/</span></span>
+        ))}
+        <span className={layout.crumbCurrent} aria-current="page">{product.name}</span>
       </nav>
-      <article className={styles.productLayout}>
-        <div className={styles.productVisualLarge}>
-          <Image
-            alt={product.primaryImage ? product.primaryImage.altText : `Нет фото товара «${product.name}»`}
-            fill
-            sizes="(max-width: 767px) 100vw, 560px"
-            src={product.primaryImage ? product.primaryImage.url : "/catalog/no-photo.webp"}
-          />
-        </div>
-        <div className={styles.productInfo}>
-          <p className={styles.productBrandArticle}>
-            {product.brand ? <><strong>{product.brand.name}</strong> · </> : null}Артикул {product.sku}
-          </p>
-          <h1>{product.name}</h1>
-          <p className={`${styles.stock} ${available ? "" : styles.stockOut}`}>{available ? `В наличии: ${product.availableQuantity}` : "Нет в наличии"}</p>
-          <p className={styles.productPrice}>{product.priceKopeks === null ? "Цена уточняется" : formatRubles(product.priceKopeks)}</p>
-          <AddToCartButton disabled={!available || product.priceKopeks === null} productId={product.id} />
-          <p className={styles.productNote}>Окончательная цена, совместимость и остаток проверяются сервером перед созданием заказа.</p>
-          <div className={styles.productFulfillment}>
-            <div className={styles.productFulfillmentItem}>
-              <PinIcon />
-              <div>
-                <strong>Самовывоз</strong>
-                <span>{STORE_LOCALITY}, {STORE_STREET} · {STORE_HOURS}</span>
-              </div>
-            </div>
-            <div className={styles.productFulfillmentItem}>
-              <TruckIcon />
-              <div>
-                <strong>Доставка</strong>
-                <span>Условия согласуются с менеджером отдельно</span>
-              </div>
-            </div>
+      <article className={layout.hero}>
+        <ProductGallery images={images} categoryImage={catalogCategoryPhoto(product.category, categoryAncestors)} />
+
+        <div className={layout.info}>
+          <div className={layout.identity}>
+            {product.brand ? <strong className={layout.brand}>{product.brand.name}</strong> : null}
+            <span>Артикул {product.sku}</span>
           </div>
-          <Link className={styles.secondaryAction} href="/expert-help">Спросить специалиста</Link>
+          <h1>{product.name}</h1>
+          {specs.length > 1 ? <SpecTable specs={specs.filter(([label]) => label !== "Бренд" && label !== "Артикул").slice(0, 4)} /> : null}
+          <div className={layout.compatibility}>
+            <strong>Подойдёт к вашему автомобилю?</strong>
+            <ExpertHelpQueryLink className={`${buttons.button} ${buttons.soft}`} prefillMessage={prefill}>
+              <ShieldCheckmark20Regular aria-hidden="true" />
+              Проверить по VIN
+            </ExpertHelpQueryLink>
+          </div>
         </div>
+
+        <aside className={layout.buy} aria-label="Цена и получение">
+          <div className={layout.buyBar}>
+            <p className={layout.price}>{product.priceKopeks === null ? "Цена по запросу" : formatRubles(product.priceKopeks)}</p>
+            <p className={`${styles.stock} ${available ? "" : styles.stockOut}`}>{stockText}</p>
+          </div>
+          <div className={layout.buyActions}>
+            {priced && available ? <ProductBuyButton productId={product.id} /> : (
+              <ExpertHelpQueryLink className={`${styles.primaryAction} ${layout.buyHelp}`} prefillMessage={prefill}>
+                {available ? "Узнать цену" : "Узнать о поступлении"}
+              </ExpertHelpQueryLink>
+            )}
+            <ProductFavourite productId={product.id} key={product.id} />
+          </div>
+          <ul className={layout.fulfilment}>
+            <li><Location24Regular aria-hidden="true" /><div><strong>Самовывоз</strong><span>{STORE_STREET}</span></div></li>
+            <li><VehicleTruck24Regular aria-hidden="true" /><div><strong>Доставка</strong><span>Срок и стоимость уточнит менеджер</span></div></li>
+          </ul>
+        </aside>
       </article>
+
+      <ProductDetails panels={detailPanels} key={product.id} />
+      <ProductAnalogs article={product.sku} brand={product.brand?.name ?? null} productId={product.id} key={`analogs-${product.id}`} />
+      <ProductFitment key={`fitment-${product.id}`} productId={product.id} productName={product.name} />
     </div>
   );
+}
+
+function SpecTable({ specs }: { specs: Array<[string, string]> }) {
+  return specs.length ? (
+    <dl className={layout.specs}>
+      {specs.map(([label, value], index) => <div key={`${label}-${index}`}><dt>{label}</dt><dd>{value}</dd></div>)}
+    </dl>
+  ) : null;
 }

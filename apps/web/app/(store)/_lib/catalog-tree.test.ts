@@ -7,6 +7,8 @@ import {
   categoryPath,
   findCategorySlugPath,
   resolveCategoryPath,
+  resolveParentLink,
+  resolveTaxonomyPath,
 } from "./catalog-tree";
 
 function node(overrides: Partial<CatalogCategoryNode> & Pick<CatalogCategoryNode, "id" | "name" | "slug">): CatalogCategoryNode {
@@ -99,6 +101,22 @@ describe("buildCategoryBreadcrumb", () => {
   });
 });
 
+describe("resolveParentLink", () => {
+  it("points a top-level category up at the catalog root", () => {
+    const location = resolveCategoryPath(tree, ["masla"]);
+    expect(resolveParentLink(location!.ancestors)).toEqual({ name: "Все категории", path: "/catalog" });
+  });
+
+  it("points a nested category up at its immediate parent, not the root", () => {
+    const location = resolveCategoryPath(tree, ["zapchasti", "kuzov", "shchetki"]);
+    expect(resolveParentLink(location!.ancestors)).toEqual({ name: "Кузов", path: "/catalog/zapchasti/kuzov" });
+  });
+
+  it("falls back to the catalog root for an empty ancestor list", () => {
+    expect(resolveParentLink([])).toEqual({ name: "Все категории", path: "/catalog" });
+  });
+});
+
 describe("findCategorySlugPath", () => {
   it("finds a deeply nested category by slug alone", () => {
     expect(findCategorySlugPath(tree, "shchetki")).toEqual(["zapchasti", "kuzov", "shchetki"]);
@@ -114,5 +132,39 @@ describe("findCategorySlugPath", () => {
 
   it("returns null against an empty tree (catalog not imported yet)", () => {
     expect(findCategorySlugPath([], "masla")).toBeNull();
+  });
+});
+
+// The public tree lists only the sections that have products. A link from /podbor into «Фильтры → Масляные»
+// (and any old bookmark) on a shop whose filters were not loaded yet answered «404 — такой страницы нет».
+describe("a section of the shop's own taxonomy that has no products yet", () => {
+  it("is found by its place in the taxonomy, with nothing in it", () => {
+    const location = resolveTaxonomyPath(["filtry", "maslyanye-filtry"]);
+    expect(location?.node).toMatchObject({ children: [], name: "Масляные", productCount: 0, slug: "maslyanye-filtry" });
+    expect(location?.ancestors.map((entry) => [entry.slug, entry.name])).toEqual([["filtry", "Фильтры"]]);
+  });
+
+  it("is found as a whole section too, without subsections to offer", () => {
+    const location = resolveTaxonomyPath(["filtry"]);
+    expect(location?.node).toMatchObject({ children: [], name: "Фильтры", productCount: 0, slug: "filtry" });
+    expect(location?.ancestors).toEqual([]);
+  });
+
+  it("is not made of a path the taxonomy does not have", () => {
+    expect(resolveTaxonomyPath(["net-takogo-razdela"])).toBeNull();
+    expect(resolveTaxonomyPath(["filtry", "net-takogo-podrazdela"])).toBeNull();
+    expect(resolveTaxonomyPath(["filtry", "maslyanye-filtry", "glubzhe"])).toBeNull();
+    expect(resolveTaxonomyPath([])).toBeNull();
+  });
+
+  it("is not made of a subsection put in the wrong place", () => {
+    // «Масляные» belong to «Фильтры»: neither a root nor a part of «Тормозная система».
+    expect(resolveTaxonomyPath(["maslyanye-filtry"])).toBeNull();
+    expect(resolveTaxonomyPath(["tormoznaya-sistema", "maslyanye-filtry"])).toBeNull();
+  });
+
+  it("does not open the staff's own shelves", () => {
+    expect(resolveTaxonomyPath(["bez-kategorii"])).toBeNull();
+    expect(resolveTaxonomyPath(["ne-pokazyvat-na-sayte"])).toBeNull();
   });
 });

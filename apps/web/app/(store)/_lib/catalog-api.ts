@@ -7,6 +7,7 @@ import {
   CatalogBrandsResponseSchema,
   CatalogCategoryTreeResponseSchema,
   CatalogProductDetailSchema,
+  CatalogProductSummarySchema,
   CatalogProductsResponseSchema,
   type CatalogBrandView,
   type CatalogCategoryNode,
@@ -15,6 +16,9 @@ import {
   type CatalogProductSummary,
   type CatalogProductsResponse,
 } from "@an30/contracts";
+
+import { publicSectionName } from "./store-categories";
+import { timedMemo } from "./timed-memo";
 
 export type CatalogImage = CatalogImageView;
 export type CatalogItem = CatalogProductSummary;
@@ -36,10 +40,15 @@ function parseCatalogResponse(value: unknown): CatalogSearchResponse {
   return parsed.data;
 }
 
+/** The tree as a customer reads it: the staff's queue «Без категории» is «Другие товары» everywhere on the storefront. */
+function withPublicNames(nodes: CatalogCategoryNode[]): CatalogCategoryNode[] {
+  return nodes.map((node) => ({ ...node, children: withPublicNames(node.children), name: publicSectionName(node) }));
+}
+
 function parseCategoryTree(value: unknown): CatalogCategoryNode[] {
   const parsed = CatalogCategoryTreeResponseSchema.safeParse(value);
   if (!parsed.success) throw new Error("Некорректный ответ дерева категорий.");
-  return parsed.data.items;
+  return withPublicNames(parsed.data.items);
 }
 
 function parseCatalogBrands(value: unknown): CatalogBrand[] {
@@ -124,18 +133,31 @@ export const searchCatalog = cache(async (
   return parseCatalogResponse(await getJson(`/catalog/products?${parameters.toString()}`));
 });
 
-/**
- * The full public category tree — cached per request like the rest of this
- * module. Categories only change on a 1C import, and the API layer already
- * caches the assembled tree itself, so this just avoids duplicate fetches
- * within one render.
- */
-export const getCategoryTree = cache(async (): Promise<CatalogCategoryNode[]> => (
-  parseCategoryTree(await getJson("/catalog/categories/tree"))
-));
+/** How long the storefront answers with the category tree it already has before asking the API again. */
+const CATEGORY_TREE_TTL_MS = 30_000;
 
-export const getCatalogBrands = cache(async (): Promise<CatalogBrand[]> => (
-  parseCatalogBrands(await getJson("/catalog/brands"))
+/**
+ * The full public category tree. It is the same for every visitor and changes only on a 1С exchange, so this
+ * process keeps it for half a minute. Every link to a section that Next.js prefetches runs that page's
+ * generateMetadata, which reads the tree: one visitor who opened the home page, the catalogue menu and /catalog
+ * used to spend 63 requests on it in a minute against the API's limit of 60 per visitor, and the catalogue then
+ * answered «слишком много запросов». After an exchange new sections show up within that half minute.
+ */
+export const getCategoryTree = timedMemo(async (): Promise<CatalogCategoryNode[]> => (
+  parseCategoryTree(await getJson("/catalog/categories/tree"))
+), CATEGORY_TREE_TTL_MS);
+
+export const getAvailableShowcase = cache(async (): Promise<CatalogItem[]> => {
+  const result = await getJson("/catalog/featured?limit=4");
+  if (!result || typeof result !== "object" || !("items" in result)) return [];
+  return CatalogProductSummarySchema.array().max(4).parse(result.items);
+});
+
+/** Brands for the filter rail; scoped to a section when its slug is given. */
+export const getCatalogBrands = cache(async (categorySlug?: string): Promise<CatalogBrand[]> => (
+  parseCatalogBrands(await getJson(categorySlug
+    ? `/catalog/brands?category=${encodeURIComponent(categorySlug)}`
+    : "/catalog/brands"))
 ));
 
 export const findCatalogItem = cache(async (slug: string): Promise<CatalogProduct | null> => {

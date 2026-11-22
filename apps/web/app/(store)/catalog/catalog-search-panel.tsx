@@ -1,12 +1,28 @@
 import Link from "next/link";
 
 import { AddToCartButton } from "../_components/cart-actions";
+import { Clock20Regular, VehicleCar20Regular } from "../_components/home-icons";
+import buttons from "../_components/store-button.module.css";
 import styles from "../_components/storefront.module.css";
 import { formatRubles } from "../_lib/catalog-api";
-import type { CatalogItem } from "../_lib/catalog-api";
+import type { CatalogBrand, CatalogCategoryNode, CatalogItem } from "../_lib/catalog-api";
+import { findCategorySlugPath } from "../_lib/catalog-tree";
+import { searchServiceLinks, suggestedCatalogSections } from "../_lib/search-guidance";
+import { catalogCategoryPhoto } from "../_lib/store-categories";
+import { isValidVin } from "../_lib/vin";
 import { CatalogResultRow, RowBadge } from "./catalog-result-row";
-import { catalogPageHref, type CatalogPageQuery } from "./catalog-query";
+import layoutStyles from "./catalog-layout.module.css";
+import { catalogPageHref, clearCatalogFiltersHref, type CatalogPageQuery } from "./catalog-query";
 import resultsStyles from "./catalog-results.module.css";
+import { CATALOG_SEARCH_FORM_ID } from "./catalog-search-form";
+import { CatalogFilterTrigger, CatalogSortSelect, Checkmark20Regular, Grid20Regular, TextBulletList20Regular } from "./catalog-toolbar-controls";
+import { CatalogVinHelpLink } from "./catalog-vin-help-link";
+import { ExpertHelpQueryLink } from "./expert-help-query-link";
+
+// A question to the shop about a product («Узнать срок», «Уточнить цену»): the same soft button as on /podbor.
+const askButton = `${buttons.button} ${buttons.soft}`;
+
+export { CATALOG_SEARCH_FORM_ID } from "./catalog-search-form";
 
 export interface CatalogEmptyState {
   body: string;
@@ -16,50 +32,44 @@ export interface CatalogEmptyState {
 export interface CatalogSearchPanelProps {
   /** Form target: `/catalog` site-wide, or the current category's own path. */
   action: string;
+  brands?: CatalogBrand[];
   /** Set by the caller whenever `items` is empty, with level-appropriate copy. */
   emptyState: CatalogEmptyState | null;
   errorHeading?: string;
   errorMessage: string | null;
   items: CatalogItem[];
+  /** "any": no product had every word, so these match at least one of them. */
+  matchMode?: "all" | "any";
   pageSize: number;
   state: CatalogPageQuery;
   total: number;
+  tree: CatalogCategoryNode[];
 }
 
-/**
- * Id shared with `CatalogFilterRail`'s availability `<select>`, which lives
- * outside this component's own `<form>` (in the rail, a DOM sibling) and
- * links back to it purely via the HTML `form` attribute — see the comment
- * on `CatalogFilterRail` for why.
- */
-export const CATALOG_SEARCH_FORM_ID = "catalog-search-form";
-
-/**
- * The search form + the shop's own 1C rows, shared by `/catalog` (site-wide)
- * and every `/catalog/[...slug]` category level — the category itself comes
- * from the route, not a query parameter, so a search here always combines
- * with whichever category the page already scoped `searchCatalog` to.
- *
- * Honest by construction: it only ever renders `items` the server actually
- * returned, and the caller must supply `emptyState` copy whenever there are
- * none — there is no generic "browse the catalog" list to fall back to.
- *
- * Each row renders through `CatalogResultRow`, the exact same row component
- * `supplier-results.tsx` uses for the under-order offers below it — that
- * shared anatomy is what makes the two sources read as one continuous list
- * rather than two differently-shaped blocks. When `query` is a real search
- * (≥2 characters) the rows get a small "На складе" caption above them,
- * deliberately light — not a boxed section — so the reader can still see
- * where the shop's own stock ends and the under-order rows begin. A plain
- * category browse (no query, or the 1-character hint) renders unlabelled,
- * exactly as before.
- */
+/** Sorting and filter controls submit together to the current catalog scope. */
 export function CatalogSearchPanel({
-  action, emptyState, errorHeading = "Каталог не отвечает", errorMessage, items, pageSize, state, total,
+  action, brands = [], emptyState, errorHeading = "Каталог не отвечает", errorMessage, items, matchMode = "all", pageSize, state, total, tree,
 }: CatalogSearchPanelProps) {
   const isSearch = state.query.trim().length >= 2;
+  const isVin = isValidVin(state.query.trim());
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const showPagination = !errorMessage && total > pageSize;
+  const serviceLinks = isSearch && !isVin ? searchServiceLinks(state.query) : [];
+  const categoryLinks = emptyState && isSearch ? suggestedCatalogSections(state.query) : [];
+  const filters = [
+    ...(state.availability === "all" ? [] : [{
+      label: state.availability === "in_stock" ? "В наличии" : "Под заказ",
+      href: catalogPageHref(action, { ...state, availability: "all" }),
+    }]),
+    ...state.brands.map(slug => ({
+      label: brands.find(brand => brand.slug === slug)?.name ?? slug,
+      href: catalogPageHref(action, { ...state, brands: state.brands.filter(brand => brand !== slug) }),
+    })),
+    ...(state.minPriceRubles === null && state.maxPriceRubles === null ? [] : [{
+      label: [state.minPriceRubles === null ? "" : `от ${state.minPriceRubles}`, state.maxPriceRubles === null ? "" : `до ${state.maxPriceRubles}`].filter(Boolean).join(" ") + " ₽",
+      href: catalogPageHref(action, { ...state, minPriceRubles: null, maxPriceRubles: null }),
+    }]),
+  ];
 
   const body = errorMessage ? (
     <section className={styles.errorState} role="alert">
@@ -67,22 +77,45 @@ export function CatalogSearchPanel({
       <p>{errorMessage}</p>
     </section>
   ) : emptyState ? (
-    <section className={styles.emptyState}>
+    <section className={isSearch ? `${styles.emptyState} ${resultsStyles.searchEmptyState}` : styles.emptyState}>
       <h2>{emptyState.heading}</h2>
       <p>{emptyState.body}</p>
+      {isSearch ? <div className={resultsStyles.emptyLinks}>
+        {categoryLinks.map(({ href, label }) => (
+          <Link className={`${buttons.button} ${buttons.quiet}`} key={href} href={href}><Grid20Regular aria-hidden="true" />{label}</Link>
+        ))}
+        <Link className={`${buttons.button} ${buttons.soft}`} href={`/podbor?q=${encodeURIComponent(state.query.trim().slice(0, 140))}`}>
+          <VehicleCar20Regular aria-hidden="true" />
+          Подобрать по автомобилю и аналогам
+        </Link>
+      </div> : null}
     </section>
   ) : (
     <>
-      <p className={styles.catalogSummary} aria-live="polite">
-        Найдено: {total}{total > items.length ? ` · показано ${items.length}` : ""}
-      </p>
-      {isSearch ? <h2 className={resultsStyles.sourceCaption}>На складе</h2> : null}
-      <section aria-label="Результаты поиска" className={resultsStyles.resultsList}>
+      {matchMode === "any" && isSearch ? (
+        <p className={resultsStyles.looseMatchNote} role="status">
+          Точного совпадения по запросу «{state.query.trim()}» нет. Ниже — похожие товары. Уточните запрос или <Link href="/expert-help">спросите специалиста</Link>.
+        </p>
+      ) : null}
+      <section aria-label={isSearch ? "Результаты поиска" : "Товары каталога"} className={resultsStyles.resultsList} data-catalog-view={state.view}>
         {items.map((item) => {
           const available = item.availableQuantity > 0;
+          const directCategoryImage = catalogCategoryPhoto(item.category);
           return (
             <CatalogResultRow
-              actionSlot={<AddToCartButton disabled={!available || item.priceKopeks === null} productId={item.id} />}
+              actionSlot={item.priceKopeks === null
+                ? <ExpertHelpQueryLink className={askButton} query={item.sku}>Уточнить цену</ExpertHelpQueryLink>
+                : available
+                  ? <AddToCartButton productId={item.id} />
+                  : (
+                    <ExpertHelpQueryLink
+                      className={askButton}
+                      prefillMessage={`Нужна деталь под заказ: ${item.brand ? `${item.brand.name} ` : ""}${item.sku}, ${item.name}. Подскажите срок и цену.`}
+                    >
+                      <Clock20Regular aria-hidden="true" />
+                      Узнать срок
+                    </ExpertHelpQueryLink>
+                  )}
               // A product found via a confirmed article cross (see
               // catalog-public.service.ts / migration 0018) is never the
               // exact article the customer typed — it must read like the
@@ -91,13 +124,17 @@ export function CatalogSearchPanel({
               // so nobody is sold a different part without being told.
               badges={item.matchedVia === "cross" ? <RowBadge analog>Аналог</RowBadge> : undefined}
               brand={item.brand ? item.brand.name : null}
-              imageAlt={item.primaryImage ? item.primaryImage.altText : `Нет фото товара «${item.name}»`}
-              imageUrl={item.primaryImage ? item.primaryImage.url : "/catalog/no-photo.webp"}
+              categoryImage={directCategoryImage ?? (item.category
+                ? catalogCategoryPhoto(item.category, findCategorySlugPath(tree, item.category.slug) ?? [])
+                : null)}
+              imageAlt={item.primaryImage?.altText ?? ""}
+              imageUrl={item.primaryImage?.url}
               key={item.id}
               name={<Link href={`/catalog/product/${encodeURIComponent(item.slug)}`}>{item.name}</Link>}
               priceLabel={item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}
               quantity={item.availableQuantity}
               sku={item.sku}
+              view={state.view}
             />
           );
         })}
@@ -118,24 +155,52 @@ export function CatalogSearchPanel({
 
   return (
     <>
-      <form action={action} className={styles.catalogForm} id={CATALOG_SEARCH_FORM_ID} method="get" role="search">
-        <div className={styles.field}>
-          <label htmlFor="catalog-query">Название или артикул</label>
-          <input defaultValue={state.query} id="catalog-query" maxLength={120} minLength={2} name="q" placeholder="Например, фильтр или артикул" type="search" />
+      <form action={action} className={layoutStyles.toolbar} id={CATALOG_SEARCH_FORM_ID} method="get">
+        {state.query && <input name="q" type="hidden" value={state.query} />}
+        {state.view === "list" && <input name="view" type="hidden" value={state.view} />}
+        <CatalogFilterTrigger count={filters.length} />
+        <CatalogSortSelect value={state.sort} />
+        <Link aria-label={state.availability === "in_stock" ? "Сбросить фильтр наличия" : "В наличии"}
+          data-active={state.availability === "in_stock"} className={layoutStyles.quickFilter}
+          href={catalogPageHref(action, { ...state, availability: state.availability === "in_stock" ? "all" : "in_stock" })}>
+          <Checkmark20Regular aria-hidden="true" /> В наличии
+        </Link>
+        <div aria-label="Вид каталога" className={layoutStyles.viewToggle} role="group">
+          <Link aria-label="Плиткой" aria-current={state.view === "grid" ? "page" : undefined}
+            href={catalogPageHref(action, { ...state, view: "grid" }, state.page)}>
+            <Grid20Regular aria-hidden="true" />
+          </Link>
+          <Link aria-label="Списком" aria-current={state.view === "list" ? "page" : undefined}
+            href={catalogPageHref(action, { ...state, view: "list" }, state.page)}>
+            <TextBulletList20Regular aria-hidden="true" />
+          </Link>
         </div>
-        <div className={styles.field}>
-          <label htmlFor="catalog-sort">Сортировка</label>
-          <select defaultValue={state.sort} id="catalog-sort" name="sort">
-            <option value="relevance">По совпадению</option>
-            <option value="name">По названию</option>
-            <option value="price_asc">Сначала дешевле</option>
-            <option value="price_desc">Сначала дороже</option>
-          </select>
-        </div>
-        <button className={styles.submitButton} type="submit">Найти</button>
+        <noscript><button className={styles.submitButton} type="submit">Применить сортировку</button></noscript>
       </form>
+      {serviceLinks.length ? <nav className={resultsStyles.matchedServices} aria-label="Информация магазина">
+        <strong>Информация магазина</strong>
+        {serviceLinks.map(({ href, label }) => <Link key={href} href={href}>{label}</Link>)}
+      </nav> : null}
+      {filters.length > 0 && (
+        <ul className={resultsStyles.activeFilters} aria-label="Выбранные фильтры">
+          {filters.map((filter) => (
+            <li key={filter.href}>
+              <Link href={filter.href} aria-label={`Снять фильтр: ${filter.label}`}>{filter.label}<span aria-hidden="true">×</span></Link>
+            </li>
+          ))}
+          <li><Link className={resultsStyles.clearFilters} href={clearCatalogFiltersHref(action, state)}>Сбросить всё</Link></li>
+        </ul>
+      )}
 
-      {body}
+      {isVin ? (
+        <section className={styles.emptyState} aria-label="Подбор по VIN">
+          <h2>VIN поможет подобрать нужную деталь</h2>
+          <p>VIN не ищется среди артикулов. Передайте его специалисту для подбора по автомобилю.</p>
+          <CatalogVinHelpLink vin={state.query.trim()} />
+        </section>
+      ) : null}
+
+      {isVin ? null : body}
     </>
   );
 }

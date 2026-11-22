@@ -1,147 +1,228 @@
+"use client";
+
+import { ChevronDown16Regular, ChevronRight20Regular, Dismiss20Regular, VehicleCar24Regular } from "@fluentui/react-icons";
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { CatalogBrand, CatalogCategoryNode } from "../_lib/catalog-api";
 import styles from "../_components/storefront.module.css";
-import { CATALOG_SEARCH_FORM_ID } from "./catalog-search-panel";
+import { PICKED_VEHICLE_EVENT, readPickedVehicle, readSavedVehicle } from "../_lib/parts-finder";
+import { BrandFacet } from "./brand-facet";
+import { sortBrandsForFacet } from "./catalog-filter-logic";
+import { CATALOG_SEARCH_FORM_ID } from "./catalog-search-form";
+import { CATALOG_FILTER_DIALOG_ID, CATALOG_FILTER_TRIGGER_ID } from "./catalog-toolbar-controls";
 import {
+  catalogPageHref,
   clearCatalogFiltersHref,
   hasActiveCatalogFilters,
+  sectionLinkState,
+  type CatalogAvailability,
   type CatalogPageQuery,
 } from "./catalog-query";
-import { CategoryChipGrid } from "./category-chip-grid";
+import { CategoryTree } from "./category-tree";
 import filterStyles from "./catalog-filters.module.css";
 
-function ChevronIcon() {
+/**
+ * The only availability signal the system can actually answer today: the
+ * shop's own 1C stock is either there (`available_quantity > 0`) or it
+ * isn't — see the `availability` filter in `CatalogProductsQuerySchema` and
+ * its SQL in `catalog-public.service.ts`. Rossko's richer «Срок доставки»
+ * (Сегодня / Завтра / До 3 дней / До 7 дней) reads off TecDoc-fed supplier
+ * lead times this shop does not have wired into the product search — the
+ * supplier's own `deliveryTime` only ever appears on the separate
+ * under-order results (`supplier-results.tsx`), which is not a filterable,
+ * paginated list. Inventing extra buckets here would filter against data
+ * that does not exist. "Под заказ" matches the wording already used
+ * site-wide for a zero-quantity row (`stock-indicator.ts`), rather than the
+ * flatter "Нет в наличии" this select used to say.
+ */
+const AVAILABILITY_OPTIONS: Array<{ label: string; value: CatalogAvailability }> = [
+  { label: "Все товары", value: "all" },
+  { label: "В наличии", value: "in_stock" },
+  { label: "Под заказ", value: "out_of_stock" },
+];
+
+function FilterGroup({ title, children }: { title: string; children: ReactNode }) {
+  return <details className={filterStyles.railGroup} open>
+    <summary>{title}<ChevronDown16Regular aria-hidden="true" /></summary>
+    <div className={filterStyles.groupBody}>{children}</div>
+  </details>;
+}
+
+const pricePresetFormat = new Intl.NumberFormat("ru-RU");
+
+/** Controls submit with the same GET form on desktop and in the mobile dialog. */
+export function CatalogFilterRail({ activePath = [], basePath, brands, found, state, tree }: {
+  /** Slug chain of the category being viewed; empty on `/catalog`. */
+  activePath?: readonly string[];
+  basePath: string;
+  /** How many products the page found: with none, the list of sections leads to the sections themselves. */
+  found: number;
+  brands: CatalogBrand[];
+  state: CatalogPageQuery;
+  /** The whole category tree — the rail shows it with the current branch open. */
+  tree: CatalogCategoryNode[];
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [mobile, setMobile] = useState(false);
+  const [draft, setDraft] = useState(0);
+
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 1101px)");
+    const sync = () => {
+      if (desktop.matches && dialogRef.current?.open) dialogRef.current.close();
+      setMobile(!desktop.matches);
+    };
+    sync();
+    desktop.addEventListener("change", sync);
+    return () => desktop.removeEventListener("change", sync);
+  }, []);
+
+  const populatedBrands = sortBrandsForFacet(brands, state.brands);
+  const formKey = JSON.stringify([state.availability, state.brands, state.minPriceRubles, state.maxPriceRubles, draft]);
+
+  const car = useChosenCar();
+
+  const body = (
+    <div className={filterStyles.railBody} key={formKey}>
+      <Link className={filterStyles.vehicle} href="/podbor">
+        <VehicleCar24Regular aria-hidden="true" />
+        {car ? (
+          <span><small>Ваш автомобиль</small><strong>{car.name}</strong>{car.details ? <small>{car.details}</small> : null}</span>
+        ) : (
+          <span><small>Подбор по автомобилю</small><strong>Подобрать по марке или VIN</strong></span>
+        )}
+        <ChevronRight20Regular aria-hidden="true" />
+      </Link>
+      <FilterGroup title="Категория">
+          <Link className={filterStyles.allCategories} href={catalogPageHref("/catalog", { ...state, page: 1 })} onClick={() => dialogRef.current?.close()}
+            aria-current={basePath === "/catalog" ? "page" : undefined}>Все категории</Link>
+          <CategoryTree activePath={activePath} onNavigate={() => dialogRef.current?.close()} state={sectionLinkState(state, found)} tree={tree} />
+      </FilterGroup>
+
+      <FilterGroup title="Цена, ₽">
+      <fieldset className={filterStyles.filterGroup}>
+        <legend className={styles.visuallyHidden}>Цена, ₽</legend>
+        <div className={filterStyles.priceRange}>
+          <label>
+            <span>От</span>
+            <input
+              defaultValue={state.minPriceRubles ?? ""}
+              form={CATALOG_SEARCH_FORM_ID}
+              inputMode="numeric"
+              min="0"
+              name="minPrice"
+              placeholder="0"
+              step="1"
+              type="number"
+            />
+          </label>
+          <label>
+            <span>До</span>
+            <input
+              defaultValue={state.maxPriceRubles ?? ""}
+              form={CATALOG_SEARCH_FORM_ID}
+              inputMode="numeric"
+              min="0"
+              name="maxPrice"
+              placeholder="Без лимита"
+              step="1"
+              type="number"
+            />
+          </label>
+        </div>
+        <div className={filterStyles.pricePresets}>
+          {[1_000, 3_000, 10_000].map(price => (
+            <Link aria-current={price === state.maxPriceRubles && state.minPriceRubles === null ? "true" : undefined}
+              onClick={() => dialogRef.current?.close()}
+              href={catalogPageHref(basePath, { ...state, minPriceRubles: null, maxPriceRubles: price })} key={price}>
+              до {pricePresetFormat.format(price)} ₽
+            </Link>
+          ))}
+        </div>
+      </fieldset>
+      </FilterGroup>
+
+      {(populatedBrands.length > 0 || state.brands.length > 0) && <FilterGroup title="Бренд">
+        <BrandFacet brands={populatedBrands} formId={CATALOG_SEARCH_FORM_ID} selectedSlugs={state.brands} />
+      </FilterGroup>}
+
+      <FilterGroup title="Наличие">
+        <fieldset className={filterStyles.filterGroup}>
+          <legend className={styles.visuallyHidden}>Наличие</legend>
+          <div className={filterStyles.brandOptions}>
+            {AVAILABILITY_OPTIONS.map((option) => (
+              <label className={filterStyles.optionRow} key={option.value}>
+                <input defaultChecked={state.availability === option.value} form={CATALOG_SEARCH_FORM_ID}
+                  name="availability" type="radio" value={option.value} />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </FilterGroup>
+
+      <div className={filterStyles.filterActions}>
+        <button className={styles.submitButton} form={CATALOG_SEARCH_FORM_ID} type="submit">Применить</button>
+        {hasActiveCatalogFilters(state) ? (
+          <Link href={clearCatalogFiltersHref(basePath, state)} onClick={() => dialogRef.current?.close()}>Сбросить фильтры</Link>
+        ) : null}
+      </div>
+    </div>
+  );
   return (
-    <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
-      <path d="m6 9 6 6 6-6" />
-    </svg>
+    <aside aria-label="Фильтры каталога" className={filterStyles.railAside}>
+      {mobile ? (
+          <dialog
+            className={filterStyles.mobileDialog}
+            id={CATALOG_FILTER_DIALOG_ID}
+            ref={dialogRef}
+            aria-label="Фильтры"
+            onClose={() => {
+              setDraft(value => value + 1);
+              document.getElementById(CATALOG_FILTER_TRIGGER_ID)?.focus();
+            }}
+            onClick={event => {
+              if (event.target !== event.currentTarget) return;
+              const bounds = event.currentTarget.getBoundingClientRect();
+              if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+                event.currentTarget.close();
+              }
+            }}
+          >
+            <header className={filterStyles.dialogHeader}>
+              <strong>Фильтры</strong>
+              <button type="button" autoFocus aria-label="Закрыть фильтры" onClick={() => dialogRef.current?.close()}><Dismiss20Regular aria-hidden="true" /></button>
+            </header>
+            <div className={filterStyles.dialogScroll} onClick={event => {
+              if (event.target instanceof Element && event.target.closest("a")) dialogRef.current?.close();
+            }}>{body}</div>
+          </dialog>
+      ) : (
+        <div className={filterStyles.desktopRail}>{body}</div>
+      )}
+    </aside>
   );
 }
 
-/**
- * Left filter rail shared by `/catalog` and every `/catalog/[...slug]`
- * level: the category chips (reusing `CategoryChipGrid` as-is) plus the
- * real brand, availability and price filters. Their controls live outside
- * `CatalogSearchPanel`'s own `<form>` — it is associated with that form via
- * the HTML `form` attribute (`CATALOG_SEARCH_FORM_ID`) instead, which is
- * what lets this rail sit in its own DOM branch while still submitting as
- * one GET request with `q` and `sort`, no JavaScript required.
- *
- * `<details>` gives the mobile "collapses into a control above the results"
- * behaviour for free and with no JS: closed by default on a phone, forced
- * open again at desktop width by the `filterRailBody` override in
- * storefront.module.css.
- */
-export function CatalogFilterRail({ basePath, brands, nodes, state }: {
-  basePath: string;
-  brands: CatalogBrand[];
-  nodes: CatalogCategoryNode[];
-  state: CatalogPageQuery;
-}) {
-  const activeFilterCount = (state.availability === "all" ? 0 : 1)
-    + state.brands.length
-    + (state.minPriceRubles === null && state.maxPriceRubles === null ? 0 : 1);
-  const selectedBrands = new Set(state.brands);
-  const populatedBrands = brands
-    .filter((brand) => brand.productCount > 0)
-    .sort((left, right) => {
-      const selected = Number(selectedBrands.has(right.slug)) - Number(selectedBrands.has(left.slug));
-      return selected || right.productCount - left.productCount || left.name.localeCompare(right.name, "ru");
-    });
-  const primaryBrands = populatedBrands.slice(0, 10);
-  const remainingBrands = populatedBrands.slice(10);
-
-  const brandOption = (brand: CatalogBrand) => (
-    <label className={filterStyles.brandOption} key={brand.id}>
-      <input
-        defaultChecked={selectedBrands.has(brand.slug)}
-        form={CATALOG_SEARCH_FORM_ID}
-        name="brand"
-        type="checkbox"
-        value={brand.slug}
-      />
-      <span>{brand.name}</span>
-      <small>{brand.productCount}</small>
-    </label>
-  );
-
-  return (
-    <aside aria-label="Фильтры каталога" className={styles.filterRail}>
-      <details className={styles.filterRailPanel}>
-        <summary className={styles.filterRailSummary}>
-          <span>Фильтры{activeFilterCount > 0 ? <span className={styles.filterRailBadge}>{activeFilterCount}</span> : null}</span>
-          <ChevronIcon />
-        </summary>
-        <div className={styles.filterRailBody}>
-          {nodes.length > 0 ? (
-            <div>
-              <p className={styles.eyebrow}>Разделы</p>
-              <CategoryChipGrid basePath={basePath} nodes={nodes} />
-            </div>
-          ) : null}
-          <div className={styles.field}>
-            <label htmlFor="catalog-availability">Наличие</label>
-            <select defaultValue={state.availability} form={CATALOG_SEARCH_FORM_ID} id="catalog-availability" name="availability">
-              <option value="all">Все товары</option>
-              <option value="in_stock">В наличии</option>
-              <option value="out_of_stock">Нет в наличии</option>
-            </select>
-          </div>
-
-          {populatedBrands.length > 0 ? (
-            <fieldset className={filterStyles.filterGroup}>
-              <legend>Бренд</legend>
-              <div className={filterStyles.brandOptions}>{primaryBrands.map(brandOption)}</div>
-              {remainingBrands.length > 0 ? (
-                <details className={filterStyles.moreBrands}>
-                  <summary>Ещё {remainingBrands.length}</summary>
-                  <div className={filterStyles.brandOptions}>{remainingBrands.map(brandOption)}</div>
-                </details>
-              ) : null}
-            </fieldset>
-          ) : null}
-
-          <fieldset className={filterStyles.filterGroup}>
-            <legend>Цена, ₽</legend>
-            <div className={filterStyles.priceRange}>
-              <label>
-                <span>От</span>
-                <input
-                  defaultValue={state.minPriceRubles ?? ""}
-                  form={CATALOG_SEARCH_FORM_ID}
-                  inputMode="numeric"
-                  min="0"
-                  name="minPrice"
-                  placeholder="0"
-                  step="1"
-                  type="number"
-                />
-              </label>
-              <label>
-                <span>До</span>
-                <input
-                  defaultValue={state.maxPriceRubles ?? ""}
-                  form={CATALOG_SEARCH_FORM_ID}
-                  inputMode="numeric"
-                  min="0"
-                  name="maxPrice"
-                  placeholder="Без лимита"
-                  step="1"
-                  type="number"
-                />
-              </label>
-            </div>
-          </fieldset>
-
-          <div className={filterStyles.filterActions}>
-            <button className={styles.submitButton} form={CATALOG_SEARCH_FORM_ID} type="submit">Применить</button>
-            {hasActiveCatalogFilters(state) ? (
-              <Link href={clearCatalogFiltersHref(basePath, state)}>Сбросить фильтры</Link>
-            ) : null}
-          </div>
-        </div>
-      </details>
-    </aside>
-  );
+/** The car chosen on /podbor, so the catalog always says what the customer is shopping for. */
+function useChosenCar(): { details: string | null; name: string } | null {
+  const [car, setCar] = useState<{ details: string | null; name: string } | null>(null);
+  useEffect(() => {
+    const read = () => {
+      const picked = readPickedVehicle();
+      const label = picked?.label ?? readSavedVehicle();
+      if (!label) return setCar(null);
+      setCar({
+        details: [picked?.generation, picked?.engine].filter(Boolean).join(" · ") || null,
+        name: picked?.make && picked.model ? `${picked.make} ${picked.model}` : label,
+      });
+    };
+    read();
+    window.addEventListener(PICKED_VEHICLE_EVENT, read);
+    window.addEventListener("storage", read);
+    return () => { window.removeEventListener(PICKED_VEHICLE_EVENT, read); window.removeEventListener("storage", read); };
+  }, []);
+  return car;
 }

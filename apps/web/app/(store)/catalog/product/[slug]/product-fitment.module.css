@@ -1,0 +1,25 @@
+.fitment { display: grid; gap: 12px; margin-top: clamp(12px, 2vw, 24px); padding: clamp(14px, 2.3vw, 26px) clamp(13px, 2.3vw, 30px); border: 1px solid var(--store-border); border-radius: var(--store-radius-lg); background: var(--store-surface); }
+.head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.head h2 { margin: 0; font-family: var(--store-font-display); font-size: 1.1rem; }
+.carLink { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--store-brand); font-size: .9rem; font-weight: 650; text-decoration: none; }
+.carLink:hover { text-decoration: underline; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.muted { margin: 0; color: var(--store-muted); font-size: .86rem; line-height: 1.5; }
+.verdict { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--store-bg); }
+.verdict > svg { flex: none; margin-top: 1px; }
+.verdict p { margin: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.verdict[data-tone="ok"] { background: color-mix(in srgb, var(--store-success) 12%, var(--store-surface)); }
+.verdict[data-tone="ok"] > svg { color: var(--store-success); }
+.verdict[data-tone="warn"] { background: color-mix(in srgb, var(--store-accent) 20%, var(--store-surface)); }
+.verdict[data-tone="warn"] > svg { color: var(--store-accent-text); }
+.verdict[data-tone="info"] > svg { color: var(--store-brand); }
+.textLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--store-brand); font-size: .9rem; font-weight: 650; }
+.makes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); align-items: start; gap: 8px; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+.make { border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); }
+.make > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 14px; font-weight: 650; cursor: pointer; }
+.make > summary small { color: var(--store-muted); font-weight: 500; }
+.make ul { display: grid; gap: 2px; margin: 0; padding: 0 14px 12px; list-style: none; font-size: .9rem; }
+.make li { padding: 3px 0; overflow-wrap: anywhere; }
+.make li small { color: var(--store-muted); }
+.make li[data-mine] { color: var(--store-brand-strong); font-weight: 700; }
+.oems { margin: 0; font-size: .88rem; line-height: 1.5; overflow-wrap: anywhere; }

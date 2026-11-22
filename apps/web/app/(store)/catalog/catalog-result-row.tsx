@@ -1,6 +1,7 @@
-import Image from "next/image";
 import type { ReactNode } from "react";
 
+import { CatalogPhoto } from "../_components/catalog-photo";
+import type { CatalogView } from "./catalog-query";
 import { stockIndicator } from "./stock-indicator";
 import styles from "./catalog-results.module.css";
 
@@ -14,8 +15,11 @@ import styles from "./catalog-results.module.css";
  */
 function StockMeter({ quantity }: { quantity: number }) {
   const { label, segments, tone } = stockIndicator(quantity);
+  // The exact count rides on the same line as the word ("мало · 5 шт."),
+  // so a card no longer spends a separate "В магазине: N шт." row on it.
+  const text = quantity > 0 ? `${label} · ${quantity} шт.` : label;
   return (
-    <span aria-label={`Наличие: ${label}`} className={styles.stockMeter} data-tone={tone} role="img">
+    <span aria-label={`Наличие: ${text}`} className={styles.stockMeter} data-tone={tone} role="img">
       {segments > 0 ? (
         <span aria-hidden="true" className={styles.stockMeterBars}>
           <span className={styles.stockMeterBar} data-filled={segments >= 1} />
@@ -23,7 +27,7 @@ function StockMeter({ quantity }: { quantity: number }) {
           <span className={styles.stockMeterBar} data-filled={segments >= 3} />
         </span>
       ) : null}
-      <span aria-hidden="true" className={styles.stockMeterLabel}>{label}</span>
+      <span aria-hidden="true" className={styles.stockMeterLabel}>{text}</span>
     </span>
   );
 }
@@ -46,7 +50,8 @@ export interface CatalogResultRowProps {
   /** "Срок: 5 дней" style note — own 1C rows never carry one. */
   deliveryNote?: string | null;
   imageAlt: string;
-  imageUrl: string;
+  imageUrl?: string | null;
+  categoryImage?: string | null;
   name: ReactNode;
   /**
    * Honest replacement for the stock meter/price/action columns when a row
@@ -57,6 +62,8 @@ export interface CatalogResultRowProps {
   priceLabel?: string;
   quantity?: number;
   sku: string;
+  underOrder?: boolean;
+  view?: CatalogView;
 }
 
 /**
@@ -69,29 +76,32 @@ export interface CatalogResultRowProps {
  * it; an analogue is just a row like any other with an "Аналог" badge.
  */
 export function CatalogResultRow({
-  actionSlot, badges, brand, deliveryNote, imageAlt, imageUrl, name, note, priceLabel, quantity, sku,
+  actionSlot, badges, brand, categoryImage, deliveryNote, imageAlt, imageUrl, name, note, priceLabel, quantity, sku, underOrder = false, view = "list",
 }: CatalogResultRowProps) {
   return (
-    <article className={styles.resultRow}>
-      <div className={styles.resultRowMedia}>
-        <Image alt={imageAlt} fill sizes="64px" src={imageUrl} />
-      </div>
-      <div className={styles.resultRowIdentity}>
-        {badges ? <div className={styles.resultRowBadges}>{badges}</div> : null}
-        <p className={styles.resultRowMeta}>{brand ? `${brand} · ` : ""}Артикул: {sku}</p>
-        <p className={styles.resultRowName}>{name}</p>
+    <article className={styles.resultRow} data-catalog-view={view}>
+      <div className={styles.resultRowItem}>
+        <CatalogPhoto alt={imageAlt} categoryImage={categoryImage} className={styles.resultRowMedia}
+          noteInside showNote={view === "grid"}
+          sizes={view === "list" ? "64px" : "(max-width: 640px) 42vw, 270px"} src={imageUrl} />
+        <div className={styles.resultRowIdentity}>
+          {badges ? <div className={styles.resultRowBadges}>{badges}</div> : null}
+          <p className={styles.resultRowMeta}>{brand ? `${brand} · ` : ""}Артикул: {sku}</p>
+          <p className={styles.resultRowName}>{name}</p>
+          {view === "list" ? <small className={styles.resultRowPhotoNote}>Фото товара пока нет</small> : null}
+        </div>
       </div>
       {note ? (
         <p className={styles.resultRowNote}>{note}</p>
       ) : (
-        <>
+        <div className={styles.resultRowPurchase}>
           <div className={styles.resultRowStock}>
-            <StockMeter quantity={quantity ?? 0} />
+            {underOrder ? null : <StockMeter quantity={quantity ?? 0} />}
             {deliveryNote ? <p className={styles.resultRowDelivery}>{deliveryNote}</p> : null}
           </div>
           <div className={styles.resultRowPrice}>{priceLabel}</div>
           <div className={styles.resultRowAction}>{actionSlot}</div>
-        </>
+        </div>
       )}
     </article>
   );
