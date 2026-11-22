@@ -369,3 +369,15 @@ describe("public contracts", () => {
     }).success).toBe(false);
   });
 });
+
+describe("what a product page says of the part beyond 1С's fields", () => {
+  it("carries the features read from the name and the original numbers it names", async () => {
+    const { CatalogProductDetailSchema } = await import("./index.js");
+    const shape = CatalogProductDetailSchema.shape;
+    expect(shape.features.parse([{ label: "Напряжение", value: "24 В" }])).toEqual([{ label: "Напряжение", value: "24 В" }]);
+    expect(shape.features.parse(undefined)).toEqual([]);
+    expect(shape.originalNumbers.parse(["48815-60111"])).toEqual(["48815-60111"]);
+    expect(shape.originalNumbers.parse(undefined)).toEqual([]);
+  });
+});
+

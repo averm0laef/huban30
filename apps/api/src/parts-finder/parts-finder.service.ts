@@ -195,11 +195,18 @@ export class PartsFinderService {
     return enriched;
   }
 
-  /** Shop's own catalog only (exact article + confirmed crosses): free, always available. */
+  /** Shop's own catalog only (the same part, crosses, the same standard size): free, always available. */
   async shopAnalogs(body: unknown): Promise<PartsFinderShopAnalogsResponse> {
     const request = parse(PartsFinderShopAnalogsRequestSchema, body);
-    const offers = await this.shop.lookup([request], PARTS_FINDER_SHOP_ANALOGS_LIMIT);
-    return { article: request.article, offers: offers.for(request) };
+    const [lookup, sameSize] = await Promise.all([
+      this.shop.lookup([request], PARTS_FINDER_SHOP_ANALOGS_LIMIT),
+      // A product card also gets the parts of its standard size (a belt, a lamp, a bearing…) from any maker.
+      request.productId ? this.shop.sameSize(request.productId, PARTS_FINDER_SHOP_ANALOGS_LIMIT) : Promise.resolve(null),
+    ]);
+    const offers = lookup.for(request);
+    const offered = new Set([request.productId, ...offers.map((offer) => offer.productId)]);
+    const sized = sameSize ? sameSize.offers.filter((offer) => !offered.has(offer.productId)) : [];
+    return { article: request.article, offers, ...(sameSize && sized.length > 0 ? { sameSize: { label: sameSize.label, offers: sized } } : {}) };
   }
 
   /**

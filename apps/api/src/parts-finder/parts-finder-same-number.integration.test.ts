@@ -28,6 +28,11 @@ const PRODUCTS = [
   // Two analogs the catalogue might name for the 24 V lamp: one of them is a 12 V lamp.
   { key: "lamp-24v-analog", sku: "17131", name: "Лампа T4W 24V BA9s Narva 17131", brand: "NARVA", category: "signalnye-lampy" },
   { key: "lamp-12v-analog", sku: "12929", name: "Лампа T4W 12V BA9s Philips 12929", brand: "PHILIPS", category: "signalnye-lampy" },
+  // Belts of one standard size from three makers, and one a little longer.
+  { key: "belt", sku: "4PK898", name: "4PK898 Ремень поликлиновый LYNXauto 4PK0898", brand: "LYNXauto", category: "remni" },
+  { key: "belt-gates", sku: "4PK898G", name: "Ремень поликлиновый Gates 4PK898", brand: null, category: "remni" },
+  { key: "belt-dayco", sku: "4PK0898D", name: "4PK0898D Ремень ручейковый Dayco 4PK 898", brand: null, category: "remni" },
+  { key: "belt-longer", sku: "4PK900", name: "4PK900 Ремень поликлиновый LYNXauto", brand: "LYNXauto", category: "remni" },
 ] as const;
 
 type Key = (typeof PRODUCTS)[number]["key"];
@@ -110,6 +115,20 @@ describe.skipIf(!url)("a shared number alone is not an analog (real PostgreSQL)"
       groups: { analogs: [{ article: "17131", brand: "NARVA", manufacturer_verified: true }, { article: "12929", brand: "PHILIPS", manufacturer_verified: true }] },
     });
     expect(await found(card("lamp", "OSRAM"))).toEqual(["lamp", "lamp-24v-analog", "lamp-twin"]);
+    const request = card("lamp", "OSRAM");
+    const basis = Object.fromEntries((await shop.lookup([request], 10)).for(request).map((offer) => [offer.sku, offer.basis]));
+    expect(basis).toEqual({ "3930": "same_number", "17131": "maker" });
+  });
+
+  it("offers parts of any maker of the same standard size, and of that size only", async () => {
+    const keys = (offers: Array<{ productId: string }>) => offers.map((offer) => PRODUCTS.find((product) => ids.get(product.key) === offer.productId)!.key).sort();
+    const belt = await shop.sameSize(ids.get("belt")!, 10);
+    expect(belt?.label).toBe("4PK898");
+    expect(keys(belt!.offers)).toEqual(["belt-dayco", "belt-gates"]);
+    const lamp = await shop.sameSize(ids.get("lamp")!, 10);
+    expect(lamp?.label).toBe("T4W 24 В BA9s");
+    expect(keys(lamp!.offers)).toEqual(["lamp-24v-analog"]);
+    expect(await shop.sameSize(ids.get("filter")!, 10)).toBeNull();
   });
 
   it("a customer who typed only the number sees every product of that number", async () => {

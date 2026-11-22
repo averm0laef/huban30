@@ -74,8 +74,9 @@ function setup(options: {
   supplierEnabled?: boolean;
 } = {}) {
   const pages = Array.isArray(options.rows?.[0]) ? [...options.rows as Row[][]] : null;
-  const query = vi.fn(async (_sql: string, values: unknown[]) => ({
-    rows: asSqlRows(pages ? pages.shift() ?? [] : (options.rows as Row[] | undefined) ?? [], values),
+  // Only the batched lookup reads the rows of a test; any other query of the shop (the card's own name) finds nothing.
+  const query = vi.fn(async (sql: string, values: unknown[]) => ({
+    rows: sql === SHOP_OFFERS_SQL ? asSqlRows(pages ? pages.shift() ?? [] : (options.rows as Row[] | undefined) ?? [], values) : [],
   }));
   const engine = {
     crosses: vi.fn(options.engine?.crosses ?? (async () => ({}))),
@@ -256,6 +257,26 @@ describe("shop analogs", () => {
     const result = await second.service.crosses({ article: "W 75/3" });
     expect((result.groups as Record<string, Array<{ shop: unknown[] }>>).analogs![0]!.shop).toHaveLength(1);
     expect(second.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("shop analogs of a product card", () => {
+  it("adds parts of the same standard size, without the ones already offered", async () => {
+    const { service } = setup({ rows: [row("3930", "OSRAM", "p-twin", { brand_name: "OSRAM" })] });
+    const productId = "7a1c3c2e-6f0d-4c3a-9d1b-0f2b8f7e6a11";
+    const shop = (service as unknown as { shop: PartsFinderShopService }).shop;
+    const sameSize = vi.spyOn(shop, "sameSize").mockResolvedValue({
+      label: "T4W 24 В BA9s",
+      offers: [
+        { availableQuantity: 1, basis: "same_size", brand: "OSRAM", matchedVia: "same_size", name: "Товар p-twin", priceKopeks: 100, productId: "p-twin", sku: "3930", slug: "s" },
+        { availableQuantity: 2, basis: "same_size", brand: "NARVA", matchedVia: "same_size", name: "Лампа", priceKopeks: 100, productId: "p-narva", sku: "17131", slug: "n" },
+      ],
+    });
+    const answer = await service.shopAnalogs({ article: "3930", brand: "OSRAM", productId });
+    expect(sameSize).toHaveBeenCalledWith(productId, expect.any(Number));
+    expect(answer.sameSize).toEqual({ label: "T4W 24 В BA9s", offers: [expect.objectContaining({ productId: "p-narva" })] });
+    await service.shopAnalogs({ article: "3930", brand: "OSRAM" });
+    expect(sameSize).toHaveBeenCalledTimes(1);
   });
 });
 

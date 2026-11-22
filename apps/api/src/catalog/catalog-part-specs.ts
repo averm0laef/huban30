@@ -167,3 +167,43 @@ export function specLabels(specs: PartSpecs): Array<[string, string]> {
   ];
   return labels.filter((entry): entry is [string, string] => entry[1] !== undefined);
 }
+
+/**
+ * What a database reads first when it looks for the parts of one standard size (PartsFinderShopService.sameSize):
+ * names matching any of `any` and all of `all` (ILIKE patterns on the name as 1С has it, «Н7» for «H7» too). Every
+ * name found is then read in full: only those of exactly the same size are offered.
+ */
+export function sizeSearch(key: string): { all: string[]; any: string[] } | null {
+  const [kind, ...parts] = key.split(":");
+  const like = (value: string) => `%${value.toLowerCase()}%`;
+  if (kind === "belt") {
+    const ribbed = /^(\d+)PK(\d+)$/u.exec(parts[0] ?? "");
+    if (ribbed) return { all: [like(ribbed[2]!)], any: ["%pk%"] };
+    const vee = /^(\d+)X(\d+)$/u.exec(parts[0] ?? "");
+    return vee ? { all: [like(vee[2]!)], any: [like(vee[1]!)] } : null;
+  }
+  if (kind === "lamp" && parts.length === 3) {
+    const type = parts[0]!.toLowerCase();
+    return { all: [like(parts[1]!)], any: type.startsWith("h") ? [like(type), like(`н${type.slice(1)}`)] : [like(type)] };
+  }
+  if (kind === "bearing") return { all: [], any: [like(parts[0]!.split("-")[0]!)] };
+  if (kind === "seal") {
+    const [inner, outer] = (parts[0] ?? "").split("X");
+    return inner && outer ? { all: [like(outer)], any: [like(inner)] } : null;
+  }
+  if (kind === "tyre") {
+    const size = /^(\d{3}\/\d{2})R/u.exec(parts[0] ?? "");
+    return size ? { all: [], any: [like(size[1]!)] } : null;
+  }
+  return null;
+}
+
+/** The standard size as the customer reads it («T4W 24 В BA9s», «4PK898», «35×50×8 мм»), or null. */
+export function sizeLabel(specs: PartSpecs): string | null {
+  const key = partSizeKey(specs);
+  if (!key) return null;
+  if (key.startsWith("lamp:")) return `${specs.lampType} ${specs.voltage} В ${baseAsWritten(specs.lampBase!)}`;
+  if (key.startsWith("seal:")) return `${specs.seal!.replace(/X/gu, "×")} мм`;
+  if (key.startsWith("tyre:")) return specs.tyreSize!.replace("R", " R");
+  return specs.belt ?? specs.bearing ?? null;
+}

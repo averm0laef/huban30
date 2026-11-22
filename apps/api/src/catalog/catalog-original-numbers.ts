@@ -23,6 +23,8 @@
  * decide (catalog-known-categories.ts); a wrong shelf is worse than the queue.
  */
 
+import { normalizeArticleNumber } from "@an30/contracts";
+
 /** Shelf slug → the part codes that mean it. */
 const CODES_BY_SHELF: Readonly<Record<string, readonly string[]>> = {
   stabilizator: ["48815", "48818", "48820", "48830", "54613", "54618", "42412"],
@@ -91,6 +93,23 @@ const HONDA_SHELF_BY_CODE: ReadonlyMap<string, string> = new Map(
 /** The part code of the first original number in the text («Втулка TG-48815-60121» → «48815»), or null. */
 export function originalPartCode(text: string): string | null {
   return ORIGINAL_NUMBER.exec(text)?.[1] ?? null;
+}
+
+/**
+ * Every vehicle maker's number the text carries («43330-39496», Honda's «51306-S47-003»), without a seller's prefix
+ * and without the article itself; for the product page's «Оригинальные номера». Spelled as in the name, once each.
+ */
+export function originalNumbersIn(text: string, sku: string): string[] {
+  const own = normalizeArticleNumber(sku);
+  const found = new Map<string, string>();
+  for (const pattern of [ORIGINAL_NUMBER, HONDA_NUMBER]) {
+    for (const match of text.matchAll(new RegExp(pattern.source, "gu"))) {
+      const number = match[0].replace(/^[^0-9]*?(?:[A-Za-z]{1,3}-)?(?=\d{5}-)/u, "").toUpperCase();
+      const key = normalizeArticleNumber(number);
+      if (key !== own && !found.has(key)) found.set(key, number);
+    }
+  }
+  return [...found.values()].slice(0, 12);
 }
 
 /** The shelf the text's original number points at, or null when it has none or its code is not a reliable witness. */

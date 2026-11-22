@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { STOREFRONT_TAXONOMY } from "@an30/contracts";
 
-import { originalNumberShelves, originalPartCode, shelfByOriginalNumber } from "./catalog-original-numbers.js";
+import { originalNumberShelves, originalNumbersIn, originalPartCode, shelfByOriginalNumber } from "./catalog-original-numbers.js";
 
 const TREE = new Set(STOREFRONT_TAXONOMY.flatMap((section) => [section.slug, ...section.children.map((child) => child.slug)]));
 
@@ -80,3 +80,16 @@ describe("the shelf an original number points at", () => {
     expect(shelfByOriginalNumber("Втулка желтая ИПСУМ")).toBeNull();
   });
 });
+
+describe("the original numbers a name carries", () => {
+  it("lists every vehicle maker's number of the name, without a seller's prefix and without the article itself", () => {
+    expect(originalNumbersIn("Опора шаровая 43330-39496 (CTR CBT-44R)", "CBT44R")).toEqual(["43330-39496"]);
+    // A seller's article keeps the original number it replaces.
+    expect(originalNumbersIn("Втулка TG-48815-60121 * Ti·GUAR", "TG4881560121")).toEqual(["48815-60121"]);
+    expect(originalNumbersIn("13265-74030 Болт шатунный Toyota", "13265-74030")).toEqual([]);
+    expect(originalNumbersIn("Стабилизатор Honda 51306-S47-003 и 51306-S47-004", "X1")).toEqual(["51306-S47-003", "51306-S47-004"]);
+    expect(originalNumbersIn("Фильтр масляный 90915-YZZE1 90915-YZZE1", "W7")).toEqual(["90915-YZZE1"]);
+    expect(originalNumbersIn("Фильтр масляный MANN W 914/2", "W9142")).toEqual([]);
+  });
+});
+

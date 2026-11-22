@@ -6,7 +6,7 @@ import { originalPartCode } from "../catalog/catalog-original-numbers.js";
 import { partTypeKey } from "../catalog/catalog-part-dictionary.js";
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
-import { partSpecs } from "../catalog/catalog-part-specs.js";
+import { partSizeKey, partSpecs, sizeLabel, sizeSearch, specsConflict } from "../catalog/catalog-part-specs.js";
 import { crossFits, sameNumberIsSamePart, sectionFromRoot, sideFromName, type PartSide } from "./same-part-number.js";
 
 export interface ShopOfferRequest {
@@ -20,6 +20,8 @@ export interface ShopOfferRequest {
 
 interface OfferRow {
   asked_brand: string | null;
+  by_staff: boolean;
+  evidence: string[];
   asked_known: boolean;
   asked_name: string | null;
   asked_root: string | null;
@@ -86,13 +88,14 @@ category_root AS (
   WHERE request.article<>''
 ), hop1 AS (
   SELECT requested.idx AS req_idx,cross_pair.article_b AS article,
-         cross_pair.brand_b AS brand,cross_pair.status,(cross_pair.relation='oe_b') AS is_oe
+         cross_pair.brand_b AS brand,cross_pair.status,(cross_pair.relation='oe_b') AS is_oe,
+         cross_pair.evidence,(cross_pair.confirmed_by IS NOT NULL) AS by_staff
   FROM requested JOIN app.article_crosses AS cross_pair
     ON cross_pair.article_a=requested.article AND cross_pair.status<>'rejected'
    AND (requested.brand='' OR app.canonical_brand(cross_pair.brand_a)=app.canonical_brand(requested.brand))
   UNION ALL
   SELECT requested.idx,cross_pair.article_a,cross_pair.brand_a,cross_pair.status,
-         (cross_pair.relation='oe_a')
+         (cross_pair.relation='oe_a'),cross_pair.evidence,(cross_pair.confirmed_by IS NOT NULL)
   FROM requested JOIN app.article_crosses AS cross_pair
     ON cross_pair.article_b=requested.article AND cross_pair.status<>'rejected'
    AND (requested.brand='' OR app.canonical_brand(cross_pair.brand_b)=app.canonical_brand(requested.brand))
@@ -109,16 +112,17 @@ category_root AS (
    AND cross_pair.status='confirmed' AND cross_pair.relation='oe_b'
   WHERE $3::boolean AND hop1.status='confirmed' AND hop1.is_oe
 ), equivalents AS (
-  SELECT requested.idx AS req_idx,requested.article AS article,''::text AS brand,0 AS via
+  SELECT requested.idx AS req_idx,requested.article AS article,''::text AS brand,0 AS via,
+         '{}'::text[] AS evidence,false AS by_staff
   FROM requested
   UNION ALL
-  SELECT req_idx,article,brand,CASE WHEN status='confirmed' THEN 1 ELSE 3 END FROM hop1
+  SELECT req_idx,article,brand,CASE WHEN status='confirmed' THEN 1 ELSE 3 END,evidence,by_staff FROM hop1
   UNION ALL
-  SELECT req_idx,article,brand,2 FROM hop2
+  SELECT req_idx,article,brand,2,'{}'::text[],false FROM hop2
 ), matches AS (
   -- A product sharing the number may also be a confirmed cross: it keeps both rows, in case the number is not enough.
   SELECT DISTINCT ON (equivalents.req_idx,product.id,equivalents.via=0)
-         equivalents.req_idx,equivalents.via,product.id AS product_id,
+         equivalents.req_idx,equivalents.via,equivalents.evidence,equivalents.by_staff,product.id AS product_id,
          product.slug::text AS slug,product.name,product.sku::text AS sku,brand.name AS brand_name,
          NULLIF(app.canonical_brand(brand.name),'') AS offered_brand,offered_root.slug AS offered_root,
          price.amount_kopeks AS price_kopeks,GREATEST(stock.available_quantity,0) AS available_quantity,
@@ -153,7 +157,7 @@ category_root AS (
   ) AS rank
   FROM matches
 )
-SELECT ranked.req_idx,ranked.via,ranked.product_id,ranked.slug,ranked.name,ranked.sku,ranked.brand_name,
+SELECT ranked.req_idx,ranked.via,ranked.evidence,ranked.by_staff,ranked.product_id,ranked.slug,ranked.name,ranked.sku,ranked.brand_name,
        ranked.offered_brand,ranked.offered_root,
        NULLIF(app.canonical_brand(requested.brand),'') AS asked_brand,requested.asked_known,requested.asked_name,requested.asked_root,
        ranked.price_kopeks::text AS price_kopeks,ranked.available_quantity::text AS available_quantity
@@ -231,6 +235,7 @@ export class PartsFinderShopService {
       if (list.length >= perPart || list.some((offer) => offer.productId === row.product_id)) continue;
       list.push({
         availableQuantity: safeInteger(row.available_quantity) ?? 0,
+        basis: offerBasis(row),
         brand: row.brand_name,
         matchedVia: row.via === 0 ? "exact" : row.via === 1 ? "cross" : "possible",
         // Without the staff's notes typed into the name in 1С («(Ш)», «+++», the shelf box): product-name.ts.
@@ -244,6 +249,78 @@ export class PartsFinderShopService {
     }
     return new ShopOfferLookup(offers);
   }
+
+  /**
+   * Parts of any maker of the product's standard size — a belt, a lamp (type, voltage and base), a bearing, a seal,
+   * a tyre (catalog-part-specs.ts): «Тот же типоразмер» on the product card. Null when the name gives no size.
+   */
+  async sameSize(productId: string, limit: number): Promise<{ label: string; offers: ShopOffer[] } | null> {
+    if (!UUID.test(productId)) return null;
+    const product = (await this.database.query<{ name: string }>(
+      "SELECT name FROM app.products WHERE id=$1::uuid AND deleted_at IS NULL", [productId],
+    )).rows[0];
+    if (!product) return null;
+    const specs = partSpecs(product.name);
+    const key = partSizeKey(specs);
+    const search = key ? sizeSearch(key) : null;
+    const label = sizeLabel(specs);
+    if (!key || !search || !label) return null;
+    const rows = (await this.database.query<Omit<OfferRow, "asked_brand" | "asked_known" | "asked_name" | "asked_root" | "by_staff" | "evidence" | "offered_brand" | "offered_root" | "req_idx" | "via">>(
+      SAME_SIZE_SQL, [productId, search.any, search.all],
+    )).rows;
+    const offers = rows
+      .filter((row) => { const theirs = partSpecs(row.name); return partSizeKey(theirs) === key && !specsConflict(specs, theirs); })
+      .slice(0, limit)
+      .map((row): ShopOffer => ({
+        availableQuantity: safeInteger(row.available_quantity) ?? 0,
+        basis: "same_size",
+        brand: row.brand_name,
+        matchedVia: "same_size",
+        name: publicProductName(row.name, row.sku),
+        priceKopeks: safeInteger(row.price_kopeks),
+        productId: row.product_id,
+        sku: row.sku,
+        slug: row.slug,
+      }));
+    return offers.length > 0 ? { label, offers } : null;
+  }
+}
+
+/**
+ * Public products whose names match the patterns of a standard size (sizeSearch), besides the product itself; the
+ * names are then read in full in TypeScript. Bounded: a size such as a tyre's is shared by dozens of items.
+ */
+const SAME_SIZE_SQL = `${VISIBLE_CATEGORIES_CTE}
+SELECT product.id AS product_id,product.slug::text AS slug,product.name,product.sku::text AS sku,brand.name AS brand_name,
+       price.amount_kopeks::text AS price_kopeks,GREATEST(stock.available_quantity,0)::text AS available_quantity
+FROM app.products AS product
+LEFT JOIN app.brands AS brand ON brand.id=product.brand_id
+LEFT JOIN app.categories AS category ON category.id=product.category_id
+LEFT JOIN app.current_product_prices AS price ON price.product_id=product.id AND price.currency='RUB'
+LEFT JOIN LATERAL (
+  SELECT COALESCE(sum(balance.quantity_on_hand-balance.quantity_reserved),0)::bigint AS available_quantity
+  FROM app.inventory_balances AS balance
+  JOIN app.warehouses AS warehouse ON warehouse.id=balance.warehouse_id
+  WHERE balance.product_id=product.id AND warehouse.is_active AND warehouse.deleted_at IS NULL
+) AS stock ON true
+WHERE product.id<>$1::uuid AND product.is_active AND product.deleted_at IS NULL
+  AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+  AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
+  AND product.name ILIKE ANY($2::text[]) AND product.name ILIKE ALL($3::text[])
+ORDER BY (stock.available_quantity>0) DESC,(price.amount_kopeks IS NULL),price.amount_kopeks,product.id
+LIMIT 300`;
+
+/**
+ * Why the offer stands for the request: the same number; a pair the staff confirmed; two sources that agree (the
+ * owner's two 1С bases are one source); a maker's catalogue (FAPI confirms a pair alone only for an original
+ * number, a replacement or the maker's own mark); the supplier or a parts catalogue alone; one original number.
+ */
+function offerBasis(row: OfferRow): ShopOffer["basis"] {
+  if (row.via === 0) return "same_number";
+  if (row.via === 2) return "original_number";
+  const sources = new Set((row.evidence ?? []).map((source) => (source.startsWith("one_c") ? "one_c" : source)));
+  if (row.via === 1) return row.by_staff ? "shop" : sources.size >= 2 ? "two_sources" : "maker";
+  return sources.has("rossko") ? "supplier" : "catalogue";
 }
 
 /** What the request says of the part besides its number; null when it says nothing (a customer typed only the number). */

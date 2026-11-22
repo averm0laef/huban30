@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { partSizeKey, partSpecs, specLabels, specsConflict } from "./catalog-part-specs.js";
+import { partSizeKey, partSpecs, sizeLabel, sizeSearch, specLabels, specsConflict } from "./catalog-part-specs.js";
 
 // Names from the owner's 1С base (export of 2026-11-22).
 describe("what a 1С name says about the part", () => {
@@ -84,3 +84,25 @@ describe("the standard size any maker's part of it fits", () => {
     expect(specLabels(partSpecs("АКБ Rocket 85 Ач 710А обратная полярность"))).toEqual([["Ёмкость", "85 А·ч"], ["Полярность", "обратная"]]);
   });
 });
+
+describe("finding the parts of one standard size among the names", () => {
+  it("narrows the names a database reads before the names are read in full", () => {
+    expect(sizeSearch("belt:4PK898")).toEqual({ all: ["%898%"], any: ["%pk%"] });
+    expect(sizeSearch("belt:13X1040")).toEqual({ all: ["%1040%"], any: ["%13%"] });
+    expect(sizeSearch("lamp:H7:24:PX26D")).toEqual({ all: ["%24%"], any: ["%h7%", "%н7%"] });
+    expect(sizeSearch("lamp:T4W:24:BA9S")).toEqual({ all: ["%24%"], any: ["%t4w%"] });
+    expect(sizeSearch("bearing:6204-2RS")).toEqual({ all: [], any: ["%6204%"] });
+    expect(sizeSearch("seal:35X50X8")).toEqual({ all: ["%50%"], any: ["%35%"] });
+    expect(sizeSearch("tyre:205/55R16")).toEqual({ all: [], any: ["%205/55%"] });
+    expect(sizeSearch("anything")).toBeNull();
+  });
+
+  it("names the size for the customer", () => {
+    expect(sizeLabel(partSpecs("3930 Лампа T4W 24V BA9s Osram"))).toBe("T4W 24 В BA9s");
+    expect(sizeLabel(partSpecs("4PK898 Ремень поликлиновый LYNXauto"))).toBe("4PK898");
+    expect(sizeLabel(partSpecs("Сальник 35x50x8"))).toBe("35×50×8 мм");
+    expect(sizeLabel(partSpecs("А/шина 205/55R16 GOFORM"))).toBe("205/55 R16");
+    expect(sizeLabel(partSpecs("Фильтр масляный"))).toBeNull();
+  });
+});
+

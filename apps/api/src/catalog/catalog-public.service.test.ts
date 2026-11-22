@@ -374,6 +374,15 @@ describe("CatalogPublicService", () => {
     expect((await service.featured({})).items[0]?.name).toBe("Клипса крепежная TORSO");
   });
 
+  it("tells on the product page what the name says of the part and the original numbers it carries", async () => {
+    query.mockResolvedValueOnce({ rows: [productRow({
+      description: null, name: "Опора шаровая перед лев 43330-39496 (CTR CBT-44R)", public_attributes: {}, sku: "CBT-44R",
+    })] }).mockResolvedValueOnce({ rows: [] });
+    const detail = await service.product("oil-filter-1");
+    expect(detail.features).toEqual([{ label: "Сторона", value: "левая" }, { label: "Ось", value: "передняя" }]);
+    expect(detail.originalNumbers).toEqual(["43330-39496"]);
+  });
+
   it("defaults matchedVia to a direct query match for product() and featured(), which never widen via crosses", async () => {
     query.mockResolvedValueOnce({ rows: [productRow({ description: null, public_attributes: {} })] })
       .mockResolvedValueOnce({ rows: [] });

@@ -683,7 +683,11 @@ export type CatalogProductsResponse = z.infer<typeof CatalogProductsResponseSche
 export const CatalogProductDetailSchema = CatalogProductSummarySchema.extend({
   attributes: z.record(z.string(), z.unknown()),
   description: z.string().max(100_000).nullable(),
+  /** What the name says plainly of the part (side, voltage, size…), as the page names it: catalog-part-specs.ts. */
+  features: z.array(z.object({ label: z.string().min(1).max(40), value: z.string().min(1).max(80) }).strict()).max(20).default([]),
   images: z.array(CatalogImageViewSchema).max(100),
+  /** A vehicle maker's original numbers the name carries besides the article («Втулка TG-48815-60121» → 48815-60121). */
+  originalNumbers: z.array(z.string().min(1).max(40)).max(12).default([]),
 }).strict();
 export type CatalogProductDetail = z.infer<typeof CatalogProductDetailSchema>;
 

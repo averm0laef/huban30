@@ -30,6 +30,8 @@ import {
 } from "../security/public-media.js";
 import { buildCategoryTree } from "./catalog-category-tree.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
+import { originalNumbersIn } from "./catalog-original-numbers.js";
+import { partSpecs, specLabels } from "./catalog-part-specs.js";
 import { alternateSearchQueries, catalogPartsAlias, foldYo } from "./catalog-search-normalize.js";
 import { catalogSearchIdentity } from "./catalog-search-identity.js";
 import {
@@ -494,7 +496,10 @@ export class CatalogPublicService {
       ...this.productSummary(row),
       attributes: row.public_attributes,
       description: row.description,
+      // What the name says plainly of the part, and the vehicle maker's numbers it carries (docs/CATALOG_MATCHING.md).
+      features: specLabels(partSpecs(row.name)).map(([label, value]) => ({ label, value })),
       images: imageViews,
+      originalNumbers: originalNumbersIn(row.name, row.sku),
       primaryImage: imageViews[0] ?? null,
     };
   }

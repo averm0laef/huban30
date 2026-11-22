@@ -6,6 +6,7 @@ import {
   PartsFinderSearchRequestSchema,
   PartsFinderSearchResponseSchema,
   PartsFinderShopAnalogsRequestSchema,
+  PartsFinderShopAnalogsResponseSchema,
   PartsFinderVehicleRequestSchema,
   ShopOfferSchema,
   partNumberCatalogueApplies,
@@ -89,3 +90,18 @@ describe("which products a parts catalogue can answer for", () => {
     expect(partNumberCatalogueApplies({ brand: "MANN-FILTER", section: null, sku: "W 68/3" })).toBe(true);
   });
 });
+
+describe("why the shop calls a product an analog", () => {
+  it("says where each offer comes from and gives the same standard size a list of its own", () => {
+    const parsed = PartsFinderShopAnalogsResponseSchema.parse({
+      article: "3930",
+      offers: [{ ...offer, basis: "maker", matchedVia: "cross" }],
+      sameSize: { label: "T4W 24V BA9s", offers: [{ ...offer, basis: "same_size", matchedVia: "same_size" }] },
+    });
+    expect(parsed.offers[0]!.basis).toBe("maker");
+    expect(parsed.sameSize?.offers[0]!.matchedVia).toBe("same_size");
+    expect(PartsFinderShopAnalogsResponseSchema.parse({ article: "3930", offers: [offer] }).sameSize).toBeUndefined();
+    expect(ShopOfferSchema.safeParse({ ...offer, basis: "guess" }).success).toBe(false);
+  });
+});
+

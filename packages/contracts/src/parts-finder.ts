@@ -76,10 +76,22 @@ export type PartsFinderShopAnalogsRequest = z.infer<typeof PartsFinderShopAnalog
  *    original number. Shown as «возможный аналог»: a specialist checks the
  *    fit before it is sold as the answer.
  */
+/**
+ * Why the shop calls a product an analog, said under its line on the storefront (docs/CATALOG_MATCHING.md):
+ * the same number of the same part, a pair the shop's staff confirmed, a maker's catalogue (an original number, a
+ * replacement, the maker's own mark), two sources that agree, the supplier alone, a parts catalogue alone, two
+ * parts replacing one original number, the same standard size.
+ */
+export const ShopOfferBasisSchema = z.enum([
+  "same_number", "shop", "maker", "two_sources", "supplier", "catalogue", "original_number", "same_size",
+]);
+export type ShopOfferBasis = z.infer<typeof ShopOfferBasisSchema>;
+
 export const ShopOfferSchema = z.object({
   availableQuantity: z.number().int().min(0),
+  basis: ShopOfferBasisSchema.optional(),
   brand: z.string().nullable(),
-  matchedVia: z.enum(["exact", "cross", "possible"]),
+  matchedVia: z.enum(["exact", "cross", "possible", "same_size"]),
   name: z.string(),
   priceKopeks: z.number().int().min(0).nullable(),
   productId: z.string().min(1),
@@ -142,6 +154,8 @@ export type PartsFinderStatusResponse = z.infer<typeof PartsFinderStatusResponse
 export const PartsFinderShopAnalogsResponseSchema = z.object({
   article: z.string(),
   offers: z.array(ShopOfferSchema).max(PARTS_FINDER_SHOP_ANALOGS_LIMIT),
+  /** Parts of any maker of the product's standard size (a belt, a lamp, a bearing, a seal, a tyre), for a product card. */
+  sameSize: z.object({ label: z.string().max(80), offers: z.array(ShopOfferSchema).max(PARTS_FINDER_SHOP_ANALOGS_LIMIT) }).optional(),
 });
 export type PartsFinderShopAnalogsResponse = z.infer<typeof PartsFinderShopAnalogsResponseSchema>;
 
