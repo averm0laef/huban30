@@ -19,6 +19,10 @@ export class DatabaseService implements OnModuleDestroy {
       connectionTimeoutMillis: 3_000,
       idleTimeoutMillis: 30_000,
       max: config.get<string>("NODE_ENV") === "test" ? 2 : 10,
+      // No just-in-time compilation: the planner prices the catalogue listing's per-product subqueries high enough
+      // to switch it on, and compiling took 1.5 s of a 2.1 s first page on the owner's 42 723 items. Every query
+      // here is a short one for a page or a form, where the compiler never pays for itself.
+      options: "-c jit=off",
       statement_timeout: 15_000,
     });
   }
