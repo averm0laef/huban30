@@ -171,17 +171,33 @@ describe("TecdocService: a number and a product of ours", () => {
     expect(calls.map((call) => call.path)).toEqual(["/search", "/part/500"]);
   });
 
+  it("checks the customer's own car with two calls, without the part's whole card", async () => {
+    const { calls, service } = setup({ answers: { "/applicability": ok({ list: [9001, 9002] }), "/part/500": detail, "/search": search } });
+    const answer = await service.productFitment("00000000-0000-4000-8000-000000000001", { genId: 9001, msId: 2 }, caller, "check");
+    expect(answer).toMatchObject({ makes: [], oems: [], status: "ok", verdict: "fits" });
+    expect(calls.map((call) => call.path)).toEqual(["/search", "/applicability"]);
+  });
+
   it("answers for the customer's own car: fits, another engine, model only, not listed", async () => {
     const answers = { "/part/500": detail, "/search": search };
     const verdict = async (ids: unknown, car: { genId?: number; msId?: number }) => {
-      const result = await setup({ answers: { ...answers, "/applicability": ok({ list: ids }) } }).service.productFitment("00000000-0000-4000-8000-000000000001", car, caller);
+      const result = await setup({ answers: { ...answers, "/applicability": ok({ list: ids }) } }).service.productFitment("00000000-0000-4000-8000-000000000001", car, caller, "check");
       return "verdict" in result ? result.verdict : result.status;
     };
     expect(await verdict([9001, 9002], { genId: 9001, msId: 2 })).toBe("fits");
     expect(await verdict([9002], { genId: 9001, msId: 2 })).toBe("other_engine");
-    expect(await verdict([], { genId: 9001, msId: 2 })).toBe("model");
-    expect(await verdict([], { msId: 2 })).toBe("model");
-    expect(await verdict([9001], { genId: 9001, msId: 777 })).toBe("not_listed");
+    expect(await verdict([9002], { msId: 2 })).toBe("model");
+    expect(await verdict([], { genId: 9001, msId: 2 })).toBe("not_listed");
+    expect(await verdict([], { msId: 777 })).toBe("not_listed");
+  });
+
+  it("lists the cars with two calls and marks only what the list itself says of the customer's car", async () => {
+    const listed = setup({ answers: { "/part/500": detail, "/search": search } });
+    expect(await listed.service.productFitment("00000000-0000-4000-8000-000000000001", { genId: 9001, msId: 2 }, caller, "list")).toMatchObject({ verdict: null });
+    expect(listed.calls.map((call) => call.path)).toEqual(["/search", "/part/500"]);
+    const other = setup({ answers: { "/part/500": detail, "/search": search } });
+    expect(await other.service.productFitment("00000000-0000-4000-8000-000000000001", { msId: 777 }, caller, "list")).toMatchObject({ verdict: "not_listed" });
+    expect(other.calls.map((call) => call.path)).toEqual(["/search", "/part/500"]);
   });
 
   it("spends nothing on oils and tools, and does not guess when the brand differs", async () => {

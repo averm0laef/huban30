@@ -1,11 +1,13 @@
 import { HttpException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { PERMISSIONS_KEY, PUBLIC_ROUTE_KEY } from "../auth/auth.decorators.js";
 import { GarageController } from "../garage/garage.controller.js";
 import { StaffTecdocController, TecdocController, tecdocHttpError } from "./tecdoc.controller.js";
 import { TecdocError } from "./tecdoc.gateway.js";
+import type { TecdocService } from "./tecdoc.service.js";
+import type { RateLimitService } from "../security/rate-limit.service.js";
 
 const reflector = new Reflector();
 const routes = (controller: { prototype: object }) => Object.getOwnPropertyNames(controller.prototype).filter((name) => name !== "constructor");
@@ -43,5 +45,19 @@ describe("tecdoc and garage routes", () => {
     }
     const passed = new HttpException("as is", 400);
     expect(tecdocHttpError(passed)).toBe(passed);
+  });
+
+  it("answers the two buttons of the product page, and a visitor's day of checks is limited", async () => {
+    const productFitment = vi.fn(async () => ({ status: "not_applicable" as const }));
+    const consume = vi.fn(async () => undefined);
+    const controller = new TecdocController({ productFitment } as unknown as TecdocService, { consume } as unknown as RateLimitService);
+    const request = { ip: "203.0.113.7" } as never;
+    const product = "00000000-0000-4000-8000-000000000001";
+    await controller.fitment(product, { gen: "9001", mode: "check", ms: "2" }, request);
+    expect(productFitment).toHaveBeenLastCalledWith(product, { genId: 9001, msId: 2 }, { ip: "203.0.113.7", userId: null }, "check");
+    await controller.fitment(product, {}, request);
+    expect(productFitment).toHaveBeenLastCalledWith(product, {}, { ip: "203.0.113.7", userId: null }, "list");
+    expect(consume).toHaveBeenCalledWith("tecdoc-fitment-day", "203.0.113.7", 30, 86_400);
+    await expect(controller.fitment(product, { mode: "check" }, request)).rejects.toBeInstanceOf(HttpException);
   });
 });

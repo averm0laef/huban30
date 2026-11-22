@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
+import { partNumberCatalogueApplies } from "@an30/contracts";
+
 import { STORE_HOURS, STORE_LOCALITY, STORE_STREET } from "../../../../site-config";
 import { ProductBuyButton } from "../../../_components/cart-actions";
 import { ChevronRight20Regular, Location24Regular, ShieldCheckmark20Regular, VehicleTruck24Regular } from "../../../_components/home-icons";
@@ -188,7 +190,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
       <ProductDetails panels={detailPanels} key={product.id} />
       <ProductAnalogs article={product.sku} brand={product.brand?.name ?? null} productId={product.id} key={`analogs-${product.id}`} />
-      <ProductFitment key={`fitment-${product.id}`} productId={product.id} productName={product.name} />
+      <ProductFitment
+        checkable={partNumberCatalogueApplies({ brand: product.brand?.name ?? null, section: categoryAncestors[0] ?? product.category?.slug ?? null, sku: product.sku })}
+        key={`fitment-${product.id}`}
+        productId={product.id}
+        productName={product.name}
+      />
     </div>
   );
 }

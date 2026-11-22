@@ -8,6 +8,7 @@ import {
   PartsFinderShopAnalogsRequestSchema,
   PartsFinderVehicleRequestSchema,
   ShopOfferSchema,
+  partNumberCatalogueApplies,
 } from "./index.js";
 
 const offer = {
@@ -75,5 +76,16 @@ describe("parts finder contracts", () => {
     expect(crosses.groups?.analogs?.[0]).toHaveProperty("votes_for", 3);
     expect(ShopOfferSchema.safeParse({ ...offer, matchedVia: "supplier" }).success).toBe(false);
     expect(ShopOfferSchema.safeParse({ ...offer, availableQuantity: -1 }).success).toBe(false);
+  });
+});
+
+describe("which products a parts catalogue can answer for", () => {
+  it("a part with its maker and a real number, not oils, chemistry, tools or accessories", () => {
+    expect(partNumberCatalogueApplies({ brand: "MANN-FILTER", section: "filtry", sku: "W 68/3" })).toBe(true);
+    expect(partNumberCatalogueApplies({ brand: null, section: "filtry", sku: "W 68/3" })).toBe(false);
+    expect(partNumberCatalogueApplies({ brand: "OSRAM", section: "avtolampy", sku: "39" })).toBe(false);
+    expect(partNumberCatalogueApplies({ brand: "Lukoil", section: "motornye-masla", sku: "3148675" })).toBe(false);
+    expect(partNumberCatalogueApplies({ brand: "Jonnesway", section: "instrumenty", sku: "W264146" })).toBe(false);
+    expect(partNumberCatalogueApplies({ brand: "MANN-FILTER", section: null, sku: "W 68/3" })).toBe(true);
   });
 });

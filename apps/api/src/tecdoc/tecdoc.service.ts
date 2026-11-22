@@ -1,11 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { normalizeArticleNumber, normalizeBrand, type ShopOffer } from "@an30/contracts";
+import { normalizeArticleNumber, normalizeBrand, partNumberCatalogueApplies, type ShopOffer } from "@an30/contracts";
 
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { parseModelName } from "../parts-finder/engine/model-name.js";
 import { VEHICLE_SEED } from "../parts-finder/engine/vehicle-seed.js";
-import { canonicalBrand, UNLINKABLE_SECTIONS, type BrandIdentities } from "../parts-finder/parts-finder-assortment.logic.js";
+import { canonicalBrand, type BrandIdentities } from "../parts-finder/parts-finder-assortment.logic.js";
 import { PartsFinderShopService, type ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
 import { popularFamilies } from "../parts-finder/parts-finder-vehicles.service.js";
 import {
@@ -295,7 +295,13 @@ export class TecdocService {
 
   /* ---------------- A product of ours: which cars it fits ---------------- */
 
-  async productFitment(productId: string, car: { genId?: number; msId?: number }, caller: TecdocCaller): Promise<
+  /**
+   * Two buttons of the product page, nothing on its opening (docs/TECDOC.md, «Применимость»): `check` — does it fit
+   * the customer's car — is /search and /applicability for the car's model (2 requests); `list` — which cars it fits
+   * — is /search and the part's card with its cars and original numbers (2 requests). The gateway keeps /search for
+   * the day, so both buttons in a row cost 3.
+   */
+  async productFitment(productId: string, car: { genId?: number; msId?: number }, caller: TecdocCaller, mode: "check" | "list" = "list"): Promise<
     | { status: "not_applicable" | "not_found" | "unknown_part" }
     | { article: { brand: string; name: string; number: string }; makes: TecdocFitmentMake[]; oems: TecdocOem[]; status: "ok"; total: number; verdict: FitmentVerdict | null }
   > {
@@ -314,9 +320,7 @@ export class TecdocService {
     const product = found.rows[0];
     if (!product) return { status: "not_found" };
     // Oils, fluids, chemistry and tools have no part-number catalogue: no call is spent on them.
-    if (!product.brand || normalizeArticleNumber(product.sku).length < 4 || (product.section && UNLINKABLE_SECTIONS.includes(product.section))) {
-      return { status: "not_applicable" };
-    }
+    if (!partNumberCatalogueApplies(product)) return { status: "not_applicable" };
     const identities = await this.brandIdentities();
     const ours = canonicalBrand(product.brand, identities);
     const wanted = normalizeArticleNumber(product.sku);
@@ -324,21 +328,16 @@ export class TecdocService {
     // The catalogue's part is ours only when both the number and the brand are: a number alone is not an identity.
     const match = candidates.find((part) => part.artId !== null && normalizeArticleNumber(part.article) === wanted && canonicalBrand(part.brand, identities) === ours);
     if (!match?.artId) return { status: "unknown_part" };
+    if (mode === "check" && car.msId) {
+      const ids = await this.gateway.get("/applicability", { art_id: match.artId, id_only: true, lat_type: VEHICLE_TYPE, ms_id: car.msId }, caller, collectGenerationIds);
+      // No engine of this model is listed: the catalogue does not name the part for the car.
+      const verdict: FitmentVerdict = ids.length === 0 ? "not_listed" : !car.genId ? "model" : ids.includes(car.genId) ? "fits" : "other_engine";
+      return { article: { brand: match.brand, name: match.name, number: match.article }, makes: [], oems: [], status: "ok", total: 0, verdict };
+    }
     const detail = await this.gateway.get(`/part/${match.artId}`, { applicability: true, lat_type: VEHICLE_TYPE, oem: true }, caller, normalizePartDetail);
     const models = detail.fitment.flatMap((make) => make.models);
-    let verdict: FitmentVerdict | null = null;
-    if (car.msId) {
-      if (!models.some((model) => model.msId === car.msId)) verdict = "not_listed";
-      else if (!car.genId) verdict = "model";
-      else {
-        const ids = await this.gateway.get("/applicability", { art_id: match.artId, id_only: true, lat_type: VEHICLE_TYPE, ms_id: car.msId }, caller, collectGenerationIds)
-          .catch((error: unknown) => {
-            if (error instanceof TecdocError && error.failure === "unavailable") return [] as number[];
-            throw error;
-          });
-        verdict = ids.length === 0 ? "model" : ids.includes(car.genId) ? "fits" : "other_engine";
-      }
-    }
+    // The list itself says only that the customer's model is not in it; whether it fits is the other button.
+    const verdict: FitmentVerdict | null = car.msId && !models.some((model) => model.msId === car.msId) ? "not_listed" : null;
     return {
       article: { brand: match.brand, name: detail.part?.name || match.name, number: match.article },
       makes: detail.fitment.map((make) => ({ ...make, make: SEED_BY_KEY.get(brandKey(make.make))?.name ?? pretty(make.make) })),

@@ -45,7 +45,5 @@ export function decideProductLink(card: Record<string, unknown>, productBrand: s
   return { action: "brand_mismatch", note: brandsNote(named) };
 }
 
-/** Storefront sections whose goods have no part-number catalogue (fluids, chemistry, tools): never looked up. */
-export const UNLINKABLE_SECTIONS: readonly string[] = [
-  "motornye-masla", "transmissionnye-masla", "antifriz", "gidravlicheskaya-zhidkost", "avtohimiya", "instrumenty", "tehosmotr", "aksessuary",
-];
+/** Storefront sections whose goods have no part-number catalogue: one list for the API and the product page. */
+export { UNLINKABLE_SECTIONS } from "@an30/contracts";

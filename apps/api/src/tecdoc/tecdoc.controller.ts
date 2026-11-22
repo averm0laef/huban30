@@ -14,7 +14,11 @@ const MakeQuery = z.object({ make: id });
 const ModelQuery = z.object({ model: id });
 const CategoriesQuery = z.object({ gen: id, q: z.string().trim().max(80).optional() });
 const PartsQuery = z.object({ all: z.enum(["0", "1"]).default("0"), category: id, gen: id, page: z.coerce.number().int().min(1).max(20).default(1) });
-const FitmentQuery = z.object({ gen: id.optional(), ms: id.optional() });
+// «check» — does it fit the customer's car (needs the car's model); «list» — which cars it fits.
+const FitmentQuery = z.object({ gen: id.optional(), mode: z.enum(["check", "list"]).default("list"), ms: id.optional() })
+  .refine((query) => query.mode === "list" || query.ms !== undefined);
+// Checks of applicability one visitor may ask for in a day (docs/TECDOC.md): the package is not spent on curiosity.
+const FITMENT_CHECKS_PER_DAY = 30;
 const Vin = z.string().trim().toUpperCase().regex(/^[A-HJ-NPR-Z0-9]{17}$/u);
 
 const MESSAGES = {
@@ -103,13 +107,14 @@ export class TecdocController {
       .catch((error: unknown) => { throw tecdocHttpError(error); });
   }
 
-  /** Which cars a product of ours fits, and whether it fits the visitor's own car. */
+  /** Which cars a product of ours fits (mode=list), or whether it fits the visitor's own car (mode=check): a button each. */
   @Get("product/:productId/fitment")
   async fitment(@Param("productId") productId: string, @Query() query: unknown, @Req() request: FastifyRequest) {
     const product = parse(z.uuid(), productId);
-    const { gen, ms } = parse(FitmentQuery, query);
+    const { gen, mode, ms } = parse(FitmentQuery, query);
     await this.limits.consume("tecdoc-fitment", request.ip, 30, 60);
-    return this.tecdoc.productFitment(product, { ...(gen ? { genId: gen } : {}), ...(ms ? { msId: ms } : {}) }, caller(request))
+    await this.limits.consume("tecdoc-fitment-day", request.ip, FITMENT_CHECKS_PER_DAY, 86_400);
+    return this.tecdoc.productFitment(product, { ...(gen ? { genId: gen } : {}), ...(ms ? { msId: ms } : {}) }, caller(request), mode)
       .catch((error: unknown) => { throw tecdocHttpError(error); });
   }
 }

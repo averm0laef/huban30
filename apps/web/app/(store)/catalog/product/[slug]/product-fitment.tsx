@@ -8,12 +8,21 @@ import buttons from "../../../_components/store-button.module.css";
 import type { PickedVehicle } from "../../../_lib/parts-finder";
 import { activeCar, onActiveCarChange, tecdocGet, vehicleCatalogSource, type FitmentVerdict, type ProductFitment as Fitment } from "../../../_lib/tecdoc";
 import { ExpertHelpQueryLink } from "../../expert-help-query-link";
+import { fitmentButtons, fitmentFailure, fitmentQuery, keepFitment, keptFitment, type FitmentCar, type FitmentMode } from "./fitment-actions";
 import styles from "./product-fitment.module.css";
 
-type Load = { status: "idle" | "loading" | "hidden" } | { status: "error" } | { data: Fitment; status: "ready" };
+type Load = { status: "idle" | "loading" | "hidden" | "expert" | "error" } | { data: Fitment; status: "ready" };
 
 function carName(car: PickedVehicle): string {
   return car.make && car.model ? `${car.make} ${car.model}` : car.label;
+}
+
+function sessionStore(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 const VERDICTS: Record<FitmentVerdict, { text: (car: string) => string; tone: "ok" | "warn" | "info" }> = {
@@ -24,45 +33,68 @@ const VERDICTS: Record<FitmentVerdict, { text: (car: string) => string; tone: "o
 };
 
 /**
- * «Применимость»: whether the product fits the visitor's own car (picked on
- * the site or the main car of the garage) and which cars it fits at all.
- * With a car chosen the answer loads by itself; without one — on a click, so
- * that merely opening a product page spends nothing.
+ * «Применимость»: whether the product fits the visitor's own car (picked on the site or the main car of the
+ * garage) and which cars it fits at all. Only on a button: opening a product page asks the catalogue nothing
+ * (docs/TECDOC.md). An answer is kept for the rest of the visit. `checkable` — the page knows the product has a
+ * part-number catalogue (partNumberCatalogueApplies); for anything else there is the check by VIN.
  */
-export function ProductFitment({ productId, productName }: { productId: string; productName: string }) {
+export function ProductFitment({ checkable, productId, productName }: { checkable: boolean; productId: string; productName: string }) {
   const [enabled, setEnabled] = useState(false);
   const [car, setCar] = useState<PickedVehicle | null>(null);
-  const [state, setState] = useState<Load>({ status: "idle" });
+  const [check, setCheck] = useState<Load>({ status: "idle" });
+  const [list, setList] = useState<Load>({ status: "idle" });
 
   useEffect(() => {
+    if (!checkable) return undefined;
     let live = true;
     const read = () => { void activeCar().then((next) => { if (live) setCar(next); }); };
     void vehicleCatalogSource().then((source) => { if (live) setEnabled(source === "tecdoc"); });
     read();
     const stop = onActiveCarChange(read);
     return () => { live = false; stop(); };
-  }, []);
+  }, [checkable]);
 
-  const msId = car?.tecdoc?.msId;
-  const genId = car?.tecdoc?.genId;
+  const ids: FitmentCar | null = car?.tecdoc?.msId ? { msId: car.tecdoc.msId, ...(car.tecdoc.genId ? { genId: car.tecdoc.genId } : {}) } : null;
+  const msId = ids?.msId;
 
-  function load(withCar: boolean) {
-    setState({ status: "loading" });
-    tecdocGet<Fitment>(`product/${encodeURIComponent(productId)}/fitment`, withCar && msId ? { ms: msId, ...(genId ? { gen: genId } : {}) } : undefined)
-      .then((data) => setState(data.status === "not_applicable" || data.status === "not_found" ? { status: "hidden" } : { data, status: "ready" }))
-      .catch(() => setState({ status: "error" }));
+  // Another car picked meanwhile: the answer for the former one no longer says anything.
+  useEffect(() => { setCheck({ status: "idle" }); }, [msId, ids?.genId]);
+
+  function load(mode: FitmentMode) {
+    const set = mode === "check" ? setCheck : setList;
+    const kept = keptFitment(sessionStore(), productId, mode, ids);
+    const show = (data: Fitment) => set(data.status === "not_applicable" || data.status === "not_found" ? { status: "hidden" } : { data, status: "ready" });
+    if (kept) { show(kept); return; }
+    set({ status: "loading" });
+    tecdocGet<Fitment>(`product/${encodeURIComponent(productId)}/fitment`, fitmentQuery(mode, ids))
+      .then((data) => { keepFitment(sessionStore(), productId, mode, ids, data); show(data); })
+      .catch((error: unknown) => set({ status: fitmentFailure(error) === "expert" ? "expert" : "error" }));
   }
 
-  // The visitor has a car: answer «подходит ли» without a click.
-  useEffect(() => {
-    if (enabled && msId) load(true);
-    // `load` reads the same values this effect depends on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, msId, genId, productId]);
-
-  if (!enabled || state.status === "hidden") return null;
+  if (!checkable || !enabled || check.status === "hidden" || list.status === "hidden") return null;
   const name = car ? carName(car) : null;
-  const verdict = state.status === "ready" && state.data.status === "ok" && name && state.data.verdict ? VERDICTS[state.data.verdict] : null;
+  const verdict = check.status === "ready" && check.data.status === "ok" && name && check.data.verdict ? VERDICTS[check.data.verdict] : null;
+  const expertPrefill = `Подойдёт ли «${productName}» для ${car?.label ?? "моего автомобиля"}? Пришлю VIN.`;
+  const idle = (state: Load) => state.status === "idle" || state.status === "error";
+  const shown = fitmentButtons(ids).filter((button) => button === "pick" || idle(button === "check" ? check : list));
+
+  const failure = (state: Load) => (state.status === "error" ? (
+    <p className={styles.muted} role="alert">Каталог применимости сейчас недоступен. Специалист проверит деталь по VIN — напишите нам.</p>
+  ) : state.status === "expert" ? (
+    <div className={styles.verdict} data-tone="info">
+      <Info20Regular aria-hidden="true" />
+      <div>
+        <p>Проверим совместимость по VIN вашего автомобиля.</p>
+        <ExpertHelpQueryLink className={styles.textLink} prefillMessage={expertPrefill}>Написать специалисту</ExpertHelpQueryLink>
+      </div>
+    </div>
+  ) : null);
+  const unknownPart = (state: Load) => (state.status === "ready" && state.data.status === "unknown_part" ? (
+    <div className={styles.verdict} data-tone="info">
+      <Info20Regular aria-hidden="true" />
+      <p>В каталоге применимости этой детали нет. Специалист проверит её по VIN вашего автомобиля.</p>
+    </div>
+  ) : null);
 
   return (
     <section aria-labelledby="product-fitment-title" className={styles.fitment}>
@@ -71,26 +103,32 @@ export function ProductFitment({ productId, productName }: { productId: string; 
         {name ? <Link className={styles.carLink} href="/podbor"><VehicleCar20Regular aria-hidden="true" />{name}</Link> : null}
       </div>
 
-      {state.status === "idle" ? (
+      {shown.length > 0 ? (
         <div className={styles.actions}>
-          <button className={`${buttons.button} ${buttons.soft}`} onClick={() => load(false)} type="button">
-            <List20Regular aria-hidden="true" /> Показать, к каким автомобилям подходит
-          </button>
-          {!name ? <Link className={`${buttons.button} ${buttons.quiet}`} href="/podbor"><VehicleCar20Regular aria-hidden="true" /> Выбрать свой автомобиль</Link> : null}
+          {shown.map((button, index) => {
+            const tier = index === 0 ? buttons.soft : buttons.quiet;
+            if (button === "check") {
+              return (
+                <button className={`${buttons.button} ${tier}`} key={button} onClick={() => load("check")} type="button">
+                  <CheckmarkCircle20Regular aria-hidden="true" /> Проверить, подойдёт ли к {name ?? "моему автомобилю"}
+                </button>
+              );
+            }
+            if (button === "list") {
+              return (
+                <button className={`${buttons.button} ${tier}`} key={button} onClick={() => load("list")} type="button">
+                  <List20Regular aria-hidden="true" /> К каким машинам подходит
+                </button>
+              );
+            }
+            return <Link className={`${buttons.button} ${tier}`} href="/podbor" key={button}><VehicleCar20Regular aria-hidden="true" /> Выбрать мой автомобиль</Link>;
+          })}
         </div>
       ) : null}
-      {state.status === "loading" ? <p className={styles.muted} role="status">Проверяем применимость…</p> : null}
-      {state.status === "error" ? (
-        <p className={styles.muted} role="alert">Каталог применимости сейчас недоступен. Специалист проверит деталь по VIN — напишите нам.</p>
-      ) : null}
 
-      {state.status === "ready" && state.data.status === "unknown_part" ? (
-        <div className={styles.verdict} data-tone="info">
-          <Info20Regular aria-hidden="true" />
-          <p>В каталоге применимости этой детали нет. Специалист проверит её по VIN вашего автомобиля.</p>
-        </div>
-      ) : null}
-
+      {check.status === "loading" ? <p className={styles.muted} role="status">Проверяем, подойдёт ли деталь к вашему автомобилю…</p> : null}
+      {failure(check)}
+      {unknownPart(check)}
       {verdict && name ? (
         <div className={styles.verdict} data-tone={verdict.tone}>
           {verdict.tone === "ok" ? <CheckmarkCircle20Regular aria-hidden="true" /> : verdict.tone === "warn" ? <Warning20Regular aria-hidden="true" /> : <Info20Regular aria-hidden="true" />}
@@ -98,20 +136,21 @@ export function ProductFitment({ productId, productName }: { productId: string; 
             <p><strong>{verdict.text(name)}</strong></p>
             {car?.generation || car?.engine ? <p className={styles.muted}>{[car.generation, car.engine].filter(Boolean).join(" · ")}</p> : null}
             {verdict.tone !== "ok" ? (
-              <ExpertHelpQueryLink className={styles.textLink} prefillMessage={`Подойдёт ли «${productName}» для ${car?.label ?? name}? Пришлю VIN.`}>
-                Проверить у специалиста по VIN
-              </ExpertHelpQueryLink>
+              <ExpertHelpQueryLink className={styles.textLink} prefillMessage={expertPrefill}>Проверить у специалиста по VIN</ExpertHelpQueryLink>
             ) : null}
           </div>
         </div>
       ) : null}
 
-      {state.status === "ready" && state.data.status === "ok" ? (
+      {list.status === "loading" ? <p className={styles.muted} role="status">Собираем список автомобилей…</p> : null}
+      {failure(list)}
+      {check.status === "ready" ? null : unknownPart(list)}
+      {list.status === "ready" && list.data.status === "ok" ? (
         <>
-          {state.data.makes.length > 0 ? (
+          {list.data.makes.length > 0 ? (
             <div className={styles.makes}>
-              {state.data.makes.map((make) => (
-                <details className={styles.make} key={make.make} open={state.data.status === "ok" && state.data.makes.length === 1}>
+              {list.data.makes.map((make, _index, makes) => (
+                <details className={styles.make} key={make.make} open={makes.length === 1}>
                   <summary><span>{make.make}</span><small>{make.models.length}</small></summary>
                   <ul>
                     {make.models.map((model) => (
@@ -124,11 +163,13 @@ export function ProductFitment({ productId, productName }: { productId: string; 
               ))}
             </div>
           ) : <p className={styles.muted}>Каталог не называет автомобили для этой детали.</p>}
-          {state.data.oems.length > 0 ? (
-            <p className={styles.oems}><strong>Оригинальные номера:</strong> {state.data.oems.map((oem) => `${oem.brand} ${oem.number}`).join(", ")}</p>
+          {list.data.oems.length > 0 ? (
+            <p className={styles.oems}><strong>Оригинальные номера:</strong> {list.data.oems.map((oem) => `${oem.brand} ${oem.number}`).join(", ")}</p>
           ) : null}
-          <p className={styles.muted}>Данные каталога TecDoc. Перед покупкой сверьте деталь со старой или пришлите нам VIN.</p>
         </>
+      ) : null}
+      {check.status === "ready" || list.status === "ready" ? (
+        <p className={styles.muted}>Данные каталога TecDoc. Перед покупкой сверьте деталь со старой или пришлите нам VIN.</p>
       ) : null}
     </section>
   );

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizeArticleNumber } from "./catalog-search-normalize.js";
+
 /**
  * "Подбор по автомобилю" (/podbor). The browser talks only to the API
  * (`/api/v1/parts-finder/*`); the API forwards to the internal parts-finder
@@ -278,3 +280,18 @@ export const PartsFinderStaffOverviewSchema = z.object({
   vin: z.object({ cacheEntries: z.number(), cacheHits: z.number(), vinrokuRemaining: z.number().nullable() }),
 });
 export type PartsFinderStaffOverview = z.infer<typeof PartsFinderStaffOverviewSchema>;
+
+/** Storefront sections whose goods have no part-number catalogue (fluids, chemistry, tools): never looked up. */
+export const UNLINKABLE_SECTIONS: readonly string[] = [
+  "motornye-masla", "transmissionnye-masla", "antifriz", "gidravlicheskaya-zhidkost", "avtohimiya", "instrumenty", "tehosmotr", "aksessuary",
+];
+
+/**
+ * Whether a parts catalogue (TecDoc, FAPI) can say which cars a product fits: a part with its maker known and a
+ * number of at least four characters, outside UNLINKABLE_SECTIONS (`section` is the top-level storefront section).
+ * Anything else is never looked up: the product page offers a check by VIN instead.
+ */
+export function partNumberCatalogueApplies(product: { brand: string | null; section: string | null; sku: string }): boolean {
+  if (!product.brand || normalizeArticleNumber(product.sku).length < 4) return false;
+  return !product.section || !UNLINKABLE_SECTIONS.includes(product.section);
+}
