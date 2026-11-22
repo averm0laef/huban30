@@ -88,7 +88,9 @@ describe.skipIf(!directory || !url)("rehearsal of the 1С exchange at full volum
     expect(outcome).toEqual({ kind: "success" });
     const run = await journal(CATALOG_FILE);
     process.stdout.write(`\n[rehearsal] catalogue: ${items.length} items, ${polls} polls, ${seconds} s, journal ${JSON.stringify(run[0])}\n`);
-    expect(run).toEqual([{ price_type_name: null, rows_rejected: 0, rows_touched: items.length, rows_uncategorized: expectedWithoutSection, status: "completed" }]);
+    // The journal counts the brands the names gave (catalog-part-makers.ts) among the rows it wrote.
+    const brands = await count("SELECT count(*)::text AS n FROM app.brands WHERE deleted_at IS NULL");
+    expect(run).toEqual([{ price_type_name: null, rows_rejected: 0, rows_touched: items.length + brands, rows_uncategorized: expectedWithoutSection, status: "completed" }]);
     expect(await count("SELECT count(*)::text AS n FROM app.products WHERE deleted_at IS NULL AND is_active")).toBe(items.length);
     expect(await count(
       `SELECT count(*)::text AS n FROM app.products AS product JOIN app.categories AS category ON category.id = product.category_id
