@@ -200,9 +200,9 @@ export function RequestsView({ session }: { session: SessionView }) {
         ) : undefined}
         description={activeTab === "contacts"
           ? "Заявки из контактов, помощи эксперта и поиска по VIN собраны в одной очереди."
-          : "Заявки клиентов на детали под заказ у поставщика Rossko. 1С-остатки и поставщик никогда не смешиваются в одно число."}
+          : "Покупатели, которые ждут деталь под заказ. Остатки магазина из 1С и предложения поставщика считаются отдельно."}
         eyebrow="Клиенты"
-        title={activeTab === "contacts" ? "Обращения" : "Ожидание"}
+        title={activeTab === "contacts" ? "Обращения" : "Лист ожидания"}
       />
       <TabList
         className={styles.sectionTabs}
@@ -210,7 +210,7 @@ export function RequestsView({ session }: { session: SessionView }) {
         selectedValue={activeTab}
       >
         <Tab value="contacts">Обращения</Tab>
-        <Tab value="waitlist">Ожидание (Rossko)</Tab>
+        <Tab value="waitlist">Лист ожидания</Tab>
       </TabList>
       {activeTab === "waitlist" ? <SupplierWaitlistPanel session={session} /> : null}
       {activeTab !== "contacts" ? null : (

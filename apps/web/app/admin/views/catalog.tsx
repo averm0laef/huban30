@@ -17,6 +17,7 @@ import {
   useResource,
 } from "../workspace-utils";
 import styles from "../workspace.module.css";
+import { CatalogEnrichmentPanel } from "./catalog-enrichment";
 
 export function CatalogView() {
   const [offset, setOffset] = useState(0);
@@ -101,10 +102,11 @@ export function CatalogView() {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить</Button>}
-        description="Каталог, цены и остатки читаются из применённых версий 1С. Ручная подмена цены недоступна."
+        description="Товары, цены и остатки приходят из 1С. Чтобы изменить цену или остаток, поправьте их в 1С — сайт обновится при следующем обмене."
         eyebrow="Товары"
         title="Каталог и остатки"
       />
+      <CatalogEnrichmentPanel />
       <div className={styles.toolbar}>
         <Input
           aria-label="Поиск по каталогу"

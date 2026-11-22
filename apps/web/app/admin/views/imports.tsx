@@ -10,6 +10,8 @@ import { DataTable } from "../data-table";
 import type { ImportPreview, ImportRow, Page } from "../types";
 import { formatDate, Pagination, RequestError, SectionHeader, useResource } from "../workspace-utils";
 import styles from "../workspace.module.css";
+import { ONE_C_SOURCE_LABELS, OneCExchangeRuns, type OneCSource } from "./one-c-exchange-runs";
+import { OneCGroupMapping } from "./one-c-group-mapping";
 
 interface PendingAction { action: "apply" | "rollback"; batch: ImportRow }
 
@@ -35,6 +37,7 @@ export function ImportsView() {
   const [offset, setOffset] = useState(0);
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [exchangeSource, setExchangeSource] = useState<OneCSource>("one_c");
   const [busy, setBusy] = useState(false);
   const [mutationError, setMutationError] = useState<unknown>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -123,10 +126,30 @@ export function ImportsView() {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить</Button>}
-        description="Сначала валидация и предпросмотр, затем явное применение. Повторная выгрузка идемпотентна."
+        description="Обычный «Обмен с сайтом» из 1С применяется сразу — его результат виден в журнале обменов. Ниже — пакеты особой обработки 1С: их можно сначала просмотреть, затем применить вручную или отменить."
         eyebrow="Интеграция"
         title="Импорт из 1С"
       />
+      <div className={styles.toolbar} aria-label="База 1С для журнала обменов">
+        {(["one_c", "one_c_secondary"] as const).map((value) => (
+          <Button
+            appearance={exchangeSource === value ? "primary" : "secondary"}
+            aria-pressed={exchangeSource === value}
+            key={value}
+            onClick={() => setExchangeSource(value)}
+          >
+            {ONE_C_SOURCE_LABELS[value]}
+          </Button>
+        ))}
+      </div>
+      <OneCExchangeRuns key={exchangeSource} source={exchangeSource} />
+      <OneCGroupMapping />
+      <div className={styles.settingsHeading}>
+        <div>
+          <h2>Пакеты с ручным применением</h2>
+          <p>Нужны, только если программист настроил в основной базе 1С отдельную обработку выгрузки. При обычном «Обмене с сайтом» этот список остаётся пустым — это нормально.</p>
+        </div>
+      </div>
       <div className={styles.toolbar}>
         <Select aria-label="Статус выгрузки" onChange={(event) => { setOffset(0); setStatus(event.target.value); }} value={status}>
           <option value="">Все статусы</option>
@@ -155,8 +178,8 @@ export function ImportsView() {
       <DataTable
         columns={columns}
         data={resource.data?.items ?? []}
-        emptyDescription="Новая выгрузка появится после запроса от разрешённого адреса 1С."
-        emptyTitle="Выгрузок пока нет"
+        emptyDescription="Если вы пользуетесь обычным «Обменом с сайтом», ничего делать не нужно: смотрите журнал обменов выше."
+        emptyTitle="Пакетов с ручным применением нет"
         loading={resource.loading}
       />
       {resource.data ? <Pagination limit={limit} offset={offset} onChange={setOffset} total={resource.data.total} /> : null}

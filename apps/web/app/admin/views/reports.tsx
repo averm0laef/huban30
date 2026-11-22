@@ -6,23 +6,23 @@ import { ArrowClockwise20Regular } from "@fluentui/react-icons";
 import type { OrderStatus } from "@an30/contracts";
 
 import { api } from "../api";
-import { formatMoney, ORDER_LABELS, RequestError, SectionHeader, useResource } from "../workspace-utils";
+import { ORDER_LABELS, RequestError, SectionHeader, useResource } from "../workspace-utils";
 import styles from "../workspace.module.css";
 
 interface ReportData {
-  days: Array<{ date: string; netCashflowKopeks: number; orders: number }>;
+  days: Array<{ date: string; orders: number }>;
   generatedAt: string;
   orderStatuses: Array<{ count: number; status: OrderStatus }>;
 }
 
 export function ReportsView() {
   const resource = useResource(() => api<ReportData>("/staff/reports"), []);
-  const max = Math.max(1, ...(resource.data?.days.map((day) => Math.abs(day.netCashflowKopeks)) ?? [1]));
+  const max = Math.max(1, ...(resource.data?.days.map((day) => day.orders) ?? [1]));
   return (
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить</Button>}
-        description="Поступления за вычетом возвратов по дате операции и количество заказов за последние 14 дней по времени Читы."
+        description="Заявки по дате создания и заказы по статусам за последние 14 дней по времени Читы."
         eyebrow="Аналитика"
         title="Отчёты"
       />
@@ -31,13 +31,13 @@ export function ReportsView() {
       {resource.data ? (
         <div className={styles.reportGrid}>
           <section className={styles.reportPanel} aria-labelledby="revenue-title">
-            <h2 id="revenue-title">Денежный поток по дням</h2>
+            <h2 id="revenue-title">Заявки по дням</h2>
             <div className={styles.barChart}>
               {resource.data.days.map((day) => (
                 <div className={styles.barRow} key={day.date}>
                   <time>{new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" }).format(new Date(`${day.date}T00:00:00`))}</time>
-                  <span className={styles.barTrack}><span data-negative={day.netCashflowKopeks < 0 || undefined} style={{ width: `${Math.max(2, (Math.abs(day.netCashflowKopeks) / max) * 100)}%` }} /></span>
-                  <strong>{formatMoney(day.netCashflowKopeks)}</strong>
+                  <span className={styles.barTrack}><span style={{ width: `${Math.max(2, (day.orders / max) * 100)}%` }} /></span>
+                  <strong>{day.orders}</strong>
                 </div>
               ))}
             </div>

@@ -117,7 +117,7 @@ export function InvoicesView() {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить</Button>}
-        description="Сумма берётся из заказа на сервере. Номер создаётся атомарно, состояние защищено версией."
+        description="Сумма берётся из заказа автоматически, номер накладной присваивается по порядку и не повторяется."
         eyebrow="Документы"
         title="Накладные"
       />
@@ -126,7 +126,7 @@ export function InvoicesView() {
           <strong>Новая накладная</strong>
           <span>Откройте заказ и передайте его идентификатор. Для одного заказа разрешена одна действующая накладная.</span>
         </div>
-        <Input aria-label="Идентификатор заказа" onChange={(_event, data) => setOrderId(data.value)} placeholder="UUID заказа" value={orderId} />
+        <Input aria-label="Идентификатор заказа" onChange={(_event, data) => setOrderId(data.value)} placeholder="ID заказа из его карточки" value={orderId} />
         <Button appearance="primary" disabled={busy || !orderId.trim()} icon={<Add20Regular />} onClick={() => void createInvoice()}>Создать черновик</Button>
         {orderId ? <span className={styles.unsavedState}>Есть несохранённый идентификатор</span> : null}
       </div>

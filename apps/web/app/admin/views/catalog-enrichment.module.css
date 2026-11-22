@@ -1,0 +1,20 @@
+.panel { margin: 20px 0; border: 1px solid var(--colorNeutralStroke2); border-radius: 20px; background: var(--colorNeutralBackground1); overflow: hidden; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 24px; }
+.header h2 { margin: 0 0 6px; font-size: 18px; line-height: 1.3; }
+.header p { margin: 0; color: var(--colorNeutralForeground2); max-width: 65ch; line-height: 1.6; }
+.header button,.form button { min-height: 44px; border-radius: 999px; padding-inline: 22px; flex-shrink: 0; }
+.body { display: grid; gap: 20px; padding: 0 24px 24px; }
+.note { margin: 0; max-width: 85ch; color: var(--colorNeutralForeground2); line-height: 1.7; }
+.form { display: grid; grid-template-columns: minmax(180px,1.2fr) minmax(130px,1fr) minmax(130px,1fr) auto; align-items: end; gap: 14px; }
+.form input,.form select { min-height: 42px; }
+.results { display: grid; gap: 14px; }
+.results > p { margin: 0; line-height: 1.6; }
+.results small { color: var(--colorNeutralForeground2); }
+.candidate { padding: 20px; border: 1px solid var(--colorNeutralStroke2); border-radius: 14px; }
+.candidateHeader { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.candidate p { margin: 10px 0; line-height: 1.5; }
+.products { display: grid; gap: 12px; padding: 14px 0 0; margin: 14px 0 0; border-top: 1px solid var(--colorNeutralStroke2); list-style: none; }
+.products li { display: flex; gap: 14px; justify-content: space-between; flex-wrap: wrap; }
+.products a { color: var(--colorBrandForeground1); text-underline-offset: 3px; }
+@media(max-width: 1150px) { .form { grid-template-columns: 1fr 1fr; } }
+@media(max-width: 640px) { .header { align-items: flex-start; flex-direction: column; padding: 20px; } .body { padding: 0 20px 20px; } .form { grid-template-columns: 1fr; } }

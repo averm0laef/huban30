@@ -1,0 +1,8 @@
+.availability { display: grid; align-content: center; gap: 1px; padding: 6px 15px 6px 7px; border: 1px solid var(--colorNeutralStroke2); border-radius: 18px; background: var(--colorNeutralBackground1); position: relative; }
+.availability :global(.fui-Switch) { min-height: 25px; font: 600 11px Montserrat,var(--fontFamilyBase),sans-serif; }
+.availability :global(.fui-Switch__label) { padding-block: 0; }
+.availability :global(.fui-Switch__indicator) { margin-block: 3px; }
+.state { padding-left: 44px; color: var(--colorNeutralForeground3); font-size: 9px; line-height: 1.4; }
+.availability[data-active] .state { color: var(--colorPaletteGreenForeground1); }
+.error { position: absolute; top: calc(100% + 8px); right: 0; width: min(280px,85vw); border: 1px solid var(--colorPaletteRedBorder1); border-radius: 14px; padding: 12px; background: var(--colorPaletteRedBackground1); color: var(--colorPaletteRedForeground1); font-size: 11px; line-height: 1.7; z-index: 25; }
+@media(max-width:600px) { .availability { padding: 4px 8px 4px 2px; border-radius: 14px; } .availability :global(.fui-Switch) { font-size: 10px; } .state { font-size: 8px; padding-left: 42px; } }

@@ -1,4 +1,4 @@
-import type { ContactRequestStatus, OrderStatus, PaymentStatus, Role, SupplierWaitlistStatus } from "@an30/contracts";
+import type { ContactRequestStatus, OrderStatus, Role, SupplierWaitlistStatus } from "@an30/contracts";
 
 export interface SessionView {
   email: string;
@@ -22,7 +22,6 @@ export interface OrderRow {
   customerPhone: string;
   id: string;
   itemCount: number;
-  paidAmountKopeks: number;
   publicNumber: string;
   status: OrderStatus;
   totalAmountKopeks: number;
@@ -43,15 +42,6 @@ export interface OrderDetail {
     sku: string;
     unitPriceKopeks: number;
   }>;
-  paidAmountKopeks: number;
-  payments: Array<{
-    amountKopeks: number;
-    id: string;
-    kind: string;
-    provider: string;
-    refundedAmountKopeks: number;
-    status: PaymentStatus;
-  }>;
   publicNumber: string;
   status: OrderStatus;
   subtotalKopeks: number;
@@ -63,11 +53,15 @@ export interface ChatRow {
   assignedName: string | null;
   assignedStaffId: string | null;
   createdAt: string;
+  /** One of public/avatars/customer-NN; a stable pick for guests. */
+  customerAvatarKey?: string;
   customerEmail: string | null;
   customerName: string | null;
   id: string;
   lastMessageAt: string | null;
   lastMessageBody: string | null;
+  /** «Ч-000123» */
+  number?: string | null;
   orderId: string | null;
   orderNumber: string | null;
   status: "closed" | "open" | "waiting_customer" | "waiting_staff";

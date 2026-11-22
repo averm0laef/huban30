@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Badge,
   Button,
   Field,
   Input,
@@ -16,10 +17,15 @@ import { ArrowClockwise20Regular, Save20Regular } from "@fluentui/react-icons";
 import { api } from "../api";
 import { formatDate, RequestError, SectionHeader, useResource } from "../workspace-utils";
 import styles from "../workspace.module.css";
+import { OneCExchangeRuns } from "./one-c-exchange-runs";
+import { OneCRejectedRequests } from "./one-c-rejected-requests";
+import { PartsFinderStatusCard } from "./parts-finder-status";
 
 interface OneCExchangeSummary {
   containsOnlyChanges: boolean;
   filename: string;
+  imagesAttached?: number;
+  imagesSkipped?: number;
   kind: "catalog" | "offers";
   rowsRejected: number;
   rowsTouched: number;
@@ -30,28 +36,53 @@ interface OneCExchangeSummary {
 }
 
 interface OneCSettings {
+  displayName: string;
+  expectedSyncMinutes: number;
+  lastCatalogExchangeAt: string | null;
+  lastOffersExchangeAt: string | null;
+  freshness: "disabled" | "never" | "stale" | "current";
   allowedNetworks: string[];
   enabled: boolean;
   hasPassword: boolean;
   lastExchangeAt: string | null;
   lastExchangeSummary: OneCExchangeSummary | Record<string, never>;
+  /** Show the 1С «Описание» of a product on its page (off by default: it often holds internal notes). */
+  publishDescriptions: boolean;
   updatedAt: string | null;
   username: string | null;
 }
 
 const EXCHANGE_KIND_LABELS: Record<OneCExchangeSummary["kind"], string> = {
-  catalog: "Классификатор и товары (import.xml)",
-  offers: "Цены и остатки (offers.xml)",
+  catalog: "Товары и разделы",
+  offers: "Цены и остатки",
 };
 
+const FRESHNESS_HINTS: Record<OneCSettings["freshness"], string> = {
+  current: "Цены и остатки приходят вовремя.",
+  stale: "Цены и остатки не обновлялись дольше двух ожидаемых интервалов. Проверьте, что в 1С включено регламентное задание обмена, компьютер с 1С работает, а в журнале ниже нет ошибок.",
+  never: "От этой базы ещё не приходили цены и остатки. Запустите обмен в 1С и проверьте журнал ниже.",
+  disabled: "Обмен выключен: сайт не принимает данные от этой базы. Включите переключатель и сохраните.",
+};
+
+type Source = "one_c" | "one_c_secondary";
 export function SettingsView() {
-  const resource = useResource(() => api<OneCSettings>("/catalog/1c/settings"), []);
+  const [source,setSource] = useState<Source>("one_c");
+  return <OneCSettingsForm key={source} source={source} onSourceChange={setSource} />;
+}
+
+function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:(source:Source)=>void}) {
+  const settingsPath=`/catalog/1c/settings?source=${source}`;
+  const resource = useResource(() => api<OneCSettings>(settingsPath), [source]);
+  const [displayName,setDisplayName]=useState("");
+  const [expectedSyncMinutes,setExpectedSyncMinutes]=useState("60");
   const [enabled, setEnabled] = useState(false);
+  const [publishDescriptions, setPublishDescriptions] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [networks, setNetworks] = useState("");
   const [baseline, setBaseline] = useState("");
   const [busy, setBusy] = useState(false);
+  const saving=useRef(false);
   // Caddy is the only public entry point (see docs/ONE_C_INTEGRATION.md) and
   // routes /api on the same origin as this admin page, so the URL 1C needs
   // is just this page's own origin plus the exchange path -- computed on the
@@ -64,19 +95,28 @@ export function SettingsView() {
   useEffect(() => {
     if (!resource.data) return;
     const nextNetworks = resource.data.allowedNetworks.join("\n");
+    setDisplayName(resource.data.displayName);
+    setExpectedSyncMinutes(String(resource.data.expectedSyncMinutes));
     setEnabled(resource.data.enabled);
+    setPublishDescriptions(resource.data.publishDescriptions);
     setUsername(resource.data.username ?? "");
     setNetworks(nextNetworks);
     setPassword("");
-    setBaseline(JSON.stringify({ enabled: resource.data.enabled, networks: nextNetworks, username: resource.data.username ?? "" }));
+    setBaseline(JSON.stringify({ enabled: resource.data.enabled, networks: nextNetworks, username: resource.data.username ?? "",displayName:resource.data.displayName,expectedSyncMinutes:String(resource.data.expectedSyncMinutes),publishDescriptions:resource.data.publishDescriptions }));
   }, [resource.data]);
 
   useEffect(() => {
-    setExchangeUrl(`${window.location.origin}/api/v1/integrations/1c/exchange`);
-  }, []);
+    setExchangeUrl(`${window.location.origin}/api/v1/integrations/1c/exchange${source === "one_c_secondary" ? "/secondary":""}`);
+  }, [source]);
 
-  const current = JSON.stringify({ enabled, networks, username });
+  const current = JSON.stringify({ enabled, networks, username,displayName,expectedSyncMinutes,publishDescriptions });
   const dirty = current !== baseline || password.length > 0;
+  // Mirrors the API's rule so the button explains itself instead of failing
+  // with a generic "некорректные настройки" after the click.
+  const passwordTooShort = password.length > 0 && password.length < 16;
+  const missingForEnable = enabled && resource.data
+    ? [!username.trim() ? "имя пользователя" : "", !resource.data.hasPassword && !password ? "пароль" : "", !networks.trim() ? "разрешённые сети" : ""].filter(Boolean)
+    : [];
 
   useEffect(() => {
     if (!dirty) return;
@@ -113,35 +153,42 @@ export function SettingsView() {
   }, [dirty]);
 
   function reload(): void {
+    if(saving.current) return;
     if (!dirty || window.confirm("Отменить несохранённые изменения и перечитать настройки?")) {
       resource.reload();
     }
   }
 
   async function save(): Promise<void> {
+    if(saving.current) return;
+    saving.current=true;
     setBusy(true);
     setMutationError(null);
     setSuccess("");
     try {
-      const updated = await api<OneCSettings>("/catalog/1c/settings", {
+      const updated = await api<OneCSettings>(settingsPath, {
         body: JSON.stringify({
           allowedNetworks: networks.split(/\s+/u).map((value) => value.trim()).filter(Boolean),
-          enabled,
+          enabled,displayName:displayName.trim(),expectedSyncMinutes:Number(expectedSyncMinutes),
           ...(password ? { password } : {}),
+          publishDescriptions,
           username: username.trim(),
         }),
         method: "PUT",
       });
       setPassword("");
-      setBaseline(JSON.stringify({ enabled: updated.enabled, networks: updated.allowedNetworks.join("\n"), username: updated.username ?? "" }));
+      setBaseline(JSON.stringify({ enabled: updated.enabled, networks: updated.allowedNetworks.join("\n"), username: updated.username ?? "",displayName:updated.displayName,expectedSyncMinutes:String(updated.expectedSyncMinutes),publishDescriptions:updated.publishDescriptions }));
+      setDisplayName(updated.displayName);setExpectedSyncMinutes(String(updated.expectedSyncMinutes));
       setNetworks(updated.allowedNetworks.join("\n"));
       setUsername(updated.username ?? "");
       setEnabled(updated.enabled);
+      setPublishDescriptions(updated.publishDescriptions);
       setSuccess("Настройки 1С сохранены. Пароль больше не отображается.");
       resource.reload();
     } catch (error) {
       setMutationError(error);
     } finally {
+      saving.current=false;
       setBusy(false);
     }
   }
@@ -149,44 +196,84 @@ export function SettingsView() {
   return (
     <>
       <SectionHeader
-        actions={<Button icon={<ArrowClockwise20Regular />} onClick={reload}>Перечитать</Button>}
-        description="Пароль хранится в виде необратимого хеша (argon2id) и никогда не возвращается в браузер."
+        actions={<Button disabled={busy} icon={<ArrowClockwise20Regular />} onClick={reload}>Перечитать</Button>}
+        description="Здесь задаётся, как каждая база 1С передаёт на сайт товары, цены и остатки. Пароль после сохранения больше нигде не показывается — даже здесь."
         eyebrow="Конфигурация"
         title="Настройки интеграций"
       />
+      <div className={styles.toolbar} aria-label="Базы 1С">
+        {(["one_c","one_c_secondary"] as const).map(value=><Button key={value} appearance={source===value ? "primary":"secondary"} aria-pressed={source===value} disabled={busy} onClick={()=>{
+          if(source!==value && (!dirty || window.confirm("Есть несохранённые настройки. Переключить базу без сохранения?"))) onSourceChange(value);
+        }}>{value === "one_c" ? "Основная база":"Дополнительная база"}</Button>)}
+      </div>
+      <MessageBar intent="info"><MessageBarBody>У каждой базы 1С свой адрес, логин и пароль. Если один и тот же артикул есть в обеих базах, на сайте будут две отдельные карточки со своими ценами и остатками — автоматически они не объединяются.</MessageBarBody></MessageBar>
       {resource.error ? <RequestError error={resource.error} onRetry={resource.reload} /> : null}
       {resource.loading && !resource.data ? <div className={styles.loadingPanel}><Spinner label="Загрузка настроек" /></div> : null}
       {resource.data ? (
         <form className={styles.settingsForm} onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <div className={styles.settingsHeading}>
-            <div><h2>Подключение 1С</h2><p>Базовая HTTP-аутентификация доступна только из разрешённых CIDR-сетей и защищена лимитами.</p></div>
-            <Switch checked={enabled} label={enabled ? "Включено" : "Выключено"} onChange={(_event, data) => setEnabled(data.checked)} />
+            <div><h2>{resource.data.displayName}</h2><p>1С подключается к сайту по логину и паролю ниже и только с адресов из списка «Разрешённые сети». Пока переключатель выключен, сайт не принимает данные от этой базы.</p></div>
+            <Switch checked={enabled} label={enabled ? "Включено" : "Выключено"} onChange={(_event, data) => setEnabled(data.checked)} disabled={busy} />
           </div>
+          <Field label="Название базы" required><Input value={displayName} onChange={(_event,data)=>setDisplayName(data.value)} maxLength={120} disabled={busy}/></Field>
+          <Field label="Ожидаемый интервал обновления остатков, минут" hint="Только контроль актуальности. Само расписание обмена задаётся в 1С; сайт не запускает выгрузку вместо неё."><Input type="number" min={5} max={10080} value={expectedSyncMinutes} onChange={(_event,data)=>setExpectedSyncMinutes(data.value)} disabled={busy}/></Field>
+          <Badge appearance="tint" color={resource.data.freshness === "current" ? "success":resource.data.freshness === "stale" ? "warning":"informative"}>{resource.data.freshness === "current" ? "Обновления приходят":resource.data.freshness === "stale" ? "Обновление задерживается":resource.data.freshness === "disabled" ? "Обмен выключен":"Цены и остатки ещё не приходили"}</Badge>
+          <p className={styles.muted}>{FRESHNESS_HINTS[resource.data.freshness]}</p>
+          <dl className={styles.detailList}><div><dt>Каталог и категории</dt><dd>{formatDate(resource.data.lastCatalogExchangeAt)}</dd></div><div><dt>Цены и остатки</dt><dd>{formatDate(resource.data.lastOffersExchangeAt)}</dd></div></dl>
           <Field
-            hint="Укажите этот адрес в 1С: Администрирование → Настройка синхронизации данных → Обмен с сайтом (CommerceML), вместе с логином и паролем ниже."
+            hint="В 1С: Администрирование → Настройка синхронизации данных → Обмен с сайтом → в узле этой базы вставьте этот адрес. Нажмите на поле, чтобы выделить адрес и скопировать."
             label="Адрес обмена для 1С"
           >
             <Input readOnly value={exchangeUrl} onClick={(event) => event.currentTarget.select()} />
           </Field>
+          <section aria-labelledby={`one-c-checklist-${source}`}>
+            <h3 id={`one-c-checklist-${source}`}>Что указать в узле обмена этой базы 1С</h3>
+            <dl className={styles.detailList}>
+              <div><dt>Адрес сайта</dt><dd>{exchangeUrl || "—"}</dd></div>
+              <div><dt>Пользователь</dt><dd>{resource.data.username ?? "сначала задайте и сохраните ниже"}</dd></div>
+              <div><dt>Пароль</dt><dd>{resource.data.hasPassword ? "тот, что сохранён здесь (сайт его не показывает; забыли — задайте новый)" : "задайте ниже, не короче 16 символов"}</dd></div>
+              <div><dt>Что выгружать</dt><dd>товары с картинками, цены и остатки; выгрузку заказов не включайте — сайт её не принимает</dd></div>
+              <div><dt>Сжатие</dt><dd>не включайте сжатие архивом; размер частей файла 1С узнаёт от сайта сама</dd></div>
+              <div><dt>Расписание</dt><dd>первый раз полная выгрузка, затем цены и остатки каждые {resource.data.expectedSyncMinutes} мин.</dd></div>
+              <div><dt>Доступ</dt><dd>внешний IP компьютера или сервера, где работает 1С, должен быть в «Разрешённых сетях»</dd></div>
+            </dl>
+          </section>
           <Field label="Имя пользователя" required>
-            <Input autoComplete="off" onChange={(_event, data) => setUsername(data.value)} value={username} />
+            <Input autoComplete="off" disabled={busy} onChange={(_event, data) => setUsername(data.value)} value={username} />
           </Field>
           <Field
             hint={resource.data.hasPassword ? "Пароль сохранён. Оставьте поле пустым, чтобы не менять его." : "Требуется не менее 16 символов."}
             label="Новый пароль"
+            validationMessage={passwordTooShort ? `Ещё ${16 - password.length} симв.: пароль 1С должен быть не короче 16 символов.` : undefined}
           >
-            <Input autoComplete="new-password" onChange={(_event, data) => setPassword(data.value)} type="password" value={password} />
+            <Input autoComplete="new-password" disabled={busy} onChange={(_event, data) => setPassword(data.value)} type="password" value={password} />
           </Field>
-          <Field hint="Одна IPv4 или IPv6 CIDR-сеть на строку." label="Разрешённые сети" required>
-            <Textarea onChange={(_event, data) => setNetworks(data.value)} resize="vertical" rows={5} value={networks} />
+          <Field hint="Внешний IP-адрес компьютера или сервера с 1С, по одному на строку, в виде 203.0.113.10/32 (/32 — ровно этот адрес). Узнать адрес можно у вашего системного администратора или провайдера." label="Разрешённые сети" required>
+            <Textarea disabled={busy} onChange={(_event, data) => setNetworks(data.value)} resize="vertical" rows={5} value={networks} />
+          </Field>
+          <Field
+            hint="Выключено: поле «Описание» из 1С на сайт не попадает. Во многих базах в нём внутренние пометки (инвентаризация, номер коробки), а не текст для покупателя. Включайте, только если в этом поле у вас описания товаров. Изменение действует со следующего обмена каталогом."
+            label="Описание товара из 1С"
+          >
+            <Switch
+              checked={publishDescriptions}
+              disabled={busy}
+              label={publishDescriptions ? "Показывать на странице товара" : "Не показывать"}
+              onChange={(_event, data) => setPublishDescriptions(data.checked)}
+            />
           </Field>
           <div className={styles.formFooter}>
-            <span>{dirty ? "Есть несохранённые изменения" : `Сохранено ${formatDate(resource.data.updatedAt)}`}</span>
-            <Button appearance="primary" disabled={!dirty || busy} icon={<Save20Regular />} type="submit">Сохранить</Button>
+            <span>{missingForEnable.length > 0
+              ? `Чтобы включить обмен, заполните: ${missingForEnable.join(", ")}`
+              : dirty ? "Есть несохранённые изменения" : `Сохранено ${formatDate(resource.data.updatedAt)}`}</span>
+            <Button appearance="primary" disabled={!dirty || busy || passwordTooShort || missingForEnable.length > 0 || !displayName.trim() || Number(expectedSyncMinutes)<5 || Number(expectedSyncMinutes)>10080} icon={<Save20Regular />} type="submit">Сохранить</Button>
           </div>
         </form>
       ) : null}
       {resource.data ? <LastExchangeResult summary={resource.data.lastExchangeSummary} timestamp={resource.data.lastExchangeAt} /> : null}
+      {resource.data ? <OneCExchangeRuns key={source} source={source} /> : null}
+      {resource.data ? <OneCRejectedRequests key={`rejected-${source}`} source={source} /> : null}
+      <PartsFinderStatusCard />
       {success ? <MessageBar intent="success"><MessageBarBody>{success}</MessageBarBody></MessageBar> : null}
       {mutationError ? <RequestError error={mutationError} onRetry={reload} /> : null}
     </>
@@ -208,18 +295,21 @@ function LastExchangeResult({
     <section aria-labelledby="one-c-exchange-result-title" className={styles.settingsForm}>
       <div className={styles.settingsHeading}>
         <div>
-          <h2 id="one-c-exchange-result-title">Последний обмен CommerceML</h2>
-          <p>Результат самого недавнего завершённого запроса 1С к адресу обмена выше.</p>
+          <h2 id="one-c-exchange-result-title">Последний успешный обмен</h2>
+          <p>Последний успешно завершённый файл. Ошибки и прерванные обмены — в журнале ниже.</p>
         </div>
       </div>
       {!("kind" in summary) || !timestamp ? (
-        <p className={styles.muted}>Обмена с 1С через этот адрес ещё не было.</p>
+        <p className={styles.muted}>От этой базы ещё не приходило ни одного файла. Настройте узел обмена в 1С по подсказкам выше и запустите обмен.</p>
       ) : (
         <dl className={styles.detailList}>
-          <div><dt>Файл</dt><dd>{EXCHANGE_KIND_LABELS[summary.kind]} — {summary.filename}</dd></div>
+          <div><dt>Что пришло</dt><dd>{EXCHANGE_KIND_LABELS[summary.kind]}</dd></div>
           <div><dt>Тип выгрузки</dt><dd>{summary.containsOnlyChanges ? "Только изменения" : "Полная выгрузка"}</dd></div>
-          <div><dt>Применено строк</dt><dd>{summary.rowsTouched}</dd></div>
-          <div><dt>Отклонено строк</dt><dd>{summary.rowsRejected}</dd></div>
+          <div><dt>Изменено записей</dt><dd>{summary.rowsTouched}</dd></div>
+          <div><dt>Не принято записей</dt><dd>{summary.rowsRejected}</dd></div>
+          {summary.kind === "catalog" && (summary.imagesAttached ?? 0) + (summary.imagesSkipped ?? 0) > 0 ? (
+            <div><dt>Фото</dt><dd>{summary.imagesAttached ?? 0} добавлено, {summary.imagesSkipped ?? 0} пропущено</dd></div>
+          ) : null}
           {summary.kind === "catalog" ? (
             <div>
               <dt>Без категории</dt>

@@ -15,8 +15,6 @@ import {
   formatDate,
   formatMoney,
   ORDER_LABELS,
-  PAYMENT_LABELS,
-  parseRublesToKopeks,
   Pagination,
   RequestError,
   SectionHeader,
@@ -25,17 +23,11 @@ import {
 import styles from "../workspace.module.css";
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
+  awaiting_confirmation: "processing",
   awaiting_delivery_terms: "processing",
-  paid: "processing",
   processing: "ready",
   ready: "completed",
 };
-
-interface RefundDraft {
-  idempotencyKey: string;
-  orderId: string;
-  payment: OrderDetail["payments"][number];
-}
 
 export function OrdersView() {
   const [offset, setOffset] = useState(0);
@@ -52,8 +44,6 @@ export function OrdersView() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<unknown>(null);
   const [cancelOrder, setCancelOrder] = useState<OrderRow | null>(null);
-  const [refundDraft, setRefundDraft] = useState<RefundDraft | null>(null);
-  const [refundAmount, setRefundAmount] = useState("");
   const detailRequest = useRef(0);
   const limit = 25;
 
@@ -107,8 +97,6 @@ export function OrdersView() {
     detailRequest.current = requestId;
     setDetailId(orderId);
     setDetail(null);
-    setRefundDraft(null);
-    setRefundAmount("");
     setDetailLoading(true);
     setDetailError(null);
     try {
@@ -127,54 +115,12 @@ export function OrdersView() {
     setMutationError(null);
     try {
       await api(`/orders/${cancelOrder.id}/status`, {
-        body: JSON.stringify({ reason: "Неоплаченный заказ отменён сотрудником", status: "cancelled", version: cancelOrder.version }),
+        body: JSON.stringify({ reason: "Заявка отменена сотрудником", status: "cancelled", version: cancelOrder.version }),
         method: "PATCH",
       });
       setCancelOrder(null);
       resource.reload();
       if (detail?.id === cancelOrder.id) void openOrder(cancelOrder.id);
-    } catch (error) {
-      setMutationError(error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function prepareRefund(orderId: string, payment: OrderDetail["payments"][number]): void {
-    const available = payment.amountKopeks - payment.refundedAmountKopeks;
-    setRefundDraft({ idempotencyKey: crypto.randomUUID(), orderId, payment });
-    setRefundAmount((available / 100).toFixed(2).replace(".", ","));
-  }
-
-  async function confirmRefund(): Promise<void> {
-    if (!refundDraft || !detail) return;
-    if (refundDraft.orderId !== detail.id) {
-      setRefundDraft(null);
-      setRefundAmount("");
-      setMutationError(new Error("Заказ изменился. Подготовьте возврат заново."));
-      return;
-    }
-    const amountKopeks = parseRublesToKopeks(refundAmount);
-    const available = refundDraft.payment.amountKopeks - refundDraft.payment.refundedAmountKopeks;
-    if (amountKopeks === null || amountKopeks <= 0 || amountKopeks > available) {
-      setMutationError(new Error(`Введите сумму от 0,01 ₽ до ${formatMoney(available)}.`));
-      return;
-    }
-    setBusy(true);
-    setMutationError(null);
-    try {
-      await api(`/payments/${refundDraft.payment.id}/refunds`, {
-        body: JSON.stringify({
-          amountKopeks,
-          idempotencyKey: refundDraft.idempotencyKey,
-          reason: `Возврат по заказу ${detail.publicNumber} из рабочего места персонала`,
-        }),
-        method: "POST",
-      });
-      setRefundDraft(null);
-      setRefundAmount("");
-      resource.reload();
-      void openOrder(detail.id);
     } catch (error) {
       setMutationError(error);
     } finally {
@@ -225,17 +171,16 @@ export function OrdersView() {
     },
     {
       accessorKey: "status",
-      cell: ({ row }) => <Badge appearance="tint">{ORDER_LABELS[row.original.status]}</Badge>,
+      cell: ({ row }) => (
+        <Badge appearance="tint" color={row.original.status === "awaiting_confirmation" ? "warning" : "brand"}>
+          {ORDER_LABELS[row.original.status]}
+        </Badge>
+      ),
       header: "Статус",
     },
     {
       accessorKey: "totalAmountKopeks",
-      cell: ({ row }) => (
-        <div className={styles.cellStack}>
-          <strong>{formatMoney(row.original.totalAmountKopeks)}</strong>
-          <span>Оплачено {formatMoney(row.original.paidAmountKopeks)}</span>
-        </div>
-      ),
+      cell: ({ row }) => <strong>{formatMoney(row.original.totalAmountKopeks)}</strong>,
       header: "Сумма",
     },
     {
@@ -250,18 +195,18 @@ export function OrdersView() {
               onClick={() => void advance(row.original)}
               size="small"
             >
-              {NEXT_STATUS[row.original.status] === "processing" ? "В работу"
+              {row.original.status === "awaiting_confirmation" ? "Подтвердить"
+                : NEXT_STATUS[row.original.status] === "processing" ? "В работу"
                 : NEXT_STATUS[row.original.status] === "ready" ? "Готов" : "Завершить"}
             </Button>
           ) : null}
-          {row.original.status === "pending_payment" ? (
+          {row.original.status === "awaiting_confirmation" ? (
             <Button appearance="subtle" onClick={() => setCancelOrder(row.original)} size="small">Отменить</Button>
           ) : null}
-          {!(["pending_payment", "cancelled", "refunded"].includes(row.original.status)) ? (
+          {!(["awaiting_confirmation", "cancelled"].includes(row.original.status)) ? (
             <Link className={styles.inlineLink} href={`/admin/invoices?orderId=${row.original.id}`}>Накладная</Link>
           ) : null}
-          {!NEXT_STATUS[row.original.status]
-            && ["cancelled", "refunded"].includes(row.original.status)
+          {!NEXT_STATUS[row.original.status] && row.original.status === "cancelled"
             ? <span className={styles.muted}>Нет действий</span> : null}
         </div>
       ),
@@ -273,7 +218,7 @@ export function OrdersView() {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить</Button>}
-        description="Цена и состав зафиксированы сервером. Изменения статуса защищены версией записи."
+        description="Цена и состав заказа сохраняются в момент оформления и дальше не меняются. Если заказ одновременно правит другой сотрудник, сайт предупредит об этом."
         eyebrow="Продажи"
         title="Заказы"
       />
@@ -305,7 +250,7 @@ export function OrdersView() {
       {mutationError ? <RequestError error={mutationError} onRetry={resource.reload} /> : null}
       {cancelOrder ? (
         <MessageBar intent="warning" className={styles.confirmBar}>
-          <MessageBarBody>Отменить неоплаченный заказ {cancelOrder.publicNumber} и освободить его резерв?</MessageBarBody>
+          <MessageBarBody>Отменить заявку {cancelOrder.publicNumber}?</MessageBarBody>
           <Button disabled={busy} onClick={() => void confirmCancellation()}>Подтвердить отмену</Button>
           <Button disabled={busy} icon={<Dismiss20Regular />} onClick={() => setCancelOrder(null)}>Оставить заказ</Button>
         </MessageBar>
@@ -314,8 +259,8 @@ export function OrdersView() {
         columns={columns}
         data={resource.data?.items ?? []}
         direction={direction}
-        emptyDescription="Заказы появятся после checkout. Фиктивные записи не создаются."
-        emptyTitle="Заказов пока нет"
+        emptyDescription="Заказы появятся здесь, как только покупатели оформят их на сайте."
+        emptyTitle="Заявок пока нет"
         loading={resource.loading}
         onSelectionChange={setSelected}
         onSort={(nextSort, nextDirection) => { setOffset(0); setSort(nextSort); setDirection(nextDirection); }}
@@ -336,7 +281,7 @@ export function OrdersView() {
               <h2 id="order-detail-title">Состав и расчёты</h2>
               <p>{detail.contact.name}, {detail.contact.phone}, {detail.contact.email}</p>
             </div>
-            <Button onClick={() => { setDetail(null); setDetailId(null); setDetailError(null); setRefundDraft(null); setRefundAmount(""); }}>Закрыть</Button>
+            <Button onClick={() => { setDetail(null); setDetailId(null); setDetailError(null); }}>Закрыть</Button>
           </div>
           <div className={styles.orderDetailGrid}>
             <section>
@@ -357,36 +302,10 @@ export function OrdersView() {
                 {detail.delivery.address ? <div><dt>Адрес</dt><dd>{detail.delivery.address}</dd></div> : null}
                 <div><dt>Товары</dt><dd>{formatMoney(detail.subtotalKopeks)}</dd></div>
                 <div><dt>Итого</dt><dd><strong>{formatMoney(detail.totalAmountKopeks)}</strong></dd></div>
-                <div><dt>Оплачено</dt><dd>{formatMoney(detail.paidAmountKopeks)}</dd></div>
               </dl>
               {detail.customerNote ? <p className={styles.customerNote}><strong>Комментарий клиента:</strong> {detail.customerNote}</p> : null}
             </section>
           </div>
-          <section>
-            <h3>Платежи</h3>
-            {detail.payments.length === 0 ? <p className={styles.muted}>Платежей ещё нет.</p> : (
-              <dl className={styles.detailList}>
-                {detail.payments.map((payment) => {
-                  const available = payment.amountKopeks - payment.refundedAmountKopeks;
-                  const refundable = available > 0 && ["succeeded", "partially_refunded"].includes(payment.status);
-                  return (
-                    <div key={payment.id}>
-                      <dt><strong>{payment.kind === "delivery" ? "Доставка" : "Товары"} · {PAYMENT_LABELS[payment.status]}</strong><span>{payment.provider}; возвращено {formatMoney(payment.refundedAmountKopeks)}</span></dt>
-                      <dd className={styles.paymentAction}><strong>{formatMoney(payment.amountKopeks)}</strong>{refundable ? <Button disabled={busy} onClick={() => prepareRefund(detail.id, payment)} size="small">Оформить возврат</Button> : null}</dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            )}
-          </section>
-          {refundDraft ? (
-            <MessageBar intent="warning" className={styles.confirmBar}>
-              <MessageBarBody>Сумма возврата указывается в рублях. Операция будет записана в аудит.</MessageBarBody>
-              <Input aria-label="Сумма возврата в рублях" inputMode="decimal" onChange={(_event, data) => setRefundAmount(data.value)} value={refundAmount} />
-              <Button disabled={busy || !refundAmount.trim()} onClick={() => void confirmRefund()}>Вернуть</Button>
-              <Button disabled={busy} onClick={() => { setRefundDraft(null); setRefundAmount(""); }}>Отмена</Button>
-            </MessageBar>
-          ) : null}
         </section>
       ) : null}
     </>

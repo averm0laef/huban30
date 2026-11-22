@@ -15,6 +15,7 @@ export const STAFF_SECTIONS = [
   "orders",
   "requests",
   "chats",
+  "client-hub",
   "catalog",
   "imports",
   "invoices",

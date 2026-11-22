@@ -9,20 +9,18 @@ import {
 } from "@fluentui/react-components";
 import { ArrowClockwise20Regular } from "@fluentui/react-icons";
 
-import type { OrderStatus, PaymentStatus } from "@an30/contracts";
+import type { OrderStatus } from "@an30/contracts";
 
 import { ApiError } from "./api";
 import styles from "./workspace.module.css";
 
 export const ORDER_LABELS: Record<OrderStatus, string> = {
+  awaiting_confirmation: "Новая заявка",
   awaiting_delivery_terms: "Условия доставки",
   cancelled: "Отменён",
   completed: "Завершён",
-  paid: "Оплачен",
-  pending_payment: "Ожидает оплаты",
   processing: "В работе",
   ready: "Готов",
-  refunded: "Возвращён",
 };
 
 export const CHAT_LABELS = {
@@ -37,16 +35,6 @@ export const INVOICE_LABELS = {
   draft: "Черновик",
   issued: "Выдана",
 } as const;
-
-export const PAYMENT_LABELS: Record<PaymentStatus, string> = {
-  authorized: "Авторизован",
-  cancelled: "Отменён",
-  failed: "Ошибка",
-  partially_refunded: "Частично возвращён",
-  pending: "Ожидает",
-  refunded: "Возвращён",
-  succeeded: "Оплачен",
-};
 
 export const ROLE_LABELS = {
   admin: "Администратор",
@@ -65,13 +53,6 @@ export function formatDate(value: string | null, withTime = true): string {
   return new Intl.DateTimeFormat("ru-RU", withTime
     ? { dateStyle: "short", timeStyle: "short" }
     : { dateStyle: "medium" }).format(new Date(value));
-}
-
-export function parseRublesToKopeks(value: string): number | null {
-  const normalized = value.trim();
-  if (!/^\d+(?:[.,]\d{1,2})?$/u.test(normalized)) return null;
-  const kopeks = Math.round(Number(normalized.replace(",", ".")) * 100);
-  return Number.isSafeInteger(kopeks) ? kopeks : null;
 }
 
 export function errorText(error: unknown): string {

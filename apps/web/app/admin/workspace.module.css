@@ -259,6 +259,8 @@
   gap: 4px;
   margin-left: auto;
 }
+.networkBadge { flex: 0 0 auto; }
+@media(max-width:600px) { .topbar .networkBadge { display: none; } .topbar { gap: 6px; } .topbarActions { flex: 0 0 auto; } .topbar .signOutButton { min-width: 32px; padding-inline: 4px; font-size: 0; } .signOutButton :global(.fui-Button__icon) { margin-right: 0; } }
 
 .menuButton {
   display: none !important;
@@ -865,7 +867,9 @@
 
 .detailList > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Both columns give way and wrap, and neither can go below its longest word. With `minmax(0, 1fr) auto` a long
+     value took the whole row and the label, squeezed to nothing, was printed over it. */
+  grid-template-columns: auto auto;
   gap: 16px;
   padding: 10px 0;
   border-bottom: 1px solid var(--colorNeutralStroke2);
@@ -884,6 +888,7 @@
 .detailList dd {
   margin: 0;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .paymentAction {
@@ -946,11 +951,28 @@
   background: var(--colorNeutralBackground1);
 }
 
+/* A block that holds a table is as wide as the table needs (.dataTable is at least 860 px): at 760 px the last
+   column — the one with the choice of a section — was cut off on a screen with room to spare. Squeezing the
+   table into 760 px instead was tried and looked worse: names in five lines, a badge overflowing its pill. */
+.settingsForm:has(.tableScroller) {
+  max-width: 1040px;
+}
+
 .settingsHeading {
   justify-content: space-between;
   gap: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+/* The text of a heading gives way; the button beside it keeps its width. Left to shrink, «Разложить товары
+   заново» was squeezed into three lines next to a long description. */
+.settingsHeading > :first-child {
+  min-width: 0;
+}
+
+.settingsHeading > :not(:first-child) {
+  flex: 0 0 auto;
 }
 
 .settingsHeading h2,
@@ -1212,4 +1234,112 @@
   .sidebar {
     transition-duration: 0.01ms;
   }
+}
+
+/* Chat inbox: customer pictures, chat numbers, delete confirmation. */
+.customerAvatar { flex: 0 0 auto; border-radius: 50%; background: var(--colorNeutralBackground3); object-fit: cover; }
+.threadWho { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.threadWho strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chatNumber { margin-right: 8px; color: var(--colorBrandForeground1); font-variant-numeric: tabular-nums; font-weight: 700; }
+.messageAuthor { display: inline-flex; align-items: center; gap: 6px; }
+.deleteDialog { display: grid; gap: 14px; }
+.deleteDialog p { margin: 0; line-height: 1.5; }
+.dangerButton:not(:disabled) { background: var(--colorPaletteRedBackground3); border-color: var(--colorPaletteRedBackground3); }
+.dangerButton:not(:disabled):hover { background: var(--colorPaletteRedForeground1); border-color: var(--colorPaletteRedForeground1); }
+
+/* Opening questionnaire of a thread, drawn as a request card. */
+.intakeCard { display: grid; gap: 6px; }
+.intakeCard strong { font-size: 0.9rem; }
+.intakeCard dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--colorNeutralBackground2); }
+.intakeCard dt { color: var(--colorNeutralForeground3); font-size: 0.78rem; }
+.intakeCard dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.intakeCard dd[data-empty] { color: var(--colorNeutralForeground3); font-weight: 400; }
+.intakeCard p { margin: 0; white-space: pre-wrap; }
+
+/* A word in running text that acts (fills the sorting-rule form). */
+.linkButton {
+  min-height: 32px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--colorBrandForeground1);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.linkButton:hover { color: var(--colorBrandForeground2Hover); }
+
+/* The sorting-rule form: labelled fields in one wrapping row. */
+.ruleForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.ruleForm label {
+  display: grid;
+  gap: 4px;
+  min-width: min(100%, 200px);
+  font-size: 13px;
+  color: var(--colorNeutralForeground2);
+}
+.ruleForm input {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 6px;
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  font: inherit;
+}
+.ruleList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A journal whose entries are sentences, not figures (the turned-away 1С requests): a list that wraps to the
+   width it has. The shared table is at least 860 px wide and cut the sentences off in the 760 px settings column. */
+.journalList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--colorNeutralStroke2);
+  border-radius: 7px;
+  list-style: none;
+}
+
+.journalEntry {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.journalEntry:last-child {
+  border-bottom: 0;
+}
+
+.journalEntry strong {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.journalEntry p {
+  margin: 0;
+  color: var(--colorNeutralForeground2);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.journalMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  color: var(--colorNeutralForeground3);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }

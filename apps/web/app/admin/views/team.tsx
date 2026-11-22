@@ -69,7 +69,7 @@ export function TeamView({ session }: { session: SessionView }) {
     {
       id: "mfa",
       cell: ({ row }) => <Badge appearance="tint" color={row.original.totpEnabled ? "success" : "danger"}>{row.original.totpEnabled ? "Включена" : "Не настроена"}</Badge>,
-      header: "MFA",
+      header: "Вход по коду",
     },
     { accessorKey: "createdAt", cell: ({ row }) => formatDate(row.original.createdAt, false), header: "Добавлен" },
   ], []);
@@ -78,13 +78,13 @@ export function TeamView({ session }: { session: SessionView }) {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить</Button>}
-        description="Состав команды и состояние обязательной MFA. Секреты и резервные коды здесь не отображаются."
+        description="Кто работает в рабочем месте и подключил ли вход по коду из приложения. Ключи и резервные коды сотрудников здесь не показываются."
         eyebrow="Доступ"
         title="Персонал"
       />
       {session.role === "admin" ? (
         <div className={styles.createStrip}>
-          <div><strong>Пригласить сотрудника</strong><span>Ссылка действует 72 часа и отправляется через настроенный SMTP.</span></div>
+          <div><strong>Пригласить сотрудника</strong><span>Сотрудник получит письмо со ссылкой. Ссылка действует 72 часа.</span></div>
           <Input aria-label="Email сотрудника" onChange={(_event, data) => setEmail(data.value)} placeholder="employee@example.ru" type="email" value={email} />
           <Select aria-label="Роль приглашения" onChange={(event) => setInviteRole(event.target.value)} value={inviteRole}>
             <option value="manager">Менеджер</option>

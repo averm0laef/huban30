@@ -1,16 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Input, Select, Spinner, Textarea } from "@fluentui/react-components";
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Field,
+  Input,
+  Select,
+  Spinner,
+  Textarea,
+} from "@fluentui/react-components";
 import {
   ArrowClockwise20Regular,
   CheckmarkCircle20Regular,
-  PersonAvailable20Regular,
+  Delete20Regular,
   Search20Regular,
   Send20Regular,
 } from "@fluentui/react-icons";
 
-import type { Role } from "@an30/contracts";
+import { customerAvatarKey, isCustomerAvatarKey, parseChatIntakeMessage, type Role } from "@an30/contracts";
 
 import { api, queryString } from "../api";
 import type { ChatMessage, ChatRow, Page, SessionView } from "../types";
@@ -24,6 +38,7 @@ import {
   useResource,
 } from "../workspace-utils";
 import styles from "../workspace.module.css";
+import { randomUuid } from "../../_lib/browser-crypto";
 
 type ConnectionState = "connecting" | "live" | "offline";
 
@@ -41,6 +56,17 @@ interface HistoryWindow {
 
 const HISTORY_PAGE_SIZE = 50;
 const RENDERED_MESSAGE_LIMIT = 150;
+
+function CustomerAvatar({ thread, size = 36 }: { size?: number; thread: ChatRow }) {
+  const key = isCustomerAvatarKey(thread.customerAvatarKey) ? thread.customerAvatarKey : customerAvatarKey(`guest:${thread.id}`);
+  return <img alt="" aria-hidden="true" className={styles.customerAvatar} height={size} src={`/avatars/${key}.webp`} width={size} />;
+}
+
+/** «7» is too short for the search box; «#7» still finds chat Ч-000007. */
+function searchTerm(value: string): string {
+  const trimmed = value.trim();
+  return /^\d$/u.test(trimmed) ? `#${trimmed}` : trimmed;
+}
 
 async function loadHistoryWindow(threadId: string, before: "latest" | string): Promise<HistoryWindow> {
   return api<HistoryWindow>(
@@ -66,6 +92,9 @@ export function ChatsView({ session }: { session: SessionView }) {
   const [connection, setConnection] = useState<ConnectionState>("offline");
   const [busy, setBusy] = useState(false);
   const [mutationError, setMutationError] = useState<unknown>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteError, setDeleteError] = useState<unknown>(null);
   const historyViewRef = useRef<"latest" | "older">("latest");
   const olderRequestRef = useRef<symbol | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -314,10 +343,30 @@ export function ChatsView({ session }: { session: SessionView }) {
     }
   }
 
+  async function deleteThread(): Promise<void> {
+    if (!selected || deleteReason.trim().length < 3) return;
+    setBusy(true);
+    setDeleteError(null);
+    try {
+      await api(`/staff/chats/${selected.id}`, {
+        body: JSON.stringify({ reason: deleteReason.trim(), version: selected.version }),
+        method: "DELETE",
+      });
+      setDeleteOpen(false);
+      setDeleteReason("");
+      setSelectedId(null);
+      resource.reload();
+    } catch (error) {
+      setDeleteError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function sendMessage(): Promise<void> {
     if (!selected || !messageText.trim()) return;
     const body = messageText.trim();
-    const clientMessageId = messageAttemptId ?? crypto.randomUUID();
+    const clientMessageId = messageAttemptId ?? randomUuid();
     setMessageAttemptId(clientMessageId);
     setBusy(true);
     setMessageError(null);
@@ -343,7 +392,7 @@ export function ChatsView({ session }: { session: SessionView }) {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить очередь</Button>}
-        description="Назначение, переписка и состояние обращения доступны в одном контексте."
+        description="Включите «Принимать обращения» в верхней панели. Новые диалоги назначаются доступным менеджерам автоматически."
         eyebrow="Поддержка"
         title="Чаты и обращения"
       />
@@ -353,12 +402,12 @@ export function ChatsView({ session }: { session: SessionView }) {
           contentBefore={<Search20Regular />}
           onChange={(_event, data) => setSearch(data.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && search.trim().length !== 1) { setOffset(0); setAppliedSearch(search.trim()); }
+            if (event.key === "Enter" && searchTerm(search).length !== 1) { setOffset(0); setAppliedSearch(searchTerm(search)); }
           }}
-          placeholder="Тема, клиент или заказ"
+          placeholder="Номер Ч-000123, тема, клиент или заказ"
           value={search}
         />
-        <Button disabled={search.trim().length === 1} onClick={() => { setOffset(0); setAppliedSearch(search.trim()); }}>Найти</Button>
+        <Button disabled={searchTerm(search).length === 1} onClick={() => { setOffset(0); setAppliedSearch(searchTerm(search)); }}>Найти</Button>
         <Select aria-label="Состояние чата" onChange={(event) => { setOffset(0); setStatus(event.target.value); }} value={status}>
           <option value="">Все состояния</option>
           {Object.entries(CHAT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -368,8 +417,8 @@ export function ChatsView({ session }: { session: SessionView }) {
           <option value="mine">Назначены мне</option>
           <option value="unassigned">Без ответственного</option>
         </Select>
-        {search.trim().length === 1 ? <span className={styles.unsavedState}>Введите минимум 2 символа</span>
-          : search.trim() !== appliedSearch ? <span className={styles.unsavedState}>Фильтр не применён</span> : null}
+        {searchTerm(search).length === 1 ? <span className={styles.unsavedState}>Введите минимум 2 символа</span>
+          : searchTerm(search) !== appliedSearch ? <span className={styles.unsavedState}>Фильтр не применён</span> : null}
       </div>
       {resource.error ? <RequestError error={resource.error} onRetry={resource.reload} /> : null}
       {mutationError ? <RequestError error={mutationError} onRetry={resource.reload} /> : null}
@@ -388,10 +437,13 @@ export function ChatsView({ session }: { session: SessionView }) {
               type="button"
             >
               <span className={styles.threadTopline}>
-                <strong>{thread.subject ?? "Обращение без темы"}</strong>
+                <span className={styles.threadWho}>
+                  <CustomerAvatar thread={thread} />
+                  <strong>{thread.subject ?? "Обращение без темы"}</strong>
+                </span>
                 {thread.unreadCount > 0 ? <Badge appearance="filled" color="brand">{thread.unreadCount}</Badge> : null}
               </span>
-              <span>{thread.customerName ?? thread.customerEmail ?? "Гость"}</span>
+              <span>{thread.number ? <b className={styles.chatNumber}>{thread.number}</b> : null}{thread.customerName ?? thread.customerEmail ?? "Гость"}</span>
               <small>{thread.lastMessageBody ?? "Сообщений пока нет"}</small>
               <span className={styles.threadMeta}>
                 <Badge appearance="tint">{CHAT_LABELS[thread.status]}</Badge>
@@ -407,24 +459,19 @@ export function ChatsView({ session }: { session: SessionView }) {
           ) : (
             <>
               <header className={styles.conversationHeader}>
-                <div>
-                  <strong>{selected.subject ?? "Обращение без темы"}</strong>
-                  <span>{selected.orderNumber ? `Заказ ${selected.orderNumber}` : "Без привязки к заказу"}</span>
+                <div className={styles.threadWho}>
+                  <CustomerAvatar size={44} thread={selected} />
+                  <div>
+                    <strong>{selected.number ? `${selected.number} · ` : ""}{selected.subject ?? "Обращение без темы"}</strong>
+                    <span>{selected.customerName ?? selected.customerEmail ?? "Гость"} · {selected.orderNumber ? `заказ ${selected.orderNumber}` : "без привязки к заказу"}</span>
+                  </div>
                 </div>
                 <Badge appearance="tint" color={connection === "live" ? "success" : connection === "connecting" ? "warning" : "danger"}>
                   {connection === "live" ? "Онлайн" : connection === "connecting" ? "Подключение" : "Нет связи"}
                 </Badge>
               </header>
               <div className={styles.threadActions}>
-                {selected.assignedStaffId === session.userId ? (
-                  <Button disabled={busy || resource.loading} onClick={() => void updateThread({ assignedStaffId: null })}>Снять назначение</Button>
-                ) : selected.assignedStaffId === null || session.role !== "manager" ? (
-                  <Button disabled={busy || resource.loading} icon={<PersonAvailable20Regular />} onClick={() => void updateThread({ assignedStaffId: session.userId })}>
-                    Взять себе
-                  </Button>
-                ) : (
-                  <span className={styles.muted}>Назначен: {selected.assignedName ?? "другой сотрудник"}</span>
-                )}
+                <span className={styles.muted}>{selected.assignedStaffId ? `Менеджер: ${selected.assignedName ?? "сотрудник АН30"}` : "В очереди. Менеджер назначается автоматически."}</span>
                 {selected.status !== "closed" ? (
                   <>
                     <Button disabled={busy || resource.loading} onClick={() => void updateThread({ status: "waiting_customer" })}>Ждём клиента</Button>
@@ -433,7 +480,28 @@ export function ChatsView({ session }: { session: SessionView }) {
                 ) : canReopen(session.role) ? (
                   <Button disabled={busy || resource.loading} onClick={() => void updateThread({ status: "open" })}>Открыть снова</Button>
                 ) : null}
+                {canDelete(session.role) ? (
+                  <Button disabled={busy || resource.loading} icon={<Delete20Regular />} onClick={() => { setDeleteError(null); setDeleteOpen(true); }}>Удалить</Button>
+                ) : null}
               </div>
+              <Dialog modalType="alert" onOpenChange={(_event, data) => { if (!busy) setDeleteOpen(data.open); }} open={deleteOpen}>
+                <DialogSurface>
+                  <DialogBody>
+                    <DialogTitle>Удалить {selected.number ?? "обращение"}?</DialogTitle>
+                    <DialogContent className={styles.deleteDialog}>
+                      <p>Чат исчезнет из очереди и у клиента. Переписка останется в базе и в журнале аудита, вернуть её может только разработчик.</p>
+                      {deleteError ? <div className={styles.inlineError} role="alert">{errorText(deleteError)}</div> : null}
+                      <Field label="Причина удаления" required hint="Например: спам, дубль обращения. Попадёт в журнал аудита.">
+                        <Textarea maxLength={500} onChange={(_event, data) => setDeleteReason(data.value)} value={deleteReason} />
+                      </Field>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button disabled={busy} onClick={() => setDeleteOpen(false)}>Отмена</Button>
+                      <Button appearance="primary" className={styles.dangerButton} disabled={busy || deleteReason.trim().length < 3} icon={<Delete20Regular />} onClick={() => void deleteThread()}>Удалить чат</Button>
+                    </DialogActions>
+                  </DialogBody>
+                </DialogSurface>
+              </Dialog>
               {messageError ? <div className={styles.inlineError}>{errorText(messageError)}</div> : null}
               <div
                 aria-busy={olderLoading || undefined}
@@ -467,15 +535,31 @@ export function ChatsView({ session }: { session: SessionView }) {
                   </div>
                 ) : null}
                 {messages.length === 0 ? <span className={styles.muted}>Сообщений пока нет.</span> : null}
-                {renderedMessages.map((message) => (
+                {renderedMessages.map((message, index) => (
                   <article
                     className={styles.message}
                     data-chat-message-id={message.id}
                     data-own={message.senderKind === "staff" || undefined}
                     key={message.id}
                   >
-                    <span>{message.senderKind === "staff" ? "Сотрудник" : message.senderKind === "system" ? "Система" : "Клиент"}</span>
-                    {message.body ? <p>{message.body}</p> : null}
+                    <span className={styles.messageAuthor}>
+                      {message.senderKind === "customer" || message.senderKind === "guest" ? <CustomerAvatar size={22} thread={selected} /> : null}
+                      {message.senderKind === "staff" ? "Сотрудник" : message.senderKind === "system" ? "Система" : selected.customerName ?? "Клиент"}
+                    </span>
+                    {(() => {
+                      const intake = index === 0 && !olderCursor && message.attachments.length === 0 ? parseChatIntakeMessage(message.body) : null;
+                      if (!intake) return message.body ? <p>{message.body}</p> : null;
+                      return (
+                        <div className={styles.intakeCard}>
+                          <strong>Заявка: {intake.intent}</strong>
+                          <dl>
+                            <dt>Автомобиль</dt><dd data-empty={intake.vehicle === null || undefined}>{intake.vehicle ?? "не указан"}</dd>
+                            <dt>Номер детали</dt><dd data-empty={intake.article === null || undefined}>{intake.article ?? "не указан"}</dd>
+                          </dl>
+                          {intake.comment ? <p>{intake.comment}</p> : null}
+                        </div>
+                      );
+                    })()}
                     {message.attachments.map((attachment) => (
                       <a href={`/api/v1/chat/attachments/${attachment.id}`} key={attachment.id}>{attachment.originalName}</a>
                     ))}
@@ -487,18 +571,18 @@ export function ChatsView({ session }: { session: SessionView }) {
               <div className={styles.composer}>
                 <Textarea
                   aria-label="Сообщение клиенту"
-                  disabled={selected.status === "closed"}
+                  disabled={selected.status === "closed" || selected.assignedStaffId !== session.userId}
                   onChange={(_event, data) => {
                     if (data.value !== messageText) setMessageAttemptId(null);
                     setMessageText(data.value);
                   }}
-                  placeholder={selected.status === "closed" ? "Чат закрыт" : "Напишите ответ"}
+                  placeholder={selected.status === "closed" ? "Чат закрыт" : selected.assignedStaffId !== session.userId ? "Ожидаем автоматического назначения" : "Напишите ответ"}
                   resize="vertical"
                   value={messageText}
                 />
                 <Button
                   appearance="primary"
-                  disabled={busy || selected.status === "closed" || !messageText.trim()}
+                  disabled={busy || selected.status === "closed" || selected.assignedStaffId !== session.userId || !messageText.trim()}
                   icon={<Send20Regular />}
                   onClick={() => void sendMessage()}
                 >
@@ -514,5 +598,10 @@ export function ChatsView({ session }: { session: SessionView }) {
 }
 
 function canReopen(role: Role): boolean {
+  return role === "director" || role === "admin";
+}
+
+/** Mirrors the API rule: only the director and administrators delete chats. */
+function canDelete(role: Role): boolean {
   return role === "director" || role === "admin";
 }

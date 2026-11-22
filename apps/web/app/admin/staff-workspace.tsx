@@ -32,9 +32,11 @@ import { ROLE_PERMISSIONS, type Permission } from "@an30/contracts";
 import { api, ApiError } from "./api";
 import type { SessionView } from "./types";
 import { ROLE_LABELS } from "./workspace-utils";
+import { StaffAvailability, availabilityPreferenceKey } from "./staff-availability";
 import { AuditView } from "./views/audit";
 import { CatalogView } from "./views/catalog";
 import { ChatsView } from "./views/chats";
+import { ClientHubView } from "./views/client-hub";
 import { ImportsView } from "./views/imports";
 import { InvoicesView } from "./views/invoices";
 import { OrdersView } from "./views/orders";
@@ -63,6 +65,7 @@ const NAVIGATION: NavigationItem[] = [
   { href: "/admin/orders", label: "Заказы", permission: "orders:read:any", section: "orders" },
   { href: "/admin/requests", label: "Обращения", permission: "requests:read:any", section: "requests" },
   { href: "/admin/chats", label: "Чаты", permission: "chat:manage:any", section: "chats" },
+  { href: "/admin/client-hub", label: "Посты и мессенджеры", permission: "content:manage", section: "client-hub" },
   { href: "/admin/catalog", label: "Каталог", permission: "catalog:read", section: "catalog" },
   { href: "/admin/imports", label: "Импорт 1С", permission: "catalog:import", section: "imports" },
   { href: "/admin/invoices", label: "Накладные", permission: "orders:read:any", section: "invoices" },
@@ -341,6 +344,8 @@ function WorkspaceFrame({
   const allowed = items.some((item) => item.section === initialSection);
 
   async function logout(): Promise<void> {
+    try { window.localStorage.removeItem(availabilityPreferenceKey(session.userId)); } catch { /* Optional local preference. */ }
+    await api("/staff/availability", { method: "POST", body: JSON.stringify({ available: false }), signal: AbortSignal.timeout(3_000) }).catch(() => undefined);
     await api("/auth/logout", { method: "POST" });
     onSignedOut();
   }
@@ -374,7 +379,8 @@ function WorkspaceFrame({
       <div className={styles.workspaceBody}>
         <header className={styles.topbar}>
           <Button appearance="subtle" aria-label="Открыть меню" className={styles.menuButton} icon={<Navigation20Regular />} onClick={onNavigation} />
-          <Badge appearance="tint" color={online ? "success" : "danger"}>{online ? "Сеть доступна" : "Нет сети"}</Badge>
+          <Badge appearance="tint" className={styles.networkBadge} color={online ? "success" : "danger"}>{online ? "Сеть доступна" : "Нет сети"}</Badge>
+          <StaffAvailability key={session.userId} userId={session.userId} />
           <div className={styles.topbarActions}>
             <Button
               appearance="subtle"
@@ -382,7 +388,7 @@ function WorkspaceFrame({
               icon={theme === "dark" ? <WeatherSunny20Regular /> : <WeatherMoon20Regular />}
               onClick={onTheme}
             />
-            <Button appearance="subtle" icon={<SignOut20Regular />} onClick={() => void logout()}>Выйти</Button>
+            <Button appearance="subtle" className={styles.signOutButton} aria-label="Выйти" icon={<SignOut20Regular />} onClick={() => void logout()}>Выйти</Button>
           </div>
         </header>
         {!online ? (
@@ -408,6 +414,7 @@ function renderSection(section: StaffSection, session: SessionView): ReactElemen
     case "audit": return <AuditView />;
     case "catalog": return <CatalogView />;
     case "chats": return <ChatsView session={session} />;
+    case "client-hub": return <ClientHubView session={session} />;
     case "imports": return <ImportsView />;
     case "invoices": return <InvoicesView />;
     case "orders": return <OrdersView />;
