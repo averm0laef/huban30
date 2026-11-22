@@ -40,6 +40,18 @@ describe("the maker of a part, read from its name", () => {
     expect(partMakerInName("Набор ключей 12 предметов")).toBeNull();
   });
 
+  it("does not take a maker named in brackets: there it is the number of an analogue, not who made the part", () => {
+    // Names of the owner's base: the part is by XBAOO, by an unnamed maker, by JS Asakashi — the brackets name crosses.
+    expect(partMakerInName("Опора шаровая | перед прав/лев | XBAOO 51220-SAA-A01 ( CTR CBHO-44)")).toBeNull();
+    expect(partMakerInName("C-419 Фильтр масляный MAZDA TITAN (Sakura C-1541) (JS Asakashi C522J) ISUZU 4HF1 4HG1")).toBeNull();
+    expect(partMakerInName("Диск тормозной передний CARINA/CALDINA/CORONA (TRW DF7248) K001662")).toBeNull();
+  });
+
+  it("still takes the maker standing outside the brackets", () => {
+    expect(partMakerInName("CVKD-9 Сайлентблок рычага подвески | перед прав/лев | 09319-12039 CTR   (Febest SZAB-036)")).toBe("CTR");
+    expect(partMakerInName("GS8714 Колодки тормозные барабанные | зад | TRW (ST-46550-33010  SAT)")).toBe("TRW");
+  });
+
   it("reads «SAT» only as a whole word in capitals", () => {
     expect(partMakerInName("ST-48510-0D130 Амортизатор передний SAT")).toBe("SAT");
     expect(partMakerInName("Кабель sat антенный 10 м")).toBeNull();

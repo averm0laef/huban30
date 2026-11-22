@@ -76,8 +76,14 @@ const MAKERS: readonly PartMaker[] = [
 
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 
-/** The maker whose name stands in the product's name as a whole word; the first one when several do. */
-export function partMakerInName(name: string): string | null {
+/**
+ * The maker whose name stands in the product's name as a whole word; the first one when several do. What stands in
+ * brackets is left out: «(CTR CBHO-44)», «(Sakura C-1541)» name the number of an analogue, not who made the part —
+ * and no brand is better than a wrong one.
+ */
+export function partMakerInName(source: string): string | null {
+  // Brackets are blanked, not cut, so that the places of the other words do not move.
+  const name = source.replace(/\([^()]*\)/gu, (bracketed) => " ".repeat(bracketed.length));
   const lower = name.toLowerCase();
   let found: { at: number; name: string } | null = null;
   for (const maker of MAKERS) {
