@@ -71,36 +71,28 @@ describe("catalog query", () => {
   });
 });
 
-// The list of sections beside the results used to carry the search text into every section. After a search that
-// found nothing, each section found nothing either and sent the customer back to the same empty page: there was
-// no way out of an empty search through the list of sections.
-describe("a link from the results to another section", () => {
-  it("leads to the section itself when the search found nothing", () => {
-    const state = parseCatalogPageQuery({ q: "антифриз" });
-    expect(catalogPageHref("/catalog/tormoznaya-sistema", sectionLinkState(state, 0))).toBe("/catalog/tormoznaya-sistema");
+// A link to a section opens the section. It used to carry the search text along: after a search every section in
+// the list was searched for the same text, found nothing and said «по запросу … ничего не нашлось» — the customer
+// who had typed something and then went to look through the sections never saw a section as it is.
+describe("a link from any catalogue page to a section", () => {
+  it("leads to the section itself, whatever was searched and however much was found", () => {
+    const state = parseCatalogPageQuery({ page: "3", q: "антифриз" });
+    expect(catalogPageHref("/catalog/tormoznaya-sistema", sectionLinkState(state))).toBe("/catalog/tormoznaya-sistema");
   });
 
-  it("keeps the search text while there is something to narrow", () => {
-    const state = parseCatalogPageQuery({ page: "3", q: "фильтр" });
-    expect(catalogPageHref("/catalog/filtry", sectionLinkState(state, 12))).toBe("/catalog/filtry?q=%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80");
+  it("leaves the brand and the price behind: they are of the section the customer is leaving", () => {
+    const state = parseCatalogPageQuery({ brand: "mann-filter", maxPrice: "900", minPrice: "100" });
+    expect(catalogPageHref("/catalog/tormoznaya-sistema", sectionLinkState(state))).toBe("/catalog/tormoznaya-sistema");
   });
 
-  it("starts the section afresh when it was the filters that left nothing", () => {
-    // The brands of one section are not the brands of another: «MANN-FILTER до 100 ₽» found nothing among the
-    // filters and would find nothing among the brakes.
-    const state = parseCatalogPageQuery({ brand: "mann-filter", maxPrice: "100" });
-    expect(catalogPageHref("/catalog/tormoznaya-sistema", sectionLinkState(state, 0))).toBe("/catalog/tormoznaya-sistema");
-    expect(catalogPageHref("/catalog/tormoznaya-sistema", sectionLinkState(state, 5))).toBe("/catalog/tormoznaya-sistema?brand=mann-filter&maxPrice=100");
-  });
-
-  it("leaves the brand and the price behind with an empty result, and keeps how the list is shown", () => {
-    const state = parseCatalogPageQuery({ availability: "in_stock", brand: "mann-filter", maxPrice: "900", minPrice: "100", q: "антифриз", sort: "name", view: "list" });
-    expect(catalogPageHref("/catalog/filtry", sectionLinkState(state, 0))).toBe("/catalog/filtry?sort=name&availability=in_stock&view=list");
+  it("keeps how the list is shown: the order, «в наличии» and the view", () => {
+    const state = parseCatalogPageQuery({ availability: "in_stock", brand: "mann-filter", q: "антифриз", sort: "name", view: "list" });
+    expect(catalogPageHref("/catalog/filtry", sectionLinkState(state))).toBe("/catalog/filtry?sort=name&availability=in_stock&view=list");
   });
 });
 
-// A section opened from the results carries the search text. When the section had nothing for it, the customer
-// was sent back to the results of the whole catalogue — the section they had asked for never opened.
+// A search inside a section (an address with ?q=, a bookmark) that finds nothing there used to send the customer
+// to the results of the whole catalogue; the section they had asked for never opened.
 describe("a search inside a section that has nothing for it", () => {
   it("opens the section itself and tells it what was not found there", () => {
     const state = parseCatalogPageQuery({ page: "2", q: "антифриз", view: "list" });

@@ -130,7 +130,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
 
       {!state.query && <CatalogCategoryTiles tiles={catalogSectionTiles(tree)} />}
       <div className={layoutStyles.layout}>
-        <CatalogFilterRail basePath="/catalog" brands={brands} found={total} state={state} tree={tree} />
+        <CatalogFilterRail basePath="/catalog" brands={brands} state={state} tree={tree} />
         <div className={layoutStyles.main}>
           <CatalogSearchPanel
             action="/catalog"

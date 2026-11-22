@@ -105,22 +105,21 @@ export function catalogPageHref(basePath: string, state: CatalogPageQuery, page 
 }
 
 /**
- * What a link to another section carries from the page it stands on. While the page has results, the section
- * narrows them: the search text and the filters go along. When nothing was found there is nothing to narrow, and
- * the link leads to the section itself, keeping only how the list is shown — otherwise every section finds
- * nothing either and sends the customer back to the same empty search.
+ * What a link to a section carries from the page it stands on: only how the list is shown (the order, «в наличии»,
+ * the view). The search text, the brand and the price stay behind — a link to a section opens the section. Carried
+ * along, the text made every section «find nothing for …» for a customer who had searched and then went to look
+ * through the sections, and a brand of one section is not a brand of another.
  */
-export function sectionLinkState(state: CatalogPageQuery, found: number): CatalogPageQuery {
-  if (found > 0) return { ...state, page: 1 };
+export function sectionLinkState(state: CatalogPageQuery): CatalogPageQuery {
   return { ...state, brands: [], maxPriceRubles: null, minPriceRubles: null, page: 1, priceRangeValid: true, query: "" };
 }
 
 /**
- * The section itself, for a search that found nothing inside it. The customer asked for this section — a click in
- * the list beside the results — so it opens as it is, and the text goes along as what was not found in it.
+ * The section itself, for a search that found nothing inside it (an address with ?q=, a bookmark). The customer
+ * asked for this section, so it opens as it is, and the text goes along as what was not found in it.
  */
 export function sectionWithoutMatchesHref(path: string, state: CatalogPageQuery): string {
-  const href = catalogPageHref(path, sectionLinkState(state, 0));
+  const href = catalogPageHref(path, sectionLinkState(state));
   return `${href}${href.includes("?") ? "&" : "?"}${new URLSearchParams({ missed: state.query }).toString()}`;
 }
 

@@ -27,6 +27,7 @@ import {
   missedSearchText,
   parseCatalogPageQuery,
   priceKopeks,
+  sectionLinkState,
   sectionWithoutMatchesHref,
 } from "../catalog-query";
 
@@ -119,9 +120,9 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   if (!errorMessage && total > 0 && state.page > totalPages) {
     redirect(catalogPageHref(path, state, totalPages));
   }
-  // A search narrowed to this section found nothing in it. The customer asked for the section — a click in the
-  // list beside the results — so it opens as it is and says what was not found. (It used to send the customer back
-  // to the results of the whole catalogue; after a search with no results at all that was a loop with no way out.)
+  // A search inside this section (an address with ?q=) found nothing in it. The customer asked for the section,
+  // so it opens as it is and says what was not found. (It used to send the customer back to the results of the
+  // whole catalogue; after a search with no results at all that was a loop with no way out.)
   // With a brand, a price or «в наличии» chosen the page stays: there the filters are what to take off.
   if (!errorMessage && !isVin && isSearch && total === 0 && !hasActiveCatalogFilters(state)) {
     redirect(sectionWithoutMatchesHref(path, state));
@@ -150,7 +151,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             <span aria-current="page" key={entry.path}>{entry.name}</span>
           ) : (
             <Fragment key={entry.path}>
-              <Link href={entry.path === "/" ? "/" : catalogPageHref(entry.path, state)}>{entry.name}</Link><span aria-hidden="true">›</span>
+              <Link href={entry.path === "/" ? "/" : catalogPageHref(entry.path, sectionLinkState(state))}>{entry.name}</Link><span aria-hidden="true">›</span>
             </Fragment>
           )
         ))}
@@ -166,11 +167,11 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           basePath={path}
           nodes={node.children}
           parentSlug={ancestors[0]?.slug ?? node.slug}
-          query={catalogPageHref("", { ...state, page: 1 })}
+          query={catalogPageHref("", sectionLinkState(state))}
         />
       ) : null}
       <div className={layoutStyles.layout}>
-        <CatalogFilterRail activePath={[...ancestors, node].map((entry) => entry.slug)} basePath={path} brands={brands} found={total} state={state} tree={tree} />
+        <CatalogFilterRail activePath={[...ancestors, node].map((entry) => entry.slug)} basePath={path} brands={brands} state={state} tree={tree} />
         <div className={layoutStyles.main}>
           {missed ? (
             <p className={resultsStyles.looseMatchNote} role="status">

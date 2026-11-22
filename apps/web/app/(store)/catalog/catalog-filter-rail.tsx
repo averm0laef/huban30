@@ -53,12 +53,10 @@ function FilterGroup({ title, children }: { title: string; children: ReactNode }
 const pricePresetFormat = new Intl.NumberFormat("ru-RU");
 
 /** Controls submit with the same GET form on desktop and in the mobile dialog. */
-export function CatalogFilterRail({ activePath = [], basePath, brands, found, state, tree }: {
+export function CatalogFilterRail({ activePath = [], basePath, brands, state, tree }: {
   /** Slug chain of the category being viewed; empty on `/catalog`. */
   activePath?: readonly string[];
   basePath: string;
-  /** How many products the page found: with none, the list of sections leads to the sections themselves. */
-  found: number;
   brands: CatalogBrand[];
   state: CatalogPageQuery;
   /** The whole category tree — the rail shows it with the current branch open. */
@@ -98,7 +96,7 @@ export function CatalogFilterRail({ activePath = [], basePath, brands, found, st
       <FilterGroup title="Категория">
           <Link className={filterStyles.allCategories} href={catalogPageHref("/catalog", { ...state, page: 1 })} onClick={() => dialogRef.current?.close()}
             aria-current={basePath === "/catalog" ? "page" : undefined}>Все категории</Link>
-          <CategoryTree activePath={activePath} onNavigate={() => dialogRef.current?.close()} state={sectionLinkState(state, found)} tree={tree} />
+          <CategoryTree activePath={activePath} onNavigate={() => dialogRef.current?.close()} state={sectionLinkState(state)} tree={tree} />
       </FilterGroup>
 
       <FilterGroup title="Цена, ₽">
