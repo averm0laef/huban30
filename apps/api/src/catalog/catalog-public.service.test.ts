@@ -74,6 +74,18 @@ describe("CatalogPublicService", () => {
     read.mockReset();
   });
 
+  it("lists one part of the site map: public products only, in a stable order, with the catalogue's size", async () => {
+    query.mockResolvedValueOnce({ rows: [{ items: [{ slug: "lampa-osram-3930", updated_at: "2026-11-22T13:00:00.5+03:00" }], total: "42723" }] });
+    await expect(service.sitemapProducts({ part: "2" })).resolves.toEqual({
+      items: [{ slug: "lampa-osram-3930", updatedAt: "2026-11-22T10:00:00.500Z" }], partSize: 10_000, total: 42_723,
+    });
+    const [sql, values] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("category.id IN (SELECT id FROM visible_categories)");
+    expect(sql).toContain("ORDER BY listed.id");
+    expect(values).toEqual([10_000, 20_000]);
+    await expect(service.sitemapProducts({ part: "x" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it("rejects malformed catalog filters before querying PostgreSQL", async () => {
     await expect(service.products({ minPriceKopeks: "200", maxPriceKopeks: "100" }))
       .rejects.toBeInstanceOf(BadRequestException);

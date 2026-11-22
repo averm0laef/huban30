@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { CatalogCategoryTreeResponseSchema, CatalogProductsResponseSchema } from "@an30/contracts";
+import { CatalogCategoryTreeResponseSchema } from "@an30/contracts";
 import type { CatalogCategoryNode } from "@an30/contracts";
 
 import { storeContentPages } from "./(store)/_lib/legacy-pages";
@@ -9,46 +9,8 @@ import { absoluteUrl, indexingAllowed } from "./site-config";
 export const dynamic = "force-dynamic";
 export const revalidate = 3_600;
 
-const PAGE_SIZE = 48;
-const MAX_OFFSET = 4_800;
-
-interface ProductEntry {
-  slug: string;
-  updatedAt: string;
-}
-
 function internalApiOrigin(): string {
   return (process.env.INTERNAL_API_URL ?? "http://127.0.0.1:4000").replace(/\/$/u, "");
-}
-
-/**
- * Walks the public catalog page by page.
- *
- * A sitemap must never take the site down with it, so any failure degrades to
- * the pages we already know rather than throwing.
- */
-async function catalogProducts(): Promise<ProductEntry[]> {
-  const entries: ProductEntry[] = [];
-  for (let offset = 0; offset <= MAX_OFFSET; offset += PAGE_SIZE) {
-    let payload: unknown;
-    try {
-      const response = await fetch(
-        `${internalApiOrigin()}/api/v1/catalog/products?limit=${PAGE_SIZE}&offset=${offset}&sort=newest`,
-        { cache: "no-store", headers: { Accept: "application/json" } },
-      );
-      if (!response.ok) break;
-      payload = await response.json();
-    } catch {
-      break;
-    }
-    const parsed = CatalogProductsResponseSchema.safeParse(payload);
-    if (!parsed.success) break;
-    for (const item of parsed.data.items) {
-      entries.push({ slug: item.slug, updatedAt: item.updatedAt });
-    }
-    if (offset + PAGE_SIZE >= parsed.data.total) break;
-  }
-  return entries;
 }
 
 function flattenCategorySlugPaths(nodes: CatalogCategoryNode[], prefix: string[]): string[][] {
@@ -59,10 +21,10 @@ function flattenCategorySlugPaths(nodes: CatalogCategoryNode[], prefix: string[]
 }
 
 /**
- * Every visible category level, root through leaf — same degrade-to-empty
- * rule as `catalogProducts()` above: the sitemap must never fail to build
- * just because the category endpoint had a bad moment, or because the
- * catalog has not been imported from 1C yet.
+ * Every visible category level, root through leaf. The sitemap must never
+ * fail to build just because the category endpoint had a bad moment, or
+ * because the catalog has not been imported from 1C yet. Products have site
+ * maps of their own, in parts: (store)/catalog/product/sitemap.ts.
  */
 async function catalogCategoryPaths(): Promise<string[][]> {
   let payload: unknown;
@@ -106,12 +68,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: absoluteUrl(`/catalog/${slugs.join("/")}`),
   }));
 
-  const productEntries: MetadataRoute.Sitemap = (await catalogProducts()).map((product) => ({
-    changeFrequency: "weekly",
-    lastModified: new Date(product.updatedAt),
-    priority: 0.8,
-    url: absoluteUrl(`/catalog/product/${product.slug}`),
-  }));
-
-  return [...staticEntries, ...contentEntries, ...categoryEntries, ...productEntries];
+  return [...staticEntries, ...contentEntries, ...categoryEntries];
 }

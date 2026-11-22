@@ -16,6 +16,8 @@ import {
   CatalogProductIdentifierSchema,
   CatalogProductsQuerySchema,
   publicProductName,
+  CATALOG_SITEMAP_PART_SIZE,
+  CatalogSitemapQuerySchema,
   type CatalogProductsQuery,
 } from "@an30/contracts";
 
@@ -468,6 +470,39 @@ export class CatalogPublicService {
       description: row.description,
       images: imageViews,
       primaryImage: imageViews[0] ?? null,
+    };
+  }
+
+  /**
+   * One part of the site map (app/(store)/catalog/product/sitemap.ts on the storefront): the slugs of public products
+   * in the order of their ids, and how many public products there are, so the storefront knows how many parts to list.
+   * The same visibility as every public read: the hidden shelf and inactive sections never reach a search engine.
+   */
+  async sitemapProducts(rawQuery: unknown) {
+    const parsed = CatalogSitemapQuerySchema.safeParse(rawQuery);
+    if (!parsed.success) {
+      throw new BadRequestException({ error: "invalid_sitemap_query", issues: parsed.error.issues });
+    }
+    const result = await this.database.query<{ items: Array<{ slug: string; updated_at: string }>; total: string }>(
+      `${VISIBLE_CATEGORIES_CTE}, listed AS (
+         SELECT product.id,product.slug::text AS slug,product.updated_at
+         FROM app.products AS product
+         LEFT JOIN app.brands AS brand ON brand.id=product.brand_id
+         LEFT JOIN app.categories AS category ON category.id=product.category_id
+         WHERE product.is_active AND product.deleted_at IS NULL
+           AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+           AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
+       )
+       SELECT (SELECT count(*) FROM listed)::text AS total,
+              COALESCE((SELECT json_agg(json_build_object('slug',page.slug,'updated_at',page.updated_at) ORDER BY page.id)
+                        FROM (SELECT * FROM listed ORDER BY listed.id LIMIT $1 OFFSET $2) AS page),'[]'::json) AS items`,
+      [CATALOG_SITEMAP_PART_SIZE, parsed.data.part * CATALOG_SITEMAP_PART_SIZE],
+    );
+    const row = result.rows[0];
+    return {
+      items: (row?.items ?? []).map((item) => ({ slug: item.slug, updatedAt: new Date(item.updated_at).toISOString() })),
+      partSize: CATALOG_SITEMAP_PART_SIZE,
+      total: safeInteger(row?.total ?? "0", "sitemap product count"),
     };
   }
 

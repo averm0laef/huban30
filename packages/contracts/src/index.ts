@@ -596,6 +596,24 @@ export const CatalogFeaturedQuerySchema = z.object({
 }).strict();
 export type CatalogFeaturedQuery = z.infer<typeof CatalogFeaturedQuerySchema>;
 
+/**
+ * The site map reads the public catalogue in parts of this many products, in a stable order: one file of a
+ * search engine's site map holds at most 50 000 addresses, and the owner's catalogue is already 42 723.
+ */
+export const CATALOG_SITEMAP_PART_SIZE = 10_000;
+
+export const CatalogSitemapQuerySchema = z.object({
+  part: z.coerce.number().int().min(0).max(99).default(0),
+}).strict();
+export type CatalogSitemapQuery = z.infer<typeof CatalogSitemapQuerySchema>;
+
+export const CatalogSitemapResponseSchema = z.object({
+  items: z.array(z.object({ slug: CatalogPublicSlugSchema, updatedAt: z.iso.datetime() }).strict()).max(CATALOG_SITEMAP_PART_SIZE),
+  partSize: z.number().int().positive(),
+  total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+}).strict();
+export type CatalogSitemapResponse = z.infer<typeof CatalogSitemapResponseSchema>;
+
 export const CatalogProductIdentifierSchema = z.union([z.uuid(), CatalogPublicSlugSchema]);
 export type CatalogProductIdentifier = z.infer<typeof CatalogProductIdentifierSchema>;
 

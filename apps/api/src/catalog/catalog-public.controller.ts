@@ -54,6 +54,13 @@ export class CatalogPublicController {
     return this.catalog.product(idOrSlug);
   }
 
+  /** The site map's parts of products; read by the storefront's server, about once an hour per part. */
+  @Get("sitemap/products")
+  async sitemapProducts(@Query() query: unknown, @Req() request: FastifyRequest) {
+    await this.rateLimit.consume("catalog-sitemap", request.ip, 60, 60);
+    return this.catalog.sitemapProducts(query);
+  }
+
   @Get("featured")
   async featured(@Query() query: unknown, @Req() request: FastifyRequest) {
     await this.rateLimit.consume("catalog-featured", request.ip, CATALOG_READS_PER_MINUTE, 60);

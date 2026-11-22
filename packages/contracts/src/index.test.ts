@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   AdminPendingTokenQuerySchema,
   CatalogBrandsResponseSchema,
+  CATALOG_SITEMAP_PART_SIZE,
   CatalogFeaturedQuerySchema,
+  CatalogSitemapQuerySchema,
+  CatalogSitemapResponseSchema,
   CatalogImageIdentifierSchema,
   CatalogProductIdentifierSchema,
   CatalogProductsQuerySchema,
@@ -262,6 +265,15 @@ describe("public contracts", () => {
   it("accepts bounded featured queries and UUID-or-slug product identifiers", () => {
     expect(CatalogFeaturedQuerySchema.parse({ limit: "12" })).toEqual({ limit: 12 });
     expect(CatalogFeaturedQuerySchema.safeParse({ limit: 25 }).success).toBe(false);
+    // The site map reads the catalogue in parts of CATALOG_SITEMAP_PART_SIZE: 42 723 products are five parts.
+    expect(CatalogSitemapQuerySchema.parse({ part: "4" })).toEqual({ part: 4 });
+    expect(CatalogSitemapQuerySchema.parse({})).toEqual({ part: 0 });
+    expect(CatalogSitemapQuerySchema.safeParse({ part: "-1" }).success).toBe(false);
+    expect(CatalogSitemapQuerySchema.safeParse({ part: "100" }).success).toBe(false);
+    expect(CatalogSitemapResponseSchema.parse({
+      items: [{ slug: "lampa-osram-3930", updatedAt: "2026-11-22T10:00:00.000Z" }], partSize: CATALOG_SITEMAP_PART_SIZE, total: 42_723,
+    }).items).toHaveLength(1);
+    expect(CatalogSitemapResponseSchema.safeParse({ items: [{ slug: "../etc", updatedAt: "2026-11-22T10:00:00.000Z" }], partSize: 10_000, total: 1 }).success).toBe(false);
     expect(CatalogProductIdentifierSchema.safeParse("oil-filter-1").success).toBe(true);
     expect(CatalogProductIdentifierSchema.safeParse("019bf9ea-0d3e-7def-9c9a-000000000010").success)
       .toBe(true);
