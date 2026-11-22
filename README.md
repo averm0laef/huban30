@@ -50,5 +50,9 @@ pnpm audit:prod
 - Политика безопасности: `SECURITY.md`
 - Ротация секретов: `docs/SECRET_ROTATION.md`
 - Схема и миграции PostgreSQL: `docs/DATABASE.md`
+- Установка на сервер (VPS), памятка владельцу: `docs/DEPLOY_VPS.md`
+- [docs/TECDOC.md](docs/TECDOC.md) — каталог автомобилей и применимость TecDoc: что разрешает договор, расход запросов, запуск.
+- [docs/OWN_CATALOG.md](docs/OWN_CATALOG.md) — собственный каталог: разделы и сортировка товаров из 1С без категорий.
+- Настройка обмена в 1С:УНФ 3.0, памятка владельцу: `docs/ONE_C_SETUP_UNF.md`
 
 Старый hosted Supabase-проект не удаляется и не отключается без отдельного подтверждения владельца; локальная legacy-витрина (Vite/Supabase) удалена из репозитория.

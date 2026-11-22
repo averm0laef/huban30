@@ -4,17 +4,26 @@ packages:
 autoInstallPeers: false
 injectWorkspacePackages: true
 overrides:
-  # GHSA-7p8r-x3mc-p8w7, host confusion via backslash. Fastify pulls in
-  # both major lines transitively, so each needs its own patched floor.
-  fast-uri@^4.0.0: '>=4.1.2'
-  fast-uri@^3.0.0: '3.1.5'
+  # Multipart 10 still pins busboy 3.2.0; retain its patched compatible major.
+  '@fastify/busboy': 3.2.5
+  # Keep both Fastify URI dependency branches above their security fixes.
+  fast-uri@^4.0.0: 4.2.3
+  fast-uri@^3.0.0: 3.1.9
+  # Nest 11 pins an older Fastify version; use its patched compatible major.
+  fastify: 5.12.8
   find-my-way: 9.7.0
-  js-yaml: 5.2.2
-  # GHSA-2v37-7h3g-55p8, zero-length custom generator loop.
-  # Next/PostCSS currently resolve nanoid 3.x transitively.
+  js-yaml: 5.5.0
   nanoid@^3.0.0: 3.3.18
   postcss: 8.5.25
-  sharp: 0.35.3
+  sharp: 0.35.5
+  source-map-js: 1.2.2
+  # ESLint 10 still requests the affected minimatch 10 branch.
+  minimatch@^10.2.6: 11.0.5
+  # React Hooks supports either Zod major; resolve the patched v4 branch.
+  zod: 4.6.7
+  eslint-plugin-react-hooks>zod-validation-error: ^4.0.0
+  # Vitest 4 supports Vite 7; stay on its patched stable branch.
+  vite: 7.3.7
 allowBuilds:
   '@scarf/scarf': false
   '@swc/core': true

@@ -42,3 +42,16 @@ backups/
 *.njsproj
 *.sln
 *.sw?
+
+# Выгрузки из 1С и другие рабочие данные владельца: цены, остатки, внутренние пометки. В Git не попадают.
+local-data/
+
+# Снимки экрана, журналы и другие результаты проверок. Воспроизводятся заново; в Git остаётся только отчёт аудита.
+outputs/*
+!outputs/security-audit-2026-11-07/
+outputs/security-audit-2026-11-07/*
+!outputs/security-audit-2026-11-07/report/
+
+# Python bytecode (services/parts-finder is the Python reference of the parts finder)
+__pycache__/
+*.pyc

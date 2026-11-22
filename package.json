@@ -9,13 +9,13 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "pnpm -r --parallel --if-present run dev",
+    "dev": "pnpm --filter @an30/messaging... build && pnpm -r --parallel --if-present run dev",
     "build": "pnpm -r --if-present run build",
     "db:migrate": "pnpm --filter @an30/database build && pnpm --filter @an30/database migrate",
     "db:seed:dev": "pnpm --filter @an30/database build && pnpm --filter @an30/database seed:dev",
     "db:status": "pnpm --filter @an30/database build && pnpm --filter @an30/database migrate:status",
     "lint": "eslint tests playwright.config.ts && pnpm -r --if-present run lint",
-    "typecheck": "pnpm --filter @an30/contracts build && tsc -p tsconfig.node.json --noEmit && pnpm -r --if-present run typecheck",
+    "typecheck": "pnpm --filter @an30/messaging... build && tsc -p tsconfig.node.json --noEmit && pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "test:e2e": "playwright test",
     "audit:prod": "pnpm audit --prod --audit-level=high",
@@ -26,11 +26,11 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.13.3",
-    "eslint": "^10.8.0",
+    "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.8.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.72.1"
   }
 }

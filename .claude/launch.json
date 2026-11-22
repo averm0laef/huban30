@@ -4,8 +4,46 @@
     {
       "name": "web-dev",
       "runtimeExecutable": "corepack",
-      "runtimeArgs": ["pnpm", "--filter", "@an30/web", "dev"],
-      "port": 3000
+      "runtimeArgs": [
+        "pnpm",
+        "--filter",
+        "@an30/web",
+        "dev"
+      ],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "api-preview",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "scripts/dev/run-api-preview.sh"
+      ],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
+      "name": "api-scratch",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "SESSION_SECRET=$(openssl rand -hex 32) DATA_ENCRYPTION_KEY=$(openssl rand -hex 32) DATABASE_URL=postgresql://antonermolaev@localhost:5432/an30_search_check REDIS_URL=redis://localhost:6379 COOKIE_SECURE=false AUTH_DEBUG_TOKENS=true LEGAL_DOCUMENTS_APPROVED=true exec corepack pnpm --filter @an30/api dev"
+      ],
+      "port": 4000
+    },
+    {
+      "name": "ref-mockup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5180",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/private/tmp/claude-501/-Users-antonermolaev--claude-spares-spare-WjcIsj/a2bced15-963f-4065-8859-51a015e6fc5b/scratchpad/ref/dist"
+      ],
+      "port": 5180
     }
   ]
 }
