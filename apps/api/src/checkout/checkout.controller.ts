@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Headers,
-  HttpCode,
   Param,
   Patch,
   Post,
@@ -12,11 +11,10 @@ import {
 } from "@nestjs/common";
 import type { FastifyRequest } from "fastify";
 
-import { Public, RequirePermissions, SkipCsrf } from "../auth/auth.decorators.js";
+import { Public, RequirePermissions } from "../auth/auth.decorators.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
 import { CheckoutService } from "./checkout.service.js";
 import { OrderService } from "./order.service.js";
-import { PaymentService } from "./payment.service.js";
 
 function metadata(request: FastifyRequest) {
   const userAgent = request.headers["user-agent"];
@@ -67,16 +65,6 @@ export class OrdersController {
   ) {
     return this.orders.updateStatus(orderId, body, request.authContext!, metadata(request));
   }
-
-  @RequirePermissions("orders:update:any")
-  @Post(":orderId/payments/delivery")
-  createDeliveryPayment(
-    @Param("orderId") orderId: string,
-    @Body() body: unknown,
-    @Req() request: FastifyRequest,
-  ) {
-    return this.orders.createDeliveryPayment(orderId, body, request.authContext!, metadata(request));
-  }
 }
 
 @Public()
@@ -98,52 +86,5 @@ export class GuestOrdersController {
       this.rateLimit.consume("guest-order-token", token ?? "missing", 120, 60),
     ]);
     return this.orders.readForGuest(orderId, token);
-  }
-}
-
-@Controller("payments")
-export class PaymentsController {
-  constructor(private readonly payments: PaymentService) {}
-
-  @RequirePermissions("payments:refund")
-  @Post(":paymentId/refunds")
-  refund(
-    @Param("paymentId") paymentId: string,
-    @Body() body: unknown,
-    @Req() request: FastifyRequest,
-  ) {
-    return this.payments.refund(paymentId, body, request.authContext!, metadata(request));
-  }
-}
-
-@Public()
-@Controller("payments/sandbox")
-export class SandboxPaymentsController {
-  constructor(private readonly payments: PaymentService) {}
-
-  @Post(":externalPaymentId/complete")
-  @HttpCode(200)
-  complete(
-    @Param("externalPaymentId") externalPaymentId: string,
-    @Body() body: unknown,
-    @Req() request: FastifyRequest,
-  ) {
-    return this.payments.completeSandbox(externalPaymentId, body, request.ip);
-  }
-}
-
-@Public()
-@SkipCsrf()
-@Controller("payments/webhooks")
-export class PaymentWebhooksController {
-  constructor(private readonly payments: PaymentService) {}
-
-  @Post("sandbox")
-  @HttpCode(200)
-  sandbox(
-    @Body() body: unknown,
-    @Headers("x-an30-sandbox-signature") signature: string | undefined,
-  ) {
-    return this.payments.handleSandboxWebhook(body, signature);
   }
 }

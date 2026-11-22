@@ -5,14 +5,9 @@ import {
   GuestCheckoutController,
   GuestOrdersController,
   OrdersController,
-  PaymentsController,
-  PaymentWebhooksController,
-  SandboxPaymentsController,
 } from "./checkout.controller.js";
 import { CheckoutService } from "./checkout.service.js";
 import { OrderService } from "./order.service.js";
-import { PaymentService } from "./payment.service.js";
-import { SandboxPaymentProvider } from "./sandbox-payment.provider.js";
 
 @Module({
   controllers: [
@@ -20,10 +15,7 @@ import { SandboxPaymentProvider } from "./sandbox-payment.provider.js";
     GuestCheckoutController,
     OrdersController,
     GuestOrdersController,
-    PaymentsController,
-    SandboxPaymentsController,
-    PaymentWebhooksController,
   ],
-  providers: [CheckoutService, OrderService, PaymentService, SandboxPaymentProvider],
+  providers: [CheckoutService, OrderService],
 })
 export class CheckoutModule {}
