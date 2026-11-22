@@ -102,7 +102,7 @@ ${paragraphs}
 <p style="margin:0 0 4px;font-size:14px;font-weight:bold;color:${TEXT};">Магазин АН-30</p>
 <p style="margin:0 0 16px;font-size:13px;color:${MUTED};">${escapeHtml(footer.address)} · ${escapeHtml(footer.hours)}</p>
 <div>${channels}</div>
-<p style="margin:16px 0 0;font-size:11.5px;color:#8b8fa8;">Письмо отправлено автоматически, отвечать на него не нужно.</p>
+<p style="margin:16px 0 0;font-size:12px;color:#6b6f88;">Письмо отправлено автоматически, отвечать на него не нужно.</p>
 </td></tr>
 </table>
 </td></tr>

@@ -32,6 +32,8 @@ const WorkerEnvironmentSchema = z.object({
   REDIS_PASSWORD_FILE: z.string().min(1).optional(),
   SMTP_ENABLED: z.enum(["true", "false"]).default("false"),
   SMTP_FROM: optionalText(z.string().email()),
+  // The name a customer sees beside the address. One line of plain text: it goes into a mail header.
+  SMTP_FROM_NAME: z.string().trim().min(1).max(80).regex(/^[^\r\n<>"]+$/u).default("АН-30"),
   SMTP_HOST: optionalText(z.string().min(1)),
   SMTP_PASSWORD: optionalText(z.string().min(1)),
   SMTP_PASSWORD_FILE: optionalText(z.string().min(1)),
@@ -103,6 +105,7 @@ export function readWorkerConfig(raw: NodeJS.ProcessEnv) {
       smtp: {
         enabled: smtpEnabled,
         from: environment.SMTP_FROM,
+        fromName: environment.SMTP_FROM_NAME,
         host: environment.SMTP_HOST,
         password: smtpPassword,
         port: environment.SMTP_PORT,

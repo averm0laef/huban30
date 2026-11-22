@@ -29,3 +29,13 @@ describe("branded e-mail", () => {
     expect(renderBrandedEmailText(email)).toContain("Подтвердить email: https://an30.ru/auth?mode=verify#token=abc");
   });
 });
+
+// Seen on a rendered letter: the line «Письмо отправлено автоматически…» was 11.5 px in a grey of weak contrast.
+describe("the small print of a letter", () => {
+  it("is never smaller than 12 px", () => {
+    const html = renderBrandedEmailHtml({ action: { label: "Открыть", url: "https://an30.ru/auth" }, lead: "Вступление", note: "Примечание", paragraphs: ["Текст"], title: "Заголовок" }, "https://an30.ru");
+    const sizes = [...html.matchAll(/font-size:\s*([0-9.]+)px/gu)].map((match) => Number(match[1]));
+    expect(sizes.length).toBeGreaterThan(3);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12);
+  });
+});

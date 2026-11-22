@@ -6,23 +6,39 @@ import type { readWorkerConfig } from "./config.js";
 
 type NotificationConfig = ReturnType<typeof readWorkerConfig>["notifications"];
 
+type SmtpConfig = NotificationConfig["smtp"];
+
+/**
+ * How the worker connects to the mail server. Always encrypted (STARTTLS required on 587, TLS from the first byte
+ * on 465), never reading a file or a URL into a letter, and giving up within seconds on a server that does not
+ * answer: nodemailer's own defaults wait two minutes for a connection and ten for a silent socket, and one stuck
+ * letter would hold the password-recovery letters queued behind it.
+ */
+export function smtpTransportOptions(smtp: SmtpConfig) {
+  return {
+    auth: smtp.user ? { pass: smtp.password, user: smtp.user } : undefined,
+    connectionTimeout: 10_000,
+    disableFileAccess: true,
+    disableUrlAccess: true,
+    greetingTimeout: 10_000,
+    host: smtp.host,
+    port: smtp.port,
+    requireTLS: !smtp.secure,
+    secure: smtp.secure,
+    socketTimeout: 30_000,
+  };
+}
+
+/** The sender a customer sees: the shop by name, at the configured address. */
+export function smtpSender(smtp: SmtpConfig): { address: string; name: string } | undefined {
+  return smtp.from ? { address: smtp.from, name: smtp.fromName } : undefined;
+}
+
 export class NotificationProviders {
   private readonly mailer: Transporter | undefined;
 
   constructor(private readonly config: NotificationConfig) {
-    this.mailer = config.smtp.enabled
-      ? nodemailer.createTransport({
-          auth: config.smtp.user
-            ? { pass: config.smtp.password, user: config.smtp.user }
-            : undefined,
-          disableFileAccess: true,
-          disableUrlAccess: true,
-          host: config.smtp.host,
-          port: config.smtp.port,
-          requireTLS: !config.smtp.secure,
-          secure: config.smtp.secure,
-        })
-      : undefined;
+    this.mailer = config.smtp.enabled ? nodemailer.createTransport(smtpTransportOptions(config.smtp)) : undefined;
   }
 
   get emailEnabled(): boolean {
@@ -30,8 +46,9 @@ export class NotificationProviders {
   }
 
   async sendEmail(recipient: string, subject: string, text: string, html?: string): Promise<void> {
-    if (!this.mailer || !this.config.smtp.from) throw new Error("smtp_disabled");
-    await this.mailer.sendMail({ from: this.config.smtp.from, subject, text, to: recipient, ...(html ? { html } : {}) });
+    const from = smtpSender(this.config.smtp);
+    if (!this.mailer || !from) throw new Error("smtp_disabled");
+    await this.mailer.sendMail({ from, subject, text, to: recipient, ...(html ? { html } : {}) });
   }
 
   async sendStaffAlert(text: string, idempotencyKey: string): Promise<number> {
