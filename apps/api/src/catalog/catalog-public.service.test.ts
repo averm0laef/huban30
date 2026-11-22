@@ -155,7 +155,7 @@ describe("CatalogPublicService", () => {
     const exactTier = ranking.search(/product\.sku_normalized=\$\d+\) DESC/u);
     const prefixTier = ranking.search(/product\.sku_normalized LIKE \$\d+\) DESC/u);
     const fuzzyTier = ranking.indexOf("relevance.score");
-    const nameTiebreak = ranking.indexOf("lower(product.name) ASC");
+    const nameTiebreak = ranking.indexOf("lower(product.name) COLLATE app.russian_names ASC");
     expect(exactTier).toBeGreaterThan(-1);
     expect(prefixTier).toBeGreaterThan(exactTier);
     expect(fuzzyTier).toBeGreaterThan(prefixTier);
@@ -699,6 +699,6 @@ describe("CatalogPublicService word-by-word search", () => {
     query.mockResolvedValueOnce({ rows: [] });
     await service.products({ category: "filters" });
     const [sql] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) ASC");
+    expect(sql).toContain("(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) COLLATE app.russian_names ASC");
   });
 });

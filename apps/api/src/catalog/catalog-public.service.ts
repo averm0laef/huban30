@@ -193,7 +193,7 @@ export class CatalogPublicService {
            AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
        ) AS products ON true
        WHERE category.id IN (SELECT id FROM visible_categories)
-       ORDER BY category.sort_order,lower(category.name),category.id`,
+       ORDER BY category.sort_order,lower(category.name) COLLATE app.russian_names,category.id`,
     );
     return {
       items: result.rows.map((row) => ({
@@ -231,7 +231,7 @@ export class CatalogPublicService {
            AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
        ) AS products ON true
        WHERE category.deleted_at IS NULL
-       ORDER BY category.sort_order,lower(category.name),category.id`,
+       ORDER BY category.sort_order,lower(category.name) COLLATE app.russian_names,category.id`,
     );
     const items = buildCategoryTree(result.rows.map((row) => ({
       description: row.description,
@@ -271,7 +271,7 @@ export class CatalogPublicService {
            AND ($1::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
        ) AS products ON true
        WHERE brand.is_active AND brand.deleted_at IS NULL AND products.product_count>0
-       ORDER BY lower(brand.name),brand.id`,
+       ORDER BY lower(brand.name) COLLATE app.russian_names,brand.id`,
       [category],
     );
     return {
@@ -637,7 +637,7 @@ export class CatalogPublicService {
   private productOrder(p: SqlParameters, input: CatalogSearchInput, article: string): { join: string; order: string } {
     switch (input.query.sort) {
       case "newest": return { join: "", order: "product.created_at DESC" };
-      case "name": return { join: "", order: "lower(product.name) ASC" };
+      case "name": return { join: "", order: "lower(product.name) COLLATE app.russian_names ASC" };
       case "price_asc": return { join: "", order: "price.amount_kopeks ASC NULLS LAST" };
       case "price_desc": return { join: "", order: "price.amount_kopeks DESC NULLS LAST" };
       // Ranking never lets a fuzzy match outrank an exact one: an exact
@@ -647,7 +647,7 @@ export class CatalogPublicService {
         ? catalogSearchRelevanceOrder(p, input, article)
         // Browsing a section: what can be bought today first, then priced
         // items, then alphabetical — never "last touched by the import".
-        : { join: "", order: "(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) ASC" };
+        : { join: "", order: "(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,lower(product.name) COLLATE app.russian_names ASC" };
     }
   }
 

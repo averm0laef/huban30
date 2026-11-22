@@ -255,6 +255,6 @@ export function catalogSearchRelevanceOrder(p: SqlParameters, input: CatalogSear
     floor(LEAST(relevance.score,1)*4) DESC,
     (stock.available_quantity>0) DESC,
     relevance.score DESC,
-    lower(product.name) ASC`;
+    lower(product.name) COLLATE app.russian_names ASC`;
   return { join, order };
 }
