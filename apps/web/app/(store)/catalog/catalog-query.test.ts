@@ -6,11 +6,9 @@ import {
   catalogPageNumbers,
   clearCatalogFiltersHref,
   hasActiveCatalogFilters,
-  missedSearchText,
   parseCatalogPageQuery,
   priceKopeks,
   sectionLinkState,
-  sectionWithoutMatchesHref,
 } from "./catalog-query";
 
 describe("catalog query", () => {
@@ -90,25 +88,6 @@ describe("a link from any catalogue page to a section", () => {
   it("keeps how the list is shown: the order, «в наличии» and the view", () => {
     const state = parseCatalogPageQuery({ availability: "in_stock", brand: "mann-filter", q: "антифриз", sort: "name", view: "list" });
     expect(catalogPageHref("/catalog/filtry", sectionLinkState(state))).toBe("/catalog/filtry?sort=name&availability=in_stock&view=list");
-  });
-});
-
-// A search inside a section (an address with ?q=, a bookmark) that finds nothing there used to send the customer
-// to the results of the whole catalogue; the section they had asked for never opened.
-describe("a search inside a section that has nothing for it", () => {
-  it("opens the section itself and tells it what was not found there", () => {
-    const state = parseCatalogPageQuery({ page: "2", q: "антифриз", view: "list" });
-    expect(sectionWithoutMatchesHref("/catalog/filtry", state))
-      .toBe("/catalog/filtry?view=list&missed=%D0%B0%D0%BD%D1%82%D0%B8%D1%84%D1%80%D0%B8%D0%B7");
-    expect(sectionWithoutMatchesHref("/catalog/filtry", parseCatalogPageQuery({ q: "антифриз" })))
-      .toBe("/catalog/filtry?missed=%D0%B0%D0%BD%D1%82%D0%B8%D1%84%D1%80%D0%B8%D0%B7");
-  });
-
-  it("reads what was missed as one line of text of a bounded length", () => {
-    expect(missedSearchText({ missed: "  анти\tфриз  " })).toBe("анти фриз");
-    expect(missedSearchText({ missed: ["первое", "второе"] })).toBe("первое");
-    expect(missedSearchText({ missed: "я".repeat(500) })).toHaveLength(120);
-    expect(missedSearchText({})).toBe("");
   });
 });
 

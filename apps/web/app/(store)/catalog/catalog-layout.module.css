@@ -97,6 +97,43 @@
   background: var(--store-surface);
   border-radius: var(--store-radius);
 }
+/* The section's own search: «Найти в разделе „Фильтры“». The header searches the whole catalogue. */
+.sectionSearch {
+  flex: 1 1 260px;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-bg);
+  color: var(--store-muted);
+}
+.sectionSearch:focus-within { border-color: var(--store-brand); outline: 2px solid color-mix(in srgb, var(--store-brand) 30%, transparent); }
+.sectionSearch > svg { flex: none; }
+/* 16px keeps iOS from zooming the page when the field is focused. */
+.toolbar .sectionSearch input { flex: 1 1 auto; min-width: 0; height: 42px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--store-text); font-size: 16px; }
+.toolbar .sectionSearch button {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--store-brand);
+  color: var(--store-on-brand);
+  font-family: var(--store-font-display);
+  font-size: .84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.toolbar .sectionSearch button:hover { background: var(--store-brand-strong); }
+@media (max-width: 670px) {
+  /* A row of its own above the other controls, with a 44 px button for a finger. */
+  .sectionSearch { flex-basis: 100%; order: -1; }
+  .toolbar .sectionSearch button { min-height: 44px; margin-right: -4px; border-radius: 0 var(--store-radius-sm) var(--store-radius-sm) 0; }
+}
 .sortSelect { position: relative; display: flex; flex: 0 1 auto; align-items: center; min-width: 0; }
 .sortSelect select {
   width: 100%;

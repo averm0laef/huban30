@@ -72,7 +72,9 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
   const router = useRouter();
   const pathname = usePathname();
   const parameters = useSearchParams();
-  const routeQuery = pathname?.startsWith("/catalog") ? parameters?.get("q")?.trim().slice(0, 120) ?? "" : "";
+  // The header searches the whole catalogue, so it repeats a text only on that search's own page. Inside a section
+  // the text belongs to the section's own field («Найти в разделе …»).
+  const routeQuery = pathname === "/catalog" ? parameters?.get("q")?.trim().slice(0, 120) ?? "" : "";
   const [value, setValue] = useState(routeQuery);
   const [state, setState] = useState<SuggestState>({ status: "idle" });
   const [open, setOpen] = useState(false);

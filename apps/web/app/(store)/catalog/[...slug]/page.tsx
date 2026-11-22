@@ -24,11 +24,9 @@ import {
   catalogPageHref,
   catalogProductCount,
   hasActiveCatalogFilters,
-  missedSearchText,
   parseCatalogPageQuery,
   priceKopeks,
   sectionLinkState,
-  sectionWithoutMatchesHref,
 } from "../catalog-query";
 
 interface CategoryPageProps {
@@ -120,15 +118,6 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   if (!errorMessage && total > 0 && state.page > totalPages) {
     redirect(catalogPageHref(path, state, totalPages));
   }
-  // A search inside this section (an address with ?q=) found nothing in it. The customer asked for the section,
-  // so it opens as it is and says what was not found. (It used to send the customer back to the results of the
-  // whole catalogue; after a search with no results at all that was a loop with no way out.)
-  // With a brand, a price or «в наличии» chosen the page stays: there the filters are what to take off.
-  if (!errorMessage && !isVin && isSearch && total === 0 && !hasActiveCatalogFilters(state)) {
-    redirect(sectionWithoutMatchesHref(path, state));
-  }
-  const missed = state.query ? "" : missedSearchText(parameters);
-
   const emptyState: CatalogEmptyState | null = state.query.length === 1
     ? { body: "Введите минимум два символа названия или артикула.", heading: "Нужно ещё немного текста" }
     : !errorMessage && items.length === 0
@@ -173,10 +162,13 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       <div className={layoutStyles.layout}>
         <CatalogFilterRail activePath={[...ancestors, node].map((entry) => entry.slug)} basePath={path} brands={brands} state={state} tree={tree} />
         <div className={layoutStyles.main}>
-          {missed ? (
+          {isSearch && !isVin && !errorMessage ? (
             <p className={resultsStyles.looseMatchNote} role="status">
-              По запросу «{missed}» в разделе «{node.name}» ничего не нашлось — показываем весь раздел.{" "}
-              <Link href={catalogSearchHref(missed)}>Искать «{missed}» во всём каталоге</Link>
+              {total > 0
+                ? <>В разделе «{node.name}» по запросу «{state.query}» — {catalogProductCount(total)}.</>
+                : <>В разделе «{node.name}» по запросу «{state.query}» ничего не нашлось.</>}{" "}
+              <Link href={catalogPageHref(path, sectionLinkState(state))}>Показать весь раздел</Link>{" · "}
+              <Link href={catalogSearchHref(state.query)}>Искать «{state.query}» во всём каталоге</Link>
             </p>
           ) : null}
           {vehicle ? (
@@ -193,19 +185,12 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             errorMessage={errorMessage}
             items={items}
             pageSize={CATALOG_PAGE_SIZE}
+            sectionName={node.name}
             state={state}
             matchMode={matchMode}
             total={total}
             tree={tree}
           />
-          {isSearch && !isVin && (
-            <p>
-              <Link className={`${buttons.button} ${buttons.quiet}`} href={catalogPageHref("/catalog", state)}>
-                <Search20Regular aria-hidden="true" />
-                Искать «{state.query}» во всём каталоге
-              </Link>
-            </p>
-          )}
         </div>
       </div>
     </div>

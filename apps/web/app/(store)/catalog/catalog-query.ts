@@ -130,20 +130,6 @@ export function sectionLinkState(state: CatalogPageQuery): CatalogPageQuery {
   return { ...state, brands: [], maxPriceRubles: null, minPriceRubles: null, page: 1, priceRangeValid: true, query: "" };
 }
 
-/**
- * The section itself, for a search that found nothing inside it (an address with ?q=, a bookmark). The customer
- * asked for this section, so it opens as it is, and the text goes along as what was not found in it.
- */
-export function sectionWithoutMatchesHref(path: string, state: CatalogPageQuery): string {
-  const href = catalogPageHref(path, sectionLinkState(state));
-  return `${href}${href.includes("?") ? "&" : "?"}${new URLSearchParams({ missed: state.query }).toString()}`;
-}
-
-/** The search text a section had nothing for (see sectionWithoutMatchesHref): one line of a bounded length. */
-export function missedSearchText(parameters: SearchParameters): string {
-  return normalizeCatalogSearchText(first(parameters.missed));
-}
-
 export function clearCatalogFiltersHref(basePath: string, state: CatalogPageQuery): string {
   return catalogPageHref(basePath, {
     ...state,

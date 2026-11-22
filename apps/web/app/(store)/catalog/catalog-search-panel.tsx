@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { AddToCartButton } from "../_components/cart-actions";
-import { ChevronLeft20Regular, ChevronRight20Regular, Clock20Regular, VehicleCar20Regular } from "../_components/home-icons";
+import { ChevronLeft20Regular, ChevronRight20Regular, Clock20Regular, Search20Regular, VehicleCar20Regular } from "../_components/home-icons";
 import buttons from "../_components/store-button.module.css";
 import styles from "../_components/storefront.module.css";
 import { formatRubles } from "../_lib/catalog-api";
@@ -41,6 +41,8 @@ export interface CatalogSearchPanelProps {
   /** "any": no product had every word, so these match at least one of them. */
   matchMode?: "all" | "any";
   pageSize: number;
+  /** On a section's page: its name. The toolbar then has the section's own search field. */
+  sectionName?: string;
   state: CatalogPageQuery;
   total: number;
   tree: CatalogCategoryNode[];
@@ -48,7 +50,7 @@ export interface CatalogSearchPanelProps {
 
 /** Sorting and filter controls submit together to the current catalog scope. */
 export function CatalogSearchPanel({
-  action, brands = [], emptyState, errorHeading = "Каталог не отвечает", errorMessage, items, matchMode = "all", pageSize, state, total, tree,
+  action, brands = [], emptyState, errorHeading = "Каталог не отвечает", errorMessage, items, matchMode = "all", pageSize, sectionName, state, total, tree,
 }: CatalogSearchPanelProps) {
   const isSearch = state.query.trim().length >= 2;
   const isVin = isValidVin(state.query.trim());
@@ -172,7 +174,16 @@ export function CatalogSearchPanel({
   return (
     <>
       <form action={action} className={layoutStyles.toolbar} id={CATALOG_SEARCH_FORM_ID} method="get">
-        {state.query && <input name="q" type="hidden" value={state.query} />}
+        {sectionName ? (
+          // A search inside this section: some look for a name among the filters only. The header searches everything.
+          <label className={layoutStyles.sectionSearch}>
+            <span className={styles.visuallyHidden}>Найти в разделе «{sectionName}»</span>
+            <Search20Regular aria-hidden="true" />
+            <input defaultValue={state.query} enterKeyHint="search" key={state.query} maxLength={120} name="q"
+              placeholder={`Найти в разделе «${sectionName}»`} type="search" />
+            <button type="submit">Найти</button>
+          </label>
+        ) : state.query && <input name="q" type="hidden" value={state.query} />}
         {state.view === "list" && <input name="view" type="hidden" value={state.view} />}
         <CatalogFilterTrigger count={filters.length} />
         <CatalogSortSelect value={state.sort} />
