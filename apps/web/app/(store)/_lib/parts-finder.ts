@@ -9,8 +9,10 @@
 
 export interface ShopOffer {
   availableQuantity: number;
-  /** "exact" — the same article; "cross" — the shop's own confirmed analogue. */
-  matchedVia?: "cross" | "exact" | "possible";
+  /** Why the shop calls it an analog (ShopOfferBasisSchema in packages/contracts). */
+  basis?: "same_number" | "shop" | "maker" | "two_sources" | "supplier" | "catalogue" | "original_number" | "same_size";
+  /** "exact" — the same article; "cross" — the shop's own confirmed analogue; "same_size" — the same standard size. */
+  matchedVia?: "cross" | "exact" | "possible" | "same_size";
   brand: string | null;
   name: string;
   priceKopeks: number | null;
@@ -78,6 +80,7 @@ export interface VehicleResult {
 export interface ShopAnalogsResult {
   article: string;
   offers: ShopOffer[];
+  sameSize?: { label: string; offers: ShopOffer[] };
 }
 
 /** In-stock shop offers first, then priced ones, then the rest; stable otherwise. */

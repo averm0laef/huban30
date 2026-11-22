@@ -17,7 +17,7 @@ import { catalogCategoryPhoto, publicSectionName } from "../../../_lib/store-cat
 import { productCompatibilityPrefillMessage } from "../../../_lib/expert-help-prefill";
 import { catalogFailureText } from "../../catalog-query";
 import { ExpertHelpQueryLink } from "../../expert-help-query-link";
-import { ProductAnalogs } from "./product-analogs";
+import { ProductAnalogs, ProductInStockAlternative } from "./product-analogs";
 import { ProductFitment } from "./product-fitment";
 import { ProductDetails } from "./product-details";
 import { ProductFavourite } from "./product-favourite";
@@ -101,6 +101,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
     ...(product.brand ? [["Бренд", product.brand.name] as [string, string]] : []),
     ["Артикул", product.sku],
     ...(product.category ? [["Раздел", publicSectionName(product.category)] as [string, string]] : []),
+    // What the name says plainly of the part (side, voltage, size…) and the vehicle maker's numbers it carries.
+    ...product.features.map((feature): [string, string] => [feature.label, feature.value]),
+    ...(product.originalNumbers.length > 0 ? [["Оригинальные номера", product.originalNumbers.join(", ")] as [string, string]] : []),
     ...visibleAttributes(product.attributes),
   ];
   const images = product.images.length
@@ -173,6 +176,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <p className={layout.price}>{product.priceKopeks === null ? "Цена по запросу" : formatRubles(product.priceKopeks)}</p>
             <p className={`${styles.stock} ${available ? "" : styles.stockOut}`}>{stockText}</p>
           </div>
+          {available ? null : <ProductInStockAlternative article={product.sku} brand={product.brand?.name ?? null} productId={product.id} key={`alternative-${product.id}`} />}
           <div className={layout.buyActions}>
             {priced && available ? <ProductBuyButton productId={product.id} /> : (
               <ExpertHelpQueryLink className={`${styles.primaryAction} ${layout.buyHelp}`} prefillMessage={prefill}>
