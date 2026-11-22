@@ -13,12 +13,15 @@ import { OneCIntegrationService } from "./one-c-integration.service.js";
 import { CatalogEnrichmentController } from "./catalog-enrichment.controller.js";
 import { CatalogEnrichmentService } from "./catalog-enrichment.service.js";
 import { CatalogSearchLogService } from "./catalog-search-log.service.js";
+import { CatalogQualityController } from "./catalog-quality.controller.js";
+import { CatalogQualityService } from "./catalog-quality.service.js";
 
 @Module({
   controllers: [
     CatalogEnrichmentController,
     CatalogImportController,
     CatalogPublicController,
+    CatalogQualityController,
     CatalogSearchController,
     OneCMachineController,
   ],
@@ -38,6 +41,7 @@ import { CatalogSearchLogService } from "./catalog-search-log.service.js";
     CatalogCategoryTreeCache,
     CatalogImportService,
     CatalogPublicService,
+    CatalogQualityService,
     CatalogRecategorizeService,
     CatalogSearchService,
     CatalogSearchLogService,
