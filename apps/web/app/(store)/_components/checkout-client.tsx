@@ -293,7 +293,7 @@ export function CheckoutClient({
                 <CartLineThumbnail line={line} />
                 <div className={commerce.lineIdentity}>
                   <CartLineIdentity line={line} position={index + 1} />
-                  <small className={commerce.linePhotoNote}>Фото товара пока нет</small>
+                  <small className={commerce.linePhotoNote}>Фото — в карточке товара</small>
                 </div>
                 <span className={commerce.lineTotal}>{line.quantity} шт. · {line.subtotalKopeks === null ? "Цена уточняется" : formatRubles(line.subtotalKopeks)}</span>
               </li>

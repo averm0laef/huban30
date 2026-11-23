@@ -29,16 +29,18 @@ export function CatalogPhoto({
   const [viewer, setViewer] = useState<{ images: readonly PreviewPhoto[]; index: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const original = src && !failed.has(src) ? src : null;
+  // The maker's photo kept after a customer asked for it (UMAPI): served as is from the catalogue's host, and named.
+  const fromMaker = Boolean(original?.startsWith("https://"));
   const frameClass = [styles.frame, className].filter(Boolean).join(" ");
   const previewImages = preview === true && original ? [{ alt, url: original }] : typeof preview === "object" ? preview.images : [];
   const content = (
     <>
       {original ? (
         <Image alt={alt} fill key={original} onError={() => setFailed((urls) => new Set([...urls, original]))}
-          preload={preload} referrerPolicy="no-referrer" sizes={sizes} src={original} unoptimized={unoptimized} />
+          preload={preload} referrerPolicy="no-referrer" sizes={sizes} src={original} unoptimized={unoptimized ?? (fromMaker || undefined)} />
       ) : <BrandWheel className={styles.emptyIcon} />}
-      {!original && showNote && noteInside ? (
-        <small className={[styles.noteInside, noteClassName].filter(Boolean).join(" ")}>Фото товара пока нет</small>
+      {showNote && noteInside && !original ? (
+        <small className={[styles.noteInside, noteClassName].filter(Boolean).join(" ")}>Фото по запросу</small>
       ) : null}
     </>
   );
@@ -51,7 +53,7 @@ export function CatalogPhoto({
           <span className={styles.zoom}><ZoomIn16Regular aria-hidden="true" /></span>
         </button>
       ) : <span className={frameClass} data-photo-missing={original ? undefined : ""}>{content}</span>}
-      {!original && showNote && !noteInside ? <small className={[styles.note, noteClassName].filter(Boolean).join(" ")}>Фото товара пока нет</small> : null}
+      {!original && showNote && !noteInside ? <small className={[styles.note, noteClassName].filter(Boolean).join(" ")}>Фото по запросу</small> : null}
       {viewer ? (
         <PhotoViewer images={viewer.images} initialIndex={viewer.index}
           onClose={() => {

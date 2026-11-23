@@ -393,7 +393,7 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
                       role="option"
                     >
                       <span className={styles.searchSuggestionFigure}>
-                        <CatalogPhoto className={styles.searchSuggestionMedia} sizes="42px" src={item.primaryImage?.url}
+                        <CatalogPhoto className={styles.searchSuggestionMedia} sizes="42px" src={item.primaryImage?.url ?? item.catalogueImage}
                           showNote={false} />
                       </span>
                       <span className={styles.searchSuggestionIdentity}>

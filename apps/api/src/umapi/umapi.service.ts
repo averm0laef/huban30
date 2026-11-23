@@ -7,9 +7,11 @@ import { PartsFinderShopService, type ShopOfferRequest } from "../parts-finder/p
 import { combinedVerdict, groupCars, verdictFor, type FitMake, type UmapiCar, type UmapiVerdict } from "./umapi-fitment.js";
 import { makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
 import {
-  normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, type UmapiArticleRow, type UmapiBrandRow, type UmapiCarLink, type UmapiCrossInfo,
+  normalizeArticleCard, normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, type UmapiArticleCard, type UmapiArticleRow,
+  type UmapiBrandRow, type UmapiCarLink, type UmapiCrossInfo, type UmapiSpec,
 } from "./umapi-normalize.js";
 import { cataloguePhotoUrls, UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
+import { UmapiProductCardService } from "./umapi-product-card.service.js";
 import { UmapiGateway, type UmapiCaller } from "./umapi.gateway.js";
 
 /** A catalogue part our product was matched to, and how. */
@@ -37,6 +39,9 @@ export type UmapiProductAnswer =
   | { status: "unknown_part" }
   /** Our number without a maker belongs to several makers in the catalogue. */
   | { status: "ambiguous" };
+
+/** «Показать фото и характеристики»: what the catalogue holds of the part (`none`: neither a photo nor characteristics). */
+export interface UmapiPhotoAnswer { part: UmapiPart; photos: string[]; specs: UmapiSpec[]; status: "ok" | "none"; title: string | null }
 
 export type UmapiFitmentAnswer = UmapiProductAnswer
   /** A check asked without a chosen car: the page asks to choose one. */
@@ -85,6 +90,7 @@ export class UmapiService {
     private readonly database: DatabaseService,
     private readonly shop: PartsFinderShopService,
     private readonly archive: UmapiPhotoArchiveService,
+    private readonly cards: UmapiProductCardService,
   ) {}
 
   /** What the product page may offer: the buttons, and the photo button only when the photo address is known. */
@@ -325,8 +331,13 @@ export class UmapiService {
 
   /* ---------------- Photo ---------------- */
 
-  /** Every press uses a fresh catalogue response. The private archive has no role in the public response. */
-  async productPhotos(productId: string, caller: UmapiCaller): Promise<UmapiProductAnswer | { status: "not_available" } | { part: UmapiPart; photos: string[]; status: "ok" | "none" }> {
+  /**
+   * «Показать фото и характеристики»: the maker's photos and characteristics of the part. Every press uses a fresh
+   * identification. When the catalogue named this very part (our number, not an analogue standing in for it), the
+   * answer is kept for the product (migration 0062): from then on the catalogue lists show its small photo and the
+   * page shows it at once. An analogue's photo is shown as such and never kept.
+   */
+  async productPhotos(productId: string, caller: UmapiCaller): Promise<UmapiProductAnswer | { status: "not_available" } | UmapiPhotoAnswer> {
     const base = this.gateway.mediaBaseUrl;
     if (!base) return { status: "not_available" };
     const product = await this.checkable(productId);
@@ -337,17 +348,28 @@ export class UmapiService {
     // The first part with a photo: an analogue stand-in has its card asked only now.
     let part = identified[0]!.part;
     let photos: string[] = [];
+    let title: string | null = identified[0]!.info?.title ?? null;
     for (const found of identified.slice(0, STAND_INS)) {
       const info = found.info ?? await this.crossInfo(found.part.asked, found.part.brand, caller, false);
       photos = info ? cataloguePhotoUrls(info.medias, base) : [];
       part = found.part;
+      title = info?.title ?? title;
       if (photos.length > 0) break;
     }
-    if (photos.length > 0 && part.via === "own" && !part.through && product.brand && sameMaker(product.brand, part.brand)) {
-      await this.archive.remember({ ...product, brand: product.brand }, part, photos).catch(() => {
-        this.logger.warn("Could not record UMAPI photo references for staff");
-      });
+    // The maker's characteristics, for the product's own part only: an analogue's sizes may differ.
+    const card: UmapiArticleCard = part.through
+      ? { specs: [], title: null }
+      : await this.gateway.get(`/Article/${part.artId}`, { Criterias: true }, caller, normalizeArticleCard, { whenNotFound: { specs: [], title: null } })
+        .catch(() => ({ specs: [], title: null }));
+    const answer = { part, photos, specs: card.specs, status: photos.length > 0 || card.specs.length > 0 ? "ok" as const : "none" as const, title: card.title ?? title };
+    if (part.via === "own" && !part.through) {
+      await this.cards.keep(product, part, answer).catch(() => this.logger.warn("Could not keep the maker's card of a product"));
+      if (photos.length > 0 && product.brand && sameMaker(product.brand, part.brand)) {
+        await this.archive.remember({ ...product, brand: product.brand }, part, photos).catch(() => {
+          this.logger.warn("Could not record UMAPI photo references for staff");
+        });
+      }
     }
-    return { part, photos, status: photos.length > 0 ? "ok" : "none" };
+    return answer;
   }
 }

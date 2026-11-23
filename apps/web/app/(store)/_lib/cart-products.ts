@@ -60,7 +60,7 @@ function toView(parsed: ReturnType<typeof CatalogProductDetailSchema.parse>): Ca
     availableQuantity: parsed.availableQuantity,
     brandName: parsed.brand?.name ?? null,
     category: parsed.category,
-    imageUrl: parsed.primaryImage?.url ?? parsed.images[0]?.url ?? null,
+    imageUrl: parsed.primaryImage?.url ?? parsed.images[0]?.url ?? parsed.catalogueCard?.photos[0] ?? parsed.catalogueImage ?? null,
     name: parsed.name,
     priceKopeks: parsed.priceKopeks,
     sku: parsed.sku,

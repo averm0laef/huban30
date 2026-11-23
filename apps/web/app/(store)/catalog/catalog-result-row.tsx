@@ -87,7 +87,7 @@ export function CatalogResultRow({
           {badges ? <div className={styles.resultRowBadges}>{badges}</div> : null}
           <p className={styles.resultRowMeta}>{brand ? `${brand} · ` : ""}Артикул: {sku}</p>
           <p className={styles.resultRowName}>{name}</p>
-          {view === "list" ? <small className={styles.resultRowPhotoNote}>Фото товара пока нет</small> : null}
+          {view === "list" && !imageUrl ? <small className={styles.resultRowPhotoNote}>Фото по запросу — в карточке товара</small> : null}
         </div>
       </div>
       {note ? (

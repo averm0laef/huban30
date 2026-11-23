@@ -97,6 +97,7 @@ interface ProductRow {
   primary_image_id: string | null;
   primary_image_is_primary: boolean | null;
   primary_image_mime_type: string | null;
+  catalogue_image?: string | null;
   sku: string;
   slug: string;
   updated_at: Date;
@@ -146,7 +147,9 @@ const PRODUCT_SELECT = `SELECT product.id,product.sku::text,product.name,product
   product.created_at,product.updated_at,price.amount_kopeks::text AS price_kopeks,
   stock.available_quantity::text,brand.id AS brand_id,brand.name AS brand_name,
   brand.slug::text AS brand_slug,category.id AS category_id,category.name AS category_name,
-  category.slug::text AS category_slug`;
+  category.slug::text AS category_slug,
+  (SELECT card.photos[1] FROM app.product_catalogue_cards AS card
+   WHERE card.product_id=product.id AND card.product_sku=product.sku) AS catalogue_image`;
 
 /** How often app.product_popularity is brought up to date. */
 const POPULARITY_REFRESH_MS = 15 * 60_000;
@@ -591,15 +594,23 @@ export class CatalogPublicService {
       [row.id, [...this.photos.providerNames], [...PUBLIC_IMAGE_MIME_TYPES]],
     );
     const imageViews = images.rows.map((image) => this.imageView(image));
+    const packSizes = await this.packSizes(row);
+    // Asked last and read leniently: the maker's card is an extra, never a reason for the page to fail.
+    const card = await Promise.resolve(this.database.query<{ article: string; brand: string; photos: string[]; specs: Array<{ label: string; value: string }>; title: string | null }>(
+      `SELECT catalogue_article AS article,catalogue_brand AS brand,photos,specs,title FROM app.product_catalogue_cards
+       WHERE product_id=$1 AND product_sku=$2`,
+      [row.id, row.sku],
+    )).catch(() => null);
     return {
       ...this.productSummary(row),
+      catalogueCard: card?.rows?.[0] ?? null,
       attributes: row.public_attributes,
       description: row.description,
       // What the name says plainly of the part, and the vehicle maker's numbers it carries (docs/CATALOG_MATCHING.md).
       features: specLabels(partSpecs(row.name)).map(([label, value]) => ({ label, value })),
       images: imageViews,
       originalNumbers: originalNumbersIn(row.name, row.sku),
-      packSizes: await this.packSizes(row),
+      packSizes,
       primaryImage: imageViews[0] ?? null,
     };
   }
@@ -781,6 +792,7 @@ export class CatalogPublicService {
       name: publicProductName(row.name, row.sku),
       priceKopeks: row.price_kopeks === null ? null : safeInteger(row.price_kopeks, "price"),
       primaryImage: image,
+      catalogueImage: row.catalogue_image ?? null,
       sku: row.sku,
       slug: row.slug,
       updatedAt: row.updated_at.toISOString(),

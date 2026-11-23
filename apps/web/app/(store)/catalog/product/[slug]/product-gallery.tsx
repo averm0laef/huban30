@@ -1,36 +1,48 @@
 "use client";
 
-import { Image20Regular } from "@fluentui/react-icons";
+import { Camera20Regular } from "@fluentui/react-icons";
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { BrandWheel } from "../../../_components/brand-mark";
 import { CatalogPhoto } from "../../../_components/catalog-photo";
 import buttons from "../../../_components/store-button.module.css";
 import { WheelLoader } from "../../../_components/wheel-loader";
 import { FinderError } from "../../../_lib/parts-finder";
-import { umapiGet, umapiStatus, type UmapiPhotos } from "../../../_lib/umapi";
+import { umapiGet, umapiStatus, type UmapiPhotos, type UmapiSpec } from "../../../_lib/umapi";
 import { ExpertHelpQueryLink } from "../../expert-help-query-link";
 import styles from "./product-page.module.css";
 
-type CataloguePhotos =
-  | { status: "off" | "idle" | "loading" | "none" }
-  | { message: string; retry: boolean; status: "error" }
-  | { label: string; photos: string[]; status: "ready" };
+/** The maker's photos and characteristics kept for the product after a customer asked for them (migration 0062). */
+export interface KeptCatalogueCard { article: string; brand: string; photos: string[]; specs: UmapiSpec[]; title: string | null }
 
-/** «Показать фото детали»: the maker's photo from the catalogue, on a press, for a product without its own photo. */
-function useCataloguePhotos(productId: string, wanted: boolean) {
-  const [state, setState] = useState<CataloguePhotos>({ status: "off" });
+type CataloguePhotos =
+  | { status: "off" | "idle" | "loading" }
+  | { specs: UmapiSpec[]; status: "none" }
+  | { message: string; retry: boolean; status: "error" }
+  | { label: string; photos: string[]; specs: UmapiSpec[]; status: "ready" };
+
+function keptState(card: KeptCatalogueCard | null): CataloguePhotos | null {
+  if (!card) return null;
+  if (card.photos.length > 0) return { label: `Фото производителя · ${card.brand} ${card.article}`, photos: card.photos, specs: card.specs, status: "ready" };
+  return card.specs.length > 0 ? { specs: card.specs, status: "none" } : null;
+}
+
+/**
+ * «Показать фото и характеристики»: the maker's photo and characteristics, on a press (docs/UMAPI_INTEGRATION.md).
+ * Once a customer asked, they are kept for the product and come with the page.
+ */
+function useCataloguePhotos(productId: string, wanted: boolean, kept: KeptCatalogueCard | null) {
+  const [state, setState] = useState<CataloguePhotos>(() => keptState(kept) ?? { status: "off" });
   const loading = useRef(false);
 
   useEffect(() => {
-    if (!wanted) return undefined;
+    if (!wanted || keptState(kept)) return undefined;
     let live = true;
     void umapiStatus().then((status) => {
       if (live && status.photos) setState({ status: "idle" });
     });
     return () => { live = false; };
-  }, [wanted]);
+  }, [kept, wanted]);
 
   async function load() {
     if (loading.current) return;
@@ -41,11 +53,11 @@ function useCataloguePhotos(productId: string, wanted: boolean) {
       if (data.status === "ok" && "photos" in data && data.photos.length > 0) {
         // An analogue standing in for a number without a card is named as such: the photo is of that analogue.
         const kind = data.part.through ? "Фото аналога" : "Фото производителя";
-        setState({ label: `${kind} · ${data.part.brand} ${data.part.article}`, photos: [...new Set(data.photos)], status: "ready" });
+        setState({ label: `${kind} · ${data.part.brand} ${data.part.article}`, photos: [...new Set(data.photos)], specs: data.specs ?? [], status: "ready" });
       } else if (data.status === "ambiguous" || data.status === "unknown_part") {
-        setState({ message: "Не удалось точно определить деталь в каталоге", retry: false, status: "error" });
+        setState({ message: "Покажем эту деталь вживую", retry: false, status: "error" });
       } else {
-        setState({ status: "none" });
+        setState({ specs: "specs" in data ? data.specs ?? [] : [], status: "none" });
       }
     } catch (error) {
       const limited = error instanceof FinderError && error.status === 429;
@@ -64,63 +76,87 @@ export interface GalleryImage {
   url: string;
 }
 
+const SPECS_SHOWN = 6;
+
+/** The maker's characteristics under the photo: the first few, the rest one tap away. */
+function MakerSpecs({ specs }: { specs: UmapiSpec[] }) {
+  if (specs.length === 0) return null;
+  const rows = (list: UmapiSpec[]) => list.map((spec) => <div className={styles.makerSpec} key={spec.label}><dt>{spec.label}</dt><dd>{spec.value}</dd></div>);
+  return (
+    <section aria-label="Характеристики производителя" className={styles.makerSpecs}>
+      <h2>Характеристики производителя</h2>
+      <dl>{rows(specs.slice(0, SPECS_SHOWN))}</dl>
+      {specs.length > SPECS_SHOWN ? (
+        <details>
+          <summary>Все характеристики ({specs.length})</summary>
+          <dl>{rows(specs.slice(SPECS_SHOWN))}</dl>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 /**
- * The frame of a product without its own photo (Claude Design canvas «совместимость и аналоги», «Карточка v2»): the
- * button is inside the frame, where the customer looks for the picture, and every answer appears in the same place.
+ * The frame of a product without its own photo (Claude Design canvas «совместимость и аналоги», boards «Карточка v2»
+ * and «Фото по запросу»): an invitation to look, not «no photo»; the button and every answer stay inside the frame.
  * Never another part's picture.
  */
-function MissingPhoto({ ask, load, state }: { ask: ReactNode; load: () => void; state: CataloguePhotos }) {
+function MissingPhoto({ article, ask, load, state }: { article: string; ask: ReactNode; load: () => void; state: CataloguePhotos }) {
   if (state.status === "loading") {
-    return <div className={styles.photoEmpty} data-state="loading"><WheelLoader label="Ищем фото…" /></div>;
+    return <div className={styles.photoEmpty} data-state="loading"><WheelLoader label="Ищем фото и характеристики…" /></div>;
   }
   if (state.status === "idle") {
     return (
       <div className={styles.photoEmpty}>
-        <BrandWheel className={styles.photoGhost} />
-        <p className={styles.photoTitle}>Своего фото у товара пока нет</p>
-        <p className={styles.photoText}>Покажем фото этой детали от производителя — по артикулу, за пару секунд.</p>
+        <Camera20Regular aria-hidden="true" className={styles.photoInvite} />
+        <p className={styles.photoTitle}>Посмотрите деталь вблизи</p>
+        <p className={styles.photoText}>Покажем фото и характеристики от производителя по артикулу {article} — бесплатно, за пару секунд.</p>
         <button className={`${buttons.button} ${buttons.primary}`} onClick={load} type="button">
-          <Image20Regular aria-hidden="true" />Показать фото детали
+          <Camera20Regular aria-hidden="true" />Показать фото и характеристики
         </button>
       </div>
     );
   }
-  if (state.status === "error") {
+  if (state.status === "error" && state.retry) {
     return (
       <div className={styles.photoEmpty} role="alert">
         <p className={styles.photoTitle}>{state.message}</p>
-        <p className={styles.photoText}>{state.retry ? "Так бывает на минуту-другую. Попробуйте ещё раз." : "Сфотографируем деталь на складе и пришлём в чат."}</p>
-        {state.retry ? <button className={`${buttons.button} ${buttons.primary}`} onClick={load} type="button">Повторить</button> : null}
+        <p className={styles.photoText}>Так бывает на минуту-другую. Попробуйте ещё раз — или пришлём фото со склада.</p>
+        <button className={`${buttons.button} ${buttons.primary}`} onClick={load} type="button">Повторить</button>
         {ask}
       </div>
     );
   }
+  // Nothing in the catalogue, a part it cannot name, or no catalogue at all: the shop photographs it for the customer.
   return (
-    <div className={styles.photoEmpty} role={state.status === "none" ? "status" : undefined}>
-      {state.status === "none" ? null : <BrandWheel className={styles.photoGhost} />}
-      <p className={styles.photoTitle}>{state.status === "none" ? "У производителя фото нет" : "Своего фото у товара пока нет"}</p>
-      <p className={styles.photoText}>Сфотографируем деталь на складе и пришлём в чат.</p>
+    <div className={styles.photoEmpty} role={state.status === "none" || state.status === "error" ? "status" : undefined}>
+      <Camera20Regular aria-hidden="true" className={styles.photoInvite} />
+      <p className={styles.photoTitle}>{state.status === "error" ? state.message : "Сфотографируем её для вас"}</p>
+      <p className={styles.photoText}>Сделаем фото на складе и пришлём в чат — увидите деталь до покупки.</p>
       {ask}
     </div>
   );
 }
 
-export function ProductGallery({ catalogPhotos, images, productId, requestMessage }: {
+export function ProductGallery({ article, catalogPhotos, images, kept = null, productId, requestMessage }: {
+  article: string;
   catalogPhotos: boolean;
   images: GalleryImage[];
+  kept?: KeptCatalogueCard | null;
   productId: string;
   requestMessage: string;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const { load, state } = useCataloguePhotos(productId, catalogPhotos && images.length === 0);
-  const fromCatalogue = state.status === "ready";
+  const { load, state } = useCataloguePhotos(productId, catalogPhotos && images.length === 0, images.length === 0 ? kept : null);
+  const fromCatalogue = state.status === "ready" && images.length === 0;
   const photos = fromCatalogue
     ? state.photos.map((url) => ({ alt: state.label, url }))
     : images.map(({ altText, url }) => ({ alt: altText, url }));
   const active = photos[activeIndex] ?? photos[0];
+  const specs = state.status === "ready" || state.status === "none" ? state.specs : [];
   const askShop = (soft: boolean) => (
     <ExpertHelpQueryLink className={`${buttons.button} ${soft ? buttons.soft : buttons.quiet}`} prefillMessage={requestMessage}>
-      Попросить фото у магазина
+      {soft ? "Получить фото в чат" : "Попросить фото у магазина"}
     </ExpertHelpQueryLink>
   );
 
@@ -135,13 +171,14 @@ export function ProductGallery({ catalogPhotos, images, productId, requestMessag
               noteInside
               preload={!fromCatalogue && activeIndex === 0}
               preview={{ images: photos, index: activeIndex }}
+              showNote={false}
               sizes="(max-width: 690px) 100vw, (max-width: 1050px) 50vw, 460px"
               src={active.url}
               unoptimized={fromCatalogue}
             />
             {fromCatalogue ? <span className={styles.photoBadge}>{state.label}</span> : null}
           </>
-        ) : <MissingPhoto ask={askShop(state.status !== "error")} load={() => { setActiveIndex(0); void load(); }} state={state} />}
+        ) : <MissingPhoto article={article} ask={askShop(state.status !== "error" || !state.retry)} load={() => { setActiveIndex(0); void load(); }} state={state} />}
       </div>
       {photos.length > 1 ? (
         <div className={styles.thumbs} role="group" aria-label={fromCatalogue ? "Фото производителя" : "Фотографии товара"}>
@@ -153,12 +190,13 @@ export function ProductGallery({ catalogPhotos, images, productId, requestMessag
           ))}
         </div>
       ) : null}
-      {fromCatalogue ? (
+      {fromCatalogue || state.status === "idle" || specs.length > 0 ? (
         <figcaption className={styles.photoActions}>
-          <p className={styles.catalogueNote} role="status">Внешний вид детали на складе может отличаться.</p>
-          {askShop(false)}
+          {fromCatalogue ? <p className={styles.catalogueNote} role="status">Фото от производителя — нажмите, чтобы увеличить. Внешний вид детали на складе может отличаться.</p> : null}
+          <MakerSpecs specs={specs} />
+          {fromCatalogue || state.status === "idle" ? askShop(false) : null}
         </figcaption>
-      ) : state.status === "idle" ? <figcaption className={styles.photoActions}>{askShop(false)}</figcaption> : null}
+      ) : null}
     </figure>
   );
 }

@@ -47,6 +47,16 @@
   text-align: center;
 }
 .photoEmpty > :is(button, a) { max-width: 100%; min-height: 48px; white-space: normal; }
+/* The invitation to look (canvas «Фото по запросу»): a camera in the brand colour, not a «no photo» sign. */
+.photoInvite { width: 44px; height: 44px; flex: none; color: var(--store-brand); }
+/* The maker's characteristics under the photo. */
+.makerSpecs { display: grid; gap: 8px; width: 100%; min-width: 0; }
+.makerSpecs h2 { margin: 0; font-family: var(--store-font-display); font-size: .95rem; font-weight: 800; }
+.makerSpecs dl { display: grid; margin: 0; }
+.makerSpec { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--store-border); font-size: .86rem; line-height: 1.4; }
+.makerSpec dt { color: var(--store-muted); }
+.makerSpec dd { margin: 0; text-align: end; font-weight: 600; overflow-wrap: anywhere; }
+.makerSpecs summary { display: inline-flex; align-items: center; min-height: 44px; color: var(--store-brand); font-weight: 700; cursor: pointer; }
 .photoGhost { width: 84px; height: 84px; flex: none; color: color-mix(in srgb, var(--store-brand) 14%, var(--store-border)); }
 .photoTitle { margin: 0; font-family: var(--store-font-display); font-size: 1rem; font-weight: 800; line-height: 1.3; color: var(--store-text); overflow-wrap: anywhere; }
 .photoText { margin: 0; max-width: 300px; color: var(--store-muted); font-size: .86rem; line-height: 1.45; }

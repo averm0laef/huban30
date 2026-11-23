@@ -47,7 +47,7 @@ export function CartClient() {
                   <CartLineThumbnail line={line} />
                   <div className={commerce.lineIdentity}>
                     <CartLineIdentity line={line} position={index + 1} />
-                    <small className={commerce.linePhotoNote}>Фото товара пока нет</small>
+                    <small className={commerce.linePhotoNote}>Фото — в карточке товара</small>
                     <button className={commerce.remove} type="button"
                       onClick={() => removeItem(line.productId)} aria-label={`Удалить позицию ${index + 1} из корзины`}>Удалить</button>
                   </div>

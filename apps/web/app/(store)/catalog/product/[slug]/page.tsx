@@ -158,7 +158,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <span className={layout.crumbCurrent} aria-current="page">{product.name}</span>
       </nav>
       <article className={layout.hero}>
-        <ProductGallery catalogPhotos={catalogueApplies} images={images} key={`gallery-${product.id}`} productId={product.id}
+        <ProductGallery article={product.sku} catalogPhotos={catalogueApplies} images={images} kept={product.catalogueCard ?? null} key={`gallery-${product.id}`} productId={product.id}
           requestMessage={productPhotoPrefillMessage(product.name, product.sku)} />
 
         <div className={layout.info}>

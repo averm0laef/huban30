@@ -137,7 +137,7 @@ export function CatalogSearchPanel({
               badges={item.matchedVia === "cross" ? <RowBadge analog>Аналог</RowBadge> : undefined}
               brand={item.brand ? item.brand.name : null}
               imageAlt={item.primaryImage?.altText ?? ""}
-              imageUrl={item.primaryImage?.url}
+              imageUrl={item.primaryImage?.url ?? item.catalogueImage ?? undefined}
               key={item.id}
               name={<Link href={`/catalog/product/${encodeURIComponent(item.slug)}`}>{item.name}</Link>}
               priceLabel={item.priceKopeks === null ? "Цена уточняется" : formatRubles(item.priceKopeks)}

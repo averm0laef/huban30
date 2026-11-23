@@ -691,6 +691,8 @@ export const CatalogProductSummarySchema = z.object({
   name: z.string().min(1).max(500),
   priceKopeks: MoneySchema.nullable(),
   primaryImage: CatalogImageViewSchema.nullable(),
+  /** The maker's photo kept after a customer asked for it (UMAPI, migration 0062): for a product without its own. */
+  catalogueImage: z.url({ protocol: /^https$/u }).max(600).nullable().optional(),
   sku: z.string().min(1).max(200),
   slug: CatalogPublicSlugSchema,
   updatedAt: z.iso.datetime(),
@@ -710,6 +712,14 @@ export type CatalogProductsResponse = z.infer<typeof CatalogProductsResponseSche
 
 export const CatalogProductDetailSchema = CatalogProductSummarySchema.extend({
   attributes: z.record(z.string(), z.unknown()),
+  /** The maker's photos and characteristics, kept after a customer asked for them (UMAPI, migration 0062). */
+  catalogueCard: z.object({
+    article: z.string().min(1).max(64),
+    brand: z.string().min(1).max(80),
+    photos: z.array(z.url({ protocol: /^https$/u }).max(600)).max(8),
+    specs: z.array(z.object({ label: z.string().min(1).max(60), value: z.string().min(1).max(200) }).strict()).max(30),
+    title: z.string().max(200).nullable(),
+  }).strict().nullable().optional(),
   description: z.string().max(100_000).nullable(),
   /** What the name says plainly of the part (side, voltage, size…), as the page names it: catalog-part-specs.ts. */
   features: z.array(z.object({ label: z.string().min(1).max(40), value: z.string().min(1).max(80) }).strict()).max(20).default([]),

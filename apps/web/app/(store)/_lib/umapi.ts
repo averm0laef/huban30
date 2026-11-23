@@ -28,7 +28,8 @@ export type UmapiFitment =
   };
 
 export type UmapiAnalogs = { status: UmapiProductStatus } | { offers: ShopOffer[]; parts: UmapiPart[]; status: "ok" };
-export type UmapiPhotos = { status: UmapiProductStatus | "not_available" } | { part: UmapiPart; photos: string[]; status: "ok" | "none" };
+export interface UmapiSpec { label: string; value: string }
+export type UmapiPhotos = { status: UmapiProductStatus | "not_available" } | { part: UmapiPart; photos: string[]; specs?: UmapiSpec[]; status: "ok" | "none"; title?: string | null };
 
 const UNAVAILABLE = "Проверка по каталогу сейчас недоступна. Попробуйте через несколько минут или спросите специалиста.";
 

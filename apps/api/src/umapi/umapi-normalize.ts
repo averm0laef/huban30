@@ -118,3 +118,28 @@ export function normalizeCrossInfo(payload: unknown): UmapiCrossInfo | null {
   if (!artId || !article || !brand) return null;
   return { article, artId, brand, medias: detail ? normalizeMedias(detail, id(detail.SUP_ID)) : [], title: text(detail?.COMPLETE_DES ?? body?.title, 200) };
 }
+
+export interface UmapiSpec { label: string; value: string }
+export interface UmapiArticleCard { specs: UmapiSpec[]; title: string | null }
+
+/**
+ * Article/{ART_ID}?Criterias=true: the maker's characteristics, in the catalogue's order, as the page shows them —
+ * «Толщина» «20,3 мм», «Датчик износа» «вкл. датчик износа». A criterion without a value is skipped; the same name
+ * twice is joined («Тормозная система»: two notes).
+ */
+export function normalizeArticleCard(payload: unknown): UmapiArticleCard {
+  const body = record(payload);
+  const specs = new Map<string, string[]>();
+  for (const row of rows(payload, "CRITERIAS")) {
+    const name = text(row.CRI_DES ?? row.CRI_SHORT_DES, 60)?.replace(/\s*\[[^\]]*\]\s*$/u, "");
+    const unit = text(row.CRI_UNIT_DES, 20);
+    const value = text(row.DES, 120) ?? (text(row.VALUE, 80) ? `${text(row.VALUE, 80)}${unit ? ` ${unit}` : ""}` : null);
+    if (!name || !value) continue;
+    const label = name[0]!.toUpperCase() + name.slice(1);
+    specs.set(label, [...(specs.get(label) ?? []), value]);
+  }
+  return {
+    specs: [...specs.entries()].slice(0, 30).map(([label, values]) => ({ label, value: [...new Set(values)].join("; ").slice(0, 200) })),
+    title: text(body?.COMPLETE_DES ?? body?.DES, 200),
+  };
+}

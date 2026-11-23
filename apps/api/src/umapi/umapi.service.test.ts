@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { PartsFinderShopService, ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
 import type { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
+import type { UmapiProductCardService } from "./umapi-product-card.service.js";
 import type { UmapiGateway } from "./umapi.gateway.js";
 import { UmapiService } from "./umapi.service.js";
 
@@ -42,6 +43,7 @@ function setup(options: { answers?: Answers; media?: string | null; product?: Te
   const asked: string[] = [];
   const fresh: string[] = [];
   const remember = vi.fn(async () => undefined);
+  const keep = vi.fn(async () => undefined);
   const gateway = {
     available: true,
     get: async (path: string, parameters: Record<string, string | number | boolean>, _caller: unknown, reduce: (payload: unknown) => unknown, settings?: { fresh?: boolean; whenNotFound?: unknown }) => {
@@ -65,8 +67,8 @@ function setup(options: { answers?: Answers; media?: string | null; product?: Te
   const shop = {
     lookup: async () => ({ for: (request: ShopOfferRequest) => shopOffers[`${request.brand}|${request.article}`] ?? [] }),
   };
-  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService);
-  return { asked, fresh, remember, service };
+  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService, { keep } as unknown as UmapiProductCardService);
+  return { asked, fresh, keep, remember, service };
 }
 
 const VISITOR = { ip: "203.0.113.7" };
@@ -268,5 +270,28 @@ describe("UmapiService: products our own number alone did not find (sample of 24
     expect(await service.productFitment(product.id, {}, VISITOR, "list")).toMatchObject({ makes: [{ make: "MERCEDES-BENZ", models: [{ cars: [{ name: "1831 · 313 л.с. · 4x2" }] }] }], total: 1 });
     // Its CV_ID equals the customer's PC_ID and its MS_ID the model's: still «not listed» for the car.
     expect(await service.productFitment(product.id, { modificationId: 100_000_123 }, VISITOR, "check")).toMatchObject({ verdict: "not_listed" });
+  });
+});
+
+describe("UmapiService: the maker's photo and characteristics are kept for the product", () => {
+  it("keeps the product's own part with its characteristics, and never an analogue's", async () => {
+    const product = { ...AFW, brand: "FILTRON", name: "Фильтр салона FILTRON K1288", sku: "K1288" };
+    const answers: Answers = {
+      ...FILTER_ANSWERS,
+      "/Article/7001": { COMPLETE_DES: "Фильтр, воздух во внутреннем пространстве", CRITERIAS: [
+        { CRI_DES: "Длина [мм]", CRI_SHORT_DES: "Длина", CRI_UNIT_DES: "мм", VALUE: "254" },
+        { CRI_DES: "Учитывать технические данные", CRI_TYPE: "NoValue" },
+        { CRI_DES: "Тормозная система", DES: "только со стальными дисками", VALUE: "80" },
+      ] },
+    };
+    const { keep, service } = setup({ answers, product });
+    const answer = await service.productPhotos(product.id, VISITOR);
+    expect(answer).toMatchObject({
+      photos: ["https://media.example/256/k1288.webp"],
+      specs: [{ label: "Длина", value: "254 мм" }, { label: "Тормозная система", value: "только со стальными дисками" }],
+      status: "ok",
+      title: "Фильтр, воздух во внутреннем пространстве",
+    });
+    expect(keep).toHaveBeenCalledWith(expect.objectContaining({ id: product.id }), expect.objectContaining({ artId: 7001 }), expect.objectContaining({ photos: ["https://media.example/256/k1288.webp"] }));
   });
 });

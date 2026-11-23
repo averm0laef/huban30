@@ -129,7 +129,7 @@ export async function HomeShowcase() {
             <article className={styles.availableItem} key={item.id}>
               <Link className={styles.availableDetails} href={`/catalog/product/${encodeURIComponent(item.slug)}`}>
                 <CatalogPhoto className={styles.availableImage} noteInside
-                  src={item.primaryImage?.url}
+                  src={item.primaryImage?.url ?? item.catalogueImage}
                   sizes="(max-width: 767px) 162px, (max-width: 1440px) 22vw, 292px" />
                 <span className={styles.availableName}>
                   <strong>{item.name}</strong>
