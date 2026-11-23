@@ -67,6 +67,9 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 const MIN_DISTINCT_PASSWORD_CHARACTERS = 5;
+// A sign-up repeated this soon is the same attempt sent again (a retry, a second
+// click, a second tab), not a request for a new letter.
+const REPEATED_REGISTRATION_WINDOW_SECONDS = 60;
 
 // Keyboard rows and alphabets joined in typing order: a password that only
 // walks along one of them (in either direction) is a pattern, not a phrase.
@@ -182,6 +185,33 @@ export class AuthService {
         userId = created.rows[0]?.id;
       }
       if (!userId) throw new Error("Registration did not resolve a user identifier");
+
+      if (existingAccount) {
+        // The letter that was just sent stays the valid one: the name and
+        // password above are the latest, but no second consent row, link or
+        // letter is made.
+        const justSent = await client.query(
+          `SELECT 1 FROM app.email_verification_tokens
+           WHERE user_id = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
+             AND created_at > clock_timestamp() - make_interval(secs => $2)
+           LIMIT 1`,
+          [userId, REPEATED_REGISTRATION_WINDOW_SECONDS],
+        );
+        if (justSent.rows.length > 0) {
+          await this.audit.record({
+            action: "auth.registration.requested",
+            entityId: userId,
+            entityType: "user",
+            ipAddress: metadata.ipAddress,
+            metadata: {
+              personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+              repeatedWithinSeconds: REPEATED_REGISTRATION_WINDOW_SECONDS,
+            },
+            userAgent: metadata.userAgent,
+          }, client);
+          return null;
+        }
+      }
 
       await client.query(
         `

@@ -193,6 +193,62 @@ describe("auth account state policy", () => {
     }), expect.anything());
   });
 
+  it.each([
+    { justSent: true, letters: 0 },
+    { justSent: false, letters: 1 },
+  ])("a sign-up repeated right after the letter was sent makes no second consent, link or letter ($justSent)", async ({ justSent, letters }) => {
+    const userId = "019bf9ea-0d3e-7def-8c9a-0000000000cd";
+    const clientQuery = vi.fn(async (statement: string, _parameters?: unknown[]) => {
+      if (statement.includes("SELECT id, status::text FROM app.users")) {
+        return { rows: [{ id: userId, status: "pending_email" }] };
+      }
+      if (statement.includes("created_at > clock_timestamp() - make_interval")) {
+        return { rows: justSent ? [{}] : [] };
+      }
+      return { rows: [] };
+    });
+    const database = {
+      transaction: vi.fn(async (work: (client: { query: typeof clientQuery }) => Promise<unknown>) => (
+        work({ query: clientQuery })
+      )),
+    };
+    const audit = { record: vi.fn() };
+    const service = new AuthService(
+      configStub({ AUTH_DEBUG_TOKENS: true }),
+      audit as unknown as AuditService,
+      {
+        encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
+        opaqueHash: vi.fn().mockReturnValue(Buffer.from("hash")),
+        randomToken: vi.fn().mockReturnValue("verification-token"),
+      } as unknown as CryptoService,
+      database as unknown as DatabaseService,
+      { hash: vi.fn().mockResolvedValue("latest-password-hash") } as unknown as PasswordService,
+      {} as SessionService,
+      {} as TotpService,
+    );
+
+    const answer = await service.register({
+      displayName: "Антон Ермолаев",
+      email: "client@example.test",
+      password: "different-secure-phrase",
+      personalDataConsent: true,
+      personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+    }, { ipAddress: "203.0.113.30" });
+
+    const statements = clientQuery.mock.calls.map((call) => String(call[0]));
+    const count = (part: string) => statements.filter((statement) => statement.includes(part)).length;
+    expect(count("INSERT INTO app.personal_data_consents")).toBe(letters);
+    expect(count("INSERT INTO app.email_verification_tokens")).toBe(letters);
+    expect(count("UPDATE app.email_verification_tokens SET used_at")).toBe(letters);
+    expect(count("INSERT INTO app.outbox_events")).toBe(letters);
+    // The password typed last is the one the link will ask for.
+    expect(clientQuery.mock.calls.find((call) => String(call[0]).includes("UPDATE app.users"))?.[1])
+      .toEqual([userId, "Антон Ермолаев", "latest-password-hash"]);
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect("developmentToken" in answer).toBe(!justSent);
+    expect(answer.message).toBe("Если адрес подходит, инструкция будет отправлена.");
+  });
+
   it("does not create a session when the password hash changes after verification", async () => {
     const initial = {
       email: "client@example.test",
