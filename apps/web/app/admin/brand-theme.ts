@@ -1,4 +1,4 @@
-import { createDarkTheme, createLightTheme, type BrandVariants } from "@fluentui/react-components";
+import { createDarkTheme, createLightTheme, type BrandVariants, type Theme } from "@fluentui/react-components";
 
 // The logo's ultramarine is the primary step; Fluent derives all component
 // states from this ramp instead of introducing its default Microsoft blue.
@@ -19,5 +19,14 @@ const shared = {
   borderRadiusXLarge: "26px",
 };
 
-export const staffLightTheme = { ...createLightTheme(brand), ...shared };
-export const staffDarkTheme = { ...createDarkTheme(brand), ...shared };
+export const staffLightTheme: Theme = { ...createLightTheme(brand), ...shared };
+export const staffDarkTheme: Theme = {
+  ...createDarkTheme(brand),
+  ...shared,
+  // Ultramarine needs lighter text steps than Fluent's default blue ramp.
+  colorBrandForeground1: brand[130],
+  colorBrandForeground2: brand[140],
+  colorBrandForegroundLink: brand[130],
+  colorBrandForegroundLinkHover: brand[140],
+  colorBrandForegroundLinkPressed: brand[120],
+};

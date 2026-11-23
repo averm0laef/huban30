@@ -16,6 +16,7 @@
 .provider :global(.fui-Radio),
 .provider :global(.fui-Switch) { min-height: 44px; }
 .provider :global(.fui-Button) { min-width: 44px; }
+.provider :global(.fui-Select__select) { min-height: 44px; }
 .brandLogo { display: block; flex: none; width: 110px; height: 46px; }
 
 .authShell {
@@ -285,7 +286,7 @@
   margin-left: auto;
 }
 .networkBadge { flex: 0 0 auto; }
-@media(max-width:600px) { .topbar .networkBadge { display: none; } .topbar { gap: 6px; } .topbarActions { flex: 0 0 auto; } .topbar .signOutButton { min-width: 32px; padding-inline: 4px; font-size: 0; } .signOutButton :global(.fui-Button__icon) { margin-right: 0; } }
+@media(max-width:600px) { .topbar .networkBadge { display: none; } .topbar { gap: 6px; } .topbarActions { flex: 0 0 auto; } .topbar .signOutButton { min-width: 44px; padding-inline: 4px; font-size: 0; } .signOutButton :global(.fui-Button__icon) { margin-right: 0; } }
 
 .menuButton {
   display: none !important;
@@ -448,8 +449,8 @@
 }
 
 .sortButton {
-  min-width: 0 !important;
-  height: 32px;
+  min-width: 44px !important;
+  height: 44px;
   margin-left: -10px;
   font: inherit !important;
 }
@@ -644,6 +645,7 @@
 }
 
 .threadCard small {
+  font-size: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1283,7 +1285,7 @@
 
 /* A word in running text that acts (fills the sorting-rule form). */
 .linkButton {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 2px;
   border: 0;
   background: none;
@@ -1309,7 +1311,7 @@
   color: var(--colorNeutralForeground2);
 }
 .ruleForm input {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 10px;
   border: 1px solid var(--colorNeutralStroke1);
   border-radius: 6px;

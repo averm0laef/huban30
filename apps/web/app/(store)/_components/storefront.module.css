@@ -873,7 +873,7 @@
 .searchForm input::-webkit-search-cancel-button { margin-right: 2px; }
 .searchForm button {
   flex: 0 0 auto;
-  height: 40px;
+  height: 44px;
   margin-right: 6px;
   padding: 0 var(--store-space-md);
   border: 0;
