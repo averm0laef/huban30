@@ -11,7 +11,7 @@ import { AuditService } from "../security/audit.service.js";
 import { PasswordService } from "../security/password.service.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
 import { parseBasicAuthorization, safeTextEqual } from "./catalog-import.utils.js";
-import { namedOneCExchangeOptions, readOneCExchangeOptions } from "../one-c-exchange/one-c-exchange-options.js";
+import { namedOneCExchangeOptions, ONE_C_DEFAULT_EXPECTED_SYNC_MINUTES, readOneCExchangeOptions } from "../one-c-exchange/one-c-exchange-options.js";
 import { ONE_C_SOURCES, sourceSql, type OneCSource } from "../one-c-exchange/one-c-source.js";
 
 const UpdateOneCSettingsSchema = z.object({
@@ -71,7 +71,11 @@ export interface OneCExchangeSummary {
   /** Photos from <Картинка> attached / skipped (missing file, not an image, failed the malware or media check). Catalog runs only. */
   imagesAttached?: number;
   imagesSkipped?: number;
+  /** A full catalogue named less than half of the live products, so the ones it does not list stayed on the shop. */
+  hidingSkipped?: boolean;
   kind: "catalog" | "offers";
+  /** Products a full catalogue no longer lists and hid from the shop. */
+  productsHidden?: number;
   rowsRejected: number;
   rowsTouched: number;
   /** How many products this run filed under the explicit "Без категории" bucket instead of a real category -- see catalog-known-categories.ts. Always 0 for an "offers" run (price/stock only, no category assignment happens there). */
@@ -135,7 +139,7 @@ export class OneCIntegrationService {
       const allowedNetworks = input.allowedNetworks ?? before?.allowed_networks ?? [];
       const enabled = input.enabled ?? before?.is_enabled ?? false;
       const displayName = input.displayName ?? before?.display_name ?? (source === "one_c" ? "Основная база 1С" : "Дополнительная база 1С");
-      const expectedSyncMinutes = input.expectedSyncMinutes ?? before?.expected_sync_minutes ?? 60;
+      const expectedSyncMinutes = input.expectedSyncMinutes ?? before?.expected_sync_minutes ?? ONE_C_DEFAULT_EXPECTED_SYNC_MINUTES;
       // Only the switches this request names change; the rest keep their stored value.
       const options = namedOneCExchangeOptions(input);
 
@@ -388,14 +392,14 @@ export class OneCIntegrationService {
     const { limit, offset } = parsed.data;
     const rows = await this.database.query<{
       body_count: number; contains_only_changes: boolean; created_at: Date; cursor_index: number;
-      error_message: string | null; filename: string; id: string; images_attached: number;
+      error_message: string | null; filename: string; hiding_skipped: boolean; id: string; images_attached: number;
       images_skipped: number; kind: "catalog" | "offers"; phase: string; price_type_name: string | null; rows_rejected: number;
-      rows_touched: number; rows_uncategorized: number; status: "completed" | "failed" | "running"; updated_at: Date;
+      products_hidden: number; rows_touched: number; rows_uncategorized: number; status: "completed" | "failed" | "running"; updated_at: Date;
     }>(
       `SELECT id::text, kind, filename, contains_only_changes, status, phase, cursor_index,
               jsonb_array_length(header_rows) + jsonb_array_length(body_rows)
                 + COALESCE(jsonb_array_length(tail_rows), 0) AS body_count, rows_touched, rows_rejected, rows_uncategorized,
-              images_attached, images_skipped, error_message, created_at, updated_at, price_type_name
+              images_attached, images_skipped, error_message, created_at, updated_at, price_type_name, products_hidden, hiding_skipped
        FROM app.one_c_exchange_runs
        WHERE source_key = ${sourceSql(source)}
        ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
@@ -410,12 +414,14 @@ export class OneCIntegrationService {
         createdAt: row.created_at.toISOString(),
         errorMessage: row.error_message,
         filename: row.filename,
+        hidingSkipped: row.hiding_skipped,
         id: row.id,
         imagesAttached: row.images_attached,
         imagesSkipped: row.images_skipped,
         kind: row.kind,
         phase: row.phase,
         priceTypeName: row.price_type_name,
+        productsHidden: row.products_hidden,
         rowsInFile: row.body_count,
         rowsRejected: row.rows_rejected,
         rowsTouched: row.rows_touched,
@@ -443,7 +449,7 @@ export class OneCIntegrationService {
 
   private safeSettings(row: OneCSettingsRow | undefined, source: OneCSource = "one_c"): Record<string, unknown> {
     const lastOffers = row?.last_offers_exchange_at;
-    const expected = row?.expected_sync_minutes ?? 60;
+    const expected = row?.expected_sync_minutes ?? ONE_C_DEFAULT_EXPECTED_SYNC_MINUTES;
     return {
       sourceKey: source,
       displayName: row?.display_name || (source === "one_c" ? "Основная база 1С" : "Дополнительная база 1С"),

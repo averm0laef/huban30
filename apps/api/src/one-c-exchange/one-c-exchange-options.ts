@@ -1,6 +1,13 @@
 import { z } from "zod";
 
 /**
+ * How often a base is expected to send prices and stock unless staff set
+ * another interval: the owner's 1С runs the exchange once a day. Only the
+ * freshness check and the late-exchange alert read it; 1С starts every exchange.
+ */
+export const ONE_C_DEFAULT_EXPECTED_SYNC_MINUTES = 24 * 60;
+
+/**
  * Per-base switches of the 1С exchange. They live in
  * app.integration_endpoints.settings (one JSON object per 1С base) and are
  * edited by staff in «Настройки интеграций»; every switch has a safe default,

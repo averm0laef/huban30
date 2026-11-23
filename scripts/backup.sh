@@ -20,6 +20,8 @@
 #   AN30_BACKUP_DIR    destination                 (default /var/backups/an30)
 #   AN30_APP_DIR       compose project directory   (default /opt/an30/app)
 #   AN30_RETAIN_DAYS   how long to keep archives   (default 14)
+#   AN30_KEEP_ALL_HOURS  archives younger than this are all kept; older ones
+#                        are thinned to the last one of each day (default 48)
 
 set -euo pipefail
 
@@ -28,6 +30,7 @@ secrets_dir=${AN30_SECRETS_DIR:-/etc/an30/secrets}
 backup_dir=${AN30_BACKUP_DIR:-/var/backups/an30}
 app_dir=${AN30_APP_DIR:-/opt/an30/app}
 retain_days=${AN30_RETAIN_DAYS:-14}
+keep_all_hours=${AN30_KEEP_ALL_HOURS:-48}
 passphrase_file="$secrets_dir/backup_passphrase.txt"
 
 log() { printf '{"level":"info","service":"backup","event":"%s","message":"%s"}\n' "$1" "$2"; }
@@ -111,6 +114,50 @@ docker run --rm -v "$uploads_volume:/data/uploads:ro" postgres:18-alpine \
 log "uploads.completed" "Attachment archive written"
 
 # ---- retention ------------------------------------------------------------
+# A copy every 15 minutes kept for the whole retention period fills the disk:
+# 96 runs a day. Recent archives stay as they are; past keep_all_hours only one
+# run of each UTC day survives, until retain_days removes it too.
+thin_before=$(date -u -d "-$keep_all_hours hours" +%Y%m%dT%H%M%SZ)
+thinned=0
+db_archive() { printf '%s/an30-db-%s.dump.zst.gpg' "$backup_dir" "$1"; }
+uploads_archive() { printf '%s/an30-uploads-%s.tar.zst.gpg' "$backup_dir" "$1"; }
+
+# A day keeps one run, database and attachments together: the last run that
+# wrote both. Thinning the two kinds separately would pair a database with
+# attachments from another run when the day's last run stopped halfway.
+day_stamps=()
+thin_day() {
+  [ "${#day_stamps[@]}" -gt 0 ] || return 0
+  local keeper=${day_stamps[0]} run file
+  for run in "${day_stamps[@]}"; do
+    if [ -e "$(db_archive "$run")" ] && [ -e "$(uploads_archive "$run")" ]; then
+      keeper=$run
+      break
+    fi
+  done
+  for run in "${day_stamps[@]}"; do
+    [ "$run" != "$keeper" ] || continue
+    for file in "$(db_archive "$run")" "$(uploads_archive "$run")"; do
+      [ -e "$file" ] || continue
+      rm -f -- "$file"
+      thinned=$((thinned + 1))
+    done
+  done
+  day_stamps=()
+}
+
+# Newest first, so the first run seen for a day is that day's last one.
+while IFS= read -r run; do
+  [[ $run < $thin_before ]] || continue
+  if [ "${#day_stamps[@]}" -gt 0 ] && [ "${run%%T*}" != "${day_stamps[0]%%T*}" ]; then
+    thin_day
+  fi
+  day_stamps+=("$run")
+done < <(find "$backup_dir" -maxdepth 1 -name 'an30-*.gpg' -printf '%f\n' \
+  | sed -nE 's/^an30-(db|uploads)-([0-9]{8}T[0-9]{6}Z)\..*$/\2/p' | sort -ru)
+thin_day
+log "retention.thinned" "Removed $thinned archive(s) older than $keep_all_hours hours, keeping the last one of each day"
+
 removed=$(find "$backup_dir" -maxdepth 1 -name 'an30-*.gpg' -mtime "+$retain_days" -print -delete | wc -l)
 log "retention.applied" "Removed $removed archive(s) older than $retain_days days"
 
