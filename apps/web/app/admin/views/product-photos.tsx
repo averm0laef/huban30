@@ -255,7 +255,7 @@ function Pack({ onChange }: { onChange: () => void }) {
           {live.map((source) => <option key={source.id} value={source.id}>{source.name} — по разрешению</option>)}
         </select>
       </label>
-      <details className={panel.note}>
+      <details className={`${panel.note} ${styles.more}`}>
         <summary>Записать нового правообладателя (производитель, поставщик)</summary>
         <form className={styles.row} onSubmit={(event) => { void create(event); }}>
           <label className={styles.field}>

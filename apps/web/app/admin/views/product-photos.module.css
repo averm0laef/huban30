@@ -25,6 +25,8 @@
 .row .field { flex: 1 1 220px; }
 .row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .row button { min-height: 44px; border-radius: 999px; padding-inline: 22px; }
+.more summary { box-sizing: border-box; min-height: 44px; padding-block: 10px; cursor: pointer; }
+.more[open] summary { margin-bottom: 6px; }
 .log { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
 .log li { padding: 12px 14px; border: 1px solid var(--colorNeutralStroke2); border-radius: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; }
