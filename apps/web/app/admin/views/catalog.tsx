@@ -19,6 +19,7 @@ import {
 import styles from "../workspace.module.css";
 import { CatalogEnrichmentPanel } from "./catalog-enrichment";
 import { CatalogQualityPanel } from "./catalog-quality";
+import { ProductPhotosPanel } from "./product-photos";
 
 export function CatalogView() {
   const [offset, setOffset] = useState(0);
@@ -108,6 +109,7 @@ export function CatalogView() {
         title="Каталог и остатки"
       />
       <CatalogQualityPanel />
+      <ProductPhotosPanel />
       <CatalogEnrichmentPanel />
       <div className={styles.toolbar}>
         <Input
