@@ -70,6 +70,40 @@ test("a double click on a make stops at its models", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Toyota Camry: двигатель" })).toBeVisible();
 });
 
+test("a double click on «Не знаю двигатель» chooses the car and nothing on the page under the picker", async ({ page }) => {
+  await openPicker(page);
+  await page.getByRole("button", { exact: true, name: "Toyota" }).first().click();
+  await page.getByRole("button", { name: /^Allion/u }).click();
+  const last = page.getByRole("button", { name: /Не знаю двигатель/u });
+  await last.scrollIntoViewIfNeeded();
+  const box = (await last.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y, { steps: 6 });
+  // The first press closes the picker: the page comes up under the pointer.
+  await page.mouse.down({ clickCount: 1 });
+  await page.mouse.up({ clickCount: 1 });
+  await expect(page.getByText("Ваш автомобиль", { exact: true })).toBeVisible();
+  const boxes = await Promise.all((await page.locator("button:visible, a:visible, label:visible").all()).map((control) => control.boundingBox()));
+  const under = boxes.some((control) => control && x > control.x && x < control.x + control.width && y > control.y && y < control.y + control.height);
+  expect(under, "the second click must have a control of the page under it, or the test checks nothing").toBe(true);
+  await page.mouse.down({ clickCount: 2 });
+  await page.mouse.up({ clickCount: 2 });
+  await page.waitForTimeout(300);
+
+  // The car is chosen and the page is as the first click left it: no search ran, the car was not removed, the picker did not reopen.
+  await expect(page.getByText("Ваш автомобиль", { exact: true })).toBeVisible();
+  await expect(page.getByRole("searchbox")).toHaveValue("");
+  await expect(page.getByText("Например:")).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Подбирать детали для этой машины" })).toBeChecked();
+  await expect(page.getByRole("navigation", { name: "Шаги выбора автомобиля" })).toHaveCount(0);
+
+  // A click of its own works on that page again.
+  await page.waitForTimeout(600);
+  await page.getByRole("button", { name: "Сменить" }).click();
+  await expect(page.getByRole("heading", { name: "Выберите марку" })).toBeVisible();
+});
+
 test("the make in the picker's breadcrumbs goes back to the list of makes", async ({ page }) => {
   await openPicker(page);
   await page.getByRole("button", { exact: true, name: "Toyota" }).first().click();

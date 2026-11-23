@@ -245,6 +245,26 @@ export function isRepeatClick(event: { detail: number }): boolean {
   return event.detail > 1;
 }
 
+type ClickEvent = { detail: number; preventDefault(): void; stopPropagation(): void };
+type ClickSource = {
+  addEventListener(type: "click", listener: (event: ClickEvent) => void, capture: boolean): void;
+  removeEventListener(type: "click", listener: (event: ClickEvent) => void, capture: boolean): void;
+};
+
+/**
+ * The click that closes a panel puts the page under the pointer. Until a click of its own (or the keyboard)
+ * comes, the rest of that double click is dropped before the page hears it.
+ */
+export function dropRestOfDoubleClick(source: ClickSource = document): void {
+  const drop = (event: ClickEvent) => {
+    if (isRepeatClick(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+    } else source.removeEventListener("click", drop, true);
+  };
+  source.addEventListener("click", drop, true);
+}
+
 export const SAVED_VEHICLE_KEY = "an30:parts-finder:vehicle";
 
 export function readSavedVehicle(): string | null {

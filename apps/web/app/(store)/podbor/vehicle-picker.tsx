@@ -6,6 +6,7 @@ import type { KeyboardEvent, MouseEvent } from "react";
 
 import buttons from "../_components/store-button.module.css";
 import {
+  dropRestOfDoubleClick,
   FinderError,
   finderGet,
   isRepeatClick,
@@ -202,6 +203,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
     if (!make || !model) return;
     const generation = generationLabel(model);
     const engine = modification ? [modification.capacity ? `${modification.capacity} л` : null, modification.engine].filter(Boolean).join(" · ") || modification.label : "";
+    dropRestOfDoubleClick();
     onPick({
       label: [make.name, familyOf(model), modification?.engine, yearsLabel(modification?.yearFrom ?? model.yearFrom, modification?.yearTo ?? model.yearTo)].filter(Boolean).join(" · "),
       make: make.name,
@@ -236,7 +238,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
             </li>
           </ol>
         </nav>
-        <button aria-label="Закрыть выбор автомобиля" className={styles.close} onClick={onCancel} type="button">
+        <button aria-label="Закрыть выбор автомобиля" className={styles.close} onClick={() => { dropRestOfDoubleClick(); onCancel(); }} type="button">
           <Dismiss16Regular aria-hidden="true" />
         </button>
       </div>

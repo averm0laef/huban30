@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isRepeatClick, pickerStep, vehicleRows } from "./parts-finder";
+import { dropRestOfDoubleClick, isRepeatClick, pickerStep, vehicleRows } from "./parts-finder";
 
 const toyota = { id: 2, name: "Toyota", slug: "toyota" };
 const allion = { id: 33, name: "Allion" };
@@ -29,6 +29,41 @@ describe("a double click in the picker", () => {
     expect(isRepeatClick({ detail: 0 })).toBe(false);
     expect(isRepeatClick({ detail: 2 })).toBe(true);
     expect(isRepeatClick({ detail: 3 })).toBe(true);
+  });
+});
+
+describe("the click that closes the picker", () => {
+  function page() {
+    const listeners = new Set<(event: { detail: number; preventDefault(): void; stopPropagation(): void }) => void>();
+    const click = (detail: number) => {
+      let heard = true;
+      for (const listener of [...listeners]) listener({ detail, preventDefault: () => undefined, stopPropagation: () => { heard = false; } });
+      return heard;
+    };
+    return {
+      click,
+      source: {
+        addEventListener: (_: "click", listener: Parameters<typeof listeners.add>[0]) => { listeners.add(listener); },
+        removeEventListener: (_: "click", listener: Parameters<typeof listeners.add>[0]) => { listeners.delete(listener); },
+      },
+    };
+  }
+
+  it("keeps the rest of its double click from the page, and nothing after it", () => {
+    const { click, source } = page();
+    dropRestOfDoubleClick(source);
+    expect(click(2)).toBe(false);
+    expect(click(3)).toBe(false);
+    expect(click(1)).toBe(true);
+    // The next double click is the visitor's own.
+    expect(click(2)).toBe(true);
+  });
+
+  it("lets a choice made from the keyboard pass", () => {
+    const { click, source } = page();
+    dropRestOfDoubleClick(source);
+    expect(click(0)).toBe(true);
+    expect(click(2)).toBe(true);
   });
 });
 
