@@ -9,6 +9,7 @@ import type { FormEvent } from "react";
 import { CHECKOUT_PERSONAL_DATA_CONSENT_TEXT } from "@an30/contracts";
 
 import { refreshCartProducts, summariseCart, useCartProducts } from "../_lib/cart-products";
+import { openChatWidget } from "./chat-launcher";
 import { formatRubles } from "../_lib/catalog-format";
 import { checkoutConfirmationMessage, checkoutPayload } from "../_lib/checkout";
 import { checkoutDraftStorage, clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from "../_lib/checkout-draft";
@@ -280,6 +281,7 @@ export function CheckoutClient({
                 <legend><span><i className={commerce.stepNumber} aria-hidden="true">3</i>Подтверждение</span></legend>
                 <p className={commerce.notice}>Оплату и получение согласует менеджер после заявки.</p>
                 <label className={styles.field}>Комментарий к заказу<textarea name="customerNote" maxLength={2000} placeholder="Например, удобное время звонка" value={details.customerNote} onChange={(event) => setDetails((current) => ({ ...current, customerNote: event.target.value }))} /></label>
+                <p className={commerce.chatHint}>Есть вопрос по заказу? <button type="button" onClick={openChatWidget}>Написать в чат</button> — заполненная форма останется на месте.</p>
                 <label className={commerce.consent}><input name="termsAccepted" type="checkbox" required /><span>Я принимаю <Link href="/terms" target="_blank">условия публичной оферты</Link>.</span></label>
                 <label className={commerce.consent}><input name="personalDataConsent" type="checkbox" required /><span>{CHECKOUT_PERSONAL_DATA_CONSENT_TEXT} <Link href="/checkout-personal-data-consent" target="_blank">Открыть документ</Link>.</span></label>
               </fieldset>

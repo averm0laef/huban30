@@ -13,8 +13,15 @@ import { RateLimitService } from "../security/rate-limit.service.js";
 
 const availabilityInput = z.object({ available: z.boolean() }).strict();
 
+/**
+ * How long a customer's unanswered chat stays with a manager who is no longer
+ * confirming availability (closed the tab, logged out, lost the connection)
+ * before it goes back to the queue for whoever is at work.
+ */
+export const UNATTENDED_CHAT_RELEASE_SECONDS = 5 * 60;
+
 @Injectable()
-class ManagerDispatchService implements OnModuleInit, OnModuleDestroy {
+export class ManagerDispatchService implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
   private readonly logger = new Logger(ManagerDispatchService.name);
@@ -55,10 +62,20 @@ class ManagerDispatchService implements OnModuleInit, OnModuleDestroy {
     return parsed.data;
   }
 
-  private async dispatch() {
+  /** One pass: returns unattended chats to the queue, then hands the queue out. */
+  async dispatch() {
     if (this.running) return;
     this.running = true;
     try {
+      for (const released of await this.releaseUnattended()) {
+        await this.events.publish({
+          threadId: released.id,
+          payload: {
+            type: "thread", status: "waiting_staff", assignedStaffId: null, assignedStaffName: null,
+            managerWaitSince: released.managerWaitSince,
+          },
+        });
+      }
       for (let count = 0; count < 8; count++) {
         const assignment = await this.assignNext();
         if (!assignment) break;
@@ -74,6 +91,48 @@ class ManagerDispatchService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.running = false;
     }
+  }
+
+  /**
+   * A chat is assigned once and nothing took it back: when its manager left,
+   * the customer's next message waited for that manager alone and nobody else
+   * could answer. Chats waiting for staff with no change for the release
+   * window return to the queue here, and the pass below hands them out again.
+   * A manager whose tab is still confirming availability keeps every chat.
+   */
+  private releaseUnattended() {
+    return this.db.transaction(async (tx) => {
+      const lock = await tx.query<{ acquired: boolean }>("SELECT pg_try_advisory_xact_lock(hashtextextended('an30-manager-dispatch',0)) AS acquired");
+      if (!lock.rows[0]?.acquired) return [];
+      // The assignment is read before the update clears it, for the audit log.
+      const released = (await tx.query<{ id: string; manager_wait_since: Date | null; staff_id: string }>(
+        `WITH unattended AS (
+           SELECT t.id,t.assigned_staff_id AS staff_id,t.updated_at AS waiting_since FROM app.chat_threads t
+           WHERE t.status='waiting_staff' AND t.assigned_staff_id IS NOT NULL AND t.deleted_at IS NULL
+             AND t.updated_at<clock_timestamp()-make_interval(secs => $1)
+             AND NOT EXISTS (
+               SELECT 1 FROM app.manager_availability a
+               WHERE a.user_id=t.assigned_staff_id AND a.expires_at>clock_timestamp()
+             )
+           ORDER BY t.updated_at,t.id LIMIT 50 FOR UPDATE OF t SKIP LOCKED
+         )
+         UPDATE app.chat_threads t
+         SET assigned_staff_id=NULL,manager_wait_since=unattended.waiting_since,version=t.version+1
+         FROM unattended WHERE t.id=unattended.id
+         RETURNING t.id,t.manager_wait_since,unattended.staff_id`,
+        [UNATTENDED_CHAT_RELEASE_SECONDS],
+      )).rows;
+      for (const thread of released) {
+        await this.audit.record({
+          action: "chat.manager_released", entityType: "chat_thread", entityId: thread.id,
+          metadata: { previousStaffId: thread.staff_id, reason: "manager_unavailable" },
+        }, tx);
+      }
+      return released.map((thread) => ({
+        id: thread.id,
+        managerWaitSince: thread.manager_wait_since?.toISOString() ?? null,
+      }));
+    });
   }
 
   private assignNext() {

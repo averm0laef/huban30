@@ -232,7 +232,8 @@ export const StaffChatsQuerySchema = StaffPageQuerySchema.extend({
   assigned: z.enum(["any", "mine", "unassigned"]).default("any"),
   direction: SortDirectionSchema,
   q: StaffSearchSchema,
-  sort: z.enum(["createdAt", "lastMessageAt", "status"]).default("lastMessageAt"),
+  // "attention": customers still waiting for an answer first, longest wait on top.
+  sort: z.enum(["attention", "createdAt", "lastMessageAt", "status"]).default("attention"),
   status: ChatThreadStatusSchema.optional(),
 }).strict();
 export type StaffChatsQuery = z.infer<typeof StaffChatsQuerySchema>;
@@ -514,6 +515,12 @@ export function parseChatIntakeMessage(body: string | null | undefined): ParsedC
  * authenticated and guest thread-creation endpoints.
  */
 export const ChatThreadCreateSchema = z.object({
+  /**
+   * Chosen by the client once per "start a chat" attempt. A request repeated
+   * with the same id (double click, retry after a lost response) returns the
+   * chat the first one opened instead of opening another.
+   */
+  clientRequestId: z.uuid().optional(),
   intake: ChatIntakeSchema,
   orderId: z.uuid().nullable().default(null),
   subject: z.string().trim().min(2).max(240).regex(CHAT_TEXT),

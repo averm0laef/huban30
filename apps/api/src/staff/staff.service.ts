@@ -436,11 +436,33 @@ export class StaffService {
 
   async chats(rawQuery: unknown, auth: AuthContext) {
     const query = this.parse(StaffChatsQuerySchema, rawQuery, "Некорректные параметры чатов");
-    const sort = {
-      createdAt: "thread.created_at",
-      lastMessageAt: "thread.last_message_at",
-      status: "thread.status",
-    }[query.sort];
+    const direction = query.direction === "asc" ? "ASC" : "DESC";
+    // The default queue is a to-do list: chats where the customer is waiting
+    // for an answer come first, the longest wait on top; then the rest by
+    // recency, closed chats last. Sorting by the last message alone pushed a
+    // customer who had waited an hour below every chat that was just answered.
+    // Since when the customer has had no answer: their first message after the
+    // last staff reply. A follow-up («Вы тут?») must not restart the wait, so
+    // the queue is ordered by this and not by the last message.
+    const waitingSince = `CASE WHEN thread.status='waiting_staff' THEN (
+      SELECT min(pending.created_at) FROM app.chat_messages AS pending
+      WHERE pending.thread_id=thread.id AND pending.deleted_at IS NULL
+        AND pending.sender_kind IN ('customer','guest')
+        AND pending.sequence_number>COALESCE((
+          SELECT max(answer.sequence_number) FROM app.chat_messages AS answer
+          WHERE answer.thread_id=thread.id AND answer.deleted_at IS NULL AND answer.sender_kind='staff'
+        ),0)
+    ) END`;
+    const orderBy = query.sort === "attention"
+      ? `CASE thread.status WHEN 'waiting_staff' THEN 0 WHEN 'open' THEN 1 WHEN 'waiting_customer' THEN 2 ELSE 3 END,
+         CASE WHEN thread.status='waiting_staff'
+           THEN COALESCE(${waitingSince},thread.last_message_at,thread.created_at) END ASC NULLS LAST,
+         thread.last_message_at DESC NULLS LAST,thread.id`
+      : `${{
+        createdAt: "thread.created_at",
+        lastMessageAt: "thread.last_message_at",
+        status: "thread.status",
+      }[query.sort]} ${direction} NULLS LAST,thread.id`;
     const pattern = searchPattern(query.q);
     const assignedStaffId = query.assigned === "mine" ? auth.userId : null;
     const onlyUnassigned = query.assigned === "unassigned";
@@ -474,6 +496,7 @@ export class StaffService {
         subject: string | null;
         unread_count: string;
         version: number;
+        waiting_since: Date | null;
       }>(
         `SELECT thread.id,thread.public_number,thread.customer_user_id,customer.avatar_key AS customer_avatar_key,
                 thread.order_id,thread.assigned_staff_id,thread.status,
@@ -486,7 +509,8 @@ export class StaffService {
                    ON receipt.message_id=unread.id AND receipt.user_id=$5
                  WHERE unread.thread_id=thread.id AND unread.deleted_at IS NULL
                    AND unread.sender_kind IN ('customer','guest') AND receipt.read_at IS NULL
-                ) AS unread_count
+                ) AS unread_count,
+                ${waitingSince} AS waiting_since
          FROM app.chat_threads AS thread
          LEFT JOIN app.users AS customer ON customer.id=thread.customer_user_id
          LEFT JOIN app.users AS assigned ON assigned.id=thread.assigned_staff_id
@@ -497,7 +521,7 @@ export class StaffService {
            ORDER BY sequence_number DESC LIMIT 1
          ) AS last_message ON true
          WHERE ${filters(8)}
-         ORDER BY ${sort} ${query.direction === "asc" ? "ASC" : "DESC"} NULLS LAST,thread.id
+         ORDER BY ${orderBy}
          LIMIT $6 OFFSET $7`,
         [query.status ?? null, assignedStaffId, onlyUnassigned, pattern,
           auth.userId, query.limit, query.offset, chatNumber],
@@ -530,6 +554,7 @@ export class StaffService {
       subject: row.subject,
       unreadCount: Number(row.unread_count),
       version: row.version,
+      waitingSince: iso(row.waiting_since ?? null),
     })), count.rows[0]?.count, query);
   }
 

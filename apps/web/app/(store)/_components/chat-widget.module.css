@@ -25,6 +25,9 @@
   transition: transform var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
 }
 
+/* A page that links to the chat itself (checkout) has no round button. */
+.launcher[hidden] { display: none; }
+
 .launcher:hover {
   background: var(--store-brand-strong);
   box-shadow: var(--store-shadow-lg), 0 0 0 6px color-mix(in srgb, var(--store-brand) 16%, transparent);
@@ -34,8 +37,6 @@
 .launcher:active {
   transform: translateY(0);
 }
-
-.mobileLabel { display: none; }
 
 .badge {
   position: absolute;
@@ -345,36 +346,15 @@
 }
 .closedBar > p { margin: 0; color: var(--store-muted); font-size: 0.84rem; line-height: 1.45; }
 
-/* On mobile the launcher occupies its own tab instead of covering page content. */
+/* Phones: the round button stays on screen, lifted above the bottom tab bar
+   (64px, see `.mobileNav`) and a little smaller so it covers less of the page. */
 @media (max-width: 767px) {
   .launcher {
-    position: relative;
-    inset: auto;
-    z-index: auto;
-    width: auto;
-    height: auto;
-    min-height: 64px;
-    align-content: center;
-    gap: 3px;
-    border-radius: 0;
-    background: var(--store-surface);
-    color: var(--store-muted);
-    box-shadow: none;
+    right: var(--store-space-sm);
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--store-space-sm));
+    width: 52px;
+    height: 52px;
   }
-  .launcher:hover {
-    transform: none;
-    background: var(--store-brand-soft);
-    color: var(--store-brand);
-    box-shadow: none;
-  }
-  .mobileLabel {
-    display: block;
-    color: var(--store-text);
-    font-size: .68rem;
-    font-weight: var(--store-weight-bold);
-    line-height: 1.15;
-  }
-  .launcher .badge { top: 4px; right: max(3px, calc(50% - 23px)); }
 }
 
 /* Phones: the widget is a full-screen messenger, following the visual

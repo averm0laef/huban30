@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import path from "node:path";
 
 import {
@@ -23,6 +23,7 @@ import {
   ChatThreadCreateSchema,
   ROLE_PERMISSIONS,
   chatNumberLabel,
+  type ChatThreadCreate,
   type Permission,
 } from "@an30/contracts";
 
@@ -47,6 +48,7 @@ import { ChatEventBus } from "./chat-event-bus.service.js";
 import type { ChatIdentity, ChatMessageView } from "./chat.types.js";
 
 const UUID = z.uuid();
+const GUEST_THREAD_SCOPE = "chat-thread:guest";
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 // ffmpeg runs inside the 1.5 GiB API container. A non-blocking, process-wide
 // admission slot prevents a burst of otherwise rate-limited guest uploads
@@ -117,7 +119,7 @@ export class ChatService {
       if (order.rowCount === 0) throw new NotFoundException("Заказ не найден");
     }
     const sender = this.sender({ auth, kind: "authenticated" });
-    const result = await this.database.transaction(async (client) => {
+    const result = await this.database.transaction((client) => this.createThreadOnce(client, `chat-thread:user:${auth.userId}`, input, async () => {
       const thread = (await client.query<ThreadRow>(
         `INSERT INTO app.chat_threads (customer_user_id,order_id,subject)
          VALUES ($1,$2,$3) RETURNING *`,
@@ -139,7 +141,7 @@ export class ChatService {
         "text",
       );
       return thread;
-    });
+    }));
     return this.threadView(result);
   }
 
@@ -157,8 +159,13 @@ export class ChatService {
       );
       if (order.rowCount === 0) throw new NotFoundException("Заказ не найден");
     }
-    const guestToken = this.crypto.randomToken();
-    const result = await this.database.transaction(async (client) => {
+    // A repeated request must hand back the same access token, and only its
+    // hash is stored: with a request id the token is derived from it (as the
+    // guest order token is in checkout), without one it is random.
+    const guestToken = input.clientRequestId
+      ? this.crypto.deriveOpaqueToken("guest-chat-access", `${GUEST_THREAD_SCOPE}\0${input.clientRequestId}`)
+      : this.crypto.randomToken();
+    const result = await this.database.transaction((client) => this.createThreadOnce(client, GUEST_THREAD_SCOPE, input, async () => {
       const thread = (await client.query<ThreadRow>(
         `INSERT INTO app.chat_threads (guest_token_hash,order_id,subject)
          VALUES ($1,$2,$3) RETURNING *`,
@@ -173,8 +180,51 @@ export class ChatService {
         "text",
       );
       return thread;
-    });
+    }));
     return { ...this.threadView(result), guestToken };
+  }
+
+  /**
+   * Opens a chat once per `clientRequestId`: a double click, a retry after a
+   * lost response or a replayed raw request gets the chat the first request
+   * opened. Without an id every request opens a chat (the per-address limit
+   * in the controller still applies).
+   */
+  private async createThreadOnce(
+    client: PoolClient,
+    scope: string,
+    input: ChatThreadCreate,
+    create: () => Promise<ThreadRow>,
+  ): Promise<ThreadRow> {
+    if (!input.clientRequestId) return create();
+    const checksum = createHash("sha256").update(JSON.stringify(input), "utf8").digest();
+    // A concurrent request with the same id waits here until the first commits.
+    await client.query(
+      `INSERT INTO app.idempotency_keys (scope,key,request_hash,resource_type,locked_until,expires_at)
+       VALUES ($1,$2,$3,'chat_thread',clock_timestamp() + interval '30 seconds',clock_timestamp() + interval '24 hours')
+       ON CONFLICT (scope,key) DO NOTHING`,
+      [scope, input.clientRequestId, checksum],
+    );
+    const key = (await client.query<{ request_hash: Buffer; resource_id: string | null }>(
+      "SELECT request_hash,resource_id FROM app.idempotency_keys WHERE scope=$1 AND key=$2 FOR UPDATE",
+      [scope, input.clientRequestId],
+    )).rows[0];
+    if (!key) throw new ConflictException("Не удалось зафиксировать повторный запрос");
+    if (key.request_hash.length !== checksum.length || !timingSafeEqual(key.request_hash, checksum)) {
+      throw new ConflictException("Этот запрос уже отправлен с другими данными");
+    }
+    if (key.resource_id) {
+      const existing = (await client.query<ThreadRow>(
+        "SELECT * FROM app.chat_threads WHERE id=$1 AND deleted_at IS NULL", [key.resource_id],
+      )).rows[0];
+      if (existing) return existing;
+    }
+    const thread = await create();
+    await client.query(
+      "UPDATE app.idempotency_keys SET resource_id=$3,completed_at=clock_timestamp() WHERE scope=$1 AND key=$2",
+      [scope, input.clientRequestId, thread.id],
+    );
+    return thread;
   }
 
   async list(auth: AuthContext) {

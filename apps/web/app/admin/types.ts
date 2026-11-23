@@ -68,6 +68,8 @@ export interface ChatRow {
   subject: string | null;
   unreadCount: number;
   version: number;
+  /** Since when the customer has had no answer; null when nobody is waiting. */
+  waitingSince?: string | null;
 }
 
 export interface ChatMessage {

@@ -3,10 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatIntake } from "@an30/contracts";
 
 import {
+  GUEST_CHAT_STORAGE_KEY,
   MANAGER_RESPONSE_WINDOW_MS,
   accessFor,
+  applyThreadStatus,
   attachmentSignatureError,
   chatThreadCreateBody,
+  chatThreadRequestId,
   formatCountdown,
   intakeSubject,
   isChatMessage,
@@ -23,6 +26,7 @@ import {
   safeDownloadName,
   senderLabel,
   serializeGuestThreads,
+  storeGuestThreadStatus,
   unansweredSince,
   type ChatMessage,
   type ChatThread,
@@ -152,6 +156,51 @@ describe("guest chat state", () => {
   });
 });
 
+describe("a status the manager set reaches the customer's conversation", () => {
+  const other: ChatThread = { ...thread, guestToken: "b".repeat(40), id: "019bf9ea-0d3e-7def-9c9a-000000000020" };
+
+  function stubStorage(initial: Record<string, string>): Map<string, string> {
+    const values = new Map(Object.entries(initial));
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+      },
+    });
+    return values;
+  }
+
+  it("closes only the chat the manager closed", () => {
+    const next = applyThreadStatus([thread, other], thread.id, "closed");
+    expect(next.map((item) => item.status)).toEqual(["closed", "open"]);
+  });
+
+  it("reopens a chat the director opened again", () => {
+    expect(applyThreadStatus([{ ...thread, status: "closed" }], thread.id, "open")[0]!.status).toBe("open");
+  });
+
+  it("returns the same list when nothing changed, so the page does not re-render in a loop", () => {
+    const threads = [thread, other];
+    expect(applyThreadStatus(threads, thread.id, "open")).toBe(threads);
+    expect(applyThreadStatus(threads, "019bf9ea-0d3e-7def-9c9a-000000000099", "closed")).toBe(threads);
+  });
+
+  it("remembers the closed chat for the guest's next visit", () => {
+    const values = stubStorage({ [GUEST_CHAT_STORAGE_KEY]: serializeGuestThreads([thread, other]) });
+    storeGuestThreadStatus(thread.id, "closed");
+    const stored = parseStoredGuestThreads(values.get(GUEST_CHAT_STORAGE_KEY) ?? null);
+    expect(stored.find((item) => item.id === thread.id)?.status).toBe("closed");
+    expect(stored.find((item) => item.id === other.id)?.status).toBe("open");
+    // The token that proves the guest owns the chat is kept.
+    expect(stored.find((item) => item.id === thread.id)?.guestToken).toBe(thread.guestToken);
+  });
+
+  it("does not fail when the browser refuses storage", () => {
+    vi.stubGlobal("window", { localStorage: { getItem: () => { throw new Error("denied"); }, setItem: () => undefined } });
+    expect(() => storeGuestThreadStatus(thread.id, "closed")).not.toThrow();
+  });
+});
+
 describe("shared chat channel helpers", () => {
   it("grants customer access unconditionally but only trusts a guest with the thread's own token", () => {
     expect(accessFor({ kind: "customer" }, thread)).toEqual({ kind: "customer" });
@@ -216,6 +265,22 @@ describe("intake questionnaire", () => {
       orderId: null,
       subject: "Нужна деталь по артикулу",
     });
+  });
+
+  it("sends the request id so the server opens one chat for a repeated request", () => {
+    const id = "7b0f3c5e-2a41-4d6f-9c1e-5a8b7d6e4f30";
+    expect(chatThreadCreateBody(baseIntake, null, id)).toMatchObject({ clientRequestId: id });
+    expect(chatThreadCreateBody(baseIntake)).not.toHaveProperty("clientRequestId");
+  });
+
+  it("keeps one request id while the same answers are resent, and takes a new one for other answers", () => {
+    let counter = 0;
+    const newId = () => `id-${++counter}`;
+    const first = chatThreadRequestId(null, baseIntake, newId);
+    // Retry after a lost response, or a second tap on «Написать магазину».
+    expect(chatThreadRequestId(first, { ...baseIntake }, newId)).toBe(first);
+    // The customer changed the answers: that is a different request.
+    expect(chatThreadRequestId(first, { ...baseIntake, comment: "Другой вопрос" }, newId).id).toBe("id-2");
   });
 });
 

@@ -209,6 +209,35 @@ export function upsertThread(threads: ChatThread[], incoming: ChatThread): ChatT
     .sort((left, right) => threadTimestamp(right) - threadTimestamp(left));
 }
 
+/**
+ * Writes the status the server reported for one thread into the stored list:
+ * the list is what decides whether a conversation shows a composer or the
+ * "closed" bar. Returns the same array when nothing changed, so a caller can
+ * skip the re-render and the storage write.
+ */
+export function applyThreadStatus(
+  threads: ChatThread[],
+  threadId: string,
+  status: ChatThread["status"],
+): ChatThread[] {
+  const target = threads.find((thread) => thread.id === threadId);
+  if (!target || target.status === status) return threads;
+  return threads.map((thread) => thread.id === threadId ? { ...thread, status } : thread);
+}
+
+/**
+ * Keeps a guest's stored copy of the thread in step with the server. Guests
+ * have no thread list endpoint: the copy in localStorage is all the next visit
+ * knows, so a chat closed by the manager would otherwise reopen its composer.
+ */
+export function storeGuestThreadStatus(threadId: string, status: ChatThread["status"]): void {
+  try {
+    const stored = parseStoredGuestThreads(window.localStorage.getItem(GUEST_CHAT_STORAGE_KEY));
+    const next = applyThreadStatus(stored, threadId, status);
+    if (next !== stored) window.localStorage.setItem(GUEST_CHAT_STORAGE_KEY, serializeGuestThreads(next));
+  } catch { /* The open page already shows the new status. */ }
+}
+
 export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const unique = new Map(current.map((message) => [message.id, message]));
   for (const message of incoming) unique.set(message.id, message);
@@ -360,8 +389,26 @@ export function intakeSubject(intake: ChatIntake): string {
  * endpoints, so the answers a customer typed are always what actually
  * reaches the new thread (never re-derived or re-typed per call site).
  */
-export function chatThreadCreateBody(intake: ChatIntake, orderId: string | null = null): ChatThreadCreate {
-  return { intake, orderId, subject: intakeSubject(intake) };
+export function chatThreadCreateBody(
+  intake: ChatIntake,
+  orderId: string | null = null,
+  clientRequestId?: string,
+): ChatThreadCreate {
+  return { ...(clientRequestId ? { clientRequestId } : {}), intake, orderId, subject: intakeSubject(intake) };
+}
+
+/**
+ * One id per "start a chat" attempt with the same answers: the server opens a
+ * single chat however many times that request is sent (double tap, retry
+ * after a lost response). Different answers are a different attempt.
+ */
+export function chatThreadRequestId(
+  previous: { answers: string; id: string } | null,
+  intake: ChatIntake,
+  newId: () => string = () => crypto.randomUUID(),
+): { answers: string; id: string } {
+  const answers = JSON.stringify(intake);
+  return previous?.answers === answers ? previous : { answers, id: newId() };
 }
 
 /* ============================================================

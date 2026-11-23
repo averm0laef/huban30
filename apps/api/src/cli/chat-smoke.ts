@@ -21,6 +21,9 @@ const webSocketUrl = `${apiBase.replace(/^http/u, "ws").replace(/\/api\/v1\/?$/u
 interface ThreadResult { guestToken: string; id: string }
 interface MessageResult { attachments: Array<{ id: string }>; id: string; sequence: string }
 
+// A chat starts with the questionnaire: the API refuses a thread without it.
+const SMOKE_INTAKE = { comment: "Проверка автономного чата", intent: "other" };
+
 let step = 0;
 const createdThreadIds: string[] = [];
 const createdStorageObjects = new Map<string, SmokeStorageObject>();
@@ -148,7 +151,7 @@ async function closeThread(threadId: string): Promise<void> {
 
 async function runSmoke(): Promise<void> {
   const first = await request<ThreadResult>("/chat/guest/threads", {
-    body: JSON.stringify({ subject: "Проверка автономного чата" }), method: "POST",
+    body: JSON.stringify({ intake: SMOKE_INTAKE, subject: "Проверка автономного чата" }), method: "POST",
   }, 201);
   createdThreadIds.push(first.id);
   if (first.guestToken.length < 32) throw new Error("Guest token is too short");
@@ -181,7 +184,8 @@ async function runSmoke(): Promise<void> {
     `/chat/guest/threads/${first.id}/messages?after=0`,
     { headers: { "x-guest-chat-token": first.guestToken }, method: "GET" }, 200,
   );
-  if (history.items.length !== 1 || history.items[0]?.sequence !== message.sequence) {
+  // The questionnaire answers are the thread's opening message; ours follows it.
+  if (history.items.length !== 2 || history.items[1]?.sequence !== message.sequence) {
     throw new Error("Cursor history is inconsistent");
   }
   passed("cursor history returns persisted messages in order");
@@ -240,12 +244,20 @@ async function runSmoke(): Promise<void> {
   passed("latest history window exposes stable realtime and older-page cursors");
 
   const foreignSocket = new WebSocket(webSocketUrl, { origin: "https://attacker.invalid" });
-  const closeCode = await new Promise<number>((resolve, reject) => {
+  // A foreign origin is refused before the upgrade (HTTP 403, see main.ts);
+  // the handler's own 1008 close is the second line of defence.
+  const refusal = await new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Invalid-origin socket stayed open")), 5_000);
-    foreignSocket.once("close", (code) => { clearTimeout(timer); resolve(code); });
+    foreignSocket.once("unexpected-response", (_request, response) => {
+      clearTimeout(timer);
+      response.resume();
+      foreignSocket.terminate();
+      resolve(`http ${response.statusCode}`);
+    });
+    foreignSocket.once("close", (code) => { clearTimeout(timer); resolve(`close ${code}`); });
     foreignSocket.once("error", () => undefined);
   });
-  if (closeCode !== 1008) throw new Error(`Invalid-origin close code was ${closeCode}`);
+  if (refusal !== "http 403" && refusal !== "close 1008") throw new Error(`Invalid-origin socket ended with ${refusal}`);
   passed("cross-origin WebSocket handshake is rejected");
 
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
@@ -371,7 +383,7 @@ async function runSmoke(): Promise<void> {
   passed("multipart upload and streamed download work above the former 10 MiB proxy limit");
 
   const second = await request<ThreadResult>("/chat/guest/threads", {
-    body: JSON.stringify({ subject: "Другой чат" }), method: "POST",
+    body: JSON.stringify({ intake: SMOKE_INTAKE, subject: "Другой чат" }), method: "POST",
   }, 201);
   createdThreadIds.push(second.id);
   await request(`/chat/guest/attachments/${attachmentId}`, {

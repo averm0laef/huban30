@@ -65,6 +65,8 @@ export interface UseChatThreadResult {
   showLatestMessages: () => void;
   /** Server-confirmed thread status, seeded from the `thread` prop and kept live over the socket (e.g. staff closing the thread elsewhere). */
   threadStatus: ChatThread["status"] | null;
+  /** The thread `threadStatus` belongs to; null until a thread is active. */
+  threadStatusThreadId: string | null;
   unreadCount: number;
   uploadAttachment: (file: File) => Promise<boolean>;
   viewingLatest: boolean;
@@ -103,6 +105,9 @@ export function useChatThread(
   const [assignedStaffName, setAssignedStaffName] = useState<string | null>(null);
   const [managerWaitSince, setManagerWaitSince] = useState<string | null | undefined>(undefined);
   const [threadStatus, setThreadStatus] = useState<ChatThread["status"] | null>(null);
+  // Which thread `threadStatus` describes: for one render after the selection
+  // changes it still holds the previous thread's status.
+  const [threadStatusThreadId, setThreadStatusThreadId] = useState<string | null>(null);
 
   const [sendAttemptId, setSendAttemptId] = useState<string | null>(null);
   const [sendPending, setSendPending] = useState(false);
@@ -177,6 +182,7 @@ export function useChatThread(
       setAssignedStaffName(null);
       setManagerWaitSince(undefined);
       setThreadStatus(null);
+      setThreadStatusThreadId(null);
       return;
     }
     const activeThread = thread;
@@ -210,6 +216,7 @@ export function useChatThread(
     setAssignedStaffName(null);
     setManagerWaitSince(activeThread.managerWaitSince);
     setThreadStatus(activeThread.status);
+    setThreadStatusThreadId(activeThread.id);
     cursorRef.current = "0";
 
     function rejectAcks(message: string): void {
@@ -556,6 +563,7 @@ export function useChatThread(
     sendPending,
     showLatestMessages,
     threadStatus,
+    threadStatusThreadId,
     unreadCount,
     uploadAttachment,
     viewingLatest: historyView === "latest",

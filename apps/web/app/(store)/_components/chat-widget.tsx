@@ -22,14 +22,17 @@ import {
   GUEST_CHAT_STORAGE_KEY,
   chatRequest,
   chatThreadCreateBody,
+  chatThreadRequestId,
   isChatThread,
   parseStoredGuestThreads,
   serializeGuestThreads,
+  storeGuestThreadStatus,
   threadNumberLabel,
   upsertThread,
   type ChatAccess,
   type ChatThread,
 } from "../chat/chat-state";
+import { chatLauncherPlacement, OPEN_CHAT_EVENT } from "./chat-launcher";
 import { ManagerJoinNotice } from "../chat/manager-join-notice";
 import { useChatThread } from "../chat/use-chat-thread";
 import styles from "./chat-widget.module.css";
@@ -81,11 +84,6 @@ function OtherChannels() {
   );
 }
 
-function isHiddenRoute(pathname: string): boolean {
-  return pathname === "/chat" || pathname.startsWith("/chat/")
-    || pathname === "/admin" || pathname.startsWith("/admin/");
-}
-
 function CloseIcon() {
   return (
     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
@@ -128,7 +126,8 @@ function PhoneIcon() {
  */
 export function ChatWidget() {
   const pathname = usePathname();
-  const hidden = isHiddenRoute(pathname ?? "");
+  const placement = chatLauncherPlacement(pathname ?? "");
+  const hidden = placement === "off";
 
   const [isOpen, setIsOpen] = useState(false);
   const [hasOpenedOnce, setHasOpenedOnce] = useState(false);
@@ -148,10 +147,12 @@ export function ChatWidget() {
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const focusComposerOnOpenRef = useRef(false);
   const previousUnreadRef = useRef(0);
+  const threadRequestRef = useRef<{ answers: string; id: string } | null>(null);
   const titleId = useId();
 
   const viewerKind = viewer.kind === "customer" ? "customer" : viewer.kind === "guest" ? "guest" : null;
@@ -187,6 +188,7 @@ export function ChatWidget() {
     sendPending,
     showLatestMessages,
     threadStatus,
+    threadStatusThreadId,
     unreadCount,
     uploadAttachment: submitAttachment,
     viewingLatest,
@@ -234,6 +236,15 @@ export function ChatWidget() {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  // Same rule as the full chat page: a status the manager set (closed,
+  // reopened) is applied here at once and kept for the guest's next visit.
+  useEffect(() => {
+    if (!threadStatus || !threadStatusThreadId) return;
+    setThread((current) => current && current.id === threadStatusThreadId && current.status !== threadStatus
+      ? { ...current, status: threadStatus } : current);
+    if (viewer.kind === "guest") storeGuestThreadStatus(threadStatusThreadId, threadStatus);
+  }, [threadStatus, threadStatusThreadId, viewer.kind]);
 
   useEffect(() => {
     if (viewer.kind !== "guest") return;
@@ -355,6 +366,8 @@ export function ChatWidget() {
   }, [unreadCount]);
 
   const handleOpen = useCallback(() => {
+    // Focus returns here on close: the round button, or the page's own link.
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setShopStatus(computeShopStatusNow());
     focusComposerOnOpenRef.current = true;
     setHasOpenedOnce(true);
@@ -367,11 +380,18 @@ export function ChatWidget() {
 
   const handleDialogClose = useCallback(() => {
     setIsOpen(false);
-    launcherRef.current?.focus();
+    (openerRef.current?.isConnected ? openerRef.current : launcherRef.current)?.focus();
   }, []);
 
+  useEffect(() => {
+    if (hidden) return;
+    window.addEventListener(OPEN_CHAT_EVENT, handleOpen);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, handleOpen);
+  }, [handleOpen, hidden]);
+
   async function createConversation(intake: ChatIntake): Promise<{ access: ChatAccess; created: ChatThread }> {
-    const body = chatThreadCreateBody(intake);
+    threadRequestRef.current = chatThreadRequestId(threadRequestRef.current, intake);
+    const body = chatThreadCreateBody(intake, null, threadRequestRef.current.id);
     if (viewer.kind === "guest") {
       const created = await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, { body, method: "POST" });
       if (!isChatThread(created) || !created.guestToken || created.guestToken.length < 32 || created.guestToken.length > 256) {
@@ -404,6 +424,7 @@ export function ChatWidget() {
     setBootstrapError("");
     try {
       const { created } = await createConversation(intake);
+      threadRequestRef.current = null;
       setThread(created);
       setStartingNewConversation(false);
       setRequestIntent("advice");
@@ -423,7 +444,10 @@ export function ChatWidget() {
     if (!body || body.length > 4_000) return;
     const result = await submitDraft(body);
     if (result.ok) setDraft("");
-    if (result.closed) setThread((current) => current ? { ...current, status: "closed" } : current);
+    if (result.closed) {
+      setThread((current) => current ? { ...current, status: "closed" } : current);
+      if (viewer.kind === "guest") storeGuestThreadStatus(thread.id, "closed");
+    }
   }
 
   async function handleFile(file: File): Promise<boolean> {
@@ -460,6 +484,7 @@ export function ChatWidget() {
         ref={launcherRef}
         type="button"
         className={styles.launcher}
+        hidden={placement === "inline"}
         onClick={handleOpen}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
@@ -468,7 +493,6 @@ export function ChatWidget() {
           : "Открыть чат с магазином"}
       >
         <Chat24Regular aria-hidden="true" />
-        <span className={styles.mobileLabel} aria-hidden="true">Чат</span>
         {unreadCount > 0 ? <span className={styles.badge} aria-hidden="true">{unreadCount > 9 ? "9+" : unreadCount}</span> : null}
       </button>
 
