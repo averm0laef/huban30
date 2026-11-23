@@ -87,7 +87,7 @@ export async function listGarage(): Promise<GarageVehicle[]> {
 
 export function garageDraft(vehicle: PickedVehicle): { catalog?: { modelId: number; modificationId?: number }; details?: string; tecdoc?: TecdocIds; title: string } {
   const title = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.label;
-  const details = [vehicle.generation, vehicle.engine].filter(Boolean).join(" · ");
+  const details = [vehicle.generation, vehicle.engine, vehicle.power, vehicle.fuel, vehicle.drive].filter(Boolean).join(" · ");
   return {
     title: title.slice(0, 120),
     ...(details ? { details: details.slice(0, 200) } : {}),
@@ -110,15 +110,24 @@ export function makeGarageVehiclePrimary(id: string): Promise<GarageVehicle> {
 /** A garage record as the car the site is shopping for. */
 export function pickedFromGarage(vehicle: GarageVehicle): PickedVehicle {
   const [make, ...model] = vehicle.title.split(" ");
-  const [generation, ...engine] = (vehicle.details ?? "").split(" · ").filter(Boolean);
-  // "T21 · 1997–2002 · универсал · 2.0 л · 3S-FE": the engine starts at the part with litres.
-  const parts = (vehicle.details ?? "").split(" · ").filter(Boolean);
-  const engineAt = parts.findIndex((part) => /\d[.,]\d\s*л\b/u.test(part));
+  // "E12 · 2001–2006 · седан · 1.6 л · 3ZZ-FE · 110 л.с. · бензин · полный привод": power, fuel and drive are read
+  // off by their form; of the rest, the engine starts at the part with litres.
+  const all = (vehicle.details ?? "").split(" · ").filter(Boolean);
+  const power = all.find((part) => /^\d+ л\.с\.$/u.test(part));
+  const drive = all.find((part) => /привод$/u.test(part));
+  const fuel = all.find((part) => /^(?:бензин|дизель|электр|газ|гибрид|природный газ|сжиженный газ)/iu.test(part));
+  const parts = all.filter((part) => part !== power && part !== drive && part !== fuel);
+  const [generation, ...engine] = parts;
+  // Not \b: in JavaScript it only knows Latin letters, so «1.6 л» at the end of a part never matched it.
+  const engineAt = parts.findIndex((part) => /\d[.,]\d\s*л(?!\p{L})/u.test(part));
   return {
     label: [vehicle.title, vehicle.details].filter(Boolean).join(" · ").slice(0, 120),
     ...(make && model.length ? { make, model: model.join(" ") } : {}),
     ...(engineAt > 0 ? { engine: parts.slice(engineAt).join(" · "), generation: parts.slice(0, engineAt).join(" · ") }
       : generation ? { generation: [generation, ...engine].join(" · ") } : {}),
+    ...(power ? { power } : {}),
+    ...(fuel ? { fuel } : {}),
+    ...(drive ? { drive } : {}),
     ...(vehicle.tecdoc ? { tecdoc: vehicle.tecdoc } : {}),
     ...(vehicle.catalog ? { modelId: vehicle.catalog.modelId, ...(vehicle.catalog.modificationId ? { modificationId: vehicle.catalog.modificationId } : {}) } : {}),
   };

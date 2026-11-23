@@ -14,6 +14,7 @@ import { PartsFinderCrossStore } from "./parts-finder-crosses.store.js";
 import { PartsFinderShopService } from "./parts-finder-shop.service.js";
 import { PgFapiLedgerStore, PgFitmentStore, PgVehicleStore } from "./parts-finder.stores.js";
 import { PartsFinderVehiclesService } from "./parts-finder-vehicles.service.js";
+import { VehicleCatalogService } from "./vehicle-catalog.service.js";
 
 @Module({
   imports: [SuppliersModule, TecdocModule],
@@ -31,6 +32,7 @@ import { PartsFinderVehiclesService } from "./parts-finder-vehicles.service.js";
     PgFitmentStore,
     PgVehicleStore,
     RedisFapiVisitorShares,
+    VehicleCatalogService,
   ],
 })
 export class PartsFinderModule implements NestModule {

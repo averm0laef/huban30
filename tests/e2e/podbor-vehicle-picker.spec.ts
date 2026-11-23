@@ -41,6 +41,8 @@ const steps = (page: Page) => page.getByRole("navigation", { name: "Шаги в�
 test("a double click on a make stops at its models", async ({ page }) => {
   await openPicker(page);
   const make = page.getByRole("button", { exact: true, name: "Toyota" }).first();
+  // The four drop-down lists above put the make tiles below the fold of a 720 px window: bring the tile into view first.
+  await make.scrollIntoViewIfNeeded();
   const box = (await make.boundingBox())!;
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
@@ -84,9 +86,13 @@ test("a double click on «Не знаю двигатель» chooses the car and
   await page.mouse.down({ clickCount: 1 });
   await page.mouse.up({ clickCount: 1 });
   await expect(page.getByText("Ваш автомобиль", { exact: true })).toBeVisible();
-  const boxes = await Promise.all((await page.locator("button:visible, a:visible, label:visible").all()).map((control) => control.boundingBox()));
-  const under = boxes.some((control) => control && x > control.x && x < control.x + control.width && y > control.y && y < control.y + control.height);
-  expect(under, "the second click must have a control of the page under it, or the test checks nothing").toBe(true);
+  // Where the second press lands depends on how tall the picker was; aim it at a control of the page that would run a
+  // search if it took the click (the press keeps clickCount 2, which is what tells the page it is the rest of a double
+  // click), so the test always has something to protect.
+  const example = page.getByRole("button", { name: /^масляный фильтр Toyota Camry/u });
+  const target = (await example.boundingBox())!;
+  expect(target, "the page under the picker must have an example search to protect").toBeTruthy();
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2);
   await page.mouse.down({ clickCount: 2 });
   await page.mouse.up({ clickCount: 2 });
   await page.waitForTimeout(300);
@@ -127,7 +133,8 @@ test("on a phone the search field and the cross of the picker stay inside its ca
     await openPicker(page);
     const picker = steps(page).locator("xpath=../..");
     const card = (await picker.boundingBox())!;
-    for (const part of [picker.getByRole("combobox"), picker.getByRole("button", { name: "Закрыть выбор автомобиля" })]) {
+    // The make search and the four drop-down lists are all comboboxes: each of them must fit.
+    for (const part of [...await picker.getByRole("combobox").all(), picker.getByRole("button", { name: "Закрыть выбор автомобиля" })]) {
       const box = (await part.boundingBox())!;
       expect(box.x, `${width}px: left edge`).toBeGreaterThanOrEqual(card.x);
       expect(box.x + box.width, `${width}px: right edge`).toBeLessThanOrEqual(card.x + card.width);

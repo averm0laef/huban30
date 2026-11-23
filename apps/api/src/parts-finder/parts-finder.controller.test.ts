@@ -65,8 +65,8 @@ describe("PartsFinderController rate limits", () => {
     const { consume, controller, finder } = setup();
     await controller[route]({ q: "x" }, request);
     expect(consume).toHaveBeenCalledWith(scope, "203.0.113.7", limit, window);
-    // The lists of models and of engines are filled from the paid catalogue on their first request.
-    expect(finder[route]).toHaveBeenCalledWith({ q: "x" }, ...(route === "suggest" ? [] : [{ ip: "203.0.113.7" }]));
+    // The picker reads our own UMAPI vehicle catalog: nobody pays for it, so the visitor is not passed on.
+    expect(finder[route]).toHaveBeenCalledWith({ q: "x" });
   });
 
   it("makes are throttled with the picker limit", async () => {
@@ -98,10 +98,10 @@ describe("PartsFinderController rate limits", () => {
     expect(reflector.get(PERMISSIONS_KEY, StaffPartsFinderController.prototype.usage)).toEqual(["catalog:write"]);
   });
 
-  it("every staff route needs the catalog permission: credits, catalog sync, linking, cross review", () => {
+  it("every staff route needs the catalog permission: credits, vehicle catalog, linking, cross review", () => {
     const reflector = new Reflector();
     const routes = Object.getOwnPropertyNames(StaffPartsFinderController.prototype).filter((name) => name !== "constructor");
-    expect(routes).toEqual(expect.arrayContaining(["usage", "overview", "vehicleCatalog", "syncVehicleCatalog", "assortmentStatus", "linkAssortment", "crossReview", "decideCross"]));
+    expect(routes).toEqual(expect.arrayContaining(["usage", "overview", "vehicleCatalog", "assortmentStatus", "linkAssortment", "crossReview", "decideCross"]));
     for (const name of routes) {
       const handler = (StaffPartsFinderController.prototype as unknown as Record<string, () => unknown>)[name]!;
       expect(reflector.get(PERMISSIONS_KEY, handler), name).toEqual(["catalog:write"]);

@@ -120,7 +120,7 @@ type AccountTab = "orders" | "garage" | "wishlist" | "history" | "addresses" | "
 
 const accountTabs: Array<{ id: AccountTab; label: string }> = [
   { id: "orders", label: "Заказы" },
-  { id: "garage", label: "Гараж" },
+  { id: "garage", label: "Мои автомобили" },
   { id: "wishlist", label: "Избранное" },
   { id: "history", label: "Вы смотрели" },
   { id: "addresses", label: "Адреса" },

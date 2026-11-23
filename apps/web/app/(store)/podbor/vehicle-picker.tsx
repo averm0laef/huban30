@@ -22,9 +22,10 @@ import shared from "./parts-finder.module.css";
 import styles from "./vehicle-picker.module.css";
 
 interface MakesResponse { groups: Array<{ letter: string; makes: PickerMake[] }>; popular: PickerMake[] }
-interface ModelsResponse { make: PickerMake; models: PickerModel[]; popular?: string[]; source: "fapi" | "seed" }
+interface ModelsResponse { make: PickerMake; models: PickerModel[]; popular?: string[]; source: "umapi" }
 interface ModificationsResponse { available: boolean; message?: string; modifications: PickerModification[] }
-interface SuggestItem { label: string; make: PickerMake; model: PickerModel | null }
+/** `family`: a model as people call it («Toyota Corolla») — the customer then picks its generation. */
+interface SuggestItem { family?: string; label: string; make: PickerMake; model: PickerModel | null }
 
 type Load<T> = { status: "idle" | "loading" } | { status: "error"; message: string } | { status: "ready"; data: T };
 
@@ -36,12 +37,33 @@ function familyOf(model: PickerModel): string {
   return model.family ?? model.name;
 }
 
-/** "T21 · 1997–2002 · универсал": what tells one generation from another. */
+/** "2001–2008 · Verso · кузов E12 · седан": what tells one generation from another, years first — that is what people know. */
 function generationLabel(model: PickerModel): string {
-  return [model.generation, yearsLabel(model.yearFrom, model.yearTo), model.body].filter(Boolean).join(" · ");
+  const code = model.bodyCode !== undefined ? [model.series, model.bodyCode ? `кузов ${model.bodyCode}` : null] : [model.generation];
+  return [yearsLabel(model.yearFrom, model.yearTo), ...code, model.body].filter(Boolean).join(" · ");
 }
 
 interface FamilyGroup { generations: PickerModel[]; name: string; yearFrom: number | null; yearTo: number | null }
+
+/** «бензин» -> «Бензин»: a group title. */
+function capital(text: string): string {
+  return text ? text[0]!.toUpperCase() + text.slice(1) : text;
+}
+
+/** Engines grouped by fuel, the larger group first; one group when the fuel is not known. */
+export function engineGroups(list: readonly PickerModification[]): Array<{ items: PickerModification[]; title: string }> {
+  const groups = new Map<string, PickerModification[]>();
+  for (const item of list) {
+    const title = item.fuel ? capital(item.fuel) : "Двигатели";
+    groups.set(title, [...(groups.get(title) ?? []), item]);
+  }
+  return [...groups.entries()].map(([title, items]) => ({ items, title })).sort((a, b) => b.items.length - a.items.length);
+}
+
+/** «1.6 л 4WD (3ZZ-FE)» as the catalog names it, else volume and engine code. */
+export function engineTitle(item: PickerModification): string {
+  return item.name ?? ([item.capacity ? `${item.capacity} л` : null, item.engine].filter(Boolean).join(" · ") || item.label);
+}
 
 /** Catalogue generations grouped under the model name people use, newest generation first. */
 export function groupFamilies(models: readonly PickerModel[]): FamilyGroup[] {
@@ -86,6 +108,8 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
   const [active, setActive] = useState(-1);
   const [filter, setFilter] = useState("");
   const [letter, setLetter] = useState<string | null>(null);
+  // Hundreds of makes: one letter at a time, the first letter until another is chosen.
+  const [makeLetter, setMakeLetter] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -134,9 +158,9 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
     }
   }, [make, family, model]);
 
-  function openMake(next: PickerMake) {
+  function openMake(next: PickerMake, preset: string | null = null) {
     setMake(next);
-    setFamily(null);
+    setFamily(preset);
     setModel(null);
     setFilter("");
     setLetter(null);
@@ -161,7 +185,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
     setQuery("");
     setSuggest([]);
     if (item.model) openModel(item.make, item.model);
-    else openMake(item.make);
+    else openMake(item.make, item.family ?? null);
   }
 
   function onSuggestKey(event: KeyboardEvent<HTMLInputElement>) {
@@ -180,6 +204,8 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
   const step = pickerStep({ family, make, model });
   // Every step replaces the list under the pointer, so the rest of a double click must not choose from the new one.
   const choose = (action: () => void) => (event: MouseEvent) => { if (!isRepeatClick(event)) action(); };
+  const shownMakeLetter = makes.status === "ready" ? makeLetter ?? makes.data.groups[0]?.letter ?? null : null;
+  const allMakes = makes.status === "ready" ? makes.data.groups.flatMap((group) => group.makes) : [];
   const families = models.status === "ready" ? groupFamilies(models.data.models) : [];
   const needle = filter.trim().toLowerCase();
   // A make has up to two hundred models: the usual ones first, the rest by first letter.
@@ -201,8 +227,13 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
 
   function pick(modification: PickerModification | null) {
     if (!make || !model) return;
-    const generation = generationLabel(model);
-    const engine = modification ? [modification.capacity ? `${modification.capacity} л` : null, modification.engine].filter(Boolean).join(" · ") || modification.label : "";
+    // The catalog's generation without its years and body type: the card shows those in tiles of their own.
+    const generation = model.bodyCode !== undefined
+      ? [model.series, model.bodyCode ? `кузов ${model.bodyCode}` : null].filter(Boolean).join(" · ") || generationLabel(model)
+      : generationLabel(model);
+    const engine = modification ? modification.name ?? ([modification.capacity ? `${modification.capacity} л` : null, modification.engine].filter(Boolean).join(" · ") || modification.label) : "";
+    const years = yearsLabel(modification?.yearFrom ?? model.yearFrom, modification?.yearTo ?? model.yearTo);
+    const body = (modification?.body ?? model.body)?.toLowerCase();
     dropRestOfDoubleClick();
     onPick({
       label: [make.name, familyOf(model), modification?.engine, yearsLabel(modification?.yearFrom ?? model.yearFrom, modification?.yearTo ?? model.yearTo)].filter(Boolean).join(" · "),
@@ -210,6 +241,11 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
       model: familyOf(model),
       ...(generation ? { generation } : {}),
       ...(engine ? { engine } : {}),
+      ...(modification?.powerPs ? { power: `${modification.powerPs} л.с.` } : {}),
+      ...(modification?.fuel ? { fuel: modification.fuel } : {}),
+      ...(modification?.drive ? { drive: modification.drive } : {}),
+      ...(body ? { body } : {}),
+      ...(years ? { years } : {}),
       ...(catalog === "tecdoc"
         ? { tecdoc: { mfaId: make.id, msId: model.id, ...(modification ? { genId: modification.id } : {}) } }
         : { modelId: model.id, ...(modification ? { modificationId: modification.id } : {}) }),
@@ -243,6 +279,86 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
         </button>
       </div>
 
+      {/* Four drop-down lists in a row: the plainest way to choose for anyone who does not want to look through cards. */}
+      <div aria-label="Выбор списками" className={styles.selects} role="group">
+        <label className={styles.select}>
+          <span>Марка</span>
+          <select
+            disabled={makes.status !== "ready"}
+            onChange={(event) => {
+              const next = allMakes.find((item) => item.slug === event.target.value);
+              if (next) openMake(next);
+            }}
+            value={make?.slug ?? ""}
+          >
+            <option value="">{makes.status === "ready" ? "Выберите марку" : "Загружаем…"}</option>
+            {makes.status === "ready" && makes.data.popular.length > 0 ? (
+              <optgroup label="Популярные">
+                {makes.data.popular.map((item) => <option key={`p-${item.id}`} value={item.slug}>{item.name}</option>)}
+              </optgroup>
+            ) : null}
+            {makes.status === "ready" ? (
+              <optgroup label="Все марки">
+                {allMakes.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}
+              </optgroup>
+            ) : null}
+          </select>
+        </label>
+        <label className={styles.select}>
+          <span>Модель</span>
+          <select
+            disabled={!make || models.status !== "ready"}
+            onChange={(event) => {
+              const next = families.find((item) => item.name === event.target.value);
+              if (next) openFamily(next);
+            }}
+            value={family ?? ""}
+          >
+            <option value="">{!make ? "Сначала марка" : models.status === "loading" ? "Загружаем…" : "Выберите модель"}</option>
+            {popular.length > 0 ? (
+              <optgroup label="Популярные">
+                {popular.map((item) => <option key={`p-${item.name}`} value={item.name}>{item.name}</option>)}
+              </optgroup>
+            ) : null}
+            <optgroup label="Все модели">
+              {families.map((item) => <option key={item.name} value={item.name}>{item.name}{yearsLabel(item.yearFrom, item.yearTo) ? ` (${yearsLabel(item.yearFrom, item.yearTo)})` : ""}</option>)}
+            </optgroup>
+          </select>
+        </label>
+        <label className={styles.select}>
+          <span>Поколение</span>
+          <select
+            disabled={!family || generations.length === 0}
+            onChange={(event) => {
+              const next = generations.find((item) => String(item.id) === event.target.value);
+              if (next && make) openModel(make, next);
+            }}
+            value={model ? String(model.id) : ""}
+          >
+            <option value="">{family ? "Выберите поколение" : "Сначала модель"}</option>
+            {generations.map((item) => <option key={item.id} value={String(item.id)}>{generationLabel(item) || item.name}</option>)}
+          </select>
+        </label>
+        <label className={styles.select}>
+          <span>Двигатель</span>
+          <select
+            disabled={!model || modifications.status !== "ready"}
+            onChange={(event) => {
+              if (event.target.value === "unknown") { pick(null); return; }
+              const next = modifications.status === "ready" ? modifications.data.modifications.find((item) => String(item.id) === event.target.value) : undefined;
+              if (next) pick(next);
+            }}
+            value=""
+          >
+            <option value="">{!model ? "Сначала поколение" : modifications.status === "loading" ? "Загружаем…" : "Выберите двигатель"}</option>
+            {modifications.status === "ready" ? modifications.data.modifications.map((item) => (
+              <option key={item.id} value={String(item.id)}>{[engineTitle(item), item.powerPs ? `${item.powerPs} л.с.` : null, item.fuel].filter(Boolean).join(" · ")}</option>
+            )) : null}
+            {model ? <option value="unknown">Не знаю двигатель</option> : null}
+          </select>
+        </label>
+      </div>
+
       {step === 1 ? (
         <>
           <h2 className={styles.title} id={`${inputId}-title`} ref={headingRef} tabIndex={-1}>Выберите марку</h2>
@@ -271,7 +387,8 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
                   <li aria-selected={index === active} id={`${listId}-${index}`} key={`${item.make.id}-${item.model?.id ?? 0}`}
                     onClick={() => pickSuggestion(item)} onMouseEnter={() => setActive(index)} role="option">
                     <strong>{item.label}</strong>
-                    {item.model && yearsLabel(item.model.yearFrom, item.model.yearTo) ? <small>{yearsLabel(item.model.yearFrom, item.model.yearTo)}</small> : null}
+                    <small>{item.model ? [item.family ? "поколение" : null, yearsLabel(item.model.yearFrom, item.model.yearTo)].filter(Boolean).join(" · ") || "модель"
+                      : item.family ? "модель" : "марка"}</small>
                   </li>
                 ))}
               </ul>
@@ -284,20 +401,22 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
               <p className={styles.groupLabel}>Популярные марки</p>
               <div className={styles.popular}>
                 {makes.data.popular.map((item) => (
-                  <button className={styles.makeButton} key={item.id} onClick={choose(() => openMake(item))} type="button">{item.name}</button>
+                  <button className={styles.makeButton} key={item.id} onClick={choose(() => openMake(item))} type="button">
+                    <strong>{item.name}</strong>
+                    {/* The Russian spelling is a reading aid: the button is named by the make alone. */}
+                    {item.nameRu ? <small aria-hidden="true">{item.nameRu}</small> : null}
+                  </button>
                 ))}
               </div>
-              <p className={styles.groupLabel}>Все марки</p>
-              <div className={styles.letters}>
+              <p className={styles.groupLabel}>Все марки · {makes.data.groups.reduce((sum, group) => sum + group.makes.length, 0)}</p>
+              <div aria-label="Марки по первой букве" className={styles.letterBar} role="group">
                 {makes.data.groups.map((group) => (
-                  <section aria-label={`Марки на ${group.letter}`} className={styles.letterGroup} key={group.letter}>
-                    <span className={styles.letter} aria-hidden="true">{group.letter}</span>
-                    <div>
-                      {group.makes.map((item) => (
-                        <button className={styles.makeLink} key={item.id} onClick={choose(() => openMake(item))} type="button">{item.name}</button>
-                      ))}
-                    </div>
-                  </section>
+                  <button aria-pressed={group.letter === shownMakeLetter} key={group.letter} onClick={() => setMakeLetter(group.letter)} type="button">{group.letter}</button>
+                ))}
+              </div>
+              <div aria-label={shownMakeLetter ? `Марки на ${shownMakeLetter}` : undefined} className={styles.makeList} role="group">
+                {(makes.data.groups.find((group) => group.letter === shownMakeLetter)?.makes ?? []).map((item) => (
+                  <button className={styles.makeLink} key={item.id} onClick={choose(() => openMake(item))} type="button">{item.name}</button>
                 ))}
               </div>
             </>
@@ -352,8 +471,20 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
             {generations.map((item) => (
               <button className={styles.generation} key={item.id} onClick={choose(() => openModel(make, item))} type="button">
                 <span className={styles.generationYears}>{yearsLabel(item.yearFrom, item.yearTo) || "годы не указаны"}</span>
-                <strong>{item.generation ?? item.name}</strong>
-                {item.body ? <small>{item.body}</small> : null}
+                {item.bodyCode !== undefined ? (
+                  <>
+                    {item.series ? <strong>{family} {item.series}</strong> : null}
+                    <span className={styles.generationTags}>
+                      {item.bodyCode ? <span className={styles.codeTag}><span>Кузов</span>{item.bodyCode}</span> : null}
+                      {item.body ? <span className={styles.bodyTag}>{capital(item.body)}</span> : null}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <strong>{item.generation ?? item.name}</strong>
+                    {item.body ? <small>{item.body}</small> : null}
+                  </>
+                )}
               </button>
             ))}
           </div>
@@ -366,12 +497,22 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
           {modifications.status === "loading" ? <p className={shared.muted} role="status">Загружаем двигатели…</p> : null}
           {modifications.status === "error" ? <p className={shared.muted} role="alert">{modifications.message}</p> : null}
           {modifications.status === "ready" ? (
-            <div className={styles.grid}>
-              {modifications.data.modifications.map((item) => (
-                <button className={styles.choice} key={item.id} onClick={choose(() => pick(item))} type="button">
-                  <strong>{[item.capacity ? `${item.capacity} л` : null, item.engine].filter(Boolean).join(" · ") || item.label}</strong>
-                  <small>{[yearsLabel(item.yearFrom, item.yearTo), item.powerPs ? `${item.powerPs} л.с.` : null, item.fuel, item.body?.toLowerCase()].filter(Boolean).join(" · ") || item.label}</small>
-                </button>
+            <div className={styles.engineGroups}>
+              {engineGroups(modifications.data.modifications).map((group, _index, all) => (
+                <section aria-label={all.length > 1 ? group.title : undefined} key={group.title}>
+                  {all.length > 1 ? <p className={styles.groupLabel}>{group.title} · {group.items.length}</p> : null}
+                  <div className={styles.engines}>
+                    {group.items.map((item) => (
+                      <button className={styles.engine} key={item.id} onClick={choose(() => pick(item))} type="button">
+                        <span>
+                          <strong>{engineTitle(item)}</strong>
+                          <small>{[yearsLabel(item.yearFrom, item.yearTo), item.drive, item.body?.toLowerCase()].filter(Boolean).join(" · ") || item.label}</small>
+                        </span>
+                        {item.powerPs ? <span className={styles.enginePower}>{item.powerPs} л.с.</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           ) : null}

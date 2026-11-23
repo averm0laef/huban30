@@ -11,12 +11,6 @@ import { PartsFinderVehiclesService } from "./parts-finder-vehicles.service.js";
 
 const AssortmentLinkSchema = z.object({ maxCredits: z.number().int().min(10).max(20_000).default(2_000) }).strict();
 
-const VehicleCatalogSyncSchema = z.object({
-  allMakes: z.boolean().default(true),
-  maxCredits: z.number().int().min(10).max(5_000).default(1_500),
-  modifications: z.boolean().default(true),
-}).strict();
-
 /** Per-IP limits; crosses spend FAPI credits, so they are the tightest. */
 export const PARTS_FINDER_RATE_LIMITS = {
   crosses: { limit: 6, scope: "parts-finder-crosses", windowSeconds: 600 },
@@ -85,13 +79,13 @@ export class PartsFinderController {
   @Get("models")
   async models(@Query() query: unknown, @Req() request: FastifyRequest) {
     await this.throttle("picker", request);
-    return this.finder.models(query, { ip: request.ip });
+    return this.finder.models(query);
   }
 
   @Get("modifications")
   async modifications(@Query() query: unknown, @Req() request: FastifyRequest) {
     await this.throttle("picker", request);
-    return this.finder.modifications(query, { ip: request.ip });
+    return this.finder.modifications(query);
   }
 
   @Get("vehicles/suggest")
@@ -130,7 +124,7 @@ export class StaffPartsFinderController {
     return this.finder.staffOverview();
   }
 
-  /** Size of the make → model → modification catalog and the last FAPI sync. */
+  /** Size of the UMAPI vehicle catalog and its last load (docs/UMAPI.md). */
   @RequirePermissions("catalog:write")
   @Get("vehicles")
   vehicleCatalog() {
@@ -166,15 +160,5 @@ export class StaffPartsFinderController {
   @HttpCode(200)
   decideCross(@Param("id") id: string, @Body() body: unknown, @Req() request: FastifyRequest) {
     return this.review.decide(id, body, request.authContext!);
-  }
-
-  /** Starts filling the vehicle catalog from FAPI in the background (one run at a time). */
-  @RequirePermissions("catalog:write")
-  @Post("vehicles/sync")
-  @HttpCode(202)
-  syncVehicleCatalog(@Body() body: unknown) {
-    const parsed = VehicleCatalogSyncSchema.safeParse(body ?? {});
-    if (!parsed.success) throw new BadRequestException({ code: "invalid_vehicle_sync", error: "Проверьте параметры синхронизации." });
-    return this.vehicles.startCatalogSync(parsed.data);
   }
 }

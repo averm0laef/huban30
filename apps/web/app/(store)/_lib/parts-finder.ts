@@ -316,14 +316,21 @@ export interface ResolveResult {
 
 export interface PickerMake { country: string | null; id: number; name: string; nameRu: string | null; slug: string }
 export interface PickerModel {
+  /** UMAPI catalog: «E12» and «Verso» apart, for the generation card. */
+  bodyCode?: string | null;
+  series?: string | null;
   body?: string | null; family?: string; fapi: boolean; generation?: string | null;
   id: number; name: string; yearFrom: number | null; yearTo: number | null;
 }
 export interface PickerModification {
   body: string | null;
   capacity: string | null;
+  /** «передний привод». */
+  drive?: string | null;
   engine: string | null;
   fuel?: string | null;
+  /** «1.4 л (L08, L68)», «530 d xDrive»: the engine as the catalog names it. */
+  name?: string;
   powerPs?: number | null;
   id: number;
   label: string;
@@ -343,6 +350,12 @@ export interface PickedVehicle {
   model?: string;
   generation?: string;
   engine?: string;
+  /** From the vehicle catalog, for the card's specification row: «110 л.с.», «бензин», «полный привод», «седан», «2001–2006». */
+  power?: string;
+  fuel?: string;
+  drive?: string;
+  body?: string;
+  years?: string;
 }
 
 /**
@@ -406,6 +419,14 @@ export function yearsLabel(from: number | null, to: number | null): string {
 
 const PICKED_VEHICLE_KEY = "an30:parts-finder:picked-vehicle";
 
+/**
+ * Cars of the UMAPI vehicle catalog have numbers from here on (migration
+ * 0056). A smaller number is a car picked in the former list, which no longer
+ * exists: its name is kept, its numbers are dropped, and the search reads the
+ * car from its name until the customer picks it again.
+ */
+export const VEHICLE_CATALOG_ID_BASE = 100_000_001;
+
 export function readPickedVehicle(): PickedVehicle | null {
   try {
     const raw = window.localStorage.getItem(PICKED_VEHICLE_KEY);
@@ -414,17 +435,18 @@ export function readPickedVehicle(): PickedVehicle | null {
     if (!value || typeof value !== "object" || typeof (value as PickedVehicle).label !== "string") return null;
     const { label, modelId, modificationId } = value as PickedVehicle;
     const line = (field: unknown) => (typeof field === "string" && field.trim() ? field.trim().slice(0, 80) : undefined);
-    const details = Object.fromEntries((["make", "model", "generation", "engine"] as const)
+    const details = Object.fromEntries((["make", "model", "generation", "engine", "power", "fuel", "drive", "body", "years"] as const)
       .flatMap((key) => { const text = line((value as PickedVehicle)[key]); return text ? [[key, text]] : []; }));
     const whole = (field: unknown): number | undefined => (Number.isInteger(field) && (field as number) > 0 ? field as number : undefined);
+    const catalogId = (field: unknown): number | undefined => (Number.isInteger(field) && (field as number) >= VEHICLE_CATALOG_ID_BASE ? field as number : undefined);
     const ids = (value as PickedVehicle).tecdoc as { genId?: unknown; mfaId?: unknown; msId?: unknown } | undefined;
     const msId = whole(ids?.msId);
     return {
       ...details,
       ...(msId ? { tecdoc: { msId, ...(whole(ids?.genId) ? { genId: whole(ids?.genId) } : {}), ...(whole(ids?.mfaId) ? { mfaId: whole(ids?.mfaId) } : {}) } } : {}),
       label: label.slice(0, 120),
-      ...(Number.isInteger(modelId) && modelId! > 0 ? { modelId } : {}),
-      ...(Number.isInteger(modificationId) && modificationId! > 0 ? { modificationId } : {}),
+      ...(catalogId(modelId) ? { modelId } : {}),
+      ...(catalogId(modificationId) ? { modificationId } : {}),
     };
   } catch {
     return null;

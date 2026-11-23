@@ -145,8 +145,8 @@ export const PartsFinderCrossesResponseSchema = z.looseObject({
 export type PartsFinderCrossesResponse = z.infer<typeof PartsFinderCrossesResponseSchema>;
 
 export const PartsFinderStatusResponseSchema = z.object({
-  /** Which vehicle catalogue the picker uses: TecDoc when its key is set, else the shop's own list. */
-  catalog: z.enum(["tecdoc", "local"]).optional(),
+  /** Which vehicle catalogue the picker uses: the UMAPI catalog once loaded, else TecDoc when its key is set, else the shop's own list. */
+  catalog: z.enum(["umapi", "tecdoc", "local"]).optional(),
   enabled: z.boolean(),
 });
 export type PartsFinderStatusResponse = z.infer<typeof PartsFinderStatusResponseSchema>;

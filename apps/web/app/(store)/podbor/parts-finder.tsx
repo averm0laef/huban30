@@ -539,7 +539,12 @@ export function PartsFinder() {
                 {picked?.generation || picked?.engine ? (
                   <dl className={styles.garageFacts}>
                     {picked.generation ? <div><dt>Поколение</dt><dd>{picked.generation}</dd></div> : null}
-                    <div><dt>Двигатель</dt><dd data-missing={!picked.engine || undefined}>{picked.engine ?? "не выбран"}</dd></div>
+                    {picked.body ? <div><dt>Тип кузова</dt><dd>{picked.body}</dd></div> : null}
+                    <div data-wide=""><dt>Двигатель</dt><dd data-missing={!picked.engine || undefined}>{picked.engine ?? "не выбран"}</dd></div>
+                    {picked.power ? <div><dt>Мощность</dt><dd>{picked.power}</dd></div> : null}
+                    {picked.fuel ? <div><dt>Топливо</dt><dd>{picked.fuel}</dd></div> : null}
+                    {picked.drive ? <div><dt>Привод</dt><dd>{picked.drive}</dd></div> : null}
+                    {picked.years && !picked.generation?.includes(picked.years) ? <div><dt>Выпуск</dt><dd>{picked.years}</dd></div> : null}
                   </dl>
                 ) : null}
                 <label className={styles.garageUse}>

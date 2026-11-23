@@ -1,21 +1,23 @@
-.list { display: grid; gap: 10px; margin: 0 0 16px; padding: 0; list-style: none; }
-.car { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 14px; padding: 14px 16px; border: 1px solid var(--store-border); border-radius: 16px; background: var(--store-surface); }
-.car[data-main] { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); }
-.icon { width: 44px; height: 44px; padding: 10px; border-radius: 12px; background: var(--store-brand-soft); color: var(--store-brand); }
-.body { display: grid; gap: 2px; min-width: 0; }
-.body strong { font-family: var(--store-font-display); font-size: 1.05rem; overflow-wrap: anywhere; }
-.body span { color: var(--store-muted); font-size: .9rem; overflow-wrap: anywhere; }
-.mainBadge { display: inline-flex; align-items: center; gap: 4px; color: var(--store-brand-strong); font-size: .82rem; font-weight: 650; }
-.mainBadge svg { width: 16px; height: 16px; color: var(--store-accent); }
-.actions { display: flex; align-items: center; gap: 6px; }
-.remove { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 0; border-radius: 50%; background: transparent; color: var(--store-muted); cursor: pointer; }
-.remove:hover { background: var(--store-bg); color: var(--store-danger); }
+/* «Мои автомобили»: one card per saved car (Claude Design canvas «выбор автомобиля», «Кабинет»). */
+.list { display: grid; gap: 12px; margin: 0 0 16px; padding: 0; list-style: none; }
+.car { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 14px 16px; padding: 18px 20px; border: 1px solid var(--store-border); border-radius: 16px; background: var(--store-surface); }
+.car[data-main] { border: 2px solid var(--store-brand); padding: 17px 19px; }
+.body { display: grid; gap: 6px; min-width: 0; }
+.body strong { font-family: var(--store-font-display); font-size: 1.2rem; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+.generation { color: var(--store-muted); font-family: var(--store-font-display); font-size: .92rem; font-weight: 650; overflow-wrap: anywhere; }
+.mainBadge { justify-self: start; display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: var(--store-radius-full, 999px); background: var(--store-accent, #F5C400); color: var(--store-brand-strong, #140F57); font-family: var(--store-font-display); font-size: .75rem; font-weight: 800; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none; }
+.facts li { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 8px; background: var(--store-bg); color: var(--store-text); font-size: .86rem; }
+.actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.remove { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border: 1px solid var(--store-border); border-radius: 10px; background: var(--store-surface); color: var(--store-muted); cursor: pointer; }
+.remove:hover { border-color: var(--store-danger); color: var(--store-danger); }
 .remove:disabled { opacity: .5; cursor: default; }
 .add { justify-self: start; }
 .picker { margin-top: 8px; }
 .muted { margin: 0; color: var(--store-muted); }
 .error { margin: 0 0 12px; color: var(--store-danger); }
-@media (max-width: 640px) {
-  .car { grid-template-columns: auto minmax(0, 1fr); }
-  .actions { grid-column: 1 / -1; justify-content: space-between; }
+@media (max-width: 560px) {
+  .car { padding: 14px 16px; }
+  .car[data-main] { padding: 13px 15px; }
+  .actions > * { flex: 1 1 100%; justify-content: center; }
 }

@@ -220,7 +220,7 @@ describe("error mapping", () => {
 
   it("answers parts_finder_disabled when switched off, while shop analogs keep working", async () => {
     const { engine, service } = setup({ enabled: false, rows: [row("0415240060", "TOYOTA", "p1")] });
-    expect(service.status()).toEqual({ catalog: "local", enabled: false });
+    expect(service.status()).toEqual({ catalog: "umapi", enabled: false });
     await expect(service.search({ query: "фильтр" })).rejects.toMatchObject({ response: { code: "parts_finder_disabled" }, status: 503 });
     expect(engine.search).not.toHaveBeenCalled();
     expect((await service.shopAnalogs({ article: "04152-40060", brand: "Toyota" })).offers).toHaveLength(1);

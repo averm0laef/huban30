@@ -132,8 +132,13 @@ export class PartsFinderService {
     @Optional() private readonly tecdoc?: TecdocService,
   ) {}
 
+  /**
+   * The picker reads the UMAPI vehicle catalog (docs/UMAPI.md). Only while it
+   * is not loaded yet and a TecDoc key is set does TecDoc answer for cars.
+   */
   status(): PartsFinderStatusResponse {
-    return { catalog: this.tecdoc?.available ? "tecdoc" : "local", enabled: this.engine.enabled };
+    const catalog = !this.vehicles.usesCatalog && this.tecdoc?.available ? "tecdoc" : "umapi";
+    return { catalog, enabled: this.engine.enabled };
   }
 
   // `caller` is the visitor a public route answers: what the paid catalogue costs is counted against that
@@ -320,14 +325,15 @@ export class PartsFinderService {
     return this.run(() => this.vehicles.makes());
   }
 
-  async models(query: unknown, caller?: TecdocCaller) {
+  // The picker reads our own vehicle catalog: no visitor pays for it, so no caller is needed.
+  async models(query: unknown) {
     const { make } = parse(PickerModelsQuerySchema, query);
-    return this.run(() => this.vehicles.models(make, caller?.ip ?? null));
+    return this.run(() => this.vehicles.models(make));
   }
 
-  async modifications(query: unknown, caller?: TecdocCaller) {
+  async modifications(query: unknown) {
     const { model } = parse(PickerModificationsQuerySchema, query);
-    return this.run(() => this.vehicles.modifications(model, caller?.ip ?? null));
+    return this.run(() => this.vehicles.modifications(model));
   }
 
   async suggest(query: unknown) {

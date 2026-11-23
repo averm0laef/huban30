@@ -10,9 +10,15 @@
 .search input { flex: 1; min-width: 0; height: 100%; padding: 0 12px; border: 0; background: transparent; color: var(--store-text); font: inherit; font-size: 1rem; outline: none; }
 .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .steps { min-width: 0; }
-.steps ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: .86rem; }
-.steps li { display: inline-flex; align-items: center; gap: 4px; color: var(--store-muted); }
-.steps li[aria-current="step"] span { color: var(--store-brand); font-weight: 700; }
+/* Four numbered steps (design: Claude Design canvas «выбор автомобиля»): the current one filled, done ones are buttons back. */
+.steps ol { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; margin: 0; padding: 0; list-style: none; font-size: .88rem; counter-reset: step; }
+.steps li { display: inline-flex; align-items: center; gap: 6px; color: var(--store-muted); font-weight: 650; counter-increment: step; }
+.steps li::before { content: counter(step); display: inline-grid; place-items: center; order: 1; width: 26px; height: 26px; border: 2px solid var(--store-border); border-radius: 50%; color: var(--store-muted); font-family: var(--store-font-display); font-size: .78rem; font-weight: 800; }
+.steps li > * { order: 2; }
+.steps li > svg { order: 0; color: var(--store-border); }
+.steps li[aria-current="step"]::before { border-color: var(--store-brand); background: var(--store-brand); color: var(--store-on-brand); }
+.steps li[aria-current="step"] span { color: var(--store-text); font-weight: 750; }
+.steps li:has(> button)::before { border-color: var(--store-brand); color: var(--store-brand); }
 /* A finished step is a button back to it: 36px with a pointer, 44px for a finger. */
 .steps button { min-height: 36px; padding: 0 12px; border: 0; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand-strong); font: inherit; font-weight: 650; cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease); }
 .steps button:hover { background: color-mix(in srgb, var(--store-brand) 14%, var(--store-surface)); }
@@ -29,7 +35,7 @@
 @media (max-width: 520px) {
   .skipEngine { justify-self: stretch; }
 }
-.title { overflow-wrap: anywhere; margin: 0; color: var(--store-text); font-family: var(--store-font-display); font-size: 1.05rem; line-height: 1.3; }
+.title { overflow-wrap: anywhere; margin: 0; color: var(--store-text); font-family: var(--store-font-display); font-size: clamp(1.2rem, 2.2vw, 1.5rem); font-weight: 800; line-height: 1.25; }
 .title:focus { outline: none; }
 .groupLabel { margin: 4px 0 0; color: var(--store-muted); font-size: .8rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
 
@@ -39,18 +45,29 @@
 .suggestList li[aria-selected="true"], .suggestList li:hover { background: var(--store-brand-soft); color: var(--store-brand-strong); }
 .suggestList small { color: var(--store-muted); font-size: .8rem; white-space: nowrap; }
 
-.popular { display: flex; flex-wrap: wrap; gap: 8px; }
-.popular .makeButton { min-height: 44px; padding: 0 16px; border: 1px solid var(--store-border); border-radius: var(--store-radius-full); background: var(--store-bg); color: var(--store-text); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
-.popular .makeButton:hover { border-color: var(--store-brand); color: var(--store-brand); }
+.popular { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 128px), 1fr)); gap: 8px; }
+.popular .makeButton { display: grid; align-content: center; gap: 2px; min-height: 60px; padding: 8px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-surface); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease); }
+.popular .makeButton strong { font-family: var(--store-font-display); font-size: .95rem; font-weight: 750; }
+.popular .makeButton small { color: var(--store-muted); font-size: .8rem; }
+.popular .makeButton:hover { border-color: var(--store-brand); box-shadow: 0 0 0 1px var(--store-brand); }
 .popular .makeButton:active { background: var(--store-brand-soft); }
 
-.letters { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 12px 20px; }
-.letterGroup { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 8px; }
-.letter { padding-top: 10px; color: var(--store-brand); font-family: var(--store-font-display); font-weight: 800; }
-.letterGroup > div { display: grid; }
-.letterGroup .makeLink { min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--store-text); font-size: .92rem; text-align: left; cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
-.letterGroup .makeLink:hover { background: var(--store-bg); color: var(--store-brand); }
-.letterGroup .makeLink:active { background: var(--store-brand-soft); }
+/* All makes: the letter bar (below) and the makes of one letter. */
+.makeList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 128px), 1fr)); gap: 8px; }
+.makeList .makeLink { min-height: 44px; padding: 0 14px; border: 1px solid var(--store-border); border-radius: 10px; background: var(--store-surface); color: var(--store-text); font-family: var(--store-font-display); font-size: .9rem; font-weight: 700; text-align: left; overflow-wrap: anywhere; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease); }
+.makeList .makeLink:hover { border-color: var(--store-brand); box-shadow: 0 0 0 1px var(--store-brand); }
+.makeList .makeLink:active { background: var(--store-brand-soft); }
+
+/* Four drop-down lists, one per step: equal columns, one height, one gap; two by two on a tablet, stacked on a phone. */
+.selects { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 16px; border-radius: 14px; background: var(--store-bg); }
+.select { display: grid; gap: 6px; min-width: 0; color: var(--store-text); font-family: var(--store-font-display); font-size: .82rem; font-weight: 700; }
+.select select { width: 100%; min-width: 0; height: 48px; padding: 0 40px 0 14px; border: 1px solid var(--store-border); border-radius: 10px; background-color: var(--store-surface); background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 20px) 21px, calc(100% - 14px) 21px; background-repeat: no-repeat; background-size: 6px 6px; color: var(--store-text); font: inherit; font-family: var(--store-font-sans); font-size: .95rem; font-weight: 500; text-overflow: ellipsis; appearance: none; cursor: pointer; }
+.select select:focus-visible { border-color: var(--store-brand); outline: 2px solid var(--store-brand-soft); outline-offset: 1px; }
+.select select:disabled { background-color: var(--store-bg); color: var(--store-muted); cursor: not-allowed; }
+/* By the picker's own width, not the screen's: on /podbor it sits in a column beside the picture. */
+.picker { container-type: inline-size; }
+@container (max-width: 960px) { .selects { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 420px) { .selects { grid-template-columns: minmax(0, 1fr); padding: 12px; } }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 8px; }
 .choice { display: grid; gap: 2px; min-height: 56px; padding: 10px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease); }
@@ -60,7 +77,7 @@
 .choice:active { background: var(--store-brand-soft); }
 
 @media (prefers-reduced-motion: reduce) {
-  .steps button, .close, .popular .makeButton, .letterGroup .makeLink, .choice { transition: none; }
+  .steps button, .close, .popular .makeButton, .makeList .makeLink, .choice, .engine { transition: none; }
 }
 
 /* Generations of one model: years first (what people know), then the body code. */
@@ -68,9 +85,15 @@
 .generation { display: grid; gap: 2px; min-height: 64px; padding: 10px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease); }
 .generation:hover { border-color: var(--store-brand); background: var(--store-surface); }
 .generation:active { background: var(--store-brand-soft); }
-.generationYears { color: var(--store-brand); font-family: var(--store-font-display); font-size: 1rem; font-weight: 800; }
-.generation strong { font-size: .92rem; overflow-wrap: anywhere; }
-.generation small { color: var(--store-muted); font-size: .82rem; }
+.generation { align-content: start; gap: 8px; min-height: 96px; padding: 14px 16px; }
+/* Body code in the brand's colour with its label, body type as a plain tag: both readable at a glance. */
+.generationTags { display: flex; flex-wrap: wrap; gap: 6px; }
+.codeTag { display: inline-flex; align-items: baseline; gap: 6px; min-height: 28px; padding: 4px 10px; border-radius: 8px; background: var(--store-brand-soft); color: var(--store-brand-strong); font-family: var(--store-font-display); font-size: .9rem; font-weight: 800; overflow-wrap: anywhere; }
+.codeTag > span { color: var(--store-muted); font-family: var(--store-font-sans); font-size: .74rem; font-weight: 600; }
+.bodyTag { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid var(--store-border); border-radius: 8px; background: var(--store-surface); color: var(--store-text); font-size: .86rem; font-weight: 600; }
+.generationYears { color: var(--store-text); font-family: var(--store-font-display); font-size: 1.15rem; font-weight: 800; }
+.generation strong { color: var(--store-brand); font-family: var(--store-font-display); font-size: .95rem; overflow-wrap: anywhere; }
+.generation small { justify-self: start; padding: 2px 8px; border-radius: 6px; background: var(--store-bg); color: var(--store-muted); font-size: .8rem; }
 @media (prefers-reduced-motion: reduce) { .generation { transition: none; } }
 
 /* Models of a make: a letter index instead of a two-hundred-card scroll. */
@@ -84,3 +107,15 @@
   .modelGrid .choice { padding: 10px 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .letterBar button { transition: none; } }
+
+/* Engines: one row each — the engine as the catalog names it, years / drive / body under it, power on the right; grouped by fuel. */
+.engineGroups { display: grid; gap: 14px; }
+.engineGroups section { display: grid; gap: 8px; }
+.engines { display: grid; gap: 8px; }
+.engine { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 64px; padding: 10px 16px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-surface); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease); }
+.engine > span:first-child { display: grid; gap: 3px; min-width: 0; }
+.engine strong { font-family: var(--store-font-display); font-size: 1rem; font-weight: 750; overflow-wrap: anywhere; }
+.engine small { color: var(--store-muted); font-size: .84rem; }
+.engine:hover { border-color: var(--store-brand); box-shadow: 0 0 0 1px var(--store-brand); }
+.engine:active { background: var(--store-brand-soft); }
+.enginePower { flex: none; margin-left: auto; font-family: var(--store-font-display); font-size: 1.05rem; font-weight: 800; white-space: nowrap; }

@@ -372,10 +372,22 @@
 .garageBody { display: grid; gap: 4px; min-width: 0; }
 .garageKicker { color: var(--store-muted); font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .garageName { font-family: var(--store-font-display); font-size: 1.15rem; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
-.garageFacts { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 2px 0 0; }
-.garageFacts div { display: flex; gap: 6px; min-width: 0; font-size: .88rem; }
-.garageFacts dt { color: var(--store-muted); }
-.garageFacts dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+/* The car's specification as tiles (Claude Design canvas «выбор автомобиля», «Итог»). */
+.garageFacts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 116px), 1fr)); gap: 8px; margin: 6px 0 2px; }
+.garageFacts div { display: grid; align-content: start; gap: 2px; min-width: 0; padding: 8px 12px; border-radius: 10px; background: var(--store-bg); }
+.garageFacts div[data-wide] { grid-column: span 2; }
+/* By the card's own width (it sits in a column beside the picture): a narrow card puts «Сменить» under the facts,
+   so the tiles get the whole width instead of the strip between the icon and the buttons. */
+.garageBody { container-type: inline-size; }
+.garage:has(.garageFacts) { grid-template-columns: auto minmax(0, 1fr); }
+.garage:has(.garageFacts) .garageActions { grid-column: 1 / -1; justify-content: flex-start; }
+@container (max-width: 239px) { .garageFacts div[data-wide] { grid-column: auto; } }
+@media (max-width: 480px) {
+  .garage:has(.garageFacts) { grid-template-columns: minmax(0, 1fr); }
+  .garage:has(.garageFacts) .garageIcon { display: none; }
+}
+.garageFacts dt { color: var(--store-muted); font-size: .78rem; }
+.garageFacts dd { margin: 0; font-family: var(--store-font-display); font-size: .92rem; font-weight: 750; overflow-wrap: anywhere; }
 .garageFacts dd[data-missing] { color: var(--store-muted); font-weight: 500; }
 .garageUse { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; width: fit-content; font-size: .9rem; cursor: pointer; }
 .garageUse input { width: 18px; height: 18px; flex: none; accent-color: var(--store-brand); }

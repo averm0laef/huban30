@@ -27,50 +27,42 @@ interface Overview {
 }
 
 interface VehicleCatalog {
-  makes: number;
-  models: number;
-  modifications: number;
-  running: boolean;
-  lastSync: { creditsUsed: number; error: string | null; finishedAt: string; makesLinked: number; modelsRefreshed: number; modificationsRefreshed: number } | null;
+  umapi: {
+    lastImport: {
+      changes: Record<"makes" | "models" | "modifications", { added: number; changed: number; retired: number }>;
+      fileName: string;
+      finishedAt: string;
+      rowsRejected: number;
+      rowsTotal: number;
+    } | null;
+    makes: number;
+    models: number;
+    modifications: number;
+  } | null;
 }
 
 const number = new Intl.NumberFormat("ru-RU");
 
-/** Make → model → engine catalog for /podbor, filled from FAPI (TecDoc data) on demand. */
-function VehicleCatalogBlock({ fapiConfigured }: { fapiConfigured: boolean }) {
+/** The UMAPI passenger-car catalog behind the car picker (docs/UMAPI.md): loaded from the licensed file, costs no requests. */
+function VehicleCatalogBlock() {
   const resource = useResource(() => api<VehicleCatalog>("/staff/parts-finder/vehicles"), []);
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
-  const data = resource.data;
-  async function start() {
-    setPending(true);
-    setMessage("");
-    try {
-      const result = await api<{ started: boolean }>("/staff/parts-finder/vehicles/sync", {
-        body: JSON.stringify({ allMakes: true, maxCredits: 1500, modifications: true }), method: "POST",
-      });
-      setMessage(result.started ? "Синхронизация запущена. Обновите карточку через несколько минут." : "Синхронизация уже идёт или ключ FAPI не задан.");
-      resource.reload();
-    } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Не удалось запустить синхронизацию.");
-    } finally {
-      setPending(false);
-    }
-  }
+  const catalog = resource.data?.umapi ?? null;
+  const last = catalog?.lastImport ?? null;
+  const changes = last ? last.changes.modifications : null;
   return (
     <>
-      <h3>Справочник автомобилей для подбора</h3>
-      {data ? (
-        <dl className={styles.detailList}>
-          <div><dt>В справочнике</dt><dd>{number.format(data.makes)} марок, {number.format(data.models)} моделей, {number.format(data.modifications)} модификаций с двигателями</dd></div>
-          <div><dt>Последняя синхронизация с FAPI</dt><dd>{data.running ? "идёт сейчас" : data.lastSync
-            ? `${formatDate(data.lastSync.finishedAt)}: связано с FAPI ${data.lastSync.makesLinked} марок, обновлены модели ${data.lastSync.modelsRefreshed} марок и двигатели ${data.lastSync.modificationsRefreshed} моделей, ${data.lastSync.creditsUsed} кредитов${data.lastSync.error ? ` — ${data.lastSync.error}` : ""}`
-            : "не запускалась после перезапуска сервера"}</dd></div>
-        </dl>
+      <h3>Справочник автомобилей UMAPI</h3>
+      {resource.data ? (
+        catalog && catalog.modifications > 0 ? (
+          <dl className={styles.detailList}>
+            <div><dt>В справочнике</dt><dd>{number.format(catalog.makes)} марок, {number.format(catalog.models)} моделей, {number.format(catalog.modifications)} модификаций</dd></div>
+            <div><dt>Последняя загрузка</dt><dd>{last && changes
+              ? `${formatDate(last.finishedAt)}, файл ${last.fileName}: строк ${number.format(last.rowsTotal)}, пропущено ${number.format(last.rowsRejected)}; модификаций добавлено ${number.format(changes.added)}, изменено ${number.format(changes.changed)}, снято с показа ${number.format(changes.retired)}`
+              : "нет сведений"}</dd></div>
+          </dl>
+        ) : <p role="status">Справочник не загружен: выбор автомобиля на сайте недоступен. Загрузите файл командой ниже.</p>
       ) : null}
-      <p className={styles.muted}>Сначала загружаются японские марки, затем европейские. Двигатели поколения, снятого с производства, оплачиваются один раз и больше не запрашиваются. За один запуск тратится не больше 1 500 кредитов.</p>
-      <div><Button appearance="primary" disabled={!fapiConfigured || pending || data?.running} onClick={start}>Обновить справочник из FAPI</Button></div>
-      {message ? <p role="status">{message}</p> : null}
+      <p className={styles.muted}>Выбор марки, модели и двигателя на сайте идёт из этого справочника и не тратит запросов платных каталогов. Новый файл от UMAPI загружается на сервере командой <code>node dist/import-vehicle-catalog.js &lt;файл&gt;</code> (порядок — в docs/UMAPI.md); тот же файл, загруженный повторно, ничего не меняет.</p>
     </>
   );
 }
@@ -397,7 +389,7 @@ export function PartsFinderStatusCard() {
           </dl>
           <TecdocBlock />
           <AssortmentLinksBlock />
-          <VehicleCatalogBlock fapiConfigured={data.fapi.configured} />
+          <VehicleCatalogBlock />
           <h3>Поставщик — позиции «под заказ»</h3>
           <Badge appearance="tint" color={!data.supplier.enabled ? "informative" : data.supplier.lastError && (!data.supplier.lastSuccessAt || data.supplier.lastError.at > data.supplier.lastSuccessAt) ? "warning" : "success"}>
             {data.supplier.enabled ? "Подключён" : "Выключен — нет ключей"}
