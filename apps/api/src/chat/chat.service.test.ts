@@ -622,3 +622,32 @@ describe("ChatService bounded history pagination", () => {
     )).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+
+describe("ChatService assistant reply for a repeated message", () => {
+  it("stores no second automated answer to the same customer message", async () => {
+    const clientQuery = vi.fn()
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ assigned_staff_id: null, status: "waiting_staff" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ "?column?": 1 }] });
+    const publish = vi.fn();
+    const service = new ChatService(
+      {
+        transaction: vi.fn(async (work: (client: { query: typeof clientQuery }) => Promise<unknown>) => (
+          work({ query: clientQuery })
+        )),
+      } as unknown as DatabaseService,
+      {} as CryptoService,
+      { publish } as unknown as ChatEventBus,
+      {} as StorageProvider,
+      {} as MalwareScannerService,
+      {} as MediaValidationService,
+    );
+
+    await expect(service.insertAssistantReply(THREAD_ID, "Ответ", MESSAGE_ID, false)).resolves.toBeNull();
+
+    // The thread row is locked before the check, so two copies of one message cannot both pass it.
+    expect(clientQuery.mock.calls[0]?.[0]).toContain("FOR UPDATE");
+    expect(clientQuery.mock.calls[1]?.[1]).toEqual([THREAD_ID, MESSAGE_ID]);
+    expect(clientQuery).toHaveBeenCalledTimes(2);
+    expect(publish).not.toHaveBeenCalled();
+  });
+});

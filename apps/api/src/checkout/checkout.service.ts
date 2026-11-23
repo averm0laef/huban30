@@ -274,7 +274,11 @@ export class CheckoutService {
       )).rows;
       const totalAvailable = inventory.reduce((total, row) => total + row.available_quantity, 0);
       if (totalAvailable < item.quantity) {
-        throw new ConflictException(`Недостаточно остатка товара ${item.productId}`);
+        // The customer reads this: name the part, not its identifier.
+        const title = `«${publicProductName(product.name, product.sku)}» (${product.sku})`;
+        throw new ConflictException(totalAvailable > 0
+          ? `Недостаточно остатка: ${title}, в наличии ${totalAvailable} шт. Уменьшите количество в корзине.`
+          : `Товара ${title} сейчас нет в наличии. Удалите его из корзины.`);
       }
       lines.push({
         amountKopeks,

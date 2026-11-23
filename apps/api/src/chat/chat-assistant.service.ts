@@ -158,6 +158,9 @@ export class ChatAssistantService {
       // A closed thread gets no more messages; a thread a human has already
       // taken is left to that human, not double-answered by the bot.
       if (!thread || thread.status === "closed" || thread.assignedStaffId) return null;
+      // The same message sent again (a retry, a double click) is answered
+      // once: no second catalogue search and no second paid model call.
+      if (params.replyToId && await this.chat.assistantAnswered(params.threadId, params.replyToId)) return null;
       return await this.buildAndInsertReply(params);
     } catch (error) {
       this.logger.warn(`assistant reply failed for thread ${params.threadId}: ${String(error)}`);
