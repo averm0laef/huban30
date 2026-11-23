@@ -194,13 +194,14 @@ describe("auth account state policy", () => {
   });
 
   it.each([
-    { justSent: true, letters: 0 },
-    { justSent: false, letters: 1 },
-  ])("a sign-up repeated right after the letter was sent makes no second consent, link or letter ($justSent)", async ({ justSent, letters }) => {
+    { name: "the same sign-up sent again right after the letter", justSent: true, samePassword: true, letters: 0 },
+    { name: "a different password right after the letter", justSent: true, samePassword: false, letters: 1 },
+    { name: "the same sign-up after the letter is no longer fresh", justSent: false, samePassword: true, letters: 1 },
+  ])("$name makes $letters new consent, link and letter", async ({ justSent, samePassword, letters }) => {
     const userId = "019bf9ea-0d3e-7def-8c9a-0000000000cd";
     const clientQuery = vi.fn(async (statement: string, _parameters?: unknown[]) => {
-      if (statement.includes("SELECT id, status::text FROM app.users")) {
-        return { rows: [{ id: userId, status: "pending_email" }] };
+      if (statement.includes("FROM app.users WHERE email")) {
+        return { rows: [{ id: userId, password_hash: "stored-password-hash", status: "pending_email" }] };
       }
       if (statement.includes("created_at > clock_timestamp() - make_interval")) {
         return { rows: justSent ? [{}] : [] };
@@ -213,6 +214,10 @@ describe("auth account state policy", () => {
       )),
     };
     const audit = { record: vi.fn() };
+    const passwords = {
+      hash: vi.fn().mockResolvedValue("new-password-hash"),
+      verify: vi.fn().mockResolvedValue(samePassword),
+    };
     const service = new AuthService(
       configStub({ AUTH_DEBUG_TOKENS: true }),
       audit as unknown as AuditService,
@@ -222,7 +227,7 @@ describe("auth account state policy", () => {
         randomToken: vi.fn().mockReturnValue("verification-token"),
       } as unknown as CryptoService,
       database as unknown as DatabaseService,
-      { hash: vi.fn().mockResolvedValue("latest-password-hash") } as unknown as PasswordService,
+      passwords as unknown as PasswordService,
       {} as SessionService,
       {} as TotpService,
     );
@@ -230,7 +235,7 @@ describe("auth account state policy", () => {
     const answer = await service.register({
       displayName: "Антон Ермолаев",
       email: "client@example.test",
-      password: "different-secure-phrase",
+      password: "correct-horse-battery-staple",
       personalDataConsent: true,
       personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
     }, { ipAddress: "203.0.113.30" });
@@ -241,11 +246,13 @@ describe("auth account state policy", () => {
     expect(count("INSERT INTO app.email_verification_tokens")).toBe(letters);
     expect(count("UPDATE app.email_verification_tokens SET used_at")).toBe(letters);
     expect(count("INSERT INTO app.outbox_events")).toBe(letters);
-    // The password typed last is the one the link will ask for.
-    expect(clientQuery.mock.calls.find((call) => String(call[0]).includes("UPDATE app.users"))?.[1])
-      .toEqual([userId, "Антон Ермолаев", "latest-password-hash"]);
+    // The password of a pending account changes only together with a new letter.
+    expect(count("UPDATE app.users")).toBe(letters);
+    if (justSent) {
+      expect(passwords.verify).toHaveBeenCalledWith("correct-horse-battery-staple", "stored-password-hash");
+    }
     expect(audit.record).toHaveBeenCalledTimes(1);
-    expect("developmentToken" in answer).toBe(!justSent);
+    expect("developmentToken" in answer).toBe(letters === 1);
     expect(answer.message).toBe("Если адрес подходит, инструкция будет отправлена.");
   });
 
