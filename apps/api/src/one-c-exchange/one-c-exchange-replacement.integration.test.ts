@@ -1,5 +1,5 @@
-// Real-database check: a real full exchange from 1С replaces a catalogue loaded earlier under other ids (the trial
-// upload of the owner's list export uses 1С codes as ids; 1С itself sends GUIDs). Skipped unless
+// Real-database check: a full exchange from 1С replaces a catalogue of other goods loaded earlier (the same goods
+// under new ids are taken over instead: one-c-exchange-adoption.integration.test.ts). Skipped unless
 // CATALOG_SEARCH_DATABASE_URL points at a scratch database (see catalog/catalog-search-regression.test.ts).
 // Runs on the second 1С base, so the "at least half of the live products" guard counts only this file's products.
 
@@ -27,7 +27,7 @@ ${ids.map((id) => `<Товар><Ид>${id}</Ид><Артикул>PZ-${id.split("
   </Товары></Каталог>
 </КоммерческаяИнформация>`;
 
-describe.skipIf(!url)("a real full exchange replaces a catalogue loaded under other ids (real PostgreSQL)", () => {
+describe.skipIf(!url)("a real full exchange replaces a catalogue of other goods (real PostgreSQL)", () => {
   let database: DatabaseService;
   let storefront: CatalogPublicService;
   let exchange: OneCExchangeService;
@@ -65,8 +65,8 @@ describe.skipIf(!url)("a real full exchange replaces a catalogue loaded under ot
     await database?.onModuleDestroy();
   });
 
-  it("shows each product once after the same goods come again under new ids", async () => {
-    await load("trial", xml(["code-1", "code-2", "code-3", "code-4"], false, "2026-11-23T10:00:00"));
+  it("shows only the goods of the full file after a catalogue of other goods", async () => {
+    await load("trial", xml(["code-11", "code-12", "code-13", "code-14"], false, "2026-11-23T10:00:00"));
     expect(await visible()).toHaveLength(4);
 
     await load("real", xml(["guid-1", "guid-2", "guid-3", "guid-4"], false, "2026-11-23T11:00:00"));
