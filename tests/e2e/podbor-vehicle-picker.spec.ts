@@ -121,6 +121,20 @@ test("the make in the picker's breadcrumbs goes back to the list of makes", asyn
   await expect(page.getByRole("heading", { name: "Toyota: выберите модель" })).toBeVisible();
 });
 
+test("on a phone the search field and the cross of the picker stay inside its card", async ({ page }) => {
+  for (const width of [375, 320]) {
+    await page.setViewportSize({ height: 812, width });
+    await openPicker(page);
+    const picker = steps(page).locator("xpath=../..");
+    const card = (await picker.boundingBox())!;
+    for (const part of [picker.getByRole("combobox"), picker.getByRole("button", { name: "Закрыть выбор автомобиля" })]) {
+      const box = (await part.boundingBox())!;
+      expect(box.x, `${width}px: left edge`).toBeGreaterThanOrEqual(card.x);
+      expect(box.x + box.width, `${width}px: right edge`).toBeLessThanOrEqual(card.x + card.width);
+    }
+  }
+});
+
 test("the VIN result shows engine volume in litres with one decimal", async ({ page }) => {
   await stubPartsFinder(page);
   await page.goto("/podbor");
