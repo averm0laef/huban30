@@ -408,6 +408,9 @@ export const OneCCatalogRowSchema = z.discriminatedUnion("entityType", [
     externalId: ExternalIdSchema,
     isActive: z.boolean().default(true),
     name: CatalogNameSchema,
+    // The item's code in 1С («Код»), when the file carries it: a product loaded before the exchange under its code
+    // is recognised by it once 1С starts sending its own identifier.
+    oneCCode: ExternalIdSchema.optional(),
     searchText: z.string().trim().max(10_000).nullable().default(null),
     sku: z.string().trim().min(1).max(128).regex(SAFE_SINGLE_LINE),
     slug: SlugSchema,
