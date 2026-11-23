@@ -15,8 +15,6 @@ import {
   MessageBarBody,
   MessageBarTitle,
   Spinner,
-  webDarkTheme,
-  webLightTheme,
 } from "@fluentui/react-components";
 import {
   Navigation20Regular,
@@ -30,6 +28,8 @@ import Link from "next/link";
 import { ROLE_PERMISSIONS, type Permission } from "@an30/contracts";
 
 import { api, ApiError } from "./api";
+import { staffDarkTheme, staffLightTheme } from "./brand-theme";
+import { BrandLockup } from "../(store)/_components/brand-mark";
 import type { SessionView } from "./types";
 import { ROLE_LABELS } from "./workspace-utils";
 import { StaffAvailability, availabilityPreferenceKey } from "./staff-availability";
@@ -127,14 +127,14 @@ export function StaffWorkspace({ initialSection }: { initialSection: StaffSectio
 
   if (authState === "loading") {
     return (
-      <FluentProvider theme={theme === "dark" ? webDarkTheme : webLightTheme} className={styles.provider}>
+      <FluentProvider theme={theme === "dark" ? staffDarkTheme : staffLightTheme} className={styles.provider}>
         <main className={styles.authShell}><Spinner label="Проверка защищённой сессии" /></main>
       </FluentProvider>
     );
   }
 
   return (
-    <FluentProvider theme={theme === "dark" ? webDarkTheme : webLightTheme} className={styles.provider}>
+    <FluentProvider theme={theme === "dark" ? staffDarkTheme : staffLightTheme} className={styles.provider}>
       {!session ? (
         <LoginPanel authError={authError} onAuthenticated={loadSession} onTheme={toggleTheme} theme={theme} />
       ) : session.role === "customer" ? (
@@ -191,7 +191,7 @@ function LoginPanel({
     <main className={styles.authShell}>
       <section className={styles.authPanel} aria-labelledby="login-title">
         <header className={styles.authBrand}>
-          <Link href="/" aria-label="АН-30, открыть магазин"><strong>АН-30</strong><span>рабочее место</span></Link>
+          <Link href="/" aria-label="АН-30, открыть магазин"><BrandLockup className={styles.brandLogo} tone="current" /><span>рабочее место</span></Link>
           <Button
             appearance="subtle"
             aria-label={theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
@@ -355,8 +355,8 @@ function WorkspaceFrame({
       <a className={styles.skipLink} href="#workspace-main">К основному содержимому</a>
       {navigationOpen ? <button aria-label="Закрыть меню" className={styles.navBackdrop} onClick={onNavigationClose} type="button" /> : null}
       <aside className={styles.sidebar} data-open={navigationOpen || undefined}>
-        <Link className={styles.workspaceBrand} href="/admin" onClick={onNavigationClose}>
-          <strong>АН-30</strong><span>персонал</span>
+        <Link aria-label="АН-30, рабочее место" className={styles.workspaceBrand} href="/admin" onClick={onNavigationClose}>
+          <BrandLockup className={styles.brandLogo} tone="current" /><span>персонал</span>
         </Link>
         <nav aria-label="Разделы рабочего места" className={styles.workspaceNav}>
           {items.map((item) => (

@@ -1,5 +1,5 @@
 .availability { display: grid; align-content: center; gap: 1px; padding: 6px 15px 6px 7px; border: 1px solid var(--colorNeutralStroke2); border-radius: 18px; background: var(--colorNeutralBackground1); position: relative; }
-.availability :global(.fui-Switch) { min-height: 25px; font: 600 11px Montserrat,var(--fontFamilyBase),sans-serif; }
+.availability :global(.fui-Switch) { min-height: 44px; font: 600 12px Montserrat,var(--fontFamilyBase),sans-serif; }
 .availability :global(.fui-Switch__label) { padding-block: 0; }
 .availability :global(.fui-Switch__indicator) { margin-block: 3px; }
 .state { padding-left: 44px; color: var(--colorNeutralForeground3); font-size: 9px; line-height: 1.4; }

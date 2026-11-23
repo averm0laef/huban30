@@ -4,6 +4,20 @@
   color: var(--colorNeutralForeground1);
 }
 
+.provider :is(h1, h2, h3) { font-family: "Montserrat", var(--fontFamilyBase); }
+.provider :global(.fui-Button),
+.provider :global(.fui-Input),
+.provider :global(.fui-Select),
+.provider :global(.fui-Combobox),
+.provider :global(.fui-Dropdown),
+.provider :global(.fui-SpinButton),
+.provider :global(.fui-Tab),
+.provider :global(.fui-Checkbox),
+.provider :global(.fui-Radio),
+.provider :global(.fui-Switch) { min-height: 44px; }
+.provider :global(.fui-Button) { min-width: 44px; }
+.brandLogo { display: block; flex: none; width: 110px; height: 46px; }
+
 .authShell {
   min-height: 100dvh;
   display: grid;
@@ -18,7 +32,7 @@
   gap: 20px;
   padding: 28px;
   border: 1px solid var(--colorNeutralStroke1);
-  border-radius: 10px;
+  border-radius: 18px;
   background: var(--colorNeutralBackground1);
   box-shadow: var(--shadow16);
 }
@@ -33,20 +47,21 @@
 
 .authBrand {
   align-items: center;
+  gap: 12px;
   justify-content: space-between;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--colorNeutralStroke2);
 }
 
 .authBrand a {
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  color: inherit;
+  color: var(--colorBrandForeground1);
   text-decoration: none;
 }
 
 .authBrand strong {
-  color: #1748ad;
+  color: var(--colorBrandForeground1);
   font-size: 1.35rem;
   font-weight: 900;
   letter-spacing: -0.04em;
@@ -159,14 +174,14 @@
   height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  background: #101a2e;
+  background: #140f57;
   color: #f5f7fb;
 }
 
 .workspaceBrand {
   min-height: 64px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   padding: 0 18px;
   border-bottom: 1px solid rgb(255 255 255 / 0.1);
@@ -175,7 +190,7 @@
 }
 
 .workspaceBrand strong {
-  color: #f7c900;
+  color: #f5c400;
   font-size: 1.25rem;
   font-weight: 900;
   letter-spacing: -0.04em;
@@ -195,13 +210,13 @@
 }
 
 .navItem {
-  min-height: 38px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 12px;
   color: #c9d2e2;
   font-size: 0.82rem;
   font-weight: 650;
@@ -214,8 +229,8 @@
 }
 
 .navItem[aria-current="page"] {
-  border-color: rgb(127 165 255 / 0.32);
-  background: #1c3974;
+  border-color: rgb(255 255 255 / 0.32);
+  background: #1800e0;
   color: #ffffff;
 }
 
@@ -234,6 +249,16 @@
 
 .sidebarFooter > span {
   color: #afbad0;
+}
+
+@media (max-width: 767px) {
+  .provider input,
+  .provider select,
+  .provider textarea,
+  .provider :global(.fui-Input__input),
+  .provider :global(.fui-Select__select),
+  .provider :global(.fui-Combobox__input),
+  .provider :global(.fui-Textarea__textarea) { font-size: 1rem; }
 }
 
 .workspaceBody {
@@ -300,7 +325,7 @@
   display: block;
   margin-bottom: 6px;
   color: var(--colorBrandForeground1);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -392,7 +417,7 @@
   border-bottom: 1px solid var(--colorNeutralStroke1);
   background: var(--colorNeutralBackground3);
   color: var(--colorNeutralForeground2);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 750;
   text-align: left;
   white-space: nowrap;
@@ -445,7 +470,7 @@
 }
 
 .cellStack > span {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .inlineLink {
@@ -626,7 +651,7 @@
 
 .threadMeta time {
   color: var(--colorNeutralForeground3);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 
 .conversation {
@@ -768,7 +793,7 @@
 .message > span,
 .message time {
   color: var(--colorNeutralForeground3);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
 }
 
 .message p {
@@ -882,7 +907,7 @@
 
 .detailList dt span {
   color: var(--colorNeutralForeground3);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .detailList dd {
@@ -1019,7 +1044,7 @@
   grid-template-columns: 58px minmax(80px, 1fr) 120px;
   align-items: center;
   gap: 10px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .barTrack {
@@ -1226,7 +1251,7 @@
   }
 
   .barRow strong {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
   }
 }
 
