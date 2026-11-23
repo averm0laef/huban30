@@ -1439,6 +1439,7 @@
 .pageContents a:focus-visible { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
 /* The sticky top bar is 64 px high: a block jumped to must not land under it. */
 .settingsAnchor { scroll-margin-top: 80px; }
-.settingsResult { max-width: 760px; }
+.settingsResult { max-width: 760px; margin: 12px 0; }
+.settingsResult .messageBar { margin: 0; }
 .settingsResult:empty { display: none; }
 @media (max-width: 820px) { .pageContents a { min-height: 44px; } }
