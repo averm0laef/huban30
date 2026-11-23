@@ -57,6 +57,9 @@ describe("API environment", () => {
     };
     expect(validateEnvironment({ ...s3, DEPLOYMENT_ENVIRONMENT: "development" }).S3_ENDPOINT).toBe("http://127.0.0.1:8333");
     expect(() => validateEnvironment({ ...s3, DEPLOYMENT_ENVIRONMENT: "staging" })).toThrow(/S3 endpoint must use HTTPS/);
+    // The bucket is still read after new photos are switched back to the disk.
+    expect(() => validateEnvironment({ ...s3, DEPLOYMENT_ENVIRONMENT: "staging", PRODUCT_PHOTO_STORAGE: "local" }))
+      .toThrow(/S3 endpoint must use HTTPS/);
     expect(() => validateEnvironment({ ...s3, DEPLOYMENT_ENVIRONMENT: "production" })).toThrow(/S3 endpoint must use HTTPS/);
   });
 

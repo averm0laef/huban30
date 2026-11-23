@@ -186,10 +186,15 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     if (!environment.S3_ENDPOINT || !environment.S3_BUCKET || !s3AccessKeyId || !s3SecretAccessKey) {
       throw new Error("S3 storage is not configured: endpoint, bucket, access key id and secret access key are required");
     }
-    // The keys sign every request; plain HTTP is only for a local store on a developer's machine.
-    if (!environment.S3_ENDPOINT.startsWith("https://") && environment.DEPLOYMENT_ENVIRONMENT !== "development") {
-      throw new Error("S3 endpoint must use HTTPS");
-    }
+  }
+  // The keys sign every request (the bucket is still read after new photos are
+  // switched back to the disk); plain HTTP is only for a local store on a developer's machine.
+  if (
+    environment.S3_ENDPOINT
+    && !environment.S3_ENDPOINT.startsWith("https://")
+    && environment.DEPLOYMENT_ENVIRONMENT !== "development"
+  ) {
+    throw new Error("S3 endpoint must use HTTPS");
   }
   if (!environment.STORAGE_ROOT.startsWith("/")) {
     throw new Error("Storage root must be an absolute path");
