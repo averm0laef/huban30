@@ -417,6 +417,14 @@ export class ProductPhotosService {
     let removeStored = false;
     try {
       const imageId = await this.database.transaction(async (client) => {
+        if (rightsSourceId) {
+          // The permission may have been revoked while the file was being checked; the lock makes the two wait for each
+          // other. It is taken before the file's row, in the order a revocation takes them, so the two cannot deadlock.
+          const rights = (await client.query<{ revoked_at: Date | null }>(
+            "SELECT revoked_at FROM app.image_rights_sources WHERE id=$1 FOR SHARE", [rightsSourceId],
+          )).rows[0];
+          if (!rights || rights.revoked_at) throw new ConflictException(REVOKED);
+        }
         // Same adoption of an object already stored (or stored once and deleted) as the 1С exchange does.
         const object = (await client.query<{ id: string; status: string; storage_key: string }>(
           `INSERT INTO app.storage_objects (provider,storage_key,original_name,mime_type,byte_size,sha256,status,owner_user_id)
@@ -431,13 +439,6 @@ export class ProductPhotosService {
         )).rows[0]!;
         removeStored = object.storage_key !== stored.storageKey;
         if (object.status !== "available") throw new ConflictException(TAKEN_DOWN);
-        if (rightsSourceId) {
-          // The permission may have been revoked while the file was being checked; the lock makes the two wait for each other.
-          const rights = (await client.query<{ revoked_at: Date | null }>(
-            "SELECT revoked_at FROM app.image_rights_sources WHERE id=$1 FOR SHARE", [rightsSourceId],
-          )).rows[0];
-          if (!rights || rights.revoked_at) throw new ConflictException(REVOKED);
-        }
         const image = (await client.query<{ id: string }>(
           `INSERT INTO app.product_images
              (product_id,storage_object_id,alt_text,sort_order,is_primary,source,rights_source_id,uploaded_by,upload_sha256,upload_byte_size)

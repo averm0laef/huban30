@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 
 import type { ConfigService } from "@nestjs/config";
+import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
@@ -272,5 +273,30 @@ describe.skipIf(!url || !hasFfmpeg)("product photos with a known origin (real Po
     await expect(slow.attachByFileName({ rightsSourceId: id }, { content: photo("teal"), fileName: "PHFX-6PK1200.jpg" }, auth)).rejects.toThrow("отозвано");
     expect(await imagesOf("belt")).toEqual([]);
     expect(files.size).toBe(kept);
+  });
+
+  it("takes the permission's lock before the file's, as a revocation does, so the two never wait on each other", async () => {
+    const { id } = await photos.createRightsSource({ name: `${PREFIX}Импортёр`, basis: "Письмо импортёра от 01.11.2026" }, auth);
+    const upload = { content: photo("navy"), fileName: "PHFX-6PK1200.jpg" };
+    await photos.attachByFileName({ rightsSourceId: id }, upload, auth);
+    // A revocation in progress: it holds the permission and is about to take the files published under it.
+    const revoking = new Client({ connectionString: url });
+    await revoking.connect();
+    await revoking.query("BEGIN");
+    await revoking.query("SELECT 1 FROM app.image_rights_sources WHERE id=$1 FOR UPDATE", [id]);
+    const again = photos.attachByFileName({ rightsSourceId: id }, upload, auth);
+    try {
+      await expect.poll(async () => (await revoking.query("SELECT 1 FROM pg_locks WHERE NOT granted")).rowCount, { timeout: 4_000 }).toBeGreaterThan(0);
+      // The upload is waiting for the permission and has not taken the file's row: the revocation can.
+      expect((await revoking.query(
+        `SELECT 1 FROM app.storage_objects WHERE id IN (SELECT storage_object_id FROM app.product_images WHERE rights_source_id=$1)
+         FOR UPDATE NOWAIT`, [id],
+      )).rowCount).toBe(1);
+    } finally {
+      await revoking.query("ROLLBACK").catch(() => undefined);
+      await revoking.end();
+      await again.catch(() => undefined);
+    }
+    expect(await again).toMatchObject({ outcome: "unchanged" });
   });
 });
