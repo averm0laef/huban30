@@ -89,7 +89,8 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
   const popupId = `${id}-suggestions`;
   const query = value.trim();
   const vin = isValidVin(query);
-  const items = state.status === "ready" ? state.items : [];
+  // A typed VIN shows only its own action: the last suggestions stay in `state` and must not be picked by the keys.
+  const items = state.status === "ready" && !vin ? state.items : [];
   const serviceLinks = query.length >= 2 ? searchServiceLinks(query) : [];
   const categoryLinks = state.status === "empty" ? suggestedCatalogSections(query) : [];
   const sectionMatches = query.length >= 2 && categories ? matchCategories(categories, query) : [];
@@ -273,7 +274,7 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
         <input
           aria-activedescendant={showPanel && items[activeIndex] ? `${id}-option-${items[activeIndex].id}` : undefined}
           aria-autocomplete="list"
-          aria-controls={showPanel ? (state.status === "ready" && !showHistory ? listboxId : popupId) : undefined}
+          aria-controls={showPanel ? (state.status === "ready" && !showHistory && !vin ? listboxId : popupId) : undefined}
           aria-expanded={showPanel}
           aria-haspopup={state.status === "ready" && !showHistory ? "listbox" : "dialog"}
           id={id}
