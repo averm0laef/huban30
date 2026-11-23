@@ -318,9 +318,7 @@ function MobileNavigation() {
       <Link className={styles.mobileNavItem} href="/" aria-current={isHome ? "page" : undefined}><Home24Regular aria-hidden="true" /><span>Главная</span></Link>
       <Link className={styles.mobileNavItem} href="/catalog" aria-current={isCatalog ? "page" : undefined}><Grid24Regular aria-hidden="true" /><span>Каталог</span></Link>
       <CartButton className={styles.mobileNavItem} icon={<Cart24Regular aria-hidden="true" />} />
-      {isChat
-        ? <Link className={styles.mobileNavItem} href="/chat" aria-current="page"><Chat24Regular aria-hidden="true" /><span>Чат</span></Link>
-        : <ChatWidget />}
+      <Link className={styles.mobileNavItem} href="/chat" aria-current={isChat ? "page" : undefined}><Chat24Regular aria-hidden="true" /><span>Чат</span></Link>
       <AccountNavigation className={styles.mobileNavItem} icon={<Person24Regular aria-hidden="true" />} isCurrent={isAccount} />
     </nav>
   );
@@ -340,6 +338,8 @@ export function StoreShell({ catalogMenu, children, initialSessionPresent }: {
           <main className={styles.main} id="main-content">{children}</main>
           <StoreFooter catalogMenu={catalogMenu} />
           <MobileNavigation />
+          {/* Outside the tab bar: the round button floats over the page at every width. */}
+          <ChatWidget />
         </div>
       </CartProvider>
     </SessionNavigationProvider>

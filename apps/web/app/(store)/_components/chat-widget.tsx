@@ -482,7 +482,6 @@ export function ChatWidget() {
           : "Открыть чат с магазином"}
       >
         <Chat24Regular aria-hidden="true" />
-        <span className={styles.mobileLabel} aria-hidden="true">Чат</span>
         {unreadCount > 0 ? <span className={styles.badge} aria-hidden="true">{unreadCount > 9 ? "9+" : unreadCount}</span> : null}
       </button>
 
