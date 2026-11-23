@@ -28,8 +28,46 @@
   background: var(--store-bg);
 }
 .galleryPhoto > img { object-fit: contain; padding: clamp(14px, 7%, 40px); mix-blend-mode: multiply; }
-.galleryPhoto[data-photo-missing] { aspect-ratio: auto; height: 112px; }
-.galleryPhoto[data-photo-missing] > img { padding: clamp(18px, 10%, 50px); }
+/* A product without its own photo: the button and every answer stay inside the frame (canvas «Карточка v2»). */
+.galleryMain { position: relative; }
+.photoEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 320px;
+  aspect-ratio: 1 / .9;
+  box-sizing: border-box;
+  padding: clamp(18px, 6%, 32px);
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius);
+  background: var(--store-bg);
+  text-align: center;
+}
+.photoEmpty > :is(button, a) { max-width: 100%; min-height: 48px; white-space: normal; }
+.photoGhost { width: 84px; height: 84px; flex: none; color: color-mix(in srgb, var(--store-brand) 14%, var(--store-border)); }
+.photoTitle { margin: 0; font-family: var(--store-font-display); font-size: 1rem; font-weight: 800; line-height: 1.3; color: var(--store-text); overflow-wrap: anywhere; }
+.photoText { margin: 0; max-width: 300px; color: var(--store-muted); font-size: .86rem; line-height: 1.45; }
+.photoBadge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  max-width: calc(100% - 24px);
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--store-surface);
+  box-shadow: 0 1px 3px rgb(18 16 70 / 14%);
+  color: var(--store-brand-strong);
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.gallery[data-multiple="true"] .photoBadge { left: 12px; }
 .thumbs { grid-row: 1; grid-column: 1; display: grid; align-content: start; gap: 8px; }
 .thumb {
   width: 64px;
@@ -139,6 +177,7 @@
   .gallery[data-multiple="true"] { grid-template-columns: minmax(0, 1fr); }
   .gallery[data-multiple="true"] .galleryMain { grid-column: 1; }
   .galleryPhoto { aspect-ratio: 1 / .82; max-height: 320px; border-radius: var(--store-radius-sm); }
+  .photoEmpty { aspect-ratio: auto; min-height: 280px; border-radius: var(--store-radius-sm); }
   .thumbs { grid-row: 2; display: flex; flex-wrap: wrap; }
   .thumb { width: 50px; height: 50px; }
   .info .specs { display: none; }

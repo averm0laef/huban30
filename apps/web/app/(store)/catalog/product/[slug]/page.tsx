@@ -13,7 +13,7 @@ import styles from "../../../_components/storefront.module.css";
 import { findCatalogItem, formatRubles, getCategoryTree } from "../../../_lib/catalog-api";
 import { categoryPath, findCategorySlugPath } from "../../../_lib/catalog-tree";
 import { breadcrumbJsonLd, pageMetadata, privatePageMetadata, productJsonLd } from "../../../_lib/seo";
-import { catalogCategoryPhoto, publicSectionName } from "../../../_lib/store-categories";
+import { publicSectionName } from "../../../_lib/store-categories";
 import { productCompatibilityPrefillMessage, productPhotoPrefillMessage } from "../../../_lib/expert-help-prefill";
 import { catalogFailureText } from "../../catalog-query";
 import { ExpertHelpQueryLink } from "../../expert-help-query-link";
@@ -158,7 +158,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <span className={layout.crumbCurrent} aria-current="page">{product.name}</span>
       </nav>
       <article className={layout.hero}>
-        <ProductGallery catalogPhotos={catalogueApplies} categoryImage={catalogCategoryPhoto(product.category, categoryAncestors)} images={images} key={`gallery-${product.id}`} productId={product.id}
+        <ProductGallery catalogPhotos={catalogueApplies} images={images} key={`gallery-${product.id}`} productId={product.id}
           requestMessage={productPhotoPrefillMessage(product.name, product.sku)} />
 
         <div className={layout.info}>

@@ -1,5 +1,6 @@
 .frame { position: relative; display: grid; place-items: center; min-width: 0; overflow: hidden; }
-.emptyIcon { width: 24px; height: 24px; color: color-mix(in srgb, var(--store-brand) 72%, var(--store-muted)); }
+/* No photo of the product: a quiet wheel of the logo, never another part's picture (owner, 24.11.2026; canvas «Карточка v2»). */
+.emptyIcon { width: min(38%, 96px); height: auto; aspect-ratio: 1; color: color-mix(in srgb, var(--store-brand) 14%, var(--store-border)); }
 .note {
   display: block;
   margin-top: 3px;

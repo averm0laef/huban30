@@ -32,3 +32,5 @@
 
 /* The head's buttons: «Найти ещё аналоги в каталоге» and «Все аналоги и под заказ», wrapping on a phone. */
 .headActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.headText { display: grid; gap: 4px; min-width: 0; }
+.headText .muted { margin: 0; }

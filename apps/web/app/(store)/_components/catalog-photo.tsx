@@ -1,15 +1,15 @@
 "use client";
 
-import { Image24Regular, ZoomIn16Regular } from "@fluentui/react-icons";
+import { ZoomIn16Regular } from "@fluentui/react-icons";
 import Image from "next/image";
 import { useRef, useState } from "react";
 
+import { BrandWheel } from "./brand-mark";
 import styles from "./catalog-photo.module.css";
 import { PhotoViewer, type PreviewPhoto } from "./photo-viewer";
 
 interface CatalogPhotoProps {
   alt?: string;
-  categoryImage?: string | null;
   className?: string;
   noteClassName?: string;
   /** Paint the "no photo yet" note as a small label over the picture instead of a line under it. */
@@ -23,21 +23,20 @@ interface CatalogPhotoProps {
 }
 
 export function CatalogPhoto({
-  alt = "", categoryImage, className, noteClassName, noteInside = false, preload, preview, showNote = true, sizes, src, unoptimized,
+  alt = "", className, noteClassName, noteInside = false, preload, preview, showNote = true, sizes, src, unoptimized,
 }: CatalogPhotoProps) {
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const [viewer, setViewer] = useState<{ images: readonly PreviewPhoto[]; index: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const original = src && !failed.has(src) ? src : null;
-  const image = original ?? (categoryImage && !failed.has(categoryImage) ? categoryImage : null);
   const frameClass = [styles.frame, className].filter(Boolean).join(" ");
   const previewImages = preview === true && original ? [{ alt, url: original }] : typeof preview === "object" ? preview.images : [];
   const content = (
     <>
-      {image ? (
-        <Image alt={original ? alt : ""} fill key={image} onError={() => setFailed((urls) => new Set([...urls, image]))}
-          preload={preload} referrerPolicy="no-referrer" sizes={sizes} src={image} unoptimized={original ? unoptimized : undefined} />
-      ) : <Image24Regular aria-hidden="true" className={styles.emptyIcon} />}
+      {original ? (
+        <Image alt={alt} fill key={original} onError={() => setFailed((urls) => new Set([...urls, original]))}
+          preload={preload} referrerPolicy="no-referrer" sizes={sizes} src={original} unoptimized={unoptimized} />
+      ) : <BrandWheel className={styles.emptyIcon} />}
       {!original && showNote && noteInside ? (
         <small className={[styles.noteInside, noteClassName].filter(Boolean).join(" ")}>Фото товара пока нет</small>
       ) : null}

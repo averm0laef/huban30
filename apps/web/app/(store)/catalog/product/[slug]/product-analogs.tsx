@@ -87,10 +87,13 @@ export function ProductAnalogs({ article, brand, catalogueApplies = false, produ
   return (
     <section className={styles.analogs} aria-labelledby="product-analogs-title">
       <div className={styles.head}>
-        <h2 id="product-analogs-title">Аналоги и замены</h2>
+        <div className={styles.headText}>
+          <h2 id="product-analogs-title">Аналоги и замены</h2>
+          <p className={styles.muted}>Другие производители той же детали, что есть у нас на складе.</p>
+        </div>
         <div className={styles.headActions}>
           {catalogue.state.status === "idle" ? (
-            <button className={`${buttons.button} ${buttons.soft}`} onClick={catalogue.load} type="button"><Search20Regular aria-hidden="true" />Найти ещё аналоги в каталоге</button>
+            <button className={`${buttons.button} ${buttons.soft}`} onClick={catalogue.load} type="button"><Search20Regular aria-hidden="true" />Найти аналоги по каталогу</button>
           ) : null}
           <Link className={`${buttons.button} ${buttons.quiet}`} href={podbor}><ArrowSwap20Regular aria-hidden="true" />Все аналоги и под заказ</Link>
         </div>

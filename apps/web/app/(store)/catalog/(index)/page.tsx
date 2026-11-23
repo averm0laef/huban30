@@ -148,7 +148,6 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
             state={state}
             matchMode={matchMode}
             total={total}
-            tree={tree}
           />
           {isSearch && !isVin && state.page === 1 && state.availability !== "in_stock" ? (
             <SupplierResults

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckmarkCircle20Regular, Info20Regular, List20Regular, ShieldCheckmark20Regular, VehicleCar20Regular, Warning20Regular } from "@fluentui/react-icons";
+import { CheckmarkCircle20Regular, Info20Regular, List20Regular, ShieldCheckmark20Regular, VehicleCar20Regular, VehicleCar24Regular, Warning20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -30,6 +30,12 @@ function plural(count: number, one: string, few: string, many: string): string {
 
 function carName(car: PickedVehicle): string {
   return car.make && car.model ? `${car.make} ${car.model}` : car.label;
+}
+
+/** «1.6 л · 102 л.с. · бензин · 2008–2012» under the car's name; the label when the car has no details. */
+function carDetails(car: PickedVehicle): string {
+  const parts = [car.engine, car.power, car.fuel, car.years].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" · ") : car.label;
 }
 
 function Answer({ children, tone, title }: { children?: ReactNode; title: string; tone: "ok" | "warn" | "info" | "mute" }) {
@@ -122,36 +128,54 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
       if (version === requestVersion.current) setResult({ data, mode, status: "ready" });
     } catch (caught) {
       if (version !== requestVersion.current) return;
-      setResult({ message: caught instanceof FinderError ? caught.message : "Проверка сейчас недоступна.", mode, status: "error" });
+      const limited = caught instanceof FinderError && caught.status === 429;
+      setResult({ message: limited ? caught.message : "Каталог сейчас не отвечает", mode, status: "error" });
     }
   }
 
   return (
     <div className={`${layout.compatibility} ${styles.box}`}>
-      <strong>{name && ids ? `Подойдёт к вашему ${name}?` : "Подойдёт к вашему автомобилю?"}</strong>
+      <strong className={styles.title}>Подойдёт к вашему автомобилю?</strong>
+      {car && ids ? (
+        <div className={styles.car}>
+          <VehicleCar24Regular aria-hidden="true" className={styles.carIcon} />
+          <span className={styles.carName}><b>{name}</b><small>{carDetails(car)}</small></span>
+          <Link className={styles.carChange} href="/podbor">Сменить</Link>
+        </div>
+      ) : (
+        <p className={styles.muted}>Выберите машину один раз — проверка заработает на всех товарах.</p>
+      )}
       <div className={styles.actions}>
         {ids ? (
           <button className={`${buttons.button} ${buttons.primary}`} disabled={result?.status === "loading" && result.mode === "check"} onClick={() => { void load("check"); }} type="button">
-            <CheckmarkCircle20Regular aria-hidden="true" /> Проверить совместимость
+            <CheckmarkCircle20Regular aria-hidden="true" /> Проверить для моей машины
           </button>
         ) : (
-          <Link className={`${buttons.button} ${buttons.primary}`} href="/podbor"><VehicleCar20Regular aria-hidden="true" /> Выбрать мой автомобиль</Link>
+          <Link className={`${buttons.button} ${buttons.primary}`} href="/podbor"><VehicleCar20Regular aria-hidden="true" /> Выбрать мою машину</Link>
         )}
         <button className={`${buttons.button} ${buttons.soft}`} disabled={result?.status === "loading" && result.mode === "list"} onClick={() => { void load("list"); }} type="button">
-          <List20Regular aria-hidden="true" /> К каким машинам подходит
+          <List20Regular aria-hidden="true" /> Все машины, к которым подходит
         </button>
       </div>
-      {car && ids ? <span className={styles.muted}>{car.label} · <Link href="/podbor">сменить</Link></span> : null}
 
       {result?.status === "loading" ? (
         <WheelLoader label={result.mode === "check" ? "Проверяем по каталогу…" : "Собираем список машин…"} size="sm" />
       ) : null}
-      {result?.status === "error" ? <Answer title={result.message} tone="mute">{vin}</Answer> : null}
+      {result?.status === "error" ? (
+        <Answer title={result.message} tone="mute">
+          <span>Попробуйте через минуту или проверим по VIN.</span>
+          <span className={styles.answerActions}>
+            <button className={`${buttons.button} ${buttons.soft}`} onClick={() => { void load(result.mode); }} type="button">Повторить</button>
+            {vin}
+          </span>
+        </Answer>
+      ) : null}
       {result?.status === "ready" ? (
         result.mode === "list" && result.data.status === "ok"
           ? <CarList makes={result.data.makes} total={result.data.total} />
           : <CheckAnswer car={name ?? "автомобиль"} data={result.data} vin={vin} />
       ) : null}
+      {result === null ? <span className={styles.muted}>Проверка по каталогу производителя. Не уверены — специалист сверит по VIN.</span> : null}
     </div>
   );
 }

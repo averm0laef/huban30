@@ -6,7 +6,7 @@ import { getAvailableShowcase, getCategoryTree, type CatalogCategoryNode } from 
 import { formatRubles } from "../_lib/catalog-format";
 import { categoryPath, findCategorySlugPath } from "../_lib/catalog-tree";
 import { catalogSearchHref } from "../_lib/catalog-search-url";
-import { catalogCategoryPhoto, categoryTiles, featuredCategoryKeys } from "../_lib/store-categories";
+import { categoryTiles, featuredCategoryKeys } from "../_lib/store-categories";
 import { ArrowUndo24Regular, Box24Regular, Chat24Regular, ChevronRight20Regular } from "./home-icons";
 import { ProductBuyButton } from "./cart-actions";
 import { CatalogPhoto } from "./catalog-photo";
@@ -129,7 +129,7 @@ export async function HomeShowcase() {
             <article className={styles.availableItem} key={item.id}>
               <Link className={styles.availableDetails} href={`/catalog/product/${encodeURIComponent(item.slug)}`}>
                 <CatalogPhoto className={styles.availableImage} noteInside
-                  src={item.primaryImage?.url} categoryImage={catalogCategoryPhoto(item.category)}
+                  src={item.primaryImage?.url}
                   sizes="(max-width: 767px) 162px, (max-width: 1440px) 22vw, 292px" />
                 <span className={styles.availableName}>
                   <strong>{item.name}</strong>

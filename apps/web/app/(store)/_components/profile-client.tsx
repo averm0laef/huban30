@@ -9,7 +9,6 @@ import type { FormEvent } from "react";
 import { apiRequest, errorText, readSession } from "../_lib/storefront-api";
 import { customerAvatarKey, customerAvatarSrc, type CustomerAvatarKey } from "../_lib/customer-avatars";
 import { forgetRecordedProductView } from "../_lib/product-view-history";
-import { catalogCategoryPhoto } from "../_lib/store-categories";
 import { ExpertHelpQueryLink } from "../catalog/expert-help-query-link";
 import { AvatarPicker } from "./avatar-picker";
 import { AddToCartButton } from "./cart-actions";
@@ -170,7 +169,7 @@ function ProductList({ empty, items, onRemove }: { empty: { text: string; title:
         return (
           <li key={product.id} className={styles.accountProduct}>
             <CatalogPhoto className={styles.accountProductMedia} noteClassName={styles.accountProductPhotoNote}
-              sizes="(max-width: 640px) 64px, 72px" src={product.imageUrl} categoryImage={catalogCategoryPhoto(product.category)} />
+              sizes="(max-width: 640px) 64px, 72px" src={product.imageUrl} />
             <div className={styles.accountProductBody}>
               <p className={styles.accountProductMeta}>{product.brandName ? <strong>{product.brandName}</strong> : null}{product.brandName ? " · " : ""}Арт. {product.sku}</p>
               <h3><Link href={`/catalog/product/${product.slug}`}>{product.name}</Link></h3>

@@ -51,7 +51,6 @@ export interface CatalogResultRowProps {
   deliveryNote?: string | null;
   imageAlt: string;
   imageUrl?: string | null;
-  categoryImage?: string | null;
   name: ReactNode;
   /**
    * Honest replacement for the stock meter/price/action columns when a row
@@ -76,12 +75,12 @@ export interface CatalogResultRowProps {
  * it; an analogue is just a row like any other with an "Аналог" badge.
  */
 export function CatalogResultRow({
-  actionSlot, badges, brand, categoryImage, deliveryNote, imageAlt, imageUrl, name, note, priceLabel, quantity, sku, underOrder = false, view = "list",
+  actionSlot, badges, brand, deliveryNote, imageAlt, imageUrl, name, note, priceLabel, quantity, sku, underOrder = false, view = "list",
 }: CatalogResultRowProps) {
   return (
     <article className={styles.resultRow} data-catalog-view={view}>
       <div className={styles.resultRowItem}>
-        <CatalogPhoto alt={imageAlt} categoryImage={categoryImage} className={styles.resultRowMedia}
+        <CatalogPhoto alt={imageAlt} className={styles.resultRowMedia}
           noteInside preview showNote={view === "grid"}
           sizes={view === "list" ? "64px" : "(max-width: 640px) 42vw, 270px"} src={imageUrl} />
         <div className={styles.resultRowIdentity}>

@@ -6,10 +6,8 @@ import { ChevronLeft20Regular, ChevronRight20Regular, Clock20Regular, Search20Re
 import buttons from "../_components/store-button.module.css";
 import styles from "../_components/storefront.module.css";
 import { formatRubles } from "../_lib/catalog-api";
-import type { CatalogBrand, CatalogCategoryNode, CatalogItem } from "../_lib/catalog-api";
-import { findCategorySlugPath } from "../_lib/catalog-tree";
+import type { CatalogBrand, CatalogItem } from "../_lib/catalog-api";
 import { searchServiceLinks, suggestedCatalogSections } from "../_lib/search-guidance";
-import { catalogCategoryPhoto } from "../_lib/store-categories";
 import { isValidVin } from "../_lib/vin";
 import { CatalogResultRow, RowBadge } from "./catalog-result-row";
 import layoutStyles from "./catalog-layout.module.css";
@@ -47,12 +45,11 @@ export interface CatalogSearchPanelProps {
   sectionName?: string;
   state: CatalogPageQuery;
   total: number;
-  tree: CatalogCategoryNode[];
 }
 
 /** Sorting and filter controls submit together to the current catalog scope. */
 export function CatalogSearchPanel({
-  action, brands = [], emptyState, errorHeading = "Каталог не отвечает", errorMessage, items, matchMode = "all", pageSize, sectionName, state, total, tree,
+  action, brands = [], emptyState, errorHeading = "Каталог не отвечает", errorMessage, items, matchMode = "all", pageSize, sectionName, state, total,
 }: CatalogSearchPanelProps) {
   const isSearch = state.query.trim().length >= 2;
   const isVin = isValidVin(state.query.trim());
@@ -116,7 +113,6 @@ export function CatalogSearchPanel({
       <section aria-label={isSearch ? "Результаты поиска" : "Товары каталога"} className={resultsStyles.resultsList} data-catalog-view={state.view}>
         {items.map((item) => {
           const available = item.availableQuantity > 0;
-          const directCategoryImage = catalogCategoryPhoto(item.category);
           return (
             <CatalogResultRow
               actionSlot={item.priceKopeks === null
@@ -140,9 +136,6 @@ export function CatalogSearchPanel({
               // so nobody is sold a different part without being told.
               badges={item.matchedVia === "cross" ? <RowBadge analog>Аналог</RowBadge> : undefined}
               brand={item.brand ? item.brand.name : null}
-              categoryImage={directCategoryImage ?? (item.category
-                ? catalogCategoryPhoto(item.category, findCategorySlugPath(tree, item.category.slug) ?? [])
-                : null)}
               imageAlt={item.primaryImage?.altText ?? ""}
               imageUrl={item.primaryImage?.url}
               key={item.id}

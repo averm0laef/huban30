@@ -196,7 +196,6 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             state={state}
             matchMode={matchMode}
             total={total}
-            tree={tree}
           />
         </div>
       </div>

@@ -1,17 +1,28 @@
 /* «Подойдёт к вашему автомобилю?» with the catalogue (Claude Design canvas «совместимость и аналоги», «Все ответы проверки»).
    No red: the catalogue can say a part is not listed, never that it does not fit. */
-.box { justify-items: stretch; gap: 10px; }
+.box { justify-items: stretch; gap: 12px; padding: clamp(14px, 1.6vw, 20px); border: 1px solid var(--store-border); }
+.title { font-family: var(--store-font-display); font-size: 1.02rem !important; font-weight: 800; line-height: 1.3; }
+/* The customer's car, as on the «Ваш автомобиль» card of /podbor (canvas «Карточка v2»). */
+.car { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 6px 10px 14px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); }
+.carIcon { flex: none; width: 26px; height: 26px; color: var(--store-brand); }
+.carName { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.carName b { font-size: .95rem; line-height: 1.3; overflow-wrap: anywhere; }
+.carName small { color: var(--store-muted); font-size: .8rem; line-height: 1.35; overflow-wrap: anywhere; }
+.carChange { display: inline-flex; align-items: center; flex: none; min-height: 44px; padding: 0 10px; font-size: .85rem; font-weight: 700; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions > :is(button, a) { flex: 1 1 210px; justify-content: center; min-height: 48px; white-space: normal; text-align: center; }
+.answerActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .muted { margin: 0; color: var(--store-muted); font-size: .82rem; }
-.answer { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid; border-radius: var(--store-radius-sm); }
+.answer { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-text); }
 .answer > div { display: grid; justify-items: start; gap: 6px; min-width: 0; }
 .answer strong { font-family: var(--store-font-display); font-size: .95rem; line-height: 1.3; overflow-wrap: anywhere; }
-.answer span { font-size: .86rem; line-height: 1.45; }
-.answerIcon { flex: none; width: 20px; height: 20px; margin-top: 1px; }
-.answer[data-tone="ok"] { border-color: color-mix(in srgb, var(--store-success) 30%, transparent); background: color-mix(in srgb, var(--store-success) 9%, var(--store-surface)); color: color-mix(in srgb, var(--store-success) 82%, black); }
-.answer[data-tone="warn"] { border-color: #f0dc8a; background: #fff6dd; color: #4d3b00; }
-.answer[data-tone="info"] { border-color: color-mix(in srgb, var(--store-brand) 22%, transparent); background: var(--store-brand-soft); color: var(--store-brand-strong); }
-.answer[data-tone="mute"] { border-color: var(--store-border); background: var(--store-surface); color: var(--store-text); }
+.answerIcon { flex: none; width: 22px; height: 22px; margin-top: 1px; }
+.answer span { color: var(--store-muted); font-size: .86rem; line-height: 1.45; }
+.answer[data-tone="ok"] .answerIcon { color: var(--store-success); }
+.answer[data-tone="ok"] { border-color: color-mix(in srgb, var(--store-success) 35%, var(--store-border)); }
+.answer[data-tone="warn"] .answerIcon { color: #a35200; }
+.answer[data-tone="info"] .answerIcon { color: var(--store-brand); }
+.answer[data-tone="mute"] .answerIcon { color: var(--store-muted); }
 
 /* «К каким машинам подходит»: makes open one by one, the customer's own first and open. */
 .cars { display: grid; gap: 8px; }

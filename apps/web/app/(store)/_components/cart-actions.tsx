@@ -8,7 +8,6 @@ import type { ReactNode } from "react";
 
 import { formatRubles } from "../_lib/catalog-format";
 import type { CartLineView } from "../_lib/cart-products";
-import { catalogCategoryPhoto } from "../_lib/store-categories";
 import { CatalogPhoto } from "./catalog-photo";
 import commerce from "./commerce.module.css";
 import { useCart } from "./cart-provider";
@@ -92,7 +91,7 @@ export function CartLineThumbnail({ line }: { line: CartLineView }) {
   const item = line.state.status === "ready" ? line.state.product : null;
   if (!item) return <span className={commerce.lineThumbnail} aria-hidden="true" />;
   return <CatalogPhoto className={commerce.lineThumbnail} sizes="72px" src={item.imageUrl}
-    categoryImage={catalogCategoryPhoto(item.category)} showNote={false} />;
+    showNote={false} />;
 }
 
 /**
