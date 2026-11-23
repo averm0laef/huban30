@@ -347,9 +347,8 @@ function parseProduct(productNode: XmlNode, properties: CommerceMlPropertyDictio
   // commonly carries the stable nomenclature code either as a direct <Код>
   // or as the predefined "Код" requisite instead; dropping those products
   // would make a normal 1C catalog look mysteriously incomplete.
-  const sku = textOf(findChild(productNode, "Артикул"))
-    ?? textOf(findChild(productNode, "Код"))
-    ?? parseProductRequisite(productNode, "Код");
+  const code = textOf(findChild(productNode, "Код")) ?? parseProductRequisite(productNode, "Код");
+  const sku = textOf(findChild(productNode, "Артикул")) ?? code;
   if (!id || !name || !sku) return null; // a product missing a required field is dropped, not fatal to the file
   const groupsNode = findChild(productNode, "Группы");
   // CommerceML allows multiple <Ид> under <Группы> (multiple categories);
@@ -386,6 +385,7 @@ function parseProduct(productNode: XmlNode, properties: CommerceMlPropertyDictio
       sku,
       slug: buildSlug(name, id),
       version: 1,
+      ...(code && code.length <= 128 ? { oneCCode: code } : {}),
       ...(imagePaths.length > 0 ? { imagePaths } : {}),
     },
   };
