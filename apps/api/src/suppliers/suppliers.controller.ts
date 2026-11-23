@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import type { FastifyRequest } from "fastify";
 
 import { Public, RequirePermissions } from "../auth/auth.decorators.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
+import { SupplierCrossFillService } from "./supplier-cross-fill.service.js";
 import { SupplierSearchService } from "./supplier-search.service.js";
 import { SupplierWaitlistService } from "./supplier-waitlist.service.js";
 
@@ -47,6 +48,27 @@ export class SupplierWaitlistController {
       this.rateLimit.consume("supplier-waitlist-contact", contact, 5, 3_600),
     ]);
     return this.waitlist.create(body, metadata(request));
+  }
+}
+
+/** The night check of our own assortment against the supplier: how far it has got, and its switch. */
+@Controller("staff/suppliers/cross-fill")
+export class StaffSupplierCrossFillController {
+  constructor(private readonly crossFill: SupplierCrossFillService) {}
+
+  // Not catalog:read: every customer holds that permission.
+  @RequirePermissions("catalog:write")
+  @Get()
+  status() {
+    return this.crossFill.status();
+  }
+
+  @RequirePermissions("catalog:write")
+  @Post("switch")
+  switch(@Body() body: unknown, @Req() request: FastifyRequest) {
+    const enabled = typeof body === "object" && body !== null && "enabled" in body ? body.enabled : undefined;
+    if (typeof enabled !== "boolean") throw new BadRequestException({ code: "invalid_cross_fill_switch", error: "Укажите, включить или выключить проверку." });
+    return this.crossFill.setEnabled(enabled, request.authContext!, metadata(request));
   }
 }
 
