@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@an30/contracts": "workspace:*",
+    "@an30/messaging": "workspace:*",
+    "@aws-sdk/client-s3": "3.1170.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/helmet": "^13.1.0",
     "@fastify/multipart": "10.1.8",
@@ -41,8 +43,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "ws": "8.21.1",
-    "zod": "^4.6.7",
-    "@an30/messaging": "workspace:*"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.12",

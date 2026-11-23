@@ -13,6 +13,7 @@
 import type { ConfigService } from "@nestjs/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
@@ -31,9 +32,9 @@ describe.skipIf(!url)("catalog search regression (real PostgreSQL)", () => {
       getOrThrow: () => url,
     } as unknown as ConfigService);
     await database.transaction((client) => seedCatalogSearchFixtures(client));
-    service = new CatalogPublicService(new CatalogCategoryTreeCache(), database, {
+    service = new CatalogPublicService(new CatalogCategoryTreeCache(), database, new ProductPhotoStorage({
       name: "local", read: async () => Buffer.alloc(0), remove: async () => undefined, store: async () => undefined,
-    } as never);
+    } as never));
   }, 60_000);
 
   afterAll(async () => {

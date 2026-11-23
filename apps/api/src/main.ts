@@ -17,18 +17,14 @@ import { DatabaseService } from "./infrastructure/database.service.js";
 import { registerOneCExchangeRawBodyParser } from "./one-c-exchange/one-c-exchange-raw-body-parser.js";
 import { StructuredLogger } from "./security/structured-logger.js";
 import { isPubliclyCacheableApiRequest } from "./security/http-cache-policy.js";
+import { API_HTTP_SERVER_OPTIONS } from "./http-server-options.js";
 import { registerNulCharacterRejection } from "./security/nul-bytes.js";
 import { RateLimitService } from "./security/rate-limit.service.js";
 import { trustedProxyRanges } from "./security/trusted-proxy.js";
 
-const API_BODY_LIMIT_BYTES = 16 * 1024 * 1024;
-
 async function bootstrap() {
   const adapter = new FastifyAdapter({
-    // CommerceML chunks top out at 8 MiB. Chat videos are deliberately
-    // capped at 15 MiB below, with a little multipart framing headroom.
-    bodyLimit: API_BODY_LIMIT_BYTES,
-    requestTimeout: 35_000,
+    ...API_HTTP_SERVER_OPTIONS,
     // Only the configured proxy addresses may supply forwarded identity.
     trustProxy: trustedProxyRanges(process.env),
   });

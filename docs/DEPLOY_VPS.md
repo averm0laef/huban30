@@ -160,6 +160,7 @@ sudo env AN30_SECRETS_DIR=/etc/an30/secrets sh /opt/an30/app/scripts/init-secret
 | `telegram_bot_token.txt` | Токен бота Telegram | `TELEGRAM_ENABLED=true`, `TELEGRAM_CHAT_ID` |
 | `vk_access_token.txt` | Токен VK для уведомлений | `VK_ENABLED=true`, `VK_PEER_ID` |
 | `gemini_api_key.txt` | Ключ Gemini | `AI_ENABLED=true` |
+| `s3_access_key_id.txt`, `s3_secret_access_key.txt` | Ключи S3-хранилища для фото товаров | `PRODUCT_PHOTO_STORAGE=s3` и `S3_*` — см. `docs/PRODUCT_PHOTOS_S3.md` |
 | `reefapi_key.txt` | Ключ ReefAPI | `REEFAPI_ENABLED=true` |
 | `api_ninjas_key.txt` | Ключ API Ninjas | `API_NINJAS_MODE=demo` или `commercial` |
 | `postgres_password.txt`, `app_database_password.txt`, `redis_password.txt`, `session_secret.txt`, `data_encryption_key.txt` | Создаются скриптом | Не менять после первого запуска |
@@ -394,6 +395,8 @@ cd /opt/an30 && rm -rf app.new && mkdir -p app.new \
   && tar xzf /tmp/an30-src.tar.gz -C app.new \
   && rm -rf app.old && mv app app.old && mv app.new app
 
+# недостающие пустые файлы ключей новой версии; заполненные не меняются
+sudo env AN30_SECRETS_DIR=/etc/an30/secrets sh /opt/an30/app/scripts/init-secrets.sh
 dc up -d --build
 dc ps
 curl -fsS https://your-domain.example/health/ready
