@@ -130,6 +130,19 @@ describe("SupplierCrossFillService", () => {
     expect(report).toMatchObject({ error: null, found: 1, lookups: 1, pairsQueued: 1, stopped: "done" });
   });
 
+  it("asks once for two cards of ours with the same number and brand", async () => {
+    const { database, recorded } = makeDatabase([product("p1", "W914/2"), product("p2", "W 914-2"), product("p3", "W914/2", "FILTRON")]);
+    const supplier = makeSupplier({ answers: (query) => (query === "W914/2" ? FOUND : { message: "", parts: [], success: true }) });
+    const { queue } = makeQueue();
+
+    const report = await makeService({ database, provider: supplier.provider, queue }).run();
+
+    // The same number under another brand is a different part and is asked separately.
+    expect(supplier.calls.map((call) => call.query)).toEqual(["W914/2", "W914/2"]);
+    expect(recorded.map((row) => row.status)).toEqual(["found", "brand_mismatch"]);
+    expect(report).toMatchObject({ lookups: 2, stopped: "done" });
+  });
+
   it("remembers which number and brand were asked, so a card changed by 1С is asked again", async () => {
     const { database, query } = makeDatabase([product("p1", "W914/2")]);
     const supplier = makeSupplier();

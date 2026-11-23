@@ -146,6 +146,8 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
     };
     const identities = await this.brandIdentities();
     const attempted: string[] = [];
+    // Numbers answered in this run: a second card of ours with the same number and brand is not asked again.
+    const answered = new Set<string>();
     let failures = 0;
     run: while (!this.stopping) {
       const batch = await this.candidates(attempted);
@@ -153,6 +155,8 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
       for (const product of batch) {
         if (this.stopping) break run;
         attempted.push(product.id);
+        const asked = `${product.brand_id}:${product.sku_normalized}`;
+        if (answered.has(asked)) continue;
         if (!isCrossFillHour(this.now())) { report.stopped = "outside_hours"; break run; }
         if (!await this.switchedOn()) { report.stopped = "switched_off"; break run; }
         if (!await this.budgetLeft()) { report.stopped = "daily_limit"; break run; }
@@ -187,6 +191,7 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
             }
           }
           await this.record(product, decision.status, queued, decision.note);
+          answered.add(asked);
           report.pairsQueued += queued;
           if (decision.status === "found") report.found += 1;
           else if (decision.status === "no_crosses") report.noCrosses += 1;
