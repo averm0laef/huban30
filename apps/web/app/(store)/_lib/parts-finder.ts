@@ -155,7 +155,7 @@ export const VEHICLE_LABELS: Record<string, string> = {
   series: "Серия",
   body: "Кузов",
   engine_model: "Двигатель",
-  displacement_l: "Объём, л",
+  displacement_l: "Объём двигателя",
   engine_hp: "Мощность, л. с.",
   fuel: "Топливо",
   transmission: "Коробка передач",
@@ -213,10 +213,21 @@ export function vehicleRows(result: VehicleResult): Array<[string, string]> {
   const rows: Array<[string, string]> = [];
   for (const [key, label] of Object.entries(VEHICLE_LABELS)) {
     const value = vehicle[key];
-    const shown = Array.isArray(value) ? value.map(text).filter(Boolean).join(", ") : text(value);
+    const shown = key === "displacement_l" ? litres(value)
+      : Array.isArray(value) ? value.map(text).filter(Boolean).join(", ") : text(value);
     if (shown) rows.push([label, shown]);
   }
   return rows;
+}
+
+/** Engine volume the way a buyer reads it: vPIC converts cubic inches and answers «2.998832712» for a 3.0. */
+function litres(value: unknown): string | null {
+  const raw = text(value);
+  if (!raw) return null;
+  const plain = raw.replace(",", ".");
+  const volume = /^\d+(?:\.\d+)?$/u.test(plain) ? Number(plain) : Number.NaN;
+  if (Number.isNaN(volume)) return raw;
+  return volume > 0 ? `${volume.toFixed(1).replace(".", ",")} л` : null;
 }
 
 export const SAVED_VEHICLE_KEY = "an30:parts-finder:vehicle";
