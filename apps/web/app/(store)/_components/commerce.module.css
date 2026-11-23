@@ -150,6 +150,20 @@
 .consent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; font-size: .86rem; line-height: 1.48; color: var(--store-muted); }
 .consent input { margin-top: 3px; width: 17px; height: 17px; }
 .consent a { color: var(--store-brand); text-underline-offset: 3px; }
+.chatHint { margin: 0; color: var(--store-muted); font-size: .86rem; line-height: 1.48; }
+.chatHint button {
+  min-height: 44px;
+  border: 0;
+  padding: 0 2px;
+  background: none;
+  color: var(--store-brand);
+  font: inherit;
+  font-weight: var(--store-weight-semibold, 600);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.chatHint button:focus-visible { outline: 2px solid var(--store-brand); outline-offset: 2px; border-radius: 4px; }
 @media (max-width: 950px) {
   .columns { grid-template-columns: minmax(0, 1fr); }
   .summary { position: static; }

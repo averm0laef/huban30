@@ -32,6 +32,7 @@ import {
   type ChatAccess,
   type ChatThread,
 } from "../chat/chat-state";
+import { chatLauncherPlacement, OPEN_CHAT_EVENT } from "./chat-launcher";
 import { ManagerJoinNotice } from "../chat/manager-join-notice";
 import { useChatThread } from "../chat/use-chat-thread";
 import styles from "./chat-widget.module.css";
@@ -83,11 +84,6 @@ function OtherChannels() {
   );
 }
 
-function isHiddenRoute(pathname: string): boolean {
-  return pathname === "/chat" || pathname.startsWith("/chat/")
-    || pathname === "/admin" || pathname.startsWith("/admin/");
-}
-
 function CloseIcon() {
   return (
     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
@@ -130,7 +126,8 @@ function PhoneIcon() {
  */
 export function ChatWidget() {
   const pathname = usePathname();
-  const hidden = isHiddenRoute(pathname ?? "");
+  const placement = chatLauncherPlacement(pathname ?? "");
+  const hidden = placement === "off";
 
   const [isOpen, setIsOpen] = useState(false);
   const [hasOpenedOnce, setHasOpenedOnce] = useState(false);
@@ -150,6 +147,7 @@ export function ChatWidget() {
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const focusComposerOnOpenRef = useRef(false);
@@ -368,6 +366,8 @@ export function ChatWidget() {
   }, [unreadCount]);
 
   const handleOpen = useCallback(() => {
+    // Focus returns here on close: the round button, or the page's own link.
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setShopStatus(computeShopStatusNow());
     focusComposerOnOpenRef.current = true;
     setHasOpenedOnce(true);
@@ -380,8 +380,14 @@ export function ChatWidget() {
 
   const handleDialogClose = useCallback(() => {
     setIsOpen(false);
-    launcherRef.current?.focus();
+    (openerRef.current?.isConnected ? openerRef.current : launcherRef.current)?.focus();
   }, []);
+
+  useEffect(() => {
+    if (hidden) return;
+    window.addEventListener(OPEN_CHAT_EVENT, handleOpen);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, handleOpen);
+  }, [handleOpen, hidden]);
 
   async function createConversation(intake: ChatIntake): Promise<{ access: ChatAccess; created: ChatThread }> {
     threadRequestRef.current = chatThreadRequestId(threadRequestRef.current, intake);
@@ -478,6 +484,7 @@ export function ChatWidget() {
         ref={launcherRef}
         type="button"
         className={styles.launcher}
+        hidden={placement === "inline"}
         onClick={handleOpen}
         aria-haspopup="dialog"
         aria-expanded={isOpen}

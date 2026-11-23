@@ -25,6 +25,9 @@
   transition: transform var(--store-duration-fast) var(--store-ease), box-shadow var(--store-duration-fast) var(--store-ease);
 }
 
+/* A page that links to the chat itself (checkout) has no round button. */
+.launcher[hidden] { display: none; }
+
 .launcher:hover {
   background: var(--store-brand-strong);
   box-shadow: var(--store-shadow-lg), 0 0 0 6px color-mix(in srgb, var(--store-brand) 16%, transparent);
