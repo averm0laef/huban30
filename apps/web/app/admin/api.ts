@@ -35,7 +35,8 @@ function errorMessage(payload: unknown, status: number): string {
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  // A file goes as multipart: the browser writes that header itself, with the boundary.
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     const token = csrfToken();
     if (token) headers.set("X-CSRF-Token", token);

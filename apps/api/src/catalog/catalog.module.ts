@@ -15,6 +15,9 @@ import { CatalogEnrichmentService } from "./catalog-enrichment.service.js";
 import { CatalogSearchLogService } from "./catalog-search-log.service.js";
 import { CatalogQualityController } from "./catalog-quality.controller.js";
 import { CatalogQualityService } from "./catalog-quality.service.js";
+import { ProductPhotoNormalizer } from "./product-photo-normalizer.js";
+import { ProductPhotosController } from "./product-photos.controller.js";
+import { ProductPhotosService } from "./product-photos.service.js";
 
 @Module({
   controllers: [
@@ -24,6 +27,7 @@ import { CatalogQualityService } from "./catalog-quality.service.js";
     CatalogQualityController,
     CatalogSearchController,
     OneCMachineController,
+    ProductPhotosController,
   ],
   // CatalogSearchService is exported so the chat assistant (see
   // chat/chat-assistant.service.ts) can reuse the exact same deterministic
@@ -46,6 +50,8 @@ import { CatalogQualityService } from "./catalog-quality.service.js";
     CatalogSearchService,
     CatalogSearchLogService,
     OneCIntegrationService,
+    ProductPhotoNormalizer,
+    ProductPhotosService,
   ],
 })
 export class CatalogModule {}
