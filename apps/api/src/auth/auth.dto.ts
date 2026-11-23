@@ -14,6 +14,10 @@ import {
   type Role,
 } from "@an30/contracts";
 
+// One line of text: no control characters and no bidirectional overrides,
+// which would let a name rewrite how staff screens and letters read.
+const DISPLAY_NAME_PATTERN = /^[^\u0000-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]+$/u;
+
 export class RegisterDto {
   @IsEmail()
   @MaxLength(254)
@@ -23,6 +27,7 @@ export class RegisterDto {
   @IsString()
   @MinLength(2)
   @MaxLength(120)
+  @Matches(DISPLAY_NAME_PATTERN, { message: "Имя содержит недопустимые символы" })
   displayName!: string;
 
   @IsString()
@@ -93,6 +98,7 @@ export class AcceptStaffInvitationDto extends TokenDto {
   @IsString()
   @MinLength(2)
   @MaxLength(120)
+  @Matches(DISPLAY_NAME_PATTERN, { message: "Имя содержит недопустимые символы" })
   displayName!: string;
 
   @IsString()

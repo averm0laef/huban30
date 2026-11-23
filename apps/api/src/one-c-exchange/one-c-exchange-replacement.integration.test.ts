@@ -42,6 +42,10 @@ describe.skipIf(!url)("a real full exchange replaces a catalogue loaded under ot
     }
     throw new Error("the import did not finish");
   };
+  /** What the staff journal says about the file with this name. */
+  const journal = async (name: string) => (await database.query<{ hiding_skipped: boolean; products_hidden: number }>(
+    "SELECT products_hidden, hiding_skipped FROM app.one_c_exchange_runs WHERE filename = $1", [`${FILE}${name}.xml`],
+  )).rows[0];
   const clean = async () => {
     await database.query("DELETE FROM app.products WHERE one_c_source = 'one_c_secondary' AND name LIKE $1", [`%${WORD}%`]);
     await database.query("DELETE FROM app.one_c_exchange_runs WHERE filename LIKE $1", [`${FILE}%`]);
@@ -71,15 +75,34 @@ describe.skipIf(!url)("a real full exchange replaces a catalogue loaded under ot
       "SELECT is_active AS active, count(*)::text AS n FROM app.products WHERE one_c_source = 'one_c_secondary' AND name LIKE $1 GROUP BY 1 ORDER BY 1", [`%${WORD}%`],
     )).rows;
     expect(rows).toEqual([{ active: false, n: "4" }, { active: true, n: "4" }]);
+    expect(await journal("trial")).toEqual({ hiding_skipped: false, products_hidden: 0 });
+    expect(await journal("real")).toEqual({ hiding_skipped: false, products_hidden: 4 });
   });
 
   it("hides nothing when 1С sends only what has changed", async () => {
     await load("changes", xml(["guid-5"], true, "2026-11-23T12:00:00"));
     expect(await visible()).toHaveLength(5);
+    expect(await journal("changes")).toEqual({ hiding_skipped: false, products_hidden: 0 });
   });
 
   it("hides nothing when a full file names fewer than half of the products: a cut-off export must not empty the shop", async () => {
     await load("cut-off", xml(["guid-1", "guid-2"], false, "2026-11-23T13:00:00"));
     expect(await visible()).toHaveLength(5);
+    expect(await journal("cut-off")).toEqual({ hiding_skipped: true, products_hidden: 0 });
+  });
+
+  it("reads a windows-1251 file the way 1С wrote it", async () => {
+    const text = xml(["guid-1", "guid-2", "guid-3", "guid-4", "guid-5", "guid-6"], false, "2026-11-23T14:00:00").replace("UTF-8", "windows-1251");
+    const decoder = new TextDecoder("windows-1251");
+    const bytes = new Map<string, number>();
+    for (let byte = 0; byte < 256; byte += 1) bytes.set(decoder.decode(Uint8Array.of(byte)), byte);
+    const assembled = Buffer.from([...text].map((character) => bytes.get(character) ?? 63));
+    const checksum = createHash("sha256").update(assembled).digest();
+    for (let poll = 0; poll < 50; poll += 1) {
+      const outcome = await exchange.processImport({ assembled, checksum, filename: `${FILE}cp1251.xml`, kind: "catalog", source: "one_c_secondary" });
+      if (outcome.kind === "success") break;
+      if (outcome.kind === "failure") throw new Error(outcome.reason);
+    }
+    expect(await visible()).toContain(`Фильтр ${WORD} 6`);
   });
 });

@@ -100,7 +100,7 @@ const post = async (path, body, headers = {}) => {
 };
 const known = await post("/auth/password/forgot", { email });
 const unknown = await post("/auth/password/forgot", { email: `nobody-${stamp}@an30-check.test` });
-const strip = (text) => text.replace(/"developmentToken":"[^"]*",?/u, "");
+const strip = (text) => text.replace(/,?"developmentToken":"[^"]*",?/u, "");
 check("recovery does not tell whether an address is registered", known.status === unknown.status && strip(known.text) === strip(unknown.text), `${known.status} / ${unknown.status}`);
 const signUp = (address) => post("/auth/register", { displayName: "Повтор", email: address, password: firstPassword, personalDataConsent: true, personalDataConsentVersion: "registration-personal-data-2026-08-15-v1" });
 const taken = await signUp(email);
