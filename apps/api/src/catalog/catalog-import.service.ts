@@ -10,7 +10,7 @@ import {
 } from "@an30/contracts";
 
 import { DatabaseService } from "../infrastructure/database.service.js";
-import { canonicalJson, rowExternalId, rowIdentity, sha256 } from "./catalog-import.utils.js";
+import { canonicalJson, rowExternalId, rowIdentity, sha256, storedCatalogRow } from "./catalog-import.utils.js";
 
 const EnvelopeShellSchema = z.object({
   exportedAt: z.iso.datetime({ offset: true }),
@@ -95,7 +95,7 @@ function numberVersion(value: string | number): number {
 }
 
 function currentDataMatches(row: OneCCatalogRow, current: CurrentEntity): boolean {
-  return !current.deleted && canonicalJson(row) === canonicalJson(current.data);
+  return !current.deleted && canonicalJson(storedCatalogRow(row)) === canonicalJson(current.data);
 }
 
 function duplicateValues(values: Array<{ key: string; row: Decision }>): void {
