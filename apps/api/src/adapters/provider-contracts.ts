@@ -120,9 +120,27 @@ export interface SupplierSearchResult {
   readonly success: boolean;
 }
 
+/**
+ * Who a live supplier call is for. `background` is the shop's own work
+ * (filling the cross base): it has its own, smaller share of the supplier's
+ * daily allowance and never takes the part reserved for customers.
+ */
+export type SupplierLane = "background" | "customer";
+
+/** Live calls made to the supplier since 00:00 MSK, when its daily allowance resets. */
+export interface SupplierUsage {
+  readonly backgroundLimit: number;
+  readonly backgroundUsed: number;
+  readonly dailyLimit: number;
+  readonly day: string;
+  readonly used: number;
+}
+
 export interface SupplierProvider {
   readonly enabled: boolean;
-  search(query: string): Promise<SupplierSearchResult>;
+  search(query: string, lane?: SupplierLane): Promise<SupplierSearchResult>;
+  /** Null when the supplier is off or the counters cannot be read. */
+  usage?(): Promise<SupplierUsage | null>;
 }
 
 export const AI_PROVIDER = Symbol("AI_PROVIDER");

@@ -59,6 +59,13 @@ const RawEnvironmentSchema = z.object({
   // доставка, 000000012 Отправка через Автобус. GetSearch rejects any other
   // value with success=false, so the format is pinned rather than left free text.
   ROSSKO_DELIVERY_ID: z.string().regex(/^\d{9}$/u).default("000000001"),
+  // Rossko allows 100 000 calls a day (reset at 00:00 MSK) and 300 a minute.
+  // The shop stops itself earlier: every live call, a customer's or its own,
+  // is counted against ROSSKO_DAILY_LIMIT. Checking our own assortment at
+  // night (off until staff switch it on) may spend
+  // ROSSKO_CROSS_FILL_DAILY_LIMIT of that a day; 0 forbids it outright.
+  ROSSKO_DAILY_LIMIT: z.coerce.number().int().min(1).max(100_000).default(90_000),
+  ROSSKO_CROSS_FILL_DAILY_LIMIT: z.coerce.number().int().min(0).max(50_000).default(4_000),
   // Retail margin applied to every supplier price before it is shown or
   // recorded. The shop buys at the distributor's price and sells at its own,
   // so the markup belongs on the server: a browser must never be able to

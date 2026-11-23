@@ -279,6 +279,80 @@ function AssortmentLinksBlock() {
   );
 }
 
+interface SupplierCrossFill {
+  brandMismatch: number;
+  crossesFromSupplier: number;
+  eligible: number;
+  enabled: boolean;
+  found: number;
+  lastRun: { error: string | null; finishedAt: string; found: number; lookups: number; pairsQueued: number; stopped: string } | null;
+  nightHours: string;
+  noCrosses: number;
+  notFound: number;
+  pending: number;
+  running: boolean;
+  switchedOn: boolean;
+  usage: { backgroundLimit: number; backgroundUsed: number; dailyLimit: number; used: number } | null;
+}
+
+const CROSS_FILL_STOP: Record<string, string> = {
+  daily_limit: "лимит на ночь исчерпан",
+  done: "все номера проверены",
+  outside_hours: "наступило утро",
+  queue_unavailable: "очередь записи недоступна",
+  rate_limit: "лимит запросов в минуту",
+  supplier_unavailable: "поставщик не отвечал",
+  switched_off: "проверку выключили",
+};
+
+/** The night check of our own numbers against the supplier's analogs: its switch, progress and the day's calls. */
+function SupplierCrossFillBlock() {
+  const resource = useResource(() => api<SupplierCrossFill>("/staff/suppliers/cross-fill"), []);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const data = resource.data;
+  if (!data) return resource.error ? <RequestError error={resource.error} onRetry={resource.reload} /> : null;
+  async function toggle(enabled: boolean) {
+    setPending(true);
+    setMessage("");
+    try {
+      await api("/staff/suppliers/cross-fill/switch", { body: JSON.stringify({ enabled }), method: "POST" });
+      setMessage(enabled ? `Проверка включена. Она работает ночью, ${data!.nightHours}.` : "Проверка выключена.");
+      resource.reload();
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : "Не удалось сохранить.");
+    } finally {
+      setPending(false);
+    }
+  }
+  const backgroundOff = data.usage !== null && data.usage.backgroundLimit === 0;
+  return (
+    <>
+      <h3>Аналоги от поставщика — в свою базу кроссов</h3>
+      <dl className={styles.detailList}>
+        <div><dt>Запросов к поставщику сегодня (по Москве)</dt><dd>{data.usage ? `${number.format(data.usage.used)} из ${number.format(data.usage.dailyLimit)}; из них ночная проверка — ${number.format(data.usage.backgroundUsed)} из ${number.format(data.usage.backgroundLimit)}` : "поставщик выключен"}</dd></div>
+        <div><dt>Пар от поставщика в базе кроссов</dt><dd>{number.format(data.crossesFromSupplier)}</dd></div>
+        <div><dt>Ночная проверка наших номеров</dt><dd>{data.running ? "идёт сейчас" : data.switchedOn ? `включена, ${data.nightHours}` : "выключена"}</dd></div>
+        <div><dt>Проверено товаров</dt><dd>{number.format(data.eligible - data.pending)} из {number.format(data.eligible)}: с аналогами — {number.format(data.found)}; без аналогов — {number.format(data.noCrosses)}; поставщик не знает номер — {number.format(data.notFound)}; номер есть под другим брендом — {number.format(data.brandMismatch)}</dd></div>
+        <div><dt>Последний запуск</dt><dd>{data.lastRun
+          ? `${formatDate(data.lastRun.finishedAt)}: проверено ${number.format(data.lastRun.lookups)} номеров, с аналогами ${number.format(data.lastRun.found)}, записано пар ${number.format(data.lastRun.pairsQueued)}; остановка — ${CROSS_FILL_STOP[data.lastRun.stopped] ?? data.lastRun.stopped}${data.lastRun.error ? ` (${data.lastRun.error})` : ""}`
+          : "не запускался после перезапуска сервера"}</dd></div>
+      </dl>
+      <p className={styles.muted}>
+        Аналоги из каждого поиска покупателя у поставщика сохраняются сами. Ночная проверка дополнительно спрашивает поставщика о наших товарах с брендом и артикулом —
+        один запрос в пять секунд, сначала товары в наличии, каждый номер один раз. Сохраняются только пары номеров, как «возможные аналоги»; цены и остатки поставщика не сохраняются.
+        Включайте её после письменного согласия поставщика на такую проверку.
+      </p>
+      <div>
+        <Button disabled={!data.enabled || backgroundOff || pending} onClick={() => { void toggle(!data.switchedOn); }}>
+          {data.switchedOn ? "Выключить ночную проверку" : "Включить ночную проверку"}
+        </Button>
+      </div>
+      {message ? <p role="status">{message}</p> : null}
+    </>
+  );
+}
+
 /** Card «Подбор и поставщики»: FAPI credits, our assortment's links, the vehicle catalog, supplier search state, VIN cache. */
 export function PartsFinderStatusCard() {
   const resource = useResource(() => api<Overview>("/staff/parts-finder/overview"), []);
@@ -325,6 +399,7 @@ export function PartsFinderStatusCard() {
             <div><dt>Последний успешный ответ</dt><dd>{formatDate(data.supplier.lastSuccessAt)}</dd></div>
             <div><dt>Последняя ошибка</dt><dd>{data.supplier.lastError ? `${formatDate(data.supplier.lastError.at)} — ${data.supplier.lastError.message}` : "не было"}</dd></div>
           </dl>
+          <SupplierCrossFillBlock />
           <h3>Расшифровка VIN и номеров кузова</h3>
           <dl className={styles.detailList}>
             <div><dt>Сохранено расшифровок</dt><dd>{number.format(data.vin.cacheEntries)}</dd></div>

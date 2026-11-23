@@ -55,8 +55,8 @@ describe("extractCrossPairs", () => {
   });
 
   it("caps the number of pairs extracted from a pathological tree", () => {
-    const manyCrosses = Array.from({ length: 600 }, (_, index) => part({ guid: `c${index}`, partNumber: `CP${index}` }));
+    const manyCrosses = Array.from({ length: 1_500 }, (_, index) => part({ guid: `c${index}`, partNumber: `CP${index}` }));
     const tree = [part({ crosses: manyCrosses })];
-    expect(extractCrossPairs(tree).length).toBeLessThanOrEqual(500);
+    expect(extractCrossPairs(tree).length).toBe(1_000);
   });
 });

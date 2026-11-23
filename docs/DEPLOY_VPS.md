@@ -239,6 +239,7 @@ sudo nano /etc/an30/production.env
 | `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_FROM`, `SMTP_USER` | Почта. Порт 587 и `SMTP_SECURE=false` либо порт 465 и `SMTP_SECURE=true`. `SMTP_FROM` — просто адрес, без имени. |
 | `YANDEX_ID_CLIENT_ID`, `VK_ID_CLIENT_ID` | Идентификаторы приложений. Пусто — кнопок входа нет. |
 | `ROSSKO_ENABLED` | `true`, когда вписаны оба ключа Rossko. |
+| `ROSSKO_DAILY_LIMIT`, `ROSSKO_CROSS_FILL_DAILY_LIMIT` | Сколько запросов к Rossko сайт делает в сутки всего (по умолчанию 90 000 из разрешённых 100 000) и сколько из них — ночная проверка наших номеров (по умолчанию 4 000; `0` запрещает её). Сама проверка включается в админке. См. [CATALOG_MATCHING.md](CATALOG_MATCHING.md), «Наполнение от поставщика». |
 | `SUPPLIER_MARKUP_PERCENT` | Наценка в процентах на цены поставщика, по умолчанию 30. |
 | `FAPI_FITMENT_ENABLED`, `FAPI_DAILY_CREDIT_LIMIT` | Подбор машины через FAPI (расходует кредиты) и дневной предел расхода. По умолчанию выключено и 1000. |
 | `ONE_C_PRICE_TYPE`, `ONE_C_PRICE_TYPE_SECONDARY` | Обычно пусто. См. [ONE_C_SETUP_UNF.md](ONE_C_SETUP_UNF.md), раздел 5.2. |

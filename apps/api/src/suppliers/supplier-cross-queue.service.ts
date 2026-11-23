@@ -85,6 +85,19 @@ export class SupplierCrossQueueService implements OnModuleDestroy {
     });
   }
 
+  /**
+   * The shop's own background filling waits for the queue to accept the
+   * pairs: it records a number as looked up only after its crosses are safely
+   * queued, so a Redis failure costs a repeat lookup later, not lost crosses.
+   * Returns how many pairs were queued; throws when the queue refuses.
+   */
+  async enqueueAndWait(pairs: readonly SupplierCrossPair[]): Promise<number> {
+    const job = buildCrossIngestJob(pairs);
+    if (!job) return 0;
+    await this.queue.add(job.name, job.data, job.options);
+    return job.data.pairs.length;
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.queue.close();
   }
