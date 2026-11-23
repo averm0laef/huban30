@@ -25,6 +25,7 @@ import {
   isChatThread,
   parseStoredGuestThreads,
   serializeGuestThreads,
+  storeGuestThreadStatus,
   threadNumberLabel,
   upsertThread,
   type ChatAccess,
@@ -187,6 +188,7 @@ export function ChatWidget() {
     sendPending,
     showLatestMessages,
     threadStatus,
+    threadStatusThreadId,
     unreadCount,
     uploadAttachment: submitAttachment,
     viewingLatest,
@@ -234,6 +236,15 @@ export function ChatWidget() {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  // Same rule as the full chat page: a status the manager set (closed,
+  // reopened) is applied here at once and kept for the guest's next visit.
+  useEffect(() => {
+    if (!threadStatus || !threadStatusThreadId) return;
+    setThread((current) => current && current.id === threadStatusThreadId && current.status !== threadStatus
+      ? { ...current, status: threadStatus } : current);
+    if (viewer.kind === "guest") storeGuestThreadStatus(threadStatusThreadId, threadStatus);
+  }, [threadStatus, threadStatusThreadId, viewer.kind]);
 
   useEffect(() => {
     if (viewer.kind !== "guest") return;
@@ -423,7 +434,10 @@ export function ChatWidget() {
     if (!body || body.length > 4_000) return;
     const result = await submitDraft(body);
     if (result.ok) setDraft("");
-    if (result.closed) setThread((current) => current ? { ...current, status: "closed" } : current);
+    if (result.closed) {
+      setThread((current) => current ? { ...current, status: "closed" } : current);
+      if (viewer.kind === "guest") storeGuestThreadStatus(thread.id, "closed");
+    }
   }
 
   async function handleFile(file: File): Promise<boolean> {

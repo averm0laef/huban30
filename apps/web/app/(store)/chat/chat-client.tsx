@@ -18,6 +18,7 @@ import { computeShopStatusNow, type ShopStatus } from "../_components/shop-statu
 import { ChatAvatar, ChatComposer, ChatMessageLog, ChatSystemPill, presenceLine } from "./chat-conversation";
 import { ChatIntakeForm } from "./chat-intake-form";
 import {
+  applyThreadStatus,
   GUEST_CHAT_STORAGE_KEY,
   STATUS_LABELS,
   chatRequest,
@@ -25,6 +26,7 @@ import {
   isChatThread,
   parseStoredGuestThreads,
   serializeGuestThreads,
+  storeGuestThreadStatus,
   threadNumberLabel,
   upsertThread,
   type ChatThread,
@@ -115,6 +117,7 @@ export function ChatClient() {
     sendPending,
     showLatestMessages,
     threadStatus,
+    threadStatusThreadId,
     uploadAttachment: submitAttachment,
     viewingLatest,
   } = useChatThread(selectedThread, viewerKind, true);
@@ -195,6 +198,15 @@ export function ChatClient() {
     return () => window.removeEventListener("storage", sync);
   }, [viewer.kind]);
 
+  // A manager closing or reopening the chat reaches this page as a live
+  // status; without copying it into the list the composer stayed open on a
+  // closed chat, and a guest's stored copy never learned about it at all.
+  useEffect(() => {
+    if (!threadStatus || !threadStatusThreadId) return;
+    setThreads((current) => applyThreadStatus(current, threadStatusThreadId, threadStatus));
+    if (viewer.kind === "guest") storeGuestThreadStatus(threadStatusThreadId, threadStatus);
+  }, [threadStatus, threadStatusThreadId, viewer.kind]);
+
   useEffect(() => {
     if (viewingLatest) messageEnd.current?.scrollIntoView({ block: "end" });
   }, [renderedMessages, viewingLatest]);
@@ -261,8 +273,8 @@ export function ChatClient() {
     const result = await submitDraft(body);
     if (result.ok) setDraft("");
     if (result.closed) {
-      setThreads((current) => current.map((thread) => thread.id === selectedThread.id
-        ? { ...thread, status: "closed" } : thread));
+      setThreads((current) => applyThreadStatus(current, selectedThread.id, "closed"));
+      if (viewer.kind === "guest") storeGuestThreadStatus(selectedThread.id, "closed");
     }
   }
 

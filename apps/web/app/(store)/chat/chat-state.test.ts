@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatIntake } from "@an30/contracts";
 
 import {
+  GUEST_CHAT_STORAGE_KEY,
   MANAGER_RESPONSE_WINDOW_MS,
   accessFor,
+  applyThreadStatus,
   attachmentSignatureError,
   chatThreadCreateBody,
   formatCountdown,
@@ -23,6 +25,7 @@ import {
   safeDownloadName,
   senderLabel,
   serializeGuestThreads,
+  storeGuestThreadStatus,
   unansweredSince,
   type ChatMessage,
   type ChatThread,
@@ -149,6 +152,51 @@ describe("guest chat state", () => {
     expect(safeDownloadName("../photo\u0000.png")).toBe(".._photo_.png");
     expect(safeDownloadName("../../photo.png")).toBe(".._.._photo.png");
     expect(safeDownloadName("..")).toBe("an30-file");
+  });
+});
+
+describe("a status the manager set reaches the customer's conversation", () => {
+  const other: ChatThread = { ...thread, guestToken: "b".repeat(40), id: "019bf9ea-0d3e-7def-9c9a-000000000020" };
+
+  function stubStorage(initial: Record<string, string>): Map<string, string> {
+    const values = new Map(Object.entries(initial));
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+      },
+    });
+    return values;
+  }
+
+  it("closes only the chat the manager closed", () => {
+    const next = applyThreadStatus([thread, other], thread.id, "closed");
+    expect(next.map((item) => item.status)).toEqual(["closed", "open"]);
+  });
+
+  it("reopens a chat the director opened again", () => {
+    expect(applyThreadStatus([{ ...thread, status: "closed" }], thread.id, "open")[0]!.status).toBe("open");
+  });
+
+  it("returns the same list when nothing changed, so the page does not re-render in a loop", () => {
+    const threads = [thread, other];
+    expect(applyThreadStatus(threads, thread.id, "open")).toBe(threads);
+    expect(applyThreadStatus(threads, "019bf9ea-0d3e-7def-9c9a-000000000099", "closed")).toBe(threads);
+  });
+
+  it("remembers the closed chat for the guest's next visit", () => {
+    const values = stubStorage({ [GUEST_CHAT_STORAGE_KEY]: serializeGuestThreads([thread, other]) });
+    storeGuestThreadStatus(thread.id, "closed");
+    const stored = parseStoredGuestThreads(values.get(GUEST_CHAT_STORAGE_KEY) ?? null);
+    expect(stored.find((item) => item.id === thread.id)?.status).toBe("closed");
+    expect(stored.find((item) => item.id === other.id)?.status).toBe("open");
+    // The token that proves the guest owns the chat is kept.
+    expect(stored.find((item) => item.id === thread.id)?.guestToken).toBe(thread.guestToken);
+  });
+
+  it("does not fail when the browser refuses storage", () => {
+    vi.stubGlobal("window", { localStorage: { getItem: () => { throw new Error("denied"); }, setItem: () => undefined } });
+    expect(() => storeGuestThreadStatus(thread.id, "closed")).not.toThrow();
   });
 });
 
