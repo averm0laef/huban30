@@ -65,6 +65,10 @@ const VOCABULARY = { makes: new Map<string, string>(), models: new Map<string, s
 
 function setup(options: {
   enabled?: boolean;
+  /** Articles the shop keeps with a second number in the same field («04152-40060 (O-117)»). */
+  filed?: string[];
+  /** Whether a word of the query names products of the shop. */
+  named?: boolean;
   engine?: Partial<Record<"crosses" | "search" | "usage" | "vehicle", (...args: never[]) => Promise<unknown>>>;
   remembered?: number;
   rememberedPairs?: number;
@@ -75,9 +79,12 @@ function setup(options: {
 } = {}) {
   const pages = Array.isArray(options.rows?.[0]) ? [...options.rows as Row[][]] : null;
   // Only the batched lookup reads the rows of a test; any other query of the shop (the card's own name) finds nothing.
-  const query = vi.fn(async (sql: string, values: unknown[]) => ({
-    rows: sql === SHOP_OFFERS_SQL ? asSqlRows(pages ? pages.shift() ?? [] : (options.rows as Row[] | undefined) ?? [], values) : [],
-  }));
+  const query = vi.fn(async (sql: string, values: unknown[]): Promise<{ rows: unknown[] }> => {
+    if (sql === SHOP_OFFERS_SQL) return { rows: asSqlRows(pages ? pages.shift() ?? [] : (options.rows as Row[] | undefined) ?? [], values) };
+    if (sql.includes("sku_normalized LIKE")) return { rows: (options.filed ?? []).map((sku) => ({ sku })) };
+    if (sql.includes("AS named")) return { rows: [{ named: options.named ?? false }] };
+    return { rows: [] };
+  });
   const engine = {
     crosses: vi.fn(options.engine?.crosses ?? (async () => ({}))),
     dailyLimit: 1000,
@@ -323,8 +330,31 @@ describe("resolve (header search)", () => {
       [{ article: "04152-40060", brand: "Toyota", confirmed: false, crossArticle: "W 68/3", crossBrand: "MANN-FILTER" }], "rossko",
     );
     expect(engine.crosses).toHaveBeenCalledWith({ article: "04152-40060" }, null);
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls.filter(([sql]) => sql === SHOP_OFFERS_SQL)).toHaveLength(2);
     expect(result.shop).toEqual([expect.objectContaining({ matchedVia: "possible", productId: "p-analog" })]);
+  });
+
+  it("finds a number 1С keeps together with the part's second number in one field", async () => {
+    const { query, service } = setup({
+      engine: { search: async () => ({ article: "04152-40060", status: "article" }) },
+      filed: ["04152-40060 (O-117)"],
+      rows: [[], [row("0415240060(O117)", "", "p-madfil", { brand_name: "Madfil", sku: "04152-40060 (O-117)" })]],
+    });
+    const result = await service.resolve({ query: "04152-40060", supplier: false });
+    expect(result).toMatchObject({ article: "04152-40060", kind: "article", shop: [{ matchedVia: "exact", productId: "p-madfil", sku: "04152-40060 (O-117)" }] });
+    expect(query.mock.calls.find(([sql]) => sql.includes("sku_normalized LIKE"))?.[1]).toEqual(["0415240060(%", "%(0415240060)%"]);
+  });
+
+  it("sends a product word with a size to the catalog search instead of calling it a part number", async () => {
+    const spellings = { field: "article", options: [{ id: 1, label: "масло 5w40" }, { id: 2, label: "VFCKJ 5W40" }], status: "choose" };
+    const named = setup({ engine: { search: async () => spellings }, named: true });
+    expect(await named.service.resolve({ query: "масло 5w40", supplier: false })).toEqual({ kind: "text", query: "масло 5w40" });
+    expect(named.log.record).not.toHaveBeenCalled();
+    // A word the shop sells nothing under stays a part number, and so does a number the shop keeps.
+    const unknown = setup({ engine: { search: async () => ({ article: "LRC 0127", status: "article" }) } });
+    expect((await unknown.service.resolve({ query: "LRC 0127", supplier: false })).kind).toBe("article");
+    const stocked = setup({ engine: { search: async () => ({ article: "LRC 0127", status: "article" }) }, named: true, rows: [row("LRC0127", "", "p1")] });
+    expect((await stocked.service.resolve({ query: "LRC 0127", supplier: false })).kind).toBe("article");
   });
 
   it("spends nothing on a number we have on the shelf, nor on the routing call", async () => {

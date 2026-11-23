@@ -64,6 +64,8 @@ export const CORE_PRODUCTS: FixtureProduct[] = [
   { key: "mahle-kx70d", sku: "KX 70D", name: "Фильтр топливный KX 70D", brand: "MAHLE", category: "sf-filtry", rubles: 1250, stock: 0 },
   { key: "febi-27155", sku: "27155", name: "Фильтр масляный", brand: "Febi Bilstein", category: "sf-filtry", rubles: 390, stock: 9 },
   { key: "unigom-w9142", sku: "W9142", name: "Патрубок системы охлаждения", brand: "Unigom", category: "sf-podveska", rubles: 700, stock: 0 },
+  // Two numbers of one part in one 1С field: the bearing answers to «7515» and to «32215».
+  { key: "bearing-7515", sku: "7515 (32215)", name: "Подшипник 7515 (32215)", brand: null, category: "sf-podveska", rubles: 640, stock: 3 },
   // Never public: inactive, deleted, hidden category, inactive brand.
   { key: "hidden-inactive", sku: "W 914/3", name: "Фильтр масляный W 914/3 (снят с продажи)", brand: "MANN-FILTER", category: "sf-filtry", rubles: 450, stock: 5, hidden: "inactive" },
   { key: "hidden-deleted", sku: "W 914/4", name: "Фильтр масляный W 914/4 (удалён)", brand: "MANN-FILTER", category: "sf-filtry", rubles: 450, stock: 5, hidden: "deleted" },

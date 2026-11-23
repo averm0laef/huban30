@@ -249,6 +249,15 @@ export class PartsFinderService {
       // Of two possible spellings ("ДКс 0127" / "LRC 0127") prefer the one the shop sells.
       const article = spellings.find((spelling) => offers.for({ article: spelling }).length > 0) ?? spellings.at(-1)!;
       let shop = offers.for({ article });
+      // «04152-40060» is kept in 1С as «04152-40060 (O-117)», «32215» as «7515 (32215)»: the shop does sell them.
+      const filed = await this.shop.filedUnder(spellings);
+      if (filed.length > 0) {
+        const found = await this.shop.lookup(filed.map((sku) => ({ article: sku, brand: null })), PARTS_FINDER_SHOP_ANALOGS_LIMIT);
+        const seen = new Set(shop.map((offer) => offer.productId));
+        shop = [...shop, ...filed.flatMap((sku) => found.for({ article: sku })).filter((offer) => !seen.has(offer.productId) && seen.add(offer.productId))];
+      }
+      // «масло 5w40», «лампа h7», «коробка 9» are a word and a size, and no number the shop keeps: the catalog search answers.
+      if (shop.length === 0 && await this.shop.namesProducts(query)) return { kind: "text", query };
       const supplier = withSupplier ? await this.supplierOffers(article) : null;
       // Nothing of ours in stock under this number: the catalogue names its
       // analogs (one call, short cache) and our catalog is asked for those —
