@@ -62,12 +62,18 @@ export function apiErrorMessage(payload: unknown, status: number): string {
   return "Не удалось выполнить запрос";
 }
 
+/** readSession's shared answer (below); here so that apiRequest can drop it on a change. */
+const SESSION_ANSWER_MS = 3_000;
+let sessionAnswer: { at: number; request: Promise<SessionView | null> } | null = null;
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const method = (options.method ?? "GET").toUpperCase();
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (!new Set(["GET", "HEAD", "OPTIONS"]).has(method)) {
+    // Sign-in, sign-out, registration and every other change may change who is signed in.
+    sessionAnswer = null;
     const csrf = readCookie("an30_csrf");
     if (csrf) headers.set("X-CSRF-Token", csrf);
   }
@@ -111,13 +117,22 @@ export interface SessionView {
   userId: string;
 }
 
-export async function readSession(): Promise<SessionView | null> {
-  try {
-    return await apiRequest<SessionView>("/auth/session");
-  } catch (error) {
+/**
+ * One answer about the visitor's session shared by every part of the page. Eight components ask on their own, and a
+ * guest's page made up to ten identical requests (24.11.2026), each counted against the visitor's API limit. The
+ * answer is kept for a short while and dropped by any request that changes something (sign-in, sign-out…).
+ */
+
+export function readSession(): Promise<SessionView | null> {
+  const now = Date.now();
+  if (sessionAnswer && now - sessionAnswer.at < SESSION_ANSWER_MS) return sessionAnswer.request;
+  const request = apiRequest<SessionView>("/auth/session").catch((error: unknown) => {
     if (error instanceof StorefrontApiError && error.status === 401) return null;
+    if (sessionAnswer?.request === request) sessionAnswer = null;
     throw error;
-  }
+  });
+  sessionAnswer = { at: now, request };
+  return request;
 }
 
 export function errorText(error: unknown): string {
