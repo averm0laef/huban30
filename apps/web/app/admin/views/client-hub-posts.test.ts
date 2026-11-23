@@ -33,9 +33,10 @@ describe("the post ID an administrator pastes", () => {
     expect(postIdFromInput(vk, "1002")).toEqual({ id: "1002" });
   });
   it("takes the number out of a Telegram link", () => {
-    expect(postIdFromInput(telegram, "https://t.me/an30_news/1001")).toEqual({ id: "1001" });
+    const named = { ...telegram, publicUrl: "https://t.me/AN30_news" };
+    expect(postIdFromInput(named, "https://t.me/an30_news/1001")).toEqual({ id: "1001" });
     expect(postIdFromInput(telegram, "https://t.me/c/1081990249/1001?single")).toEqual({ id: "1001" });
-    expect(postIdFromInput(telegram, "t.me/s/an30_news/1001")).toEqual({ id: "1001" });
+    expect(postIdFromInput(named, "t.me/s/an30_news/1001")).toEqual({ id: "1001" });
   });
   it("takes the number out of a VK link", () => {
     expect(postIdFromInput(vk, "https://vk.com/wall-230001_1002")).toEqual({ id: "1002" });
@@ -45,6 +46,13 @@ describe("the post ID an administrator pastes", () => {
     expect(postIdFromInput(telegram, "https://t.me/c/555/1001")).toEqual({ error: "other_channel" });
     expect(postIdFromInput({ ...telegram, publishTarget: "@an30_news" }, "https://t.me/another/1001")).toEqual({ error: "other_channel" });
     expect(postIdFromInput(vk, "https://vk.com/wall-999_1002")).toEqual({ error: "other_channel" });
+  });
+  it("marks a link whose channel cannot be compared with the saved one", () => {
+    // Saved by number only, linked by name (and the other way round): the link may be to any channel.
+    expect(postIdFromInput({ ...telegram, publicUrl: "" }, "https://t.me/another/1001")).toEqual({ id: "1001", unverified: true });
+    expect(postIdFromInput({ ...telegram, publishTarget: "@an30_news", publicUrl: "" }, "https://t.me/c/555/1001")).toEqual({ id: "1001", unverified: true });
+    expect(postIdFromInput({ ...vk, publishTarget: "" }, "https://vk.com/wall-999_1002")).toEqual({ id: "1002", unverified: true });
+    expect(postIdFromInput({ ...telegram, publicUrl: "" }, "1001")).toEqual({ id: "1001" });
   });
   it("refuses text that is neither a number nor a post link", () => {
     expect(postIdFromInput(telegram, "https://t.me/an30_news")).toEqual({ error: "unrecognized" });

@@ -20,8 +20,11 @@ export function publishedPostUrl(destination: Destination, externalId: string | 
   return null;
 }
 
-/** Reads the ID from what the administrator pasted: the number or a link to the post. */
-export function postIdFromInput(destination: Destination, input: string): { id: string } | { error: "unrecognized" | "other_channel" } {
+/**
+ * Reads the ID from what the administrator pasted: the number or a link to the post.
+ * `unverified` marks a link whose channel could not be compared with the saved destination.
+ */
+export function postIdFromInput(destination: Destination, input: string): { id: string; unverified?: true } | { error: "unrecognized" | "other_channel" } {
   const value = input.trim();
   if (destination.platform !== "telegram" && destination.platform !== "vk") return value ? { id: value } : { error: "unrecognized" };
   if (/^\d+$/u.test(value)) return { id: value };
@@ -29,12 +32,13 @@ export function postIdFromInput(destination: Destination, input: string): { id: 
     const link = /^(?:https?:\/\/)?(?:t\.me|telegram\.me)\/(?:s\/)?(c\/\d+|[A-Za-z0-9_]{4,})\/(\d+)(?:[?#].*)?$/u.exec(value);
     if (!link) return { error: "unrecognized" };
     const { name, internal } = telegramChannel(destination);
-    const other = link[1]!.startsWith("c/") ? internal !== undefined && link[1] !== `c/${internal}` : name !== undefined && link[1]!.toLowerCase() !== name.toLowerCase();
-    return other ? { error: "other_channel" } : { id: link[2]! };
+    // A link names the channel either by its number or by its name, and only the same form can be compared.
+    const [linked, saved] = link[1]!.startsWith("c/") ? [link[1]!.slice(2), internal] : [link[1]!.toLowerCase(), name?.toLowerCase()];
+    return saved === undefined ? { id: link[2]!, unverified: true } : linked === saved ? { id: link[2]! } : { error: "other_channel" };
   }
   const wall = /wall(-?\d+)_(\d+)/u.exec(value);
   if (!wall) return { error: "unrecognized" };
-  return destination.publishTarget && wall[1] !== destination.publishTarget ? { error: "other_channel" } : { id: wall[2]! };
+  return !destination.publishTarget ? { id: wall[2]!, unverified: true } : wall[1] === destination.publishTarget ? { id: wall[2]! } : { error: "other_channel" };
 }
 
 /** Telegram cannot add a photo to a published text post or take it away from a photo post. */
