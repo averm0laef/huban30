@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { recordProductView } from "./product-view-history";
 
 describe("recordProductView", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
   it("sends the opened product to the customer's history once, however often the page asks", async () => {
     const request = vi.fn().mockResolvedValue({ recorded: true });
     await Promise.all([recordProductView("product-1", request), recordProductView("product-1", request)]);
@@ -11,6 +13,19 @@ describe("recordProductView", () => {
     await recordProductView("product-2", request);
     await recordProductView("product-1", request);
     expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it("records the same product again on a later visit: after the history was cleared it must come back", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-23T10:00:00Z"));
+    const request = vi.fn().mockResolvedValue({ recorded: true });
+    await recordProductView("product-4", request);
+    vi.setSystemTime(new Date("2026-11-23T10:00:01Z"));
+    await recordProductView("product-4", request);
+    expect(request).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(new Date("2026-11-23T10:00:10Z"));
+    await recordProductView("product-4", request);
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the product page working when the history cannot be written, and tries again on the next visit", async () => {

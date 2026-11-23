@@ -2,19 +2,20 @@ import { apiRequest } from "./storefront-api";
 
 type HistoryRequest = (path: string, options: { body: { productId: string }; method: "POST" }) => Promise<unknown>;
 
-let lastRecorded: string | null = null;
+/** One page opening asks more than once (React runs the effect twice in development); a later visit is a new view. */
+const SAME_OPENING_MS = 3_000;
 
-/**
- * Adds the product a signed-in customer has opened to «Вы смотрели» in the profile. The page of a product never
- * sent this, so the list stayed empty for everyone. One request per opened product (an effect that runs twice
- * sends one); a failure is not shown: the history is a convenience, the product page works without it.
- */
+let last: { at: number; productId: string } | null = null;
+
 export async function recordProductView(productId: string, request: HistoryRequest = apiRequest): Promise<void> {
-  if (lastRecorded === productId) return;
-  lastRecorded = productId;
+  const now = Date.now();
+  if (last && last.productId === productId && now - last.at < SAME_OPENING_MS) return;
+  const mine = { at: now, productId };
+  last = mine;
   try {
     await request("/account/history", { method: "POST", body: { productId } });
   } catch {
-    if (lastRecorded === productId) lastRecorded = null;
+    // «Вы смотрели» is a convenience: the product page stays as it is, and the next opening tries again.
+    if (last === mine) last = null;
   }
 }
