@@ -211,7 +211,7 @@ describe("AccountService ownership boundaries", () => {
       audit as unknown as AuditService,
       database as unknown as DatabaseService,
       {} as PasswordService,
-      { name: "local" } as StorageProvider,
+      new ProductPhotoStorage({ name: "s3" } as StorageProvider, [{ name: "local" } as StorageProvider]),
     );
 
     await expect(service.createAddress(
