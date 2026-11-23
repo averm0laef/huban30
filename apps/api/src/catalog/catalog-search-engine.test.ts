@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CatalogProductsQuerySchema } from "@an30/contracts";
 
+import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
@@ -120,7 +121,7 @@ describe("CatalogPublicService with an engine", () => {
     const transactionQuery = vi.fn(async (text: string) => (text.startsWith("SET LOCAL") ? { rows: [] } : query(text)));
     const database = { query, transaction: async <T>(work: (client: unknown) => Promise<T>) => work({ query: transactionQuery }) };
     const service = new CatalogPublicService(new CatalogCategoryTreeCache(), database as unknown as DatabaseService,
-      { name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() }, engine);
+      new ProductPhotoStorage({ name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() }), engine);
     return { query, service };
   }
   const row = (id: string, sku: string) => ({

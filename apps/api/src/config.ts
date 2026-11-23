@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { z } from "zod";
 
+const blankToUndefined = (value: unknown) => (typeof value === "string" && value.trim() === "" ? undefined : value);
+
 const RawEnvironmentSchema = z.object({
   API_BIND_HOST: z.string().trim().min(1).max(253).default("127.0.0.1"),
   REEFAPI_ENABLED: z.enum(["true", "false"]).default("false"),
@@ -65,6 +67,21 @@ const RawEnvironmentSchema = z.object({
   // influence what a part costs. Expressed in percent.
   SUPPLIER_MARKUP_PERCENT: z.coerce.number().min(0).max(500).default(30),
   STORAGE_ROOT: z.string().min(1).default("/data/uploads"),
+  // Product photos (docs/PRODUCT_PHOTOS_S3.md): "s3" sends new photos to an
+  // S3-compatible bucket instead of the server's disk. Chat attachments and
+  // banners stay on STORAGE_ROOT either way.
+  PRODUCT_PHOTO_STORAGE: z.preprocess(blankToUndefined, z.enum(["local", "s3"]).default("local")),
+  // compose.yaml passes an empty string for a setting the owner has not filled in.
+  S3_ENDPOINT: z.preprocess(blankToUndefined, z.string().url().optional()),
+  S3_REGION: z.preprocess(blankToUndefined, z.string().regex(/^[a-z0-9-]{1,64}$/u).default("ru-1")),
+  S3_BUCKET: z.preprocess(blankToUndefined, z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u).optional()),
+  S3_ACCESS_KEY_ID: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  S3_ACCESS_KEY_ID_FILE: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  S3_SECRET_ACCESS_KEY_FILE: z.string().min(1).optional(),
+  // Path-style addressing (endpoint/bucket/key) is what every S3-compatible
+  // provider accepts; "false" switches to bucket.endpoint for AWS-style hosts.
+  S3_FORCE_PATH_STYLE: z.preprocess(blankToUndefined, z.enum(["true", "false"]).default("true")),
   SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(1_440).default(30),
   SESSION_SECRET: z.string().min(32).optional(),
   SESSION_SECRET_FILE: z.string().min(1).optional(),
@@ -137,6 +154,9 @@ export function validateEnvironment(raw: Record<string, unknown>) {
   const rosskoKey2 = environment.ROSSKO_KEY2 ?? readSecret(environment.ROSSKO_KEY2_FILE);
   const geminiApiKey = environment.GEMINI_API_KEY ?? readSecret(environment.GEMINI_API_KEY_FILE);
   const reefApiKey = environment.REEFAPI_KEY ?? readSecret(environment.REEFAPI_KEY_FILE);
+  const s3AccessKeyId = environment.S3_ACCESS_KEY_ID ?? readOptionalSecret(environment.S3_ACCESS_KEY_ID_FILE);
+  const s3SecretAccessKey = environment.S3_SECRET_ACCESS_KEY
+    ?? readOptionalSecret(environment.S3_SECRET_ACCESS_KEY_FILE);
 
   if (environment.NODE_ENV === "production" && !environment.DATABASE_URL && !databasePassword) {
     throw new Error("Production database credentials are not configured");
@@ -161,6 +181,20 @@ export function validateEnvironment(raw: Record<string, unknown>) {
   }
   if (environment.ENABLE_PUBLIC_CHECKOUT === "true" && environment.LEGAL_DOCUMENTS_APPROVED !== "true") {
     throw new Error("Public checkout requires approved legal documents");
+  }
+  if (environment.PRODUCT_PHOTO_STORAGE === "s3") {
+    if (!environment.S3_ENDPOINT || !environment.S3_BUCKET || !s3AccessKeyId || !s3SecretAccessKey) {
+      throw new Error("S3 storage is not configured: endpoint, bucket, access key id and secret access key are required");
+    }
+  }
+  // The keys sign every request (the bucket is still read after new photos are
+  // switched back to the disk); plain HTTP is only for a local store on a developer's machine.
+  if (
+    environment.S3_ENDPOINT
+    && !environment.S3_ENDPOINT.startsWith("https://")
+    && environment.DEPLOYMENT_ENVIRONMENT !== "development"
+  ) {
+    throw new Error("S3 endpoint must use HTTPS");
   }
   if (!environment.STORAGE_ROOT.startsWith("/")) {
     throw new Error("Storage root must be an absolute path");
@@ -226,6 +260,9 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     ROSSKO_ENABLED: environment.ROSSKO_ENABLED === "true",
     ROSSKO_KEY1: rosskoKey1,
     ROSSKO_KEY2: rosskoKey2,
+    S3_ACCESS_KEY_ID: s3AccessKeyId,
+    S3_FORCE_PATH_STYLE: environment.S3_FORCE_PATH_STYLE === "true",
+    S3_SECRET_ACCESS_KEY: s3SecretAccessKey,
     SESSION_SECRET: sessionSecret,
   };
 }

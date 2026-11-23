@@ -13,7 +13,7 @@ import { AccountAvatarUpdateSchema, customerAvatarKey, publicProductName } from 
 
 import type { AuthContext } from "../auth/auth-context.js";
 import { assertStrongPassword } from "../auth/auth.service.js";
-import { STORAGE_PROVIDER, type StorageProvider } from "../adapters/provider-contracts.js";
+import { PRODUCT_PHOTO_STORAGE, type ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
 import { PasswordService } from "../security/password.service.js";
@@ -130,7 +130,7 @@ export class AccountService {
     private readonly audit: AuditService,
     private readonly database: DatabaseService,
     private readonly passwords: PasswordService,
-    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    @Inject(PRODUCT_PHOTO_STORAGE) private readonly photos: ProductPhotoStorage,
   ) {}
 
   async read(auth: AuthContext) {
@@ -281,7 +281,7 @@ export class AccountService {
        JOIN app.wishlist_items AS wishlist ON wishlist.product_id=product.id
        WHERE wishlist.user_id=$1 AND ${PUBLIC_ACCOUNT_PRODUCT_FILTERS}
        ORDER BY wishlist.created_at DESC LIMIT $2`,
-      [auth.userId, query.limit, this.storage.name],
+      [auth.userId, query.limit, [...this.photos.providerNames]],
     )).rows;
     return { items: rows.map(productView) };
   }
@@ -333,7 +333,7 @@ export class AccountService {
        JOIN app.product_views AS viewed ON viewed.product_id=product.id
        WHERE viewed.user_id=$1 AND ${PUBLIC_ACCOUNT_PRODUCT_FILTERS}
        ORDER BY viewed.last_viewed_at DESC LIMIT $2`,
-      [auth.userId, query.limit, this.storage.name],
+      [auth.userId, query.limit, [...this.photos.providerNames]],
     )).rows;
     return { items: rows.map(productView) };
   }
@@ -607,7 +607,7 @@ export class AccountService {
               SELECT product_image.id FROM app.product_images AS product_image
               JOIN app.storage_objects AS storage ON storage.id=product_image.storage_object_id
               WHERE product_image.product_id=product.id AND storage.status='available'
-                AND storage.deleted_at IS NULL AND storage.provider=$3
+                AND storage.deleted_at IS NULL AND storage.provider=ANY($3::text[])
                 AND storage.mime_type IN ('image/avif','image/jpeg','image/png','image/webp')
               ORDER BY product_image.is_primary DESC,product_image.sort_order,product_image.created_at
               LIMIT 1

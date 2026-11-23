@@ -9,6 +9,7 @@ import { NotFoundException } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import type { AuthContext } from "../auth/auth-context.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { OneCExchangeService } from "../one-c-exchange/one-c-exchange.service.js";
@@ -69,9 +70,9 @@ describe.skipIf(!url)("the hidden shelf (real PostgreSQL)", () => {
   beforeAll(async () => {
     database = new DatabaseService({ get: () => "test", getOrThrow: () => url } as unknown as ConfigService);
     const cache = new CatalogCategoryTreeCache();
-    storefront = new CatalogPublicService(cache, database, {
+    storefront = new CatalogPublicService(cache, database, new ProductPhotoStorage({
       name: "local", read: async () => Buffer.alloc(0), remove: async () => undefined, store: async () => undefined,
-    } as never);
+    } as never));
     sorting = new CatalogRecategorizeService(database, undefined, cache);
     // A group mapping records who made it; the staff member stays in the scratch database between runs.
     const email = `${PREFIX}staff@an30.local`;
