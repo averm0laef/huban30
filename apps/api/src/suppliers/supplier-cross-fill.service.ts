@@ -208,7 +208,7 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
         brand_mismatch: string; eligible: string; found: string; from_supplier: string; no_crosses: string; not_found: string;
       }>(
         `WITH own AS (
-           SELECT product.id
+           SELECT product.id,product.sku_normalized,product.brand_id
            FROM app.products AS product
            JOIN app.brands AS brand ON brand.id=product.brand_id AND brand.is_active AND brand.deleted_at IS NULL
            LEFT JOIN app.categories AS category ON category.id=product.category_id
@@ -216,7 +216,8 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
            WHERE product.is_active AND product.deleted_at IS NULL AND length(product.sku_normalized)>=4
              AND (COALESCE(parent.slug,category.slug) IS NULL OR NOT COALESCE(parent.slug,category.slug)::text=ANY($1::text[]))
          ), looked AS (
-           SELECT lookup.status FROM app.supplier_cross_lookups AS lookup JOIN own ON own.id=lookup.product_id
+           SELECT lookup.status FROM app.supplier_cross_lookups AS lookup
+           JOIN own ON own.id=lookup.product_id AND own.sku_normalized=lookup.sku_normalized AND own.brand_id=lookup.brand_id
          )
          SELECT (SELECT count(*) FROM own)::text AS eligible,
                 (SELECT count(*) FROM looked WHERE status='found')::text AS found,
@@ -284,7 +285,8 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
        JOIN app.brands AS brand ON brand.id=product.brand_id AND brand.is_active AND brand.deleted_at IS NULL
        LEFT JOIN app.categories AS category ON category.id=product.category_id
        LEFT JOIN app.categories AS parent ON parent.id=category.parent_id
-       LEFT JOIN app.supplier_cross_lookups AS lookup ON lookup.product_id=product.id
+       LEFT JOIN app.supplier_cross_lookups AS lookup
+         ON lookup.product_id=product.id AND lookup.sku_normalized=product.sku_normalized AND lookup.brand_id=product.brand_id
        LEFT JOIN LATERAL (
          SELECT COALESCE(sum(balance.quantity_on_hand-balance.quantity_reserved),0) AS available
          FROM app.inventory_balances AS balance WHERE balance.product_id=product.id
@@ -300,13 +302,16 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
     return result.rows;
   }
 
-  /** One answer serves every product of ours with the same number and brand (duplicate cards in 1С). */
+  /**
+   * One answer serves every product of ours with the same number and brand (duplicate cards in 1С).
+   * The number and brand asked are kept: when 1С changes either on a card, the old answer no longer counts.
+   */
   private async record(product: Candidate, status: string, pairs: number, note: string | null): Promise<void> {
     await this.database.query(
-      `INSERT INTO app.supplier_cross_lookups (product_id,status,pairs,note)
-       SELECT product.id,$3,$4,$5 FROM app.products AS product
+      `INSERT INTO app.supplier_cross_lookups (product_id,sku_normalized,brand_id,status,pairs,note)
+       SELECT product.id,product.sku_normalized,product.brand_id,$3,$4,$5 FROM app.products AS product
        WHERE product.sku_normalized=$1 AND product.brand_id=$2 AND product.is_active AND product.deleted_at IS NULL
-       ON CONFLICT (product_id) DO UPDATE SET status=EXCLUDED.status,pairs=EXCLUDED.pairs,note=EXCLUDED.note,checked_at=clock_timestamp()`,
+       ON CONFLICT (product_id) DO UPDATE SET sku_normalized=EXCLUDED.sku_normalized,brand_id=EXCLUDED.brand_id,status=EXCLUDED.status,pairs=EXCLUDED.pairs,note=EXCLUDED.note,checked_at=clock_timestamp()`,
       [product.sku_normalized, product.brand_id, status, pairs, note],
     );
   }

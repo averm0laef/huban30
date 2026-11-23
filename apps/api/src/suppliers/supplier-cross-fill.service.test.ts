@@ -46,7 +46,7 @@ function makeDatabase(products: Product[], switchedOn = true) {
     }
     throw new Error(`unexpected query: ${text.slice(0, 60)}`);
   });
-  return { database: { query } as unknown as DatabaseService, recorded, setting };
+  return { database: { query } as unknown as DatabaseService, query, recorded, setting };
 }
 
 function makeSupplier(options: { answers?: (query: string) => SupplierSearchResult; backgroundLimit?: number; enabled?: boolean } = {}) {
@@ -128,6 +128,21 @@ describe("SupplierCrossFillService", () => {
     expect(queued).toEqual([[{ partA: { article: "W914/2", brand: "MANN" }, partB: { article: "0451103318", brand: "BOSCH" } }]]);
     expect(recorded).toEqual([{ note: null, pairs: 1, skuNormalized: "W9142", status: "found" }]);
     expect(report).toMatchObject({ error: null, found: 1, lookups: 1, pairsQueued: 1, stopped: "done" });
+  });
+
+  it("remembers which number and brand were asked, so a card changed by 1С is asked again", async () => {
+    const { database, query } = makeDatabase([product("p1", "W914/2")]);
+    const supplier = makeSupplier();
+    const { queue } = makeQueue();
+
+    await makeService({ database, provider: supplier.provider, queue }).run();
+
+    const texts = query.mock.calls.map(([text]) => text.replace(/\s+/gu, " "));
+    const written = texts.find((text) => text.includes("INSERT INTO app.supplier_cross_lookups"));
+    expect(written).toContain("(product_id,sku_normalized,brand_id,status,pairs,note)");
+    expect(written).toContain("sku_normalized=EXCLUDED.sku_normalized,brand_id=EXCLUDED.brand_id");
+    const selected = texts.find((text) => text.includes("LEFT JOIN app.supplier_cross_lookups"));
+    expect(selected).toContain("lookup.product_id=product.id AND lookup.sku_normalized=product.sku_normalized AND lookup.brand_id=product.brand_id");
   });
 
   it("remembers a number the supplier does not know, so it is not asked again", async () => {
