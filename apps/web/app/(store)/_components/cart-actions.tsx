@@ -62,15 +62,28 @@ export function CartButton({ className, icon }: { className?: string; icon?: Rea
   );
 }
 
-export function CartQuantity({ productId, quantity }: { productId: string; quantity: number }) {
+const MAX_LINE_QUANTITY = 100;
+
+/** The largest quantity «+» may reach: the cart limit, or the stock when it is known. */
+export function quantityLimit(available?: number | null): number {
+  return available == null ? MAX_LINE_QUANTITY : Math.max(0, Math.min(MAX_LINE_QUANTITY, available));
+}
+
+export function CartQuantity({ available, productId, quantity }: {
+  available?: number | null;
+  productId: string;
+  quantity: number;
+}) {
   const { updateQuantity } = useCart();
+  const limit = quantityLimit(available);
   return (
     <div className={commerce.quantity} role="group" aria-label="Количество товара">
       <button type="button" disabled={quantity <= 1} onClick={() => updateQuantity(productId, quantity - 1)}
         aria-label="Уменьшить количество"><Subtract20Regular aria-hidden="true" /></button>
       <output aria-live="polite" aria-label="Количество">{quantity}</output>
-      <button type="button" disabled={quantity >= 100} onClick={() => updateQuantity(productId, quantity + 1)}
-        aria-label="Увеличить количество"><Add20Regular aria-hidden="true" /></button>
+      <button type="button" disabled={quantity >= limit} onClick={() => updateQuantity(productId, quantity + 1)}
+        aria-label="Увеличить количество"
+        title={quantity >= limit && limit < MAX_LINE_QUANTITY ? "Больше нет в наличии" : undefined}><Add20Regular aria-hidden="true" /></button>
     </div>
   );
 }
@@ -129,7 +142,7 @@ export function AddToCartButton({ disabled, onAdded, productId }: {
   );
 }
 
-export function ProductBuyButton({ productId }: { productId: string }) {
+export function ProductBuyButton({ available, productId }: { available?: number; productId: string }) {
   const { items } = useCart();
   const addedAt = useRef<number | null>(null);
   const line = items.find(item => item.productId === productId);
@@ -142,7 +155,7 @@ export function ProductBuyButton({ productId }: { productId: string }) {
       event.preventDefault();
       event.stopPropagation();
     }}>
-      <CartQuantity productId={productId} quantity={line.quantity} />
+      <CartQuantity available={available} productId={productId} quantity={line.quantity} />
       <Link href="/cart">В корзине</Link>
     </div>
   );

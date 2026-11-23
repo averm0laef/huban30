@@ -3,16 +3,17 @@
 import { Location24Regular, Person24Regular, VehicleTruck24Regular } from "@fluentui/react-icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { CHECKOUT_PERSONAL_DATA_CONSENT_TEXT } from "@an30/contracts";
 
-import { summariseCart, useCartProducts } from "../_lib/cart-products";
+import { resetCartProductCache, summariseCart, useCartProducts } from "../_lib/cart-products";
 import { formatRubles } from "../_lib/catalog-format";
 import { checkoutConfirmationMessage, checkoutPayload } from "../_lib/checkout";
+import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from "../_lib/checkout-draft";
 import { clearIdempotencyKey, stableIdempotencyKey } from "../_lib/idempotency";
-import { apiRequest, errorText, readSession } from "../_lib/storefront-api";
+import { StorefrontApiError, apiRequest, errorText, readSession } from "../_lib/storefront-api";
 import { CartLineIdentity, CartLineThumbnail } from "./cart-actions";
 import commerce from "./commerce.module.css";
 import { useCart } from "./cart-provider";
@@ -74,6 +75,9 @@ export function CheckoutClient({
   const [online, setOnline] = useState(true);
   const [guest, setGuest] = useState(false);
   const [contact, setContact] = useState({ email: "", name: "", phone: "" });
+  const [details, setDetails] = useState({ address: "", customerNote: "" });
+  const [draftRead, setDraftRead] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
   const itemCount = useMemo(() => items.reduce((total, item) => total + item.quantity, 0), [items]);
   const products = useCartProducts(items);
   const cart = summariseCart(items, products);
@@ -86,8 +90,28 @@ export function CheckoutClient({
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
 
+  // The banner sits above the form and the button below it: bring a refusal
+  // to the customer instead of leaving it off the screen.
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.scrollIntoView({ block: "center" });
+    errorRef.current?.focus({ preventScroll: true });
+  }, [error]);
+
+  useEffect(() => {
+    if (!draftRead) return;
+    saveCheckoutDraft(window.sessionStorage, { ...contact, ...details, deliveryMethod });
+  }, [contact, deliveryMethod, details, draftRead]);
+
   useEffect(() => {
     if (!initialOrderId) {
+      const draft = readCheckoutDraft(window.sessionStorage);
+      if (draft) {
+        setContact({ email: draft.email, name: draft.name, phone: draft.phone });
+        setDetails({ address: draft.address, customerNote: draft.customerNote });
+        setDeliveryMethod(draft.deliveryMethod);
+      }
+      setDraftRead(true);
       void (async () => {
         try {
           const session = await readSession();
@@ -157,10 +181,14 @@ export function CheckoutClient({
       const checkout = await apiRequest<CheckoutResponse>(session ? "/checkout" : "/checkout/guest", { method: "POST", body });
       window.sessionStorage.setItem(confirmationStorageKey(checkout.order.id), JSON.stringify(checkout));
       clearIdempotencyKey(window.sessionStorage, "checkout");
+      clearCheckoutDraft(window.sessionStorage);
+      setDraftRead(false);
       clear();
       setResult(checkout);
       router.replace(`/checkout?order=${encodeURIComponent(checkout.order.id)}`);
     } catch (caught) {
+      // Stock or price changed under the cart: show the cart what the catalog says now.
+      if (caught instanceof StorefrontApiError && caught.status === 409) resetCartProductCache();
       setError(errorText(caught));
     } finally {
       setPending(false);
@@ -210,7 +238,7 @@ export function CheckoutClient({
       </nav>
       <header className={commerce.heading}><h1>Оформление заказа</h1></header>
       {!online ? <div className={styles.offlineNotice} role="status">Нет подключения к сети. Данные формы останутся на странице, но отправка недоступна.</div> : null}
-      {error ? <div className={styles.formError} role="alert"><strong>Заявка не создана</strong><p>{error}</p></div> : null}
+      {error ? <div className={styles.formError} role="alert" ref={errorRef} tabIndex={-1}><strong>Заявка не создана</strong><p>{error}</p></div> : null}
       {!hydrated ? <div className={commerce.empty} role="status"><h2>Открываем корзину</h2></div> : itemCount === 0 ? (
         <section className={commerce.empty}><h2>Корзина пуста</h2><Link className={`${styles.primaryAction} ${commerce.action}`} href="/catalog">Перейти в каталог</Link></section>
       ) : (
@@ -232,7 +260,7 @@ export function CheckoutClient({
                     <input type="radio" name="deliveryMethod" value="needs_quote" checked={deliveryMethod === "needs_quote"} onChange={() => setDeliveryMethod("needs_quote")} />
                   </label>
                 </div>
-                {deliveryMethod === "needs_quote" ? <label className={styles.field}>Адрес доставки<textarea name="address" required minLength={5} maxLength={1000} autoComplete="street-address" /></label> : null}
+                {deliveryMethod === "needs_quote" ? <label className={styles.field}>Адрес доставки<textarea name="address" required minLength={5} maxLength={1000} autoComplete="street-address" value={details.address} onChange={(event) => setDetails((current) => ({ ...current, address: event.target.value }))} /></label> : null}
               </fieldset>
             </section>
 
@@ -251,7 +279,7 @@ export function CheckoutClient({
               <fieldset className={commerce.stepFields}>
                 <legend><span><i className={commerce.stepNumber} aria-hidden="true">3</i>Подтверждение</span></legend>
                 <p className={commerce.notice}>Оплату и получение согласует менеджер после заявки.</p>
-                <label className={styles.field}>Комментарий к заказу<textarea name="customerNote" maxLength={2000} placeholder="Например, удобное время звонка" /></label>
+                <label className={styles.field}>Комментарий к заказу<textarea name="customerNote" maxLength={2000} placeholder="Например, удобное время звонка" value={details.customerNote} onChange={(event) => setDetails((current) => ({ ...current, customerNote: event.target.value }))} /></label>
                 <label className={commerce.consent}><input name="termsAccepted" type="checkbox" required /><span>Я принимаю <Link href="/terms" target="_blank">условия публичной оферты</Link>.</span></label>
                 <label className={commerce.consent}><input name="personalDataConsent" type="checkbox" required /><span>{CHECKOUT_PERSONAL_DATA_CONSENT_TEXT} <Link href="/checkout-personal-data-consent" target="_blank">Открыть документ</Link>.</span></label>
               </fieldset>
@@ -275,8 +303,9 @@ export function CheckoutClient({
               <strong>{cart.pricesComplete ? formatRubles(cart.knownSubtotalKopeks) : cart.knownSubtotalKopeks > 0 ? `от ${formatRubles(cart.knownSubtotalKopeks)}` : "Уточняется"}</strong>
             </div>
             <Link className={commerce.remove} href="/cart">Изменить корзину</Link>
-            {cart.hasUnavailable ? <p className={commerce.notice} role="status">Удалите недоступные позиции в корзине.</p> : null}
-            <button className={`${styles.submitButton} ${commerce.action}`} form="checkout-request" type="submit" disabled={pending || !online || cart.hasUnavailable}>{pending ? "Отправляем заявку…" : "Отправить заявку"}</button>
+            {cart.hasUnavailable ? <p className={commerce.notice} role="status">Удалите недоступные позиции в корзине.</p>
+              : cart.hasOverStock ? <p className={commerce.notice} role="status">В корзине больше, чем есть в наличии. Уменьшите количество в корзине.</p> : null}
+            <button className={`${styles.submitButton} ${commerce.action}`} form="checkout-request" type="submit" disabled={pending || !online || cart.hasUnavailable || cart.hasOverStock}>{pending ? "Отправляем заявку…" : "Отправить заявку"}</button>
           </aside>
         </div>
       )}

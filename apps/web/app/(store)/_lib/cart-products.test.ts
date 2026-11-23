@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { summariseCart } from "./cart-products";
+import { overStockNote, summariseCart } from "./cart-products";
 import type { CartProductState, CartProductView } from "./cart-products";
 
 const productA = "11111111-1111-4111-8111-111111111111";
@@ -45,6 +45,26 @@ describe("summariseCart", () => {
     expect(summary.pricesComplete).toBe(false);
     expect(summary.lines[1]?.state.status).toBe("loading");
     expect(summary.lines[1]?.subtotalKopeks).toBeNull();
+  });
+
+  it("marks a line that holds more pieces than the catalog has", () => {
+    const summary = summariseCart(
+      [{ productId: productA, quantity: 6 }, { productId: productB, quantity: 5 }],
+      { [productA]: ready(), [productB]: ready() },
+    );
+
+    expect(summary.hasOverStock).toBe(true);
+    expect(summary.lines.map((line) => line.overStock)).toEqual([true, false]);
+    expect(summary.lines[0]?.availableQuantity).toBe(5);
+    expect(overStockNote(5)).toBe("В наличии только 5 шт.");
+    expect(overStockNote(0)).toBe("Нет в наличии");
+  });
+
+  it("does not guess stock for a line that is still loading", () => {
+    const summary = summariseCart([{ productId: productA, quantity: 99 }], {});
+
+    expect(summary.hasOverStock).toBe(false);
+    expect(summary.lines[0]?.availableQuantity).toBeNull();
   });
 
   it("reports a line the catalog no longer sells", () => {
