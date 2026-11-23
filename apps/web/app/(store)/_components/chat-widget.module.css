@@ -50,7 +50,7 @@
   border-radius: var(--store-radius-full);
   background: var(--store-accent);
   color: var(--store-accent-text);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: var(--store-weight-black);
   line-height: 1;
 }
@@ -135,7 +135,7 @@
 }
 .threadNumber {
   color: var(--store-muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
 }
@@ -224,7 +224,7 @@
   line-height: 1.4;
 }
 .notice button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--store-radius-full);
@@ -324,7 +324,7 @@
 
 .inlineError { margin: 0; color: var(--store-danger); font-size: 0.8rem; line-height: 1.4; }
 .hint { margin: 0; color: var(--store-muted); font-size: 0.76rem; line-height: 1.4; }
-.legalNote { margin: 0; color: var(--store-muted); font-size: 0.74rem; line-height: 1.45; }
+.legalNote { margin: 0; color: var(--store-muted); font-size: 0.75rem; line-height: 1.45; }
 .legalNote a { color: var(--store-brand); }
 
 /* ---------- Footer: manager note + composer, or the closed bar ---------- */
@@ -370,7 +370,7 @@
   .mobileLabel {
     display: block;
     color: var(--store-text);
-    font-size: .68rem;
+    font-size: .75rem;
     font-weight: var(--store-weight-bold);
     line-height: 1.15;
   }

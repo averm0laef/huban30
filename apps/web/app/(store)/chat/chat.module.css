@@ -175,7 +175,7 @@
 .listError { background: color-mix(in srgb, var(--store-danger) 7%, var(--store-surface)); }
 .listError button {
   justify-self: start;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 16px;
   border: 0;
   border-radius: var(--store-radius-full);
@@ -245,16 +245,16 @@
   border-radius: 10px;
   background: var(--store-brand);
   color: var(--store-on-brand);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: var(--store-weight-black);
 }
 .closedTag {
   flex: 0 0 auto;
   color: var(--store-muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .forgetButton {
-  min-height: 36px;
+  min-height: 44px;
   margin: -4px 0 6px 70px;
   padding: 0;
   border: 0;
@@ -277,7 +277,7 @@
   line-height: 1.4;
 }
 .forgetConfirm button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--store-border);
   border-radius: var(--store-radius-full);
@@ -344,7 +344,7 @@
 }
 .conversationTitle small {
   color: var(--store-muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 .conversationTitle span[data-tone="online"] { color: #16a34a; }
@@ -378,7 +378,7 @@
 }
 .historyError span { color: var(--store-muted); }
 .historyError button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--store-radius-full);

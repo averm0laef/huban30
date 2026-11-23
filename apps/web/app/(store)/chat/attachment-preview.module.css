@@ -92,7 +92,7 @@
 
 .videoLoadButton span {
   color: var(--store-muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.4;
 }

@@ -6,7 +6,7 @@
 .body { display: grid; gap: 20px; padding: 0 24px 24px; }
 .note { margin: 0; max-width: 85ch; color: var(--colorNeutralForeground2); line-height: 1.7; }
 .form { display: grid; grid-template-columns: minmax(180px,1.2fr) minmax(130px,1fr) minmax(130px,1fr) auto; align-items: end; gap: 14px; }
-.form input,.form select { min-height: 42px; }
+.form input,.form select { min-height: 44px; }
 .results { display: grid; gap: 14px; }
 .results > p { margin: 0; line-height: 1.6; }
 .results small { color: var(--colorNeutralForeground2); }

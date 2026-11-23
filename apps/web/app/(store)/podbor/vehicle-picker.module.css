@@ -12,7 +12,7 @@
 .steps li { display: inline-flex; align-items: center; gap: 4px; color: var(--store-muted); }
 .steps li[aria-current="step"] span { color: var(--store-brand); font-weight: 700; }
 /* A finished step is a button back to it: 36px with a pointer, 44px for a finger. */
-.steps button { min-height: 36px; padding: 0 12px; border: 0; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand-strong); font: inherit; font-weight: 650; cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease); }
+.steps button { min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--store-radius-full); background: var(--store-brand-soft); color: var(--store-brand-strong); font: inherit; font-weight: 650; cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease); }
 .steps button:hover { background: color-mix(in srgb, var(--store-brand) 14%, var(--store-surface)); }
 .steps button:active { background: color-mix(in srgb, var(--store-brand) 20%, var(--store-surface)); }
 .close { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--store-muted); cursor: pointer; transition: background-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }

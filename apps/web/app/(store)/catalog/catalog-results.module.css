@@ -261,7 +261,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
+  min-height: 44px;
   padding: 4px 12px;
   border: 1px solid var(--store-border);
   border-radius: var(--store-radius-full);
@@ -314,6 +314,24 @@
   .resultRow[data-catalog-view="grid"] .resultRowName { font-size: .9rem; }
 }
 
+/* Keep catalogue order and view preference; give phone cards room to read. */
+@media (max-width: 480px) {
+  .resultsList[data-catalog-view="grid"] { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .resultRow[data-catalog-view="grid"] { padding: 12px; gap: 12px; }
+  .resultRow[data-catalog-view="grid"] .resultRowItem { grid-template-columns: 80px minmax(0, 1fr); gap: 12px; }
+  .resultRow[data-catalog-view="grid"] .resultRowMedia { width: 80px; height: 80px; aspect-ratio: 1; }
+  .resultRow[data-catalog-view="grid"] .resultRowMedia[data-photo-missing] { padding: 8px; }
+  .resultRow[data-catalog-view="grid"] .resultRowMedia[data-photo-missing] > :is(img, svg) { display: none; }
+  .resultRow[data-catalog-view="grid"] .resultRowMedia[data-photo-missing] > small { position: static; max-width: 100%; padding: 0; background: transparent; text-align: center; }
+  .resultRow[data-catalog-view="grid"] .resultRowIdentity { padding: 0; gap: 5px; }
+  .resultRow[data-catalog-view="grid"] .resultRowName { font-size: 1rem; line-height: 1.4; }
+  .resultRow[data-catalog-view="grid"] .resultRowMeta { font-size: .8rem; line-height: 1.4; }
+  .resultRow[data-catalog-view="grid"] .resultRowPurchase { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 0; }
+  .resultRow[data-catalog-view="grid"] .resultRowStock { grid-column: 1; grid-row: 1; }
+  .resultRow[data-catalog-view="grid"] .resultRowPrice { grid-column: 2; grid-row: 1; justify-self: end; font-size: 1.15rem; }
+  .resultRow[data-catalog-view="grid"] .resultRowAction { grid-column: 1 / -1; }
+}
+
 .matchedServices {
   display: flex;
   flex-wrap: wrap;
@@ -336,7 +354,7 @@
 .matchedServices a {
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
+  min-height: 44px;
   color: var(--store-brand);
   font-weight: 640;
   text-underline-offset: 4px;

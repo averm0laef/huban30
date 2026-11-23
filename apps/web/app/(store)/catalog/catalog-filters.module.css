@@ -58,7 +58,7 @@
 .allCategories {
   display: flex;
   align-items: center;
-  min-height: 38px;
+  min-height: 44px;
   padding: 5px 10px 5px 28px;
   border-radius: 10px;
   color: var(--store-muted);
@@ -71,7 +71,7 @@
 .pricePresets a {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  min-height: 44px;
   padding: 3px 9px;
   border-radius: var(--store-radius-full);
   background: var(--store-bg);
@@ -249,15 +249,15 @@
 .tree,
 .treeChildren { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; }
 .treeChildren { margin: 1px 0 4px 15px; padding-left: 6px; border-left: 1px solid var(--store-border); }
-.treeRow { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; border-radius: 10px; }
+.treeRow { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; border-radius: 10px; }
 .treeRow:hover { background: var(--store-bg); }
 .treeRow[data-current] { background: var(--store-brand-soft); }
 .treeToggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -269,14 +269,14 @@
 .treeToggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .treeToggle:hover { color: var(--store-brand); }
 .treeToggle:focus-visible { outline: 2px solid var(--store-brand); outline-offset: -2px; }
-.treeSpacer { width: 26px; }
+.treeSpacer { width: 44px; }
 .treeLink {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
-  min-height: 38px;
+  min-height: 44px;
   padding: 6px 10px 6px 2px;
   color: var(--store-text);
   font-size: .9rem;

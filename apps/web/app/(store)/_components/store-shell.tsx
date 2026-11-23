@@ -170,7 +170,7 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
   }
 
   return (
-    <header className={styles.header}>
+    <header className={styles.header} data-home={pathname === "/" ? "true" : undefined}>
       <div
         className={styles.headerInset}
         data-collapsed={collapsed ? "true" : undefined}
