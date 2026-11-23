@@ -25,7 +25,8 @@ mkdir -p "$release"
 tar xzf "$archive" -C "$release"
 
 echo "== backup before the release"
-current=$(docker compose ls --format json | grep -o '"ConfigFiles":"[^"]*' | head -1 | sed 's/.*:"//; s/,.*//; s#/compose.yaml##')
+# The running release's folder (none when production is stopped: the backup then reads the new tree's compose.yaml).
+current=$({ docker compose ls --all --filter name=an30-production --format json || true; } | { grep -o '"ConfigFiles":"[^"]*' || true; } | head -1 | sed 's/.*:"//; s/,.*//; s#/compose.yaml##')
 AN30_ENV_FILE=$env_file AN30_APP_DIR=${current:-$release} AN30_COMPOSE_PROJECT=an30-production bash "$release/scripts/backup.sh"
 
 cd "$release"
