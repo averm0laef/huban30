@@ -165,7 +165,7 @@ export class AuthService {
       if (!canRefreshPendingRegistration(existingAccount?.status)) return null;
 
       if (existingAccount?.password_hash) {
-        // The same sign-up sent again changes nothing: the letter that was
+        // The same sign-up sent again makes nothing new: the letter that was
         // just sent stays the valid one. A different password is a new
         // request and goes on to a new letter, so the password of a pending
         // account never changes without the mailbox being told.
@@ -180,6 +180,12 @@ export class AuthService {
           justSent.rows.length > 0
           && await this.passwords.verify(input.password, existingAccount.password_hash)
         ) {
+          // Whoever sends the stored password is the person who signed up,
+          // so a corrected name is taken.
+          await client.query(
+            "UPDATE app.users SET display_name = $2 WHERE id = $1 AND display_name IS DISTINCT FROM $2",
+            [existingAccount.id, this.normalizeDisplayName(input.displayName)],
+          );
           await this.audit.record({
             action: "auth.registration.requested",
             entityId: existingAccount.id,

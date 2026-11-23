@@ -246,8 +246,11 @@ describe("auth account state policy", () => {
     expect(count("INSERT INTO app.email_verification_tokens")).toBe(letters);
     expect(count("UPDATE app.email_verification_tokens SET used_at")).toBe(letters);
     expect(count("INSERT INTO app.outbox_events")).toBe(letters);
-    // The password of a pending account changes only together with a new letter.
-    expect(count("UPDATE app.users")).toBe(letters);
+    // The password of a pending account changes only together with a new letter;
+    // a corrected name is taken either way.
+    expect(count("password_hash = $3")).toBe(letters);
+    expect(clientQuery.mock.calls.find((call) => String(call[0]).includes("UPDATE app.users"))?.[1])
+      .toEqual(letters === 1 ? [userId, "Антон Ермолаев", "new-password-hash"] : [userId, "Антон Ермолаев"]);
     if (justSent) {
       expect(passwords.verify).toHaveBeenCalledWith("correct-horse-battery-staple", "stored-password-hash");
     }
