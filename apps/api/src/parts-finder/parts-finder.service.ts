@@ -23,6 +23,7 @@ import {
 import type { z } from "zod";
 
 import { SUPPLIER_PROVIDER, type SupplierProvider } from "../adapters/provider-contracts.js";
+import { CatalogPublicService } from "../catalog/catalog-public.service.js";
 import { CatalogSearchLogService } from "../catalog/catalog-search-log.service.js";
 import { RedisService } from "../infrastructure/redis.service.js";
 import { SupplierSearchService } from "../suppliers/supplier-search.service.js";
@@ -129,8 +130,23 @@ export class PartsFinderService {
     private readonly redis: RedisService,
     private readonly searchLog: CatalogSearchLogService,
     private readonly crossStore: PartsFinderCrossStore,
+    private readonly catalog: CatalogPublicService,
     @Optional() private readonly tecdoc?: TecdocService,
   ) {}
+
+  /**
+   * True when the query is a product name with a size, not a part number: it has a word, and the catalog search
+   * finds products that match every word of it. A number the shop does not keep («VKBA 3247») matches none.
+   */
+  private async catalogAnswers(query: string): Promise<boolean> {
+    if (!/\p{L}{3,}/u.test(query)) return false;
+    try {
+      const page = await this.catalog.products({ availability: "all", limit: 1, offset: 0, q: query, sort: "relevance" });
+      return page.matchMode === "all" && page.total > 0;
+    } catch {
+      return false;
+    }
+  }
 
   status(): PartsFinderStatusResponse {
     return { catalog: this.tecdoc?.available ? "tecdoc" : "local", enabled: this.engine.enabled };
@@ -248,16 +264,17 @@ export class PartsFinderService {
       const offers = await this.shop.lookup(spellings.map((article) => ({ article, brand: null })), PARTS_FINDER_SHOP_ANALOGS_LIMIT);
       // Of two possible spellings ("ДКс 0127" / "LRC 0127") prefer the one the shop sells.
       const article = spellings.find((spelling) => offers.for({ article: spelling }).length > 0) ?? spellings.at(-1)!;
-      let shop = offers.for({ article });
       // «04152-40060» is kept in 1С as «04152-40060 (O-117)», «32215» as «7515 (32215)»: the shop does sell them.
       const filed = await this.shop.filedUnder(spellings);
-      if (filed.length > 0) {
-        const found = await this.shop.lookup(filed.map((sku) => ({ article: sku, brand: null })), PARTS_FINDER_SHOP_ANALOGS_LIMIT);
-        const seen = new Set(shop.map((offer) => offer.productId));
-        shop = [...shop, ...filed.flatMap((sku) => found.for({ article: sku })).filter((offer) => !seen.has(offer.productId) && seen.add(offer.productId))];
-      }
+      const filedOffers = filed.length === 0 ? [] : await this.shop.lookup(filed.map((sku) => ({ article: sku, brand: null })), PARTS_FINDER_SHOP_ANALOGS_LIMIT)
+        .then((found) => filed.flatMap((sku) => found.for({ article: sku })));
+      const withFiled = (exact: ShopOffer[]): ShopOffer[] => {
+        const seen = new Set(exact.map((offer) => offer.productId));
+        return [...exact, ...filedOffers.filter((offer) => !seen.has(offer.productId) && seen.add(offer.productId))];
+      };
+      let shop = withFiled(offers.for({ article }));
       // «масло 5w40», «лампа h7», «коробка 9» are a word and a size, and no number the shop keeps: the catalog search answers.
-      if (shop.length === 0 && await this.shop.namesProducts(query)) return { kind: "text", query };
+      if (shop.length === 0 && await this.catalogAnswers(query)) return { kind: "text", query };
       const supplier = withSupplier ? await this.supplierOffers(article) : null;
       // Nothing of ours in stock under this number: the catalogue names its
       // analogs (one call, short cache) and our catalog is asked for those —
@@ -272,7 +289,7 @@ export class PartsFinderService {
       // then ask our catalog again. The routing-only call (supplier: false)
       // never spends anything.
       if (withSupplier && !shop.some((offer) => offer.availableQuantity > 0) && await this.learnArticle(article, supplier, caller?.ip ?? null)) {
-        shop = (await this.shop.lookup([{ article, brand: null }], PARTS_FINDER_SHOP_ANALOGS_LIMIT)).for({ article });
+        shop = withFiled((await this.shop.lookup([{ article, brand: null }], PARTS_FINDER_SHOP_ANALOGS_LIMIT)).for({ article }));
       }
       return {
         alternatives: spellings.filter((spelling) => spelling !== article),

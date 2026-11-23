@@ -63,15 +63,6 @@ describe.skipIf(!url)("shop offers through the cross graph (real PostgreSQL)", (
     expect(await shop.filedUnder(["75150"])).toEqual([]);
   });
 
-  it("tells a product word with a size from a part number", async () => {
-    expect(await shop.namesProducts("лампа h7")).toBe(true);
-    expect(await shop.namesProducts("лампы h7")).toBe(true);
-    expect(await shop.namesProducts("mobil 5w40")).toBe(true);
-    expect(await shop.namesProducts("цшзук 300")).toBe(false);
-    expect(await shop.namesProducts("04152-40060")).toBe(false);
-    expect(await shop.namesProducts("W 914/2")).toBe(false);
-  });
-
   it("names our product without the staff's notes typed into its name in 1С", async () => {
     expect(await first("KP-170", null)).toMatchObject({ matchedVia: "exact", name: "Клипса крепежная TORSO", sku: "KP-170" });
   });

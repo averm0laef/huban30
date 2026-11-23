@@ -4,7 +4,6 @@ import { normalizeArticleNumber, normalizeBrand, publicProductName, type ShopOff
 
 import { originalPartCode } from "../catalog/catalog-original-numbers.js";
 import { partTypeKey } from "../catalog/catalog-part-dictionary.js";
-import { lightRussianStem } from "../catalog/catalog-search-tokens.js";
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { partSizeKey, partSpecs, sizeLabel, sizeSearch, specsConflict } from "../catalog/catalog-part-specs.js";
@@ -271,24 +270,6 @@ export class PartsFinderShopService {
       patterns,
     );
     return result.rows.map((row) => row.sku);
-  }
-
-  /**
-   * True when a word of the query names what the shop sells («масло 5w40», «лампа h7», «mobil 5w40»): the query is
-   * then a product name with a size, not a part number. A Russian word is compared without its ending.
-   */
-  async namesProducts(query: string): Promise<boolean> {
-    const words = [...new Set(query.toLowerCase().replaceAll("ё", "е").match(/[a-zа-я]+/gu) ?? [])]
-      .filter((word) => word.length >= 3).slice(0, 3);
-    if (words.length === 0) return false;
-    const patterns = words.map((word) => (/[а-я]/u.test(word) ? `\\m${lightRussianStem(word) ?? word}` : `\\m${word}\\M`));
-    const result = await this.database.query<{ named: boolean }>(
-      `SELECT EXISTS (SELECT 1 FROM app.products AS product
-         WHERE product.is_active AND product.deleted_at IS NULL
-           AND (${patterns.map((_, index) => `product.search_text_folded ~* $${index + 1}`).join(" OR ")})) AS named`,
-      patterns,
-    );
-    return result.rows[0]?.named === true;
   }
 
   /**

@@ -1,5 +1,6 @@
 import { Module, type MiddlewareConsumer, type NestModule } from "@nestjs/common";
 
+import { CatalogModule } from "../catalog/catalog.module.js";
 import { CatalogSearchLogService } from "../catalog/catalog-search-log.service.js";
 import { SuppliersModule } from "../suppliers/suppliers.module.js";
 import { TecdocModule } from "../tecdoc/tecdoc.module.js";
@@ -16,7 +17,7 @@ import { PgFapiLedgerStore, PgFitmentStore, PgVehicleStore } from "./parts-finde
 import { PartsFinderVehiclesService } from "./parts-finder-vehicles.service.js";
 
 @Module({
-  imports: [SuppliersModule, TecdocModule],
+  imports: [CatalogModule, SuppliersModule, TecdocModule],
   controllers: [PartsFinderController, StaffPartsFinderController],
   providers: [
     CatalogSearchLogService,

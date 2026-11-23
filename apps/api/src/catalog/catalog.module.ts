@@ -33,8 +33,10 @@ import { CatalogQualityService } from "./catalog-quality.service.js";
   // instance (a category the exchange writes must invalidate the same tree
   // the storefront reads) and the same integration_key='one_c' credentials
   // OneCMachineController already authenticates against, instead of standing
-  // up a second, disconnected copy of either.
-  exports: [CatalogCategoryTreeCache, CatalogSearchService, OneCIntegrationService],
+  // up a second, disconnected copy of either. CatalogPublicService is
+  // exported so the header search (parts-finder.service.ts) can ask whether
+  // the storefront search answers a query before calling it a part number.
+  exports: [CatalogCategoryTreeCache, CatalogPublicService, CatalogSearchService, OneCIntegrationService],
   providers: [
     CatalogEnrichmentService,
     CatalogApplyService,

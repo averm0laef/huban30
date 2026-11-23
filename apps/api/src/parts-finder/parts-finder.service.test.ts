@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { normalizeBrand, type SupplierSearchResponse } from "@an30/contracts";
 
 import type { SupplierProvider } from "../adapters/provider-contracts.js";
+import type { CatalogPublicService } from "../catalog/catalog-public.service.js";
 import type { CatalogSearchLogService } from "../catalog/catalog-search-log.service.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { RedisService } from "../infrastructure/redis.service.js";
@@ -67,8 +68,8 @@ function setup(options: {
   enabled?: boolean;
   /** Articles the shop keeps with a second number in the same field («04152-40060 (O-117)»). */
   filed?: string[];
-  /** Whether a word of the query names products of the shop. */
-  named?: boolean;
+  /** What the catalog search finds for the query: products matching every word, and how it matched. */
+  catalog?: { matchMode: "all" | "any"; total: number };
   engine?: Partial<Record<"crosses" | "search" | "usage" | "vehicle", (...args: never[]) => Promise<unknown>>>;
   remembered?: number;
   rememberedPairs?: number;
@@ -82,7 +83,6 @@ function setup(options: {
   const query = vi.fn(async (sql: string, values: unknown[]): Promise<{ rows: unknown[] }> => {
     if (sql === SHOP_OFFERS_SQL) return { rows: asSqlRows(pages ? pages.shift() ?? [] : (options.rows as Row[] | undefined) ?? [], values) };
     if (sql.includes("sku_normalized LIKE")) return { rows: (options.filed ?? []).map((sku) => ({ sku })) };
-    if (sql.includes("AS named")) return { rows: [{ named: options.named ?? false }] };
     return { rows: [] };
   });
   const engine = {
@@ -118,6 +118,7 @@ function setup(options: {
   };
   const log = { record: vi.fn() };
   const crossStore = { remember: vi.fn(async () => options.remembered ?? 0), rememberPairs: vi.fn(async () => options.rememberedPairs ?? 0) };
+  const catalog = { products: vi.fn(async () => options.catalog ?? { matchMode: "all" as const, total: 0 }) };
   const service = new PartsFinderService(
     engine as unknown as PartsFinderEngine,
     new PartsFinderShopService({ query } as unknown as DatabaseService),
@@ -127,8 +128,9 @@ function setup(options: {
     redis as unknown as RedisService,
     log as unknown as CatalogSearchLogService,
     crossStore as unknown as PartsFinderCrossStore,
+    catalog as unknown as CatalogPublicService,
   );
-  return { crossStore, engine, log, query, redisStore, service, suppliers, vehicles };
+  return { catalog, crossStore, engine, log, query, redisStore, service, suppliers, vehicles };
 }
 
 describe("search", () => {
@@ -345,16 +347,46 @@ describe("resolve (header search)", () => {
     expect(query.mock.calls.find(([sql]) => sql.includes("sku_normalized LIKE"))?.[1]).toEqual(["0415240060(%", "%(0415240060)%"]);
   });
 
+  it("keeps the part filed with a second number when an analog is learnt for a number out of stock", async () => {
+    const supplier = { ...SUPPLIER, parts: [{ ...SUPPLIER.parts[0]!, crosses: [{ ...SUPPLIER.parts[0]!, brand: "MANN-FILTER", crosses: [], partNumber: "W 68/3" }] }] };
+    const card = { part: { article: "04152-40060", brand: "TOYOTA" }, groups: { analogs: [{ article: "W 68/3", brand: "MANN-FILTER" }] }, status: "found" };
+    const { service } = setup({
+      engine: { crosses: async () => card, search: async () => ({ article: "04152-40060", status: "article" }) },
+      filed: ["04152-40060 (O-117)"],
+      remembered: 1,
+      rows: [
+        [],
+        [row("0415240060(O117)", "", "p-madfil", { available_quantity: "0", brand_name: "Madfil", sku: "04152-40060 (O-117)" })],
+        [row("0415240060", "", "p-analog", { brand_name: "MANN-FILTER", sku: "W 68/3", via: 3 })],
+      ],
+      supplier,
+    });
+    const result = await service.resolve({ query: "04152-40060" });
+    expect(result.shop?.map((offer) => offer.productId)).toEqual(["p-analog", "p-madfil"]);
+  });
+
   it("sends a product word with a size to the catalog search instead of calling it a part number", async () => {
     const spellings = { field: "article", options: [{ id: 1, label: "масло 5w40" }, { id: 2, label: "VFCKJ 5W40" }], status: "choose" };
-    const named = setup({ engine: { search: async () => spellings }, named: true });
+    const named = setup({ catalog: { matchMode: "all", total: 192 }, engine: { search: async () => spellings } });
     expect(await named.service.resolve({ query: "масло 5w40", supplier: false })).toEqual({ kind: "text", query: "масло 5w40" });
+    expect(named.catalog.products).toHaveBeenCalledWith(expect.objectContaining({ q: "масло 5w40" }));
     expect(named.log.record).not.toHaveBeenCalled();
-    // A word the shop sells nothing under stays a part number, and so does a number the shop keeps.
-    const unknown = setup({ engine: { search: async () => ({ article: "LRC 0127", status: "article" }) } });
-    expect((await unknown.service.resolve({ query: "LRC 0127", supplier: false })).kind).toBe("article");
-    const stocked = setup({ engine: { search: async () => ({ article: "LRC 0127", status: "article" }) }, named: true, rows: [row("LRC0127", "", "p1")] });
-    expect((await stocked.service.resolve({ query: "LRC 0127", supplier: false })).kind).toBe("article");
+  });
+
+  it("keeps a part number the shop does not sell a part number, whatever its letters", async () => {
+    const skf = { search: async () => ({ article: "VKBA 3247", status: "article" }) };
+    // «VKBA 3246» is on the shelf, «VKBA 3247» is not: the catalog finds nothing by every word, or only something alike.
+    for (const catalog of [{ matchMode: "all" as const, total: 0 }, { matchMode: "any" as const, total: 12 }]) {
+      const { service } = setup({ catalog, engine: skf });
+      expect(await service.resolve({ query: "VKBA 3247", supplier: false })).toMatchObject({ article: "VKBA 3247", kind: "article", shop: [] });
+    }
+    // No word at all: the catalog is not asked.
+    const digits = setup({ catalog: { matchMode: "all", total: 5 }, engine: { search: async () => ({ article: "90915-10003", status: "article" }) } });
+    expect((await digits.service.resolve({ query: "90915-10003", supplier: false })).kind).toBe("article");
+    expect(digits.catalog.products).not.toHaveBeenCalled();
+    // A number the shop keeps is a part number even when the catalog would also find it.
+    const stocked = setup({ catalog: { matchMode: "all", total: 1 }, engine: { search: async () => ({ article: "VKBA 3246", status: "article" }) }, rows: [row("VKBA3246", "", "p1")] });
+    expect((await stocked.service.resolve({ query: "VKBA 3246", supplier: false })).kind).toBe("article");
   });
 
   it("spends nothing on a number we have on the shelf, nor on the routing call", async () => {
