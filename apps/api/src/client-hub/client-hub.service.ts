@@ -28,7 +28,7 @@ type Connection = { id: string; platform: HubPlatform; environment: string; is_t
 const connectionColumns = `id,platform,name,environment,is_test AS "isTest",publish_enabled AS "publishEnabled",inbox_enabled AS "inboxEnabled",
   publish_target AS "publishTarget",inbox_target AS "inboxTarget",public_url AS "publicUrl",version,last_checked_at AS "lastCheckedAt",diagnostic`;
 const jobColumns = `j.id,j.connection_id AS "connectionId",c.platform,c.name AS "connectionName",j.state,j.revision,
-  COALESCE(p.applied_revision,0) AS "appliedRevision",p.external_id AS "externalId",j.attempt_count AS "attemptCount",j.last_error AS "lastError",j.created_at AS "createdAt"`;
+  COALESCE(p.applied_revision,0) AS "appliedRevision",p.external_id AS "externalId",p.content_kind AS "contentKind",j.attempt_count AS "attemptCount",j.last_error AS "lastError",j.created_at AS "createdAt"`;
 const conversationColumns = `v.id,v.connection_id AS "connectionId",c.platform,c.name AS "connectionName",v.customer_name AS "customerName",v.peer_id AS "peerId",
   v.state,v.assigned_to AS "assignedTo",COALESCE(u.display_name,u.email::text) AS "assignedName",v.version,v.last_message_at AS "lastMessageAt",
   v.last_message_preview AS "lastMessagePreview",v.unread_count AS "unreadCount",v.manager_wait_since AS "managerWaitSince"`;
