@@ -92,8 +92,11 @@ export function partCandidates(product: { brand: string | null; name: string; sk
   const own: PartCandidate[] = [];
   if (!isOwnCode(product.sku)) {
     own.push({ article: product.sku, brand: product.brand, via: "own" });
-    // «ST-23300-31090»: SAT's copy of the original Toyota part 23300-31090 — the original number names the part.
-    const original = /^ST-(.+)$/iu.exec(product.sku.trim())?.[1];
+    // «ST-23300-31090»: SAT's copy of the original Toyota part 23300-31090 — the original number names the part. 1С
+    // also keeps it without the dash («ST0411164345» = 04111-64345); then only a long run of digits counts, so
+    // that an article that merely starts with «ST» («STD24», a wiper) is never cut.
+    const sku = product.sku.trim();
+    const original = /^ST-(.+)$/iu.exec(sku)?.[1] ?? /^ST(\d{8,}[A-Z]?)$/iu.exec(normalizeArticleNumber(sku))?.[1];
     if (original && normalizeArticleNumber(original).length >= 6) own.push({ article: original, brand: null, via: "own" });
   }
   const labelled = bracketedNumbers(product.name)

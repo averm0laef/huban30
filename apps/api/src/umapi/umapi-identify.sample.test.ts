@@ -9,6 +9,12 @@ describe("which numbers a product is looked up by", () => {
       .toEqual([{ article: "ST-23300-31090", brand: null, via: "own" }, { article: "23300-31090", brand: null, via: "own" }]);
   });
 
+  it("reads it without the dash too, and leaves other articles starting with «ST» whole", () => {
+    expect(partCandidates({ brand: null, name: "ST-04111-64345 Ремкомплект ДВС 2C/2C-T TOYOTA", sku: "ST0411164345" }).map((c) => c.article))
+      .toEqual(["ST0411164345", "0411164345"]);
+    expect(partCandidates({ brand: "AutoProfi", name: "Щетка стеклоочистителя AUTOPROFI 24\"", sku: "STD24" }).map((c) => c.article)).toEqual(["STD24"]);
+  });
+
   it("never asks about 1С's own codes, and finds the number written in the name", () => {
     expect(isOwnCode("00-00022450")).toBe(true);
     expect(isOwnCode("ST-23300-31090")).toBe(false);
