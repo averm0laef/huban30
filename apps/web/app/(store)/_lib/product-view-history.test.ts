@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { recordProductView } from "./product-view-history";
+import { forgetRecordedProductView, recordProductView } from "./product-view-history";
 
 describe("recordProductView", () => {
   afterEach(() => { vi.useRealTimers(); });
@@ -25,6 +25,14 @@ describe("recordProductView", () => {
     expect(request).toHaveBeenCalledTimes(1);
     vi.setSystemTime(new Date("2026-11-23T10:00:10Z"));
     await recordProductView("product-4", request);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("records the product opened right after the history was cleared", async () => {
+    const request = vi.fn().mockResolvedValue({ recorded: true });
+    await recordProductView("product-5", request);
+    forgetRecordedProductView();
+    await recordProductView("product-5", request);
     expect(request).toHaveBeenCalledTimes(2);
   });
 

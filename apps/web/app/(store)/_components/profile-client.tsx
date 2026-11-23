@@ -8,6 +8,7 @@ import type { FormEvent } from "react";
 
 import { apiRequest, errorText, readSession } from "../_lib/storefront-api";
 import { customerAvatarKey, customerAvatarSrc, type CustomerAvatarKey } from "../_lib/customer-avatars";
+import { forgetRecordedProductView } from "../_lib/product-view-history";
 import { catalogCategoryPhoto } from "../_lib/store-categories";
 import { ExpertHelpQueryLink } from "../catalog/expert-help-query-link";
 import { AvatarPicker } from "./avatar-picker";
@@ -360,6 +361,7 @@ export function ProfileClient({ initialTab = "orders", socialStatus }: { initial
     setPending("history"); setError("");
     try {
       await apiRequest<void>("/account/history", { method: "DELETE" });
+      forgetRecordedProductView();
       setData((current) => current ? { ...current, history: [] } : current);
       setNotice("История очищена");
     } catch (caught) { setError(errorText(caught)); } finally { setPending(""); }

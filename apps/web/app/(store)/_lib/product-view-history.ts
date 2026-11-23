@@ -19,3 +19,8 @@ export async function recordProductView(productId: string, request: HistoryReque
     if (last === mine) last = null;
   }
 }
+
+/** «Очистить историю»: the product opened a moment ago is a new view when it is opened again. */
+export function forgetRecordedProductView(): void {
+  last = null;
+}
