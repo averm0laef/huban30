@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { AuthContext } from "../auth/auth-context.js";
+import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import type { StorageProvider } from "../adapters/provider-contracts.js";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { AuditService } from "../security/audit.service.js";
@@ -28,7 +29,7 @@ describe("AccountService ownership boundaries", () => {
       { record: vi.fn() } as unknown as AuditService,
       { query } as unknown as DatabaseService,
       {} as PasswordService,
-      { name: "local" } as StorageProvider,
+      new ProductPhotoStorage({ name: "s3" } as StorageProvider, [{ name: "local" } as StorageProvider]),
     );
 
     await service.clearHistory(auth);
@@ -53,7 +54,7 @@ describe("AccountService ownership boundaries", () => {
       { record: vi.fn() } as unknown as AuditService,
       { query } as unknown as DatabaseService,
       {} as PasswordService,
-      { name: "local" } as StorageProvider,
+      new ProductPhotoStorage({ name: "s3" } as StorageProvider, [{ name: "local" } as StorageProvider]),
     );
 
     const wishlist = await service.wishlist({}, auth) as { items: Array<{ name: string }> };
@@ -63,13 +64,32 @@ describe("AccountService ownership boundaries", () => {
     expect(history.items[0]?.name).toBe("Клипса крепежная TORSO");
   });
 
+  it("shows a saved or viewed product's photo whichever photo storage holds it", async () => {
+    const query = vi.fn().mockResolvedValue({ rowCount: 0, rows: [] });
+    const service = new AccountService(
+      { record: vi.fn() } as unknown as AuditService,
+      { query } as unknown as DatabaseService,
+      {} as PasswordService,
+      new ProductPhotoStorage({ name: "s3" } as StorageProvider, [{ name: "local" } as StorageProvider]),
+    );
+
+    await service.wishlist({}, auth);
+    await service.history({}, auth);
+
+    for (const [text, values] of query.mock.calls as Array<[string, unknown[]]>) {
+      expect(text).toContain("storage.provider=ANY($3::text[])");
+      expect(values[2]).toEqual(["s3", "local"]);
+    }
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
   it("scopes wishlist mutations to the session user and validates the local product", async () => {
     const query = vi.fn().mockResolvedValue({ rowCount: 1, rows: [{ product_id: PRODUCT_ID }] });
     const service = new AccountService(
       { record: vi.fn() } as unknown as AuditService,
       { query } as unknown as DatabaseService,
       {} as PasswordService,
-      { name: "local" } as StorageProvider,
+      new ProductPhotoStorage({ name: "s3" } as StorageProvider, [{ name: "local" } as StorageProvider]),
     );
 
     await expect(service.addWishlist({ productId: PRODUCT_ID }, auth)).resolves.toEqual({
@@ -102,7 +122,7 @@ describe("AccountService ownership boundaries", () => {
       audit as unknown as AuditService,
       database as unknown as DatabaseService,
       passwords as unknown as PasswordService,
-      { name: "local" } as StorageProvider,
+      new ProductPhotoStorage({ name: "s3" } as StorageProvider, [{ name: "local" } as StorageProvider]),
     );
 
     await service.changePassword(
@@ -147,7 +167,7 @@ describe("AccountService ownership boundaries", () => {
       audit as unknown as AuditService,
       database as unknown as DatabaseService,
       {} as PasswordService,
-      { name: "local" } as StorageProvider,
+      new ProductPhotoStorage({ name: "s3" } as StorageProvider, [{ name: "local" } as StorageProvider]),
     );
 
     await expect(service.updateAddress(
@@ -164,7 +184,7 @@ describe("AccountService ownership boundaries", () => {
 
 describe("AccountService avatar", () => {
   function make(query: ReturnType<typeof vi.fn>, record = vi.fn()) {
-    return new AccountService({ record } as unknown as AuditService, { query, transaction: (work: (client: unknown) => unknown) => work({ query }) } as unknown as DatabaseService, {} as PasswordService, { name: "local" } as StorageProvider);
+    return new AccountService({ record } as unknown as AuditService, { query, transaction: (work: (client: unknown) => unknown) => work({ query }) } as unknown as DatabaseService, {} as PasswordService, new ProductPhotoStorage({ name: "local" } as StorageProvider));
   }
   const accountRow = (avatarKey: string | null) => ({ avatar_key: avatarKey, created_at: new Date("2026-01-01T00:00:00Z"), display_name: "Иван", email: "user@example.test", id: USER_ID, phone: null });
 

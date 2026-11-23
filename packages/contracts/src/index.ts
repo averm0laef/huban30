@@ -563,7 +563,8 @@ export const CatalogSearchQuerySchema = z.object({
 }).strict();
 export type CatalogSearchQuery = z.infer<typeof CatalogSearchQuerySchema>;
 
-const CatalogPublicSlugSchema = z.string().trim().min(1).max(180)
+export const CATALOG_PUBLIC_SLUG_MAX_LENGTH = 180;
+const CatalogPublicSlugSchema = z.string().trim().min(1).max(CATALOG_PUBLIC_SLUG_MAX_LENGTH)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 const CatalogOptionalMoneyQuerySchema = z.preprocess(
   (value) => value === "" ? undefined : value,

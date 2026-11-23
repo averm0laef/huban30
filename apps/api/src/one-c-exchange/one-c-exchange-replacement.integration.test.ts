@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import type { ConfigService } from "@nestjs/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import { CatalogCategoryTreeCache } from "../catalog/catalog-category-tree-cache.service.js";
 import { CatalogPublicService } from "../catalog/catalog-public.service.js";
 import { OneCIntegrationService } from "../catalog/one-c-integration.service.js";
@@ -54,7 +55,7 @@ describe.skipIf(!url)("a real full exchange replaces a catalogue of other goods 
   beforeAll(async () => {
     database = new DatabaseService({ get: () => "test", getOrThrow: () => url } as unknown as ConfigService);
     const cache = new CatalogCategoryTreeCache();
-    storefront = new CatalogPublicService(cache, database, { name: "local" } as never);
+    storefront = new CatalogPublicService(cache, database, new ProductPhotoStorage({ name: "local" } as never));
     exchange = new OneCExchangeService(cache, database, new OneCIntegrationService(undefined as never, database, undefined as never, undefined as never));
     await clean();
   });
