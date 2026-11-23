@@ -67,9 +67,13 @@ export function normalizeArticleRows(payload: unknown): UmapiArticleRow[] {
   });
 }
 
-/** ArticleLinks/{ART_ID}: the passenger cars a part is listed for (lorries, axles and engines are not shown). */
+/**
+ * ArticleLinks/{ART_ID}: the passenger cars (PC) and the lorries and buses (CV) a part is listed for; axles and
+ * engines are not shown. A lorry gets a negative id and no model id, so that it is listed but never taken for the
+ * customer's car (our vehicle catalog holds passenger cars only, and the two numberings may overlap).
+ */
 export function normalizeCarLinks(payload: unknown): UmapiCarLink[] {
-  return rows(payload, "PC").flatMap((row) => {
+  const cars = rows(payload, "PC").flatMap((row) => {
     const pcId = id(row.PC_ID);
     const make = text(row.MANUFACTURER, 80);
     const model = text(row.MODEL_SERIES, 120);
@@ -78,6 +82,18 @@ export function normalizeCarLinks(payload: unknown): UmapiCarLink[] {
       ? [{ car, make, makeId: id(row.MFA_ID), model, msId: id(row.MS_ID), pcId, yearFrom: year(row.CI_FROM), yearTo: year(row.CI_TO) }]
       : [];
   });
+  const lorries = rows(payload, "CV").flatMap((row) => {
+    const cvId = id(row.CV_ID);
+    const make = text(row.MANUFACTURER, 80);
+    const model = text(row.MODEL_SERIES, 120);
+    const name = text(row.COMMERCIAL_VEHICLE, 100);
+    const power = text(row.POWER_PS_START, 12)?.replace(/\.0+$/u, "");
+    const axles = text(row.AXLE_CONFIGURATION, 12);
+    return cvId && make && model && name
+      ? [{ car: [name, power ? `${power} л.с.` : null, axles].filter(Boolean).join(" · "), make, makeId: id(row.MFA_ID), model, msId: null, pcId: -cvId, yearFrom: year(row.CI_FROM), yearTo: year(row.CI_TO) }]
+      : [];
+  });
+  return [...cars, ...lorries];
 }
 
 /** Article/{ART_ID}?Medias=true (and getCrossInfo's `td`): the article's photo files, in the catalogue's order. */

@@ -241,4 +241,32 @@ describe("UmapiService: products our own number alone did not find (sample of 24
     };
     expect(await setup({ answers, product: sheft }).service.productFitment(sheft.id, {}, VISITOR, "list")).toMatchObject({ parts: [{ article: "LX 1734", brand: "MAHLE", via: "name" }], status: "ok" });
   });
+
+  it("takes our maker for a number written in the name, and an original number behind our maker", async () => {
+    const belt: TestProduct = { brand: "ContiTech", id: "00000000-0000-4000-8000-000000000105", name: "AVX13X1385 Ремень клиновой Contitech", section: "remni", sku: "13X1385" };
+    const beltAnswers: Answers = {
+      "/BrandRefinement/13X1385": [{ BRAND: "PROCODIS FRANCE", DISPLAY_NR: "13X1385", TYPE: "ArticleNumber" }],
+      "/BrandRefinement/AVX13X1385": ["CONTINENTAL CTAM", "GMB", "OPTIBELT"].map((BRAND) => ({ BRAND, DISPLAY_NR: "AVX13X1385", TYPE: "ArticleNumber" })),
+      "/v2/cross/parts/Analogs/getCrossInfo?article=AVX13X1385&brand=CONTINENTAL+CTAM": { article: "AVX13X1385", brand: "CONTINENTAL CTAM", catalogId: 9501, td: { ARTICLE_NR: "AVX13X1385", ART_ID: 9501, BRAND: "CONTINENTAL CTAM" } },
+      "/ArticleLinks/9501": { PC: [SPRINTER_313] },
+    };
+    expect(await setup({ answers: beltAnswers, product: belt }).service.productFitment(belt.id, {}, VISITOR, "list")).toMatchObject({ parts: [{ brand: "CONTINENTAL CTAM" }], status: "ok" });
+    const seal: TestProduct = { brand: "NOK", id: "00000000-0000-4000-8000-000000000106", name: "BE1192-E0 Сальник раздатки NOK 90311-48009", section: "kpp", sku: "9031148009" };
+    const sealAnswers: Answers = {
+      "/BrandRefinement/9031148009": [{ BRAND: "TOYOTA", DISPLAY_NR: "90311-48009", TYPE: "OENumber" }],
+      "/Analogs/9031148009/TOYOTA": { data: [{ ARTICLE_NR: "AB1234", ART_ID: 9601, BRAND: "CORTECO" }] },
+      "/ArticleLinks/9601": { PC: [SPRINTER_313] },
+    };
+    expect(await setup({ answers: sealAnswers, product: seal }).service.productFitment(seal.id, {}, VISITOR, "list")).toMatchObject({ parts: [{ through: { brand: "TOYOTA" } }], status: "ok" });
+  });
+
+  it("lists lorries too, and never takes one for the customer's car", async () => {
+    const actros = { AXLE_CONFIGURATION: "4x2", CI_FROM: "2002-11-01", COMMERCIAL_VEHICLE: "1831", CV_ID: 32001, MANUFACTURER: "MERCEDES-BENZ", MFA_ID: 74, MODEL_SERIES: "ACTROS MP2 / MP3", MS_ID: 5590, POWER_PS_START: "313.00" };
+    const answers: Answers = { ...FILTER_ANSWERS, "/ArticleLinks/7001": { CV: [actros] } };
+    const product = { ...AFW, brand: "FILTRON", name: "Фильтр FILTRON K1288", sku: "K1288" };
+    const { service } = setup({ answers, product });
+    expect(await service.productFitment(product.id, {}, VISITOR, "list")).toMatchObject({ makes: [{ make: "MERCEDES-BENZ", models: [{ cars: [{ name: "1831 · 313 л.с. · 4x2" }] }] }], total: 1 });
+    // Its CV_ID equals the customer's PC_ID and its MS_ID the model's: still «not listed» for the car.
+    expect(await service.productFitment(product.id, { modificationId: 100_000_123 }, VISITOR, "check")).toMatchObject({ verdict: "not_listed" });
+  });
 });

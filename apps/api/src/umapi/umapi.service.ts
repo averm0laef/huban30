@@ -54,6 +54,16 @@ export type UmapiFitmentAnswer = UmapiProductAnswer
 const ANALOG_ROWS = 100;
 /** Analogues whose cars stand in for a number without a card of its own: enough for a full list, few calls. */
 const STAND_INS = 3;
+/** Makers whose analogue stands in first: known to customers, with full cards and photos in the catalogue. */
+const KNOWN_MAKERS = [
+  "BOSCH", "MANNFILTER", "MAHLE", "KNECHT", "FILTRON", "HENGSTFILTER", "TRW", "ATE", "BREMBO", "TEXTAR", "FEBEST", "MASUMA", "JSASAKASHI",
+  "SAKURA", "BLUEPRINT", "KYB", "SACHS", "LEMFORDER", "FEBIBILSTEIN", "MEYLE", "SKF", "NTN", "SNR", "JTEKTKOYO", "NSK", "DENSO", "NGK",
+  "CTR", "555", "GATES", "DAYCO", "CONTINENTALCTAM", "AISIN", "EXEDY", "VALEO", "LUK", "NISSHINBO", "AKEBONO", "SANGSIN", "LYNXAUTO",
+];
+function makerRank(brand: string): number {
+  const index = KNOWN_MAKERS.findIndex((known) => sameMaker(known, brand));
+  return index === -1 ? KNOWN_MAKERS.length : index;
+}
 const SHOP_OFFERS_PER_ANALOG = 2;
 const MAX_ANALOG_OFFERS = 24;
 
@@ -127,18 +137,25 @@ export class UmapiService {
     if (number.length < 3) return null;
     const all = await this.brandsOf(number, caller, fresh);
     const makers = [...new Set(all.filter((row) => row.type === "ArticleNumber").map((row) => row.brand))];
-    let brand: string | undefined;
-    if (candidate.brand) {
-      brand = makers.find((maker) => sameMaker(maker, candidate.brand!));
+    // A number of the name is first the product's own number written in full («AVX13X1385 … Contitech»).
+    const ours = candidate.brand ?? (candidate.via === "name" ? product.brand : null);
+    let brand: string | undefined = ours ? makers.find((maker) => sameMaker(maker, ours)) : undefined;
+    if (brand) {
+      // found by our maker
+    } else if (makers.length > 0 && candidate.brand) {
+      // Our maker has no such number: another maker's same number is another part.
+      return null;
     } else if (makers.length === 1) {
       brand = makers[0];
     } else if (makers.length > 1) {
       brand = makerNamedIn(product.name, makers) ?? undefined;
       if (!brand) return "ambiguous";
     } else {
-      // Only an original number of a car maker («TOYOTA 23300-31090»): the parts made to it stand in for it.
+      // No maker's own number: an original number of a car maker («TOYOTA 23300-31090», NOK's «90311-48009»), or
+      // another maker's cross of it. The parts made to it stand in for it.
       const original = [...new Set(all.filter((row) => row.type === "OENumber").map((row) => row.brand))];
-      const maker = makerNamedIn(product.name, original) ?? original[0];
+      const crosses = [...new Set(all.map((row) => row.brand))];
+      const maker = makerNamedIn(product.name, original) ?? original[0] ?? (crosses.length === 1 ? crosses[0] : undefined);
       return maker ? this.standIns(number, maker, candidate, caller, fresh) : null;
     }
     if (!brand) return null;
@@ -152,7 +169,9 @@ export class UmapiService {
 
   /** Up to three analogues of a number that has no card of its own, each a part with its own card id. */
   private async standIns(number: string, maker: string, candidate: PartCandidate, caller: UmapiCaller, fresh: boolean): Promise<ResolvedPart[] | null> {
-    const rows = await this.articlesOf(number, maker, caller, fresh);
+    const rows = [...await this.articlesOf(number, maker, caller, fresh)]
+      // Makers a customer knows first (their photo and list are the ones to show), then the catalogue's order.
+      .sort((a, b) => makerRank(a.brand) - makerRank(b.brand));
     const seen = new Set<number>();
     const parts: ResolvedPart[] = [];
     for (const row of rows) {
