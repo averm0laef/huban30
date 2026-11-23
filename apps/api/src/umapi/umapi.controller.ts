@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, HttpCode, HttpException, HttpStatus, Param, Post, Query, Req } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Header, HttpCode, HttpException, HttpStatus, Param, Post, Query, Req, StreamableFile } from "@nestjs/common";
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -6,6 +6,7 @@ import { Public, RequirePermissions } from "../auth/auth.decorators.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
 import { UmapiBudgetService } from "./umapi-budget.service.js";
 import { UmapiCacheService } from "./umapi-cache.service.js";
+import { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import { UmapiError, UmapiGateway, type UmapiCaller } from "./umapi.gateway.js";
 import { UmapiService } from "./umapi.service.js";
 
@@ -80,7 +81,16 @@ export class UmapiController {
     return this.umapi.productAnalogs(product, caller(request)).catch((error: unknown) => { throw umapiHttpError(error); });
   }
 
+  @Get("number/analogs")
+  @Header("Cache-Control", "no-store")
+  async numberAnalogs(@Query() input: unknown, @Req() request: FastifyRequest) {
+    const { article, brand } = parse(z.object({ article: z.string().trim().min(2).max(64), brand: z.string().trim().min(1).max(80).optional() }), input);
+    await this.press(request);
+    return this.umapi.numberAnalogs(article, brand, caller(request)).catch((error: unknown) => { throw umapiHttpError(error); });
+  }
+
   @Get("product/:productId/photos")
+  @Header("Cache-Control", "no-store")
   async photos(@Param("productId") productId: string, @Req() request: FastifyRequest) {
     const product = parse(z.uuid(), productId);
     await this.press(request);
@@ -95,6 +105,8 @@ export class StaffUmapiController {
     private readonly gateway: UmapiGateway,
     private readonly budget: UmapiBudgetService,
     private readonly cache: UmapiCacheService,
+    private readonly archive: UmapiPhotoArchiveService,
+    private readonly limits: RateLimitService,
   ) {}
 
   @RequirePermissions("catalog:write")
@@ -102,6 +114,30 @@ export class StaffUmapiController {
   async status() {
     const [usage, cached] = await Promise.all([this.budget.status(), this.cache.size().catch(() => null)]);
     return { ...this.gateway.health, cache: { entries: cached, maxEntries: this.cache.maxEntries, ttlSeconds: this.cache.ttlSeconds }, usage };
+  }
+
+  @Get("photos")
+  @Header("Cache-Control", "private, no-store")
+  @RequirePermissions("catalog:write")
+  photos(@Query() query: unknown) {
+    return this.archive.list(query);
+  }
+
+  @Post("photos/:id/save")
+  @HttpCode(200)
+  @RequirePermissions("catalog:write")
+  async savePhoto(@Param("id") id: string, @Req() request: FastifyRequest) {
+    const photoId = parse(z.uuid(), id);
+    await this.limits.consume("umapi-photo-save", request.authContext!.userId, 20, 60);
+    return this.archive.save(photoId);
+  }
+
+  @Get("photos/:id/file")
+  @Header("Cache-Control", "private, no-store")
+  @RequirePermissions("catalog:write")
+  async downloadPhoto(@Param("id") id: string) {
+    const { bytes, name } = await this.archive.file(parse(z.uuid(), id));
+    return new StreamableFile(bytes, { disposition: `attachment; filename="${name}"`, length: bytes.length, type: "image/jpeg" });
   }
 
   /** Empties the display cache (also the step to take when the contract ends). */

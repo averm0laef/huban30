@@ -1,8 +1,9 @@
 import type { ShopOffer } from "@an30/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { PartsFinderShopService, ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
+import type { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import type { UmapiGateway } from "./umapi.gateway.js";
 import { UmapiService } from "./umapi.service.js";
 
@@ -39,10 +40,13 @@ function offer(productId: string, brand: string, sku: string, matchedVia: ShopOf
 function setup(options: { answers?: Answers; media?: string | null; product?: TestProduct | null; shop?: Record<string, ShopOffer[]> } = {}) {
   const answers = options.answers ?? FILTER_ANSWERS;
   const asked: string[] = [];
+  const fresh: string[] = [];
+  const remember = vi.fn(async () => undefined);
   const gateway = {
     available: true,
-    get: async (path: string, parameters: Record<string, string | number | boolean>, _caller: unknown, reduce: (payload: unknown) => unknown, settings?: { whenNotFound?: unknown }) => {
+    get: async (path: string, parameters: Record<string, string | number | boolean>, _caller: unknown, reduce: (payload: unknown) => unknown, settings?: { fresh?: boolean; whenNotFound?: unknown }) => {
       asked.push(path);
+      if (settings?.fresh) fresh.push(path);
       // getCrossInfo is one path for every part: its number and maker are in the parameters.
       const key = path.startsWith("/v2/") ? `${path}?${new URLSearchParams(Object.entries(parameters).map(([name, value]) => [name, String(value)])).toString()}` : path;
       return key in answers ? reduce(answers[key]) : settings?.whenNotFound !== undefined ? settings.whenNotFound : reduce([]);
@@ -61,8 +65,8 @@ function setup(options: { answers?: Answers; media?: string | null; product?: Te
   const shop = {
     lookup: async () => ({ for: (request: ShopOfferRequest) => shopOffers[`${request.brand}|${request.article}`] ?? [] }),
   };
-  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService);
-  return { asked, service };
+  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService);
+  return { asked, fresh, remember, service };
 }
 
 const VISITOR = { ip: "203.0.113.7" };
@@ -142,10 +146,43 @@ describe("UmapiService: analogs and photo", () => {
   });
 
   it("gives photo addresses on the media host, and nothing without one", async () => {
-    const { service } = setup();
+    const { service, remember } = setup();
     expect(await service.productPhotos(AFW.id, VISITOR)).toMatchObject({ photos: ["https://media.example/256/k1288.webp"], status: "ok" });
+    expect(remember).not.toHaveBeenCalled();
     const { asked, service: noMedia } = setup({ media: null });
     expect(await noMedia.productPhotos(AFW.id, VISITOR)).toEqual({ status: "not_available" });
     expect(asked).toEqual([]);
   });
+  it("requests fresh data on each photo press and records exact matches for staff", async () => {
+    const product = { ...AFW, brand: "FILTRON", name: "Фильтр салона FILTRON K1288", sku: "K1288" };
+    const { fresh, remember, service } = setup({ product });
+    await service.productPhotos(product.id, VISITOR);
+    await service.productPhotos(product.id, VISITOR);
+    expect(fresh).toEqual([
+      "/BrandRefinement/K1288", "/v2/cross/parts/Analogs/getCrossInfo",
+      "/BrandRefinement/K1288", "/v2/cross/parts/Analogs/getCrossInfo",
+    ]);
+    expect(remember).toHaveBeenCalledTimes(2);
+    expect(remember).toHaveBeenCalledWith(expect.objectContaining({ brand: "FILTRON", id: product.id }),
+      expect.objectContaining({ artId: 7001, via: "own" }), ["https://media.example/256/k1288.webp"]);
+  });
+
+  it("standalone selection resolves the maker and keeps the exact local offers only", async () => {
+    const { service } = setup({
+      answers: { ...FILTER_ANSWERS, "/BrandRefinement/K1288": [
+        { BRAND: "FILTRON", DISPLAY_NR: "K 1288", TYPE: "ArticleNumber" },
+        { BRAND: "OTHER", DISPLAY_NR: "K1288", TYPE: "ArticleNumber" },
+        { BRAND: "SAMPA", DISPLAY_NR: "K1288", TYPE: "IAMNumber" },
+      ] },
+      shop: { "MANN-FILTER|CU 3569": [offer("exact", "MANN-FILTER", "CU3569"), offer("different", "SAKURA", "CU3569")] },
+    });
+    expect(await service.numberAnalogs("K1288", undefined, VISITOR)).toMatchObject({
+      status: "choose_brand", candidates: [{ brand: "FILTRON" }, { brand: "OTHER" }],
+    });
+    expect(await service.numberAnalogs("K1288", "FILTRON", VISITOR)).toMatchObject({
+      status: "found", groups: { analogs: [{ brand: "MANN-FILTER", article: "CU 3569", shop: [{ productId: "exact" }] }] },
+    });
+    expect(await service.numberAnalogs("K1288", "SAMPA", VISITOR)).toEqual({ article: "K1288", status: "no_data" });
+  });
+
 });

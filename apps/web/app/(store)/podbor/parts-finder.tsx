@@ -25,6 +25,7 @@ import type { FormEvent, ReactNode } from "react";
 
 import { AddToCartButton } from "../_components/cart-actions";
 import buttons from "../_components/store-button.module.css";
+import { umapiGet } from "../_lib/umapi";
 import { formatRubles } from "../_lib/catalog-format";
 import {
   CHOICE_LABELS,
@@ -109,12 +110,33 @@ function AnalogsPanel({ article, brand, description, manufacturerId }: { article
     return () => { active = false; };
   }, [article, brand, description]);
 
-  const loadCrosses = useCallback((chosenId?: number) => {
+  const loadCrosses = useCallback(async (selected?: FinderPart) => {
     setCrosses({ status: "loading" });
-    finderRequest<CrossesResult>("crosses", { article, ...((chosenId ?? manufacturerId) ? { manufacturer_id: chosenId ?? manufacturerId } : {}) })
-      .then((data) => setCrosses({ data, status: "ready" }))
-      .catch((caught: unknown) => setCrosses({ message: errorMessage(caught), status: "error" }));
-  }, [article, manufacturerId]);
+    let emptyCatalogue: CrossesResult | undefined;
+    if (!selected?.manufacturer_id) {
+      const params = new URLSearchParams({ article });
+      const maker = selected?.brand ?? brand;
+      if (maker) params.set("brand", maker);
+      try {
+        const data = await umapiGet<CrossesResult>(`number/analogs?${params.toString()}`);
+        if (data.status !== "no_data") {
+          setCrosses({ data, status: "ready" });
+          return;
+        }
+        emptyCatalogue = data;
+      } catch {
+        // The existing catalogue path remains available on a provider outage.
+      }
+    }
+    try {
+      const id = selected?.manufacturer_id ?? manufacturerId;
+      const data = await finderRequest<CrossesResult>("crosses", { article, ...(id ? { manufacturer_id: id } : {}) });
+      setCrosses({ data, status: "ready" });
+    } catch (caught) {
+      if (emptyCatalogue) setCrosses({ data: emptyCatalogue, status: "ready" });
+      else setCrosses({ message: errorMessage(caught), status: "error" });
+    }
+  }, [article, brand, manufacturerId]);
 
   return (
     <div className={styles.analogs}>
@@ -126,20 +148,20 @@ function AnalogsPanel({ article, brand, description, manufacturerId }: { article
       {shop.status === "ready" && shop.data.offers.length > 0
         ? <div className={styles.offers}>{shop.data.offers.map((offer) => <OfferRow key={offer.productId} offer={offer} />)}</div> : null}
 
-      {crosses.status === "idle" ? (
-        <button className={`${softButton} ${styles.selfStart}`} onClick={() => loadCrosses()} type="button">
+      {crosses.status === "idle" || crosses.status === "error" ? (
+        <button className={`${softButton} ${styles.selfStart}`} onClick={() => { void loadCrosses(); }} type="button">
           <BookSearch20Regular aria-hidden="true" />
           Аналоги и замены от производителей
         </button>
       ) : null}
       {crosses.status === "loading" ? <p className={styles.muted} role="status">Запрашиваем каталог производителей…</p> : null}
       {crosses.status === "error" ? <p className={styles.muted} role="alert">{crosses.message}</p> : null}
-      {crosses.status === "ready" ? <CrossesView data={crosses.data} onChooseBrand={loadCrosses} /> : null}
+      {crosses.status === "ready" ? <CrossesView data={crosses.data} onChooseBrand={(candidate) => { void loadCrosses(candidate); }} /> : null}
     </div>
   );
 }
 
-function CrossesView({ data, onChooseBrand }: { data: CrossesResult; onChooseBrand: (id: number) => void }) {
+function CrossesView({ data, onChooseBrand }: { data: CrossesResult; onChooseBrand: (candidate: FinderPart) => void }) {
   if (data.status === "choose_brand") {
     return (
       <div className={styles.step}>
@@ -147,7 +169,7 @@ function CrossesView({ data, onChooseBrand }: { data: CrossesResult; onChooseBra
         <div className={styles.options}>
           {(data.candidates ?? []).map((candidate) => (
             <button className={styles.option} key={`${candidate.manufacturer_id}-${candidate.article}`}
-              onClick={() => candidate.manufacturer_id && onChooseBrand(candidate.manufacturer_id)} type="button">
+              onClick={() => onChooseBrand(candidate)} type="button">
               {candidate.brand}{candidate.description ? <small>{candidate.description}</small> : null}
             </button>
           ))}
@@ -252,7 +274,7 @@ function PartCard({ part }: { part: FinderPart }) {
           </ExpertHelpQueryLink>
         ) : null}
       </div>
-      {showAnalogs ? <AnalogsPanel article={part.article} brand={part.brand} description={part.description} manufacturerId={part.manufacturer_id} /> : null}
+      {showAnalogs ? <AnalogsPanel key={`${part.article}:${part.brand ?? ""}`} article={part.article} brand={part.brand} description={part.description} manufacturerId={part.manufacturer_id} /> : null}
     </article>
   );
 }

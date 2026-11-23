@@ -72,6 +72,7 @@ describe("database migrations", () => {
       "0058_umapi_usage",
       "0059_search_typo_distance",
       "0060_vehicle_kind_and_popularity",
+      "0061_umapi_product_photos",
     ]);
     expect(migrations.every(({ checksum }) => /^[a-f0-9]{64}$/.test(checksum))).toBe(true);
     expect(migrations[0]?.sql).toContain("CREATE SCHEMA app");

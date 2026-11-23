@@ -32,6 +32,8 @@ export class UmapiError extends Error {
 }
 
 export interface UmapiRequestOptions<T> {
+  /** Every admitted photo-button request is sent upstream, even with a warm cache. */
+  fresh?: boolean;
   /** True when the reduced answer holds nothing: kept for an hour, so a miss is asked again soon. */
   isEmpty?: (value: T) => boolean;
   /** The answer for «404 — no such number»: an answer about the number, kept for an hour, not an outage. */
@@ -111,6 +113,7 @@ export class UmapiGateway {
   ): Promise<T> {
     if (!this.enabled) throw new UmapiError("disabled", "no key");
     const cacheKey = UmapiCacheService.keyOf(path, parameters);
+    if (options.fresh) return this.call(path, parameters, caller, reduce, options, cacheKey);
     let cached: T | undefined;
     try {
       cached = await this.cache.get<T>(cacheKey);

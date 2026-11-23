@@ -9,7 +9,7 @@ import { errorText, formatDate, Pagination, RequestError, useResource } from "..
 import panel from "./catalog-enrichment.module.css";
 import styles from "./product-photos.module.css";
 
-type Mode = "shoot" | "pack" | "takedown";
+type Mode = "shoot" | "pack" | "takedown" | "umapi";
 type Source = "one_c" | "own_photo" | "licensed";
 
 interface Summary {
@@ -22,6 +22,10 @@ interface Page<T> { items: T[]; limit: number; offset: number; total: number }
 interface Photo {
   code: string; createdAt: string; id: string; rightsSource: string | null; shownName: string; sku: string; source: Source; uploadedBy: string | null; url: string;
 }
+interface UmapiPhoto {
+  id: string; article: string; brand: string; sku: string; name: string; externalId: string | null;
+  oneCSource: string; source: string | null; saved: boolean;
+}
 interface RightsSource { basis: string; createdAt: string; id: string; name: string; photos: number; revokedAt: string | null }
 type PackResult =
   | { fileName: string; outcome: "attached" | "unchanged"; product: Product }
@@ -29,7 +33,7 @@ type PackResult =
   | { fileName: string; outcome: "not_found" }
   | { fileName: string; message: string; outcome: "error" };
 
-const MODES: Record<Mode, string> = { shoot: "Снять на телефон", pack: "Загрузить пакет", takedown: "Фото на сайте" };
+const MODES: Record<Mode, string> = { shoot: "Снять на телефон", pack: "Загрузить пакет", takedown: "Фото на сайте", umapi: "UMAPI для 1С" };
 const SOURCE_LABELS: Record<Source, string> = { licensed: "По разрешению", one_c: "Из 1С", own_photo: "Снято магазином" };
 const number = (value: number) => value.toLocaleString("ru-RU");
 
@@ -102,9 +106,72 @@ export function ProductPhotosPanel() {
           {mode === "shoot" ? <ShootQueue onChange={summary.reload} /> : null}
           {mode === "pack" ? <Pack onChange={summary.reload} /> : null}
           {mode === "takedown" ? <Takedown onChange={summary.reload} /> : null}
+          {mode === "umapi" ? <UmapiPhotoArchive /> : null}
         </div>
       ) : null}
     </section>
+  );
+}
+
+function UmapiPhotoArchive() {
+  const limit = 20;
+  const [offset, setOffset] = useState(0);
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const photos = useResource(
+    () => api<Page<UmapiPhoto>>(`/staff/umapi/photos${queryString({ limit, offset, search })}`),
+    [offset, search],
+  );
+
+  async function save(photo: UmapiPhoto) {
+    setSaving(photo.id);
+    setError(null);
+    try {
+      await api(`/staff/umapi/photos/${photo.id}/save`, { method: "POST" });
+      photos.reload();
+    } catch (caught) {
+      setError(errorText(caught));
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <>
+      <p className={panel.note}>Связи появляются после запроса фото на витрине при совпадении артикула и бренда. Сохраните подходящий снимок и скачайте его для своей базы 1С.</p>
+      <div className={styles.filters}>
+        <input aria-label="Найти фото UMAPI по товару" onChange={(event) => { setSearch(event.target.value); setOffset(0); }}
+          placeholder="Название, артикул или код 1С" type="search" value={search} />
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      {photos.error ? <RequestError error={photos.error} onRetry={photos.reload} /> : null}
+      {photos.data?.items.length === 0 ? <p className={panel.note}>Связанных фото UMAPI пока нет.</p> : null}
+      <ul className={styles.photos}>
+        {photos.data?.items.map((photo) => (
+          <li className={styles.photo} key={photo.id}>
+            {photo.source ? <img alt="" height={88} loading="lazy" referrerPolicy="no-referrer" src={photo.source} width={88} /> : <span />}
+            <div className={styles.archiveIdentity}>
+              <strong>{photo.name}</strong>
+              <div className={styles.meta}>Артикул {photo.sku} · UMAPI {photo.brand} {photo.article}</div>
+              <div className={styles.meta}>{photo.oneCSource === "one_c_secondary" ? "Дополнительная база" : "Основная база"} · {photo.externalId ? `код 1С ${photo.externalId}` : "код 1С не указан"}</div>
+            </div>
+            <div className={styles.archiveAction}>
+              {photo.saved ? (
+                <Button as="a" href={`/api/v1/staff/umapi/photos/${photo.id}/file`}>Скачать JPEG для 1С</Button>
+              ) : (
+                <Button disabled={saving !== null || !photo.source} onClick={() => { void save(photo); }}>
+                  {saving === photo.id ? "Сохраняем…" : "Сохранить для 1С"}
+                </Button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {photos.data && photos.data.total > limit ? (
+        <div className={styles.pager}><Pagination limit={limit} offset={offset} onChange={setOffset} total={photos.data.total} /></div>
+      ) : null}
+    </>
   );
 }
 

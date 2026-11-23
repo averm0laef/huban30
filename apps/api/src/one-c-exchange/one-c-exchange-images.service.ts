@@ -52,6 +52,7 @@ export class OneCExchangeImagesService {
   ) {}
 
   async attach(task: ImageTask, source: OneCSource): Promise<ImageAttachOutcome> {
+    if (/-an30-umapi-[0-9a-f]{8}\.jpe?g$/iu.test(task.path)) return this.skip(task, "internal UMAPI photo");
     const product = (await this.database.query<{ id: string; name: string }>(
       `SELECT id, name FROM app.products
        WHERE external_id = $1 AND one_c_source = ${sourceSql(source)} AND deleted_at IS NULL`,
@@ -93,10 +94,12 @@ export class OneCExchangeImagesService {
     // A photo taken down on a rights claim stays down (docs/PRODUCT_PHOTOS.md): 1С keeps sending the file it has.
     const withdrawn = (await this.database.query(
       `SELECT 1 FROM app.product_image_withdrawals
-       WHERE (sha256 = $1 AND byte_size = $2) OR (upload_sha256 = $1 AND upload_byte_size = $2) LIMIT 1`,
+       WHERE (sha256 = $1 AND byte_size = $2) OR (upload_sha256 = $1 AND upload_byte_size = $2)
+       UNION ALL
+       SELECT 1 FROM app.umapi_product_photos WHERE jpeg IS NOT NULL AND digest(jpeg, 'sha256') = $1 LIMIT 1`,
       [sha256, content.length],
     )).rowCount;
-    if (withdrawn) return this.skip(task, "this photo was taken down in «Фото товаров»");
+    if (withdrawn) return this.skip(task, "the photo was withdrawn or is internal UMAPI media");
 
     try {
       await this.malwareScanner.assertClean(content);

@@ -143,7 +143,7 @@ const RawEnvironmentSchema = z.object({
   UMAPI_HOURLY_LIMIT: z.coerce.number().int().min(0).max(200_000).default(0),
   // Provider calls one visitor may cause in a day (cache answers are not counted).
   UMAPI_VISITOR_DAILY_LIMIT: z.coerce.number().int().min(5).max(10_000).default(120),
-  UMAPI_CACHE_TTL_SECONDS: z.coerce.number().int().min(60).max(604_800).default(86_400),
+  UMAPI_CACHE_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(86_400),
   UMAPI_CACHE_MAX_ENTRIES: z.coerce.number().int().min(100).max(200_000).default(20_000),
   // Where the catalogue's photo files are served from; empty = the «show photo» button is hidden.
   UMAPI_MEDIA_BASE_URL: z.union([z.literal(""), z.string().url()]).optional(),

@@ -106,9 +106,9 @@ export function ProductGallery({ catalogPhotos, categoryImage, images, productId
         {state.status === "ready" ? <p className={styles.catalogueNote} role="status">{state.note}</p> : null}
         {state.status === "none" ? <p className={styles.catalogueNote} role="status">В каталоге нет фото детали.</p> : null}
         {state.status === "error" ? <p className={styles.catalogueNote} role="alert">{state.message}</p> : null}
-        {state.status === "idle" || state.status === "error" ? (
-          <button className={`${buttons.button} ${buttons.soft}`} onClick={() => { void load(); }} type="button">
-            <Image20Regular aria-hidden="true" /> {state.status === "error" ? "Повторить поиск фото" : "Показать фото из каталога"}
+        {state.status === "idle" || state.status === "ready" || state.status === "none" || state.status === "error" ? (
+          <button className={`${buttons.button} ${buttons.soft}`} onClick={() => { setActiveIndex(0); void load(); }} type="button">
+            <Image20Regular aria-hidden="true" /> {state.status === "ready" ? "Обновить фото из каталога" : state.status === "idle" ? "Показать фото из каталога" : "Повторить поиск фото"}
           </button>
         ) : null}
         <ExpertHelpQueryLink className={`${buttons.button} ${buttons.quiet}`} prefillMessage={requestMessage}>

@@ -1,8 +1,10 @@
 import { Module } from "@nestjs/common";
 
+import { ProductPhotoNormalizer } from "../catalog/product-photo-normalizer.js";
 import { PartsFinderShopService } from "../parts-finder/parts-finder-shop.service.js";
 import { UmapiBudgetService } from "./umapi-budget.service.js";
 import { UmapiCacheService } from "./umapi-cache.service.js";
+import { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import { StaffUmapiController, UmapiController } from "./umapi.controller.js";
 import { UmapiGateway } from "./umapi.gateway.js";
 import { UmapiService } from "./umapi.service.js";
@@ -16,6 +18,6 @@ import { UmapiService } from "./umapi.service.js";
 @Module({
   controllers: [UmapiController, StaffUmapiController],
   exports: [UmapiService],
-  providers: [PartsFinderShopService, UmapiBudgetService, UmapiCacheService, UmapiGateway, UmapiService],
+  providers: [PartsFinderShopService, ProductPhotoNormalizer, UmapiPhotoArchiveService, UmapiBudgetService, UmapiCacheService, UmapiGateway, UmapiService],
 })
 export class UmapiModule {}

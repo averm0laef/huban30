@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { normalizeArticleNumber, umapiCatalogueApplies, type ShopOffer } from "@an30/contracts";
 
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
@@ -9,6 +9,7 @@ import { partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.
 import {
   normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, type UmapiArticleRow, type UmapiBrandRow, type UmapiCarLink, type UmapiCrossInfo,
 } from "./umapi-normalize.js";
+import { cataloguePhotoUrls, UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import { UmapiGateway, type UmapiCaller } from "./umapi.gateway.js";
 
 /** A catalogue part our product was matched to, and how. */
@@ -48,19 +49,23 @@ const ANALOG_ROWS = 100;
 const SHOP_OFFERS_PER_ANALOG = 2;
 const MAX_ANALOG_OFFERS = 24;
 
+interface ResolvedPart { part: UmapiPart; info: UmapiCrossInfo }
+
 interface ProductRow { brand: string | null; id: string; name: string; section: string | null; sku: string }
 
 /**
  * Our products against the UMAPI catalogue, each a visitor's button (docs/UMAPI_INTEGRATION.md): does a part fit
  * the customer's car, which cars it fits, which of OUR products are its analogs, what it looks like. Answers are
- * matched with our own data at that moment and are not written to the database.
+ * matched with our own data at that moment. Exact photo matches enter a separate staff archive for 1С.
  */
 @Injectable()
 export class UmapiService {
+  private readonly logger = new Logger(UmapiService.name);
   constructor(
     private readonly gateway: UmapiGateway,
     private readonly database: DatabaseService,
     private readonly shop: PartsFinderShopService,
+    private readonly archive: UmapiPhotoArchiveService,
   ) {}
 
   /** What the product page may offer: the buttons, and the photo button only when the photo address is known. */
@@ -86,17 +91,17 @@ export class UmapiService {
     return found.rows[0] ?? null;
   }
 
-  private brandsOf(article: string, caller: UmapiCaller): Promise<UmapiBrandRow[]> {
-    return this.gateway.get(`/BrandRefinement/${encodeURIComponent(article)}`, {}, caller, normalizeBrandRows, { isEmpty: (list) => list.length === 0, whenNotFound: [] });
+  private brandsOf(article: string, caller: UmapiCaller, fresh: boolean): Promise<UmapiBrandRow[]> {
+    return this.gateway.get(`/BrandRefinement/${encodeURIComponent(article)}`, {}, caller, normalizeBrandRows, { fresh, isEmpty: (list) => list.length === 0, whenNotFound: [] });
   }
 
-  private crossInfo(article: string, brand: string, caller: UmapiCaller): Promise<UmapiCrossInfo | null> {
-    return this.gateway.get("/v2/cross/parts/Analogs/getCrossInfo", { article, brand }, caller, normalizeCrossInfo, { isEmpty: (info) => info === null, whenNotFound: null });
+  private crossInfo(article: string, brand: string, caller: UmapiCaller, fresh: boolean): Promise<UmapiCrossInfo | null> {
+    return this.gateway.get("/v2/cross/parts/Analogs/getCrossInfo", { article, brand }, caller, normalizeCrossInfo, { fresh, isEmpty: (info) => info === null, whenNotFound: null });
   }
 
-  private articlesOf(article: string, brand: string, caller: UmapiCaller): Promise<UmapiArticleRow[]> {
+  private articlesOf(article: string, brand: string, caller: UmapiCaller, fresh = false): Promise<UmapiArticleRow[]> {
     return this.gateway.get(`/Analogs/${encodeURIComponent(article)}/${encodeURIComponent(brand)}`, { limit: ANALOG_ROWS }, caller, normalizeArticleRows,
-      { isEmpty: (list) => list.length === 0, whenNotFound: [] });
+      { fresh, isEmpty: (list) => list.length === 0, whenNotFound: [] });
   }
 
   /**
@@ -104,11 +109,11 @@ export class UmapiService {
    * «ArticleNumber»; the others are other makers' crosses), then the part's catalogue id (getCrossInfo). A number
    * without a maker counts only when UMAPI knows a single maker for it.
    */
-  private async resolve(candidate: PartCandidate, caller: UmapiCaller): Promise<UmapiPart | "ambiguous" | null> {
+  private async resolve(candidate: PartCandidate, caller: UmapiCaller, fresh: boolean): Promise<ResolvedPart | "ambiguous" | null> {
     // UMAPI is asked with the bare number: «W 914/2» as «W9142» (a «/» in the address breaks the path; checked 23.11.2026).
     const number = normalizeArticleNumber(candidate.article);
     if (number.length < 3) return null;
-    const all = await this.brandsOf(number, caller);
+    const all = await this.brandsOf(number, caller, fresh);
     const own = all.filter((row) => row.type === "ArticleNumber");
     const brands = own.length > 0 ? own : all;
     let brand: string | undefined;
@@ -120,19 +125,19 @@ export class UmapiService {
       brand = makers[0];
     }
     if (!brand) return null;
-    const info = await this.crossInfo(number, brand, caller);
-    if (!info || normalizeArticleNumber(info.article) !== number) return null;
-    return { article: info.article, artId: info.artId, asked: number, brand: info.brand, via: candidate.via };
+    const info = await this.crossInfo(number, brand, caller, fresh);
+    if (!info || normalizeArticleNumber(info.article) !== number || !sameMaker(info.brand, brand)) return null;
+    return { info, part: { article: info.article, artId: info.artId, asked: number, brand: info.brand, via: candidate.via } };
   }
 
   /** Our own number decides alone; without it, the analogue numbers in the name (at most three). */
-  private async identify(product: ProductRow, caller: UmapiCaller): Promise<UmapiPart[] | "ambiguous" | null> {
+  private async identify(product: ProductRow, caller: UmapiCaller, fresh = false): Promise<ResolvedPart[] | "ambiguous" | null> {
     const [own, ...named] = partCandidates(product);
-    const ownPart = await this.resolve(own!, caller);
+    const ownPart = await this.resolve(own!, caller, fresh);
     if (ownPart && ownPart !== "ambiguous") return [ownPart];
-    const parts: UmapiPart[] = [];
+    const parts: ResolvedPart[] = [];
     for (const candidate of named) {
-      const part = await this.resolve(candidate, caller);
+      const part = await this.resolve(candidate, caller, fresh);
       if (part && part !== "ambiguous") parts.push(part);
     }
     if (parts.length > 0) return parts;
@@ -179,10 +184,10 @@ export class UmapiService {
     const identified = await this.identify(product, caller);
     if (identified === "ambiguous") return { status: "ambiguous" };
     if (!identified) return { status: "unknown_part" };
-    const links = await Promise.all(identified.map((part) =>
+    const links = await Promise.all(identified.map(({ part }) =>
       this.gateway.get(`/ArticleLinks/${part.artId}`, {}, caller, normalizeCarLinks, { isEmpty: (list) => list.length === 0, whenNotFound: [] })));
-    const parts = identified.map((part, index) => ({ ...part, verdict: car ? verdictFor(links[index]!, car) : null }));
-    const via = identified[0]!.via;
+    const parts = identified.map(({ part }, index) => ({ ...part, verdict: car ? verdictFor(links[index]!, car) : null }));
+    const via = identified[0]!.part.via;
     if (mode === "check") {
       return { makes: [], parts, status: "ok", total: 0, verdict: combinedVerdict(parts.map((part) => ({ verdict: part.verdict!, via: part.via }))), via };
     }
@@ -203,7 +208,7 @@ export class UmapiService {
     const identified = await this.identify(product, caller);
     if (identified === "ambiguous") return { status: "ambiguous" };
     if (!identified) return { status: "unknown_part" };
-    const rows = (await Promise.all(identified.map((part) => this.articlesOf(part.asked, part.brand, caller)))).flat();
+    const rows = (await Promise.all(identified.map(({ part }) => this.articlesOf(part.asked, part.brand, caller)))).flat();
     const requests: ShopOfferRequest[] = rows.map((row) => ({ article: row.article, brand: row.brand }));
     const lookup = await this.shop.lookup(requests, SHOP_OFFERS_PER_ANALOG);
     const seen = new Set<string>([product.id]);
@@ -217,25 +222,60 @@ export class UmapiService {
       }
     }
     offers.sort((a, b) => Number(b.availableQuantity > 0) - Number(a.availableQuantity > 0) || (a.priceKopeks ?? Infinity) - (b.priceKopeks ?? Infinity));
-    return { offers: offers.slice(0, MAX_ANALOG_OFFERS), parts: identified, status: "ok" };
+    return { offers: offers.slice(0, MAX_ANALOG_OFFERS), parts: identified.map(({ part }) => part), status: "ok" };
+  }
+
+  /** «Самостоятельный подбор»: candidates belong to their own number and every shop offer matches both fields. */
+  async numberAnalogs(article: string, brand: string | undefined, caller: UmapiCaller) {
+    const number = normalizeArticleNumber(article);
+    const empty = { article, status: "no_data" as const };
+    if (number.length < 3) return empty;
+    const brands = await this.brandsOf(number, caller, true);
+    const exact = brands.filter((entry) => entry.type === "ArticleNumber" && normalizeArticleNumber(entry.article) === number);
+    const makers = [...new Set(exact.map((entry) => entry.brand))];
+    if (!brand && makers.length > 1) {
+      return { article, candidates: makers.map((maker) => ({ article, brand: maker })), status: "choose_brand" as const };
+    }
+    const maker = brand ? makers.find((value) => sameMaker(brand, value)) : makers[0];
+    if (!maker) return empty;
+
+    const seen = new Set<string>();
+    const crossRows = (await this.articlesOf(number, maker, caller, true)).filter((row) => {
+      const crossNumber = normalizeArticleNumber(row.article);
+      const key = `${row.brand.toUpperCase()}:${crossNumber}`;
+      if (seen.has(key) || (crossNumber === number && sameMaker(row.brand, maker))) return false;
+      seen.add(key);
+      return true;
+    });
+    if (crossRows.length === 0) return empty;
+    const lookup = await this.shop.lookup(crossRows, SHOP_OFFERS_PER_ANALOG);
+    const analogs = crossRows.map(({ article: crossArticle, brand: crossBrand }) => ({
+      article: crossArticle,
+      brand: crossBrand,
+      shop: lookup.for({ article: crossArticle, brand: crossBrand })
+        .filter((offer) => offer.matchedVia === "exact" && offer.brand && sameMaker(offer.brand, crossBrand)),
+    }));
+    return { article, groups: { analogs }, status: "found" as const };
   }
 
   /* ---------------- Photo ---------------- */
 
-  /** «Показать фото из каталога»: the part's photo files (getCrossInfo, already asked to identify it), as addresses the browser loads. */
+  /** Every press uses a fresh catalogue response. The private archive has no role in the public response. */
   async productPhotos(productId: string, caller: UmapiCaller): Promise<UmapiProductAnswer | { status: "not_available" } | { part: UmapiPart; photos: string[]; status: "ok" | "none" }> {
     const base = this.gateway.mediaBaseUrl;
     if (!base) return { status: "not_available" };
     const product = await this.checkable(productId);
     if ("status" in product) return product;
-    const identified = await this.identify(product, caller);
+    const identified = await this.identify(product, caller, true);
     if (identified === "ambiguous") return { status: "ambiguous" };
     if (!identified) return { status: "unknown_part" };
-    const part = identified[0]!;
-    const medias = (await this.crossInfo(part.asked, part.brand, caller))?.medias ?? [];
-    // https://image.umapi.ru/IMAGE/{SUP_ID}/{FILE_NAME} (the API's documentation, «Изображение»).
-    const photos = medias.map((media) => (/^https:\/\//iu.test(media.file) ? media.file
-      : `${base}/${media.supId !== null ? `${media.supId}/` : ""}${media.file.split("/").map(encodeURIComponent).join("/")}`));
+    const { info, part } = identified[0]!;
+    const photos = cataloguePhotoUrls(info.medias, base);
+    if (photos.length > 0 && part.via === "own" && product.brand && sameMaker(product.brand, part.brand)) {
+      await this.archive.remember({ ...product, brand: product.brand }, part, photos).catch(() => {
+        this.logger.warn("Could not record UMAPI photo references for staff");
+      });
+    }
     return { part, photos, status: photos.length > 0 ? "ok" : "none" };
   }
 }
