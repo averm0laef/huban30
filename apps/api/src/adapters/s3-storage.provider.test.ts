@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { createServer, type IncomingMessage, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -29,7 +29,7 @@ async function body(request: IncomingMessage): Promise<Buffer> {
 }
 
 beforeAll(async () => {
-  server = createServer((request, response) => {
+  const handle = (request: IncomingMessage, response: ServerResponse) => {
     void (async () => {
       const key = decodeURIComponent(new URL(request.url ?? "/", "http://fake").pathname).slice(1);
       seen.push({ authorization: request.headers.authorization, method: request.method ?? "", url: request.url ?? "" });
@@ -60,7 +60,11 @@ beforeAll(async () => {
       response.writeHead(200, { "Content-Length": String(object.body.length), "Content-Type": object.contentType })
         .end(object.body);
     })();
-  });
+  };
+  server = createServer(handle);
+  // Like some S3 gateways, never answers "Expect: 100-continue": the body is
+  // read only if the client sends it without waiting for the go-ahead.
+  server.on("checkContinue", handle);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -159,6 +163,15 @@ describe("S3StorageProvider", () => {
 
     expect(Date.now() - started).toBeLessThan(3_000);
   }, 6_000);
+
+  it("uploads a large photo to a bucket that never answers Expect: 100-continue", async () => {
+    const provider = new S3StorageProvider(settings({ maxAttempts: 1, requestTimeoutMs: 1_500 }));
+    const photo = Buffer.alloc(3 * 1024 * 1024, 7);
+
+    const stored = await provider.store(photo, "jpg");
+
+    expect(objects.get(`an30-photos/${stored.storageKey}`)?.body.equals(photo)).toBe(true);
+  });
 
   it("signs every request with the access key and never sends the secret", async () => {
     const provider = new S3StorageProvider(settings());

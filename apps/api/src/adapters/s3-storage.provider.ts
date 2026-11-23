@@ -44,6 +44,9 @@ export class S3StorageProvider implements StorageProvider {
     this.client = new S3Client({
       credentials: { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey },
       endpoint: settings.endpoint,
+      // A photo over 2 MiB would otherwise wait for "100 Continue"; a gateway
+      // that never sends it would use up the whole request timeout.
+      expectContinueHeader: false,
       forcePathStyle: settings.forcePathStyle,
       maxAttempts: settings.maxAttempts ?? 3,
       region: settings.region,
