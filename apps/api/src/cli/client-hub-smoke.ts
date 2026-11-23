@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHmac,randomUUID } from "node:crypto";
-import { readFileSync,writeFileSync } from "node:fs";
+import { mkdirSync,readFileSync,writeFileSync } from "node:fs";
 import { Client } from "pg";
 import { ConfigService } from "@nestjs/config";
 import { validateEnvironment } from "../config.js";
@@ -50,6 +50,7 @@ async function main() {
       if(Number(used)>=Math.floor(Date.now()/30_000)) await new Promise(resolve=>setTimeout(resolve,30_100-Date.now()%30_000));
       csrf=(await request<{csrfToken:string}>("/auth/totp/verify",{code:totp.generateCode(secret)})).csrfToken;
     }
+    mkdirSync("/tmp/an30-client-hub-20261118",{recursive:true,mode:0o700});
     writeFileSync("/tmp/an30-client-hub-20261118/preview-access.json",JSON.stringify({email:"hub-preview@example.invalid",passwordFile:process.env.HUB_PREVIEW_PASSWORD_FILE,totpSecret:secret,cookies:[...cookies].map(([name,value])=>({name,value,url:config.APP_ORIGIN}))},null,2),{mode:0o600});
     const run=randomUUID().slice(0,8),ids={} as Record<HubPlatform,string>,secrets={} as Record<HubPlatform,HubSecrets>;
     for(const platform of ["telegram","vk","max","whatsapp"] as const) {

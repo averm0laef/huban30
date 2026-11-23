@@ -65,6 +65,8 @@ export interface HubJobView {
   id: string; connectionId: string; platform: HubPlatform; connectionName: string;
   state: "queued" | "sending" | "succeeded" | "failed" | "unknown" | "manual";
   revision: number | null; appliedRevision: number; externalId: string | null;
+  /** What is published under externalId: Telegram cannot switch a post between the two. */
+  contentKind?: "text" | "image" | null;
   attemptCount: number; lastError: string | null; createdAt: string;
 }
 export interface HubPostView extends Omit<HubPostInput, "id" | "revision"> {
