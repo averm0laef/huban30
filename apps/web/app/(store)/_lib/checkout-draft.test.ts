@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  EMPTY_CHECKOUT_DRAFT, clearCheckoutDraft, parseCheckoutDraft, readCheckoutDraft, saveCheckoutDraft,
+  EMPTY_CHECKOUT_DRAFT, checkoutDraftStorage, clearCheckoutDraft, parseCheckoutDraft, readCheckoutDraft, saveCheckoutDraft,
 } from "./checkout-draft";
 
 function memoryStorage() {
@@ -56,5 +56,19 @@ describe("checkout draft", () => {
     expect(readCheckoutDraft(broken)).toBeNull();
     expect(() => saveCheckoutDraft(broken, filled)).not.toThrow();
     expect(() => clearCheckoutDraft(broken)).not.toThrow();
+  });
+
+  it("opens the form without a draft where the browser blocks storage", () => {
+    // Blocked storage throws on reading `window.sessionStorage` itself.
+    const blockedWindow = {
+      get sessionStorage(): never { throw new DOMException("denied", "SecurityError"); },
+    };
+    const storage = checkoutDraftStorage(blockedWindow);
+
+    expect(storage).toBeNull();
+    expect(readCheckoutDraft(storage)).toBeNull();
+    expect(() => saveCheckoutDraft(storage, filled)).not.toThrow();
+    expect(() => clearCheckoutDraft(storage)).not.toThrow();
+    expect(checkoutDraftStorage({ sessionStorage: memoryStorage() })).not.toBeNull();
   });
 });

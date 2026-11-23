@@ -30,6 +30,18 @@ export const EMPTY_CHECKOUT_DRAFT: CheckoutDraft = {
   address: "", customerNote: "", deliveryMethod: "pickup", email: "", name: "", phone: "",
 };
 
+/**
+ * The tab's storage, or null where the browser blocks it: there reading
+ * `sessionStorage` itself throws, before any call on it.
+ */
+export function checkoutDraftStorage(source: { sessionStorage: DraftStorage }): DraftStorage | null {
+  try {
+    return source.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 function text(value: unknown, limit: number): string {
   return typeof value === "string" ? value.slice(0, limit) : "";
 }
@@ -53,7 +65,8 @@ export function parseCheckoutDraft(raw: string | null): CheckoutDraft | null {
   }
 }
 
-export function readCheckoutDraft(storage: DraftStorage): CheckoutDraft | null {
+export function readCheckoutDraft(storage: DraftStorage | null): CheckoutDraft | null {
+  if (!storage) return null;
   try {
     return parseCheckoutDraft(storage.getItem(STORAGE_KEY));
   } catch {
@@ -66,7 +79,8 @@ function isEmpty(draft: CheckoutDraft): boolean {
     && draft.deliveryMethod === "pickup";
 }
 
-export function saveCheckoutDraft(storage: DraftStorage, draft: CheckoutDraft): void {
+export function saveCheckoutDraft(storage: DraftStorage | null, draft: CheckoutDraft): void {
+  if (!storage) return;
   try {
     if (isEmpty(draft)) storage.removeItem(STORAGE_KEY);
     else storage.setItem(STORAGE_KEY, JSON.stringify(draft));
@@ -75,7 +89,8 @@ export function saveCheckoutDraft(storage: DraftStorage, draft: CheckoutDraft): 
   }
 }
 
-export function clearCheckoutDraft(storage: DraftStorage): void {
+export function clearCheckoutDraft(storage: DraftStorage | null): void {
+  if (!storage) return;
   try {
     storage.removeItem(STORAGE_KEY);
   } catch {

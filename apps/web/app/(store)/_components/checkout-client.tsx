@@ -11,7 +11,7 @@ import { CHECKOUT_PERSONAL_DATA_CONSENT_TEXT } from "@an30/contracts";
 import { resetCartProductCache, summariseCart, useCartProducts } from "../_lib/cart-products";
 import { formatRubles } from "../_lib/catalog-format";
 import { checkoutConfirmationMessage, checkoutPayload } from "../_lib/checkout";
-import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from "../_lib/checkout-draft";
+import { checkoutDraftStorage, clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from "../_lib/checkout-draft";
 import { clearIdempotencyKey, stableIdempotencyKey } from "../_lib/idempotency";
 import { StorefrontApiError, apiRequest, errorText, readSession } from "../_lib/storefront-api";
 import { CartLineIdentity, CartLineThumbnail } from "./cart-actions";
@@ -100,12 +100,12 @@ export function CheckoutClient({
 
   useEffect(() => {
     if (!draftRead) return;
-    saveCheckoutDraft(window.sessionStorage, { ...contact, ...details, deliveryMethod });
+    saveCheckoutDraft(checkoutDraftStorage(window), { ...contact, ...details, deliveryMethod });
   }, [contact, deliveryMethod, details, draftRead]);
 
   useEffect(() => {
     if (!initialOrderId) {
-      const draft = readCheckoutDraft(window.sessionStorage);
+      const draft = readCheckoutDraft(checkoutDraftStorage(window));
       if (draft) {
         setContact({ email: draft.email, name: draft.name, phone: draft.phone });
         setDetails({ address: draft.address, customerNote: draft.customerNote });
@@ -181,7 +181,7 @@ export function CheckoutClient({
       const checkout = await apiRequest<CheckoutResponse>(session ? "/checkout" : "/checkout/guest", { method: "POST", body });
       window.sessionStorage.setItem(confirmationStorageKey(checkout.order.id), JSON.stringify(checkout));
       clearIdempotencyKey(window.sessionStorage, "checkout");
-      clearCheckoutDraft(window.sessionStorage);
+      clearCheckoutDraft(checkoutDraftStorage(window));
       setDraftRead(false);
       clear();
       setResult(checkout);
