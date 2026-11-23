@@ -9,6 +9,7 @@ import {
   applyThreadStatus,
   attachmentSignatureError,
   chatThreadCreateBody,
+  chatThreadRequestId,
   formatCountdown,
   intakeSubject,
   isChatMessage,
@@ -264,6 +265,22 @@ describe("intake questionnaire", () => {
       orderId: null,
       subject: "Нужна деталь по артикулу",
     });
+  });
+
+  it("sends the request id so the server opens one chat for a repeated request", () => {
+    const id = "7b0f3c5e-2a41-4d6f-9c1e-5a8b7d6e4f30";
+    expect(chatThreadCreateBody(baseIntake, null, id)).toMatchObject({ clientRequestId: id });
+    expect(chatThreadCreateBody(baseIntake)).not.toHaveProperty("clientRequestId");
+  });
+
+  it("keeps one request id while the same answers are resent, and takes a new one for other answers", () => {
+    let counter = 0;
+    const newId = () => `id-${++counter}`;
+    const first = chatThreadRequestId(null, baseIntake, newId);
+    // Retry after a lost response, or a second tap on «Написать магазину».
+    expect(chatThreadRequestId(first, { ...baseIntake }, newId)).toBe(first);
+    // The customer changed the answers: that is a different request.
+    expect(chatThreadRequestId(first, { ...baseIntake, comment: "Другой вопрос" }, newId).id).toBe("id-2");
   });
 });
 

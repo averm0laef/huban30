@@ -389,8 +389,26 @@ export function intakeSubject(intake: ChatIntake): string {
  * endpoints, so the answers a customer typed are always what actually
  * reaches the new thread (never re-derived or re-typed per call site).
  */
-export function chatThreadCreateBody(intake: ChatIntake, orderId: string | null = null): ChatThreadCreate {
-  return { intake, orderId, subject: intakeSubject(intake) };
+export function chatThreadCreateBody(
+  intake: ChatIntake,
+  orderId: string | null = null,
+  clientRequestId?: string,
+): ChatThreadCreate {
+  return { ...(clientRequestId ? { clientRequestId } : {}), intake, orderId, subject: intakeSubject(intake) };
+}
+
+/**
+ * One id per "start a chat" attempt with the same answers: the server opens a
+ * single chat however many times that request is sent (double tap, retry
+ * after a lost response). Different answers are a different attempt.
+ */
+export function chatThreadRequestId(
+  previous: { answers: string; id: string } | null,
+  intake: ChatIntake,
+  newId: () => string = () => crypto.randomUUID(),
+): { answers: string; id: string } {
+  const answers = JSON.stringify(intake);
+  return previous?.answers === answers ? previous : { answers, id: newId() };
 }
 
 /* ============================================================

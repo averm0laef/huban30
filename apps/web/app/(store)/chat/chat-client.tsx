@@ -23,6 +23,7 @@ import {
   STATUS_LABELS,
   chatRequest,
   chatThreadCreateBody,
+  chatThreadRequestId,
   isChatThread,
   parseStoredGuestThreads,
   serializeGuestThreads,
@@ -80,6 +81,7 @@ export function ChatClient() {
   const [shopStatus, setShopStatus] = useState<ShopStatus | null>(null);
   const messageEnd = useRef<HTMLDivElement | null>(null);
   const createForm = useRef<HTMLDivElement | null>(null);
+  const threadRequestRef = useRef<{ answers: string; id: string } | null>(null);
 
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedId) ?? null,
@@ -241,7 +243,8 @@ export function ChatClient() {
 
   async function createThread(intake: ChatIntake): Promise<void> {
     if (createPending || (viewer.kind !== "guest" && viewer.kind !== "customer")) return;
-    const body = chatThreadCreateBody(intake);
+    threadRequestRef.current = chatThreadRequestId(threadRequestRef.current, intake);
+    const body = chatThreadCreateBody(intake, null, threadRequestRef.current.id);
     setCreatePending(true);
     setCreateError("");
     try {
@@ -252,6 +255,7 @@ export function ChatClient() {
         || (viewer.kind === "guest" && (!created.guestToken || created.guestToken.length < 32 || created.guestToken.length > 256))) {
         throw new Error("Сервер не вернул безопасный доступ к новому чату");
       }
+      threadRequestRef.current = null;
       const next = upsertThread(threads, created);
       setThreads(next);
       if (viewer.kind === "guest") persistGuestThreads(next);

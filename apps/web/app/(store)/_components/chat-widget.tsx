@@ -22,6 +22,7 @@ import {
   GUEST_CHAT_STORAGE_KEY,
   chatRequest,
   chatThreadCreateBody,
+  chatThreadRequestId,
   isChatThread,
   parseStoredGuestThreads,
   serializeGuestThreads,
@@ -153,6 +154,7 @@ export function ChatWidget() {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const focusComposerOnOpenRef = useRef(false);
   const previousUnreadRef = useRef(0);
+  const threadRequestRef = useRef<{ answers: string; id: string } | null>(null);
   const titleId = useId();
 
   const viewerKind = viewer.kind === "customer" ? "customer" : viewer.kind === "guest" ? "guest" : null;
@@ -382,7 +384,8 @@ export function ChatWidget() {
   }, []);
 
   async function createConversation(intake: ChatIntake): Promise<{ access: ChatAccess; created: ChatThread }> {
-    const body = chatThreadCreateBody(intake);
+    threadRequestRef.current = chatThreadRequestId(threadRequestRef.current, intake);
+    const body = chatThreadCreateBody(intake, null, threadRequestRef.current.id);
     if (viewer.kind === "guest") {
       const created = await chatRequest<GuestThreadResponse>("/chat/guest/threads", undefined, { body, method: "POST" });
       if (!isChatThread(created) || !created.guestToken || created.guestToken.length < 32 || created.guestToken.length > 256) {
@@ -415,6 +418,7 @@ export function ChatWidget() {
     setBootstrapError("");
     try {
       const { created } = await createConversation(intake);
+      threadRequestRef.current = null;
       setThread(created);
       setStartingNewConversation(false);
       setRequestIntent("advice");
