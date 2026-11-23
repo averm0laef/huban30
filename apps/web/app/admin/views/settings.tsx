@@ -75,6 +75,17 @@ const PAGE_CONTENTS = [
   { id: "settings-parts-finder", label: "Подбор и поставщики" },
 ] as const;
 
+/**
+ * Scrolls to a block without adding a history entry: with unsaved edits «Назад» is guarded by a «leave the
+ * page?» question, and a jump inside the page must not be what it asks about.
+ */
+function jumpTo(event: { preventDefault(): void }, id: string): void {
+  const block = document.getElementById(id);
+  if (!block) return;
+  event.preventDefault();
+  block.scrollIntoView();
+}
+
 type Source = "one_c" | "one_c_secondary";
 export function SettingsView() {
   const [source,setSource] = useState<Source>("one_c");
@@ -140,6 +151,8 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
       if (!(event.target instanceof Element)) return;
       const link = event.target.closest<HTMLAnchorElement>("a[href]");
       if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+      // A jump to a block of this same page leaves the form and its edits where they are.
+      if (link.getAttribute("href")?.startsWith("#")) return;
       if (!window.confirm("Есть несохранённые изменения. Уйти со страницы без сохранения?")) {
         event.preventDefault();
         event.stopPropagation();
@@ -214,7 +227,7 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
       />
       <nav aria-label="На этой странице" className={styles.pageContents}>
         <span>На странице:</span>
-        {PAGE_CONTENTS.map((item) => <a href={`#${item.id}`} key={item.id}>{item.label}</a>)}
+        {PAGE_CONTENTS.map((item) => <a href={`#${item.id}`} key={item.id} onClick={(event) => jumpTo(event, item.id)}>{item.label}</a>)}
       </nav>
       <div className={styles.toolbar} aria-label="Базы 1С">
         {(["one_c","one_c_secondary"] as const).map(value=><Button key={value} appearance={source===value ? "primary":"secondary"} aria-pressed={source===value} disabled={busy} onClick={()=>{
