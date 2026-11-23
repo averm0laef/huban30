@@ -113,6 +113,11 @@ export const CORE_PRODUCTS: FixtureProduct[] = [
   { key: "castrol-edge-5w30-4", sku: "15669A", name: "Масло моторное Castrol EDGE 5W-30 LL 4 л", brand: "Castrol", category: "sf-motornye-masla", rubles: 4200, stock: 6 },
   { key: "castrol-magnatec-5w40-4", sku: "156E9E", name: "Масло моторное Castrol Magnatec 5W-40 A3/B4 4 л", brand: "Castrol", category: "sf-motornye-masla", rubles: 3300, stock: 0 },
   { key: "castrol-syntrans-75w90", sku: "15D704", name: "Масло трансмиссионное Castrol Syntrans 75W-90 1 л", brand: "Castrol", category: "sf-motornye-masla", rubles: 1400, stock: 3 },
+  { key: "zic-atf", sku: "132632", name: "Масло для АКПП ZIC ATF Multi 1 л", brand: null, category: "sf-motornye-masla", rubles: 900, stock: 4 },
+  // «дмрв» is not a typo of the «ДМ» this article is cut into.
+  { key: "m10dm", sku: "М10-ДМ", name: "Масло моторное М10ДМ 20 л", brand: null, category: "sf-motornye-masla", rubles: 4200, stock: 2 },
+  { key: "dmrv-cleaner", sku: "80447", name: "Очиститель ДМРВ Luftmassensensor-Reiniger 0,2 л", brand: null, category: "sf-avtohimiya", rubles: 1100, stock: 3 },
+  { key: "muffler-2101", sku: "21010-1200010-81", name: "Глушитель основной ВАЗ 2101", brand: null, category: "sf-podveska", rubles: 2600, stock: 1 },
   { key: "mobil-3000-5w40-4", sku: "152566", name: "Масло моторное Mobil Super 3000 X1 5W-40 4 л", brand: "Mobil", category: "sf-motornye-masla", rubles: 3100, stock: 0 },
   { key: "mobil-1-0w40-4", sku: "153678", name: "Масло моторное Mobil 1 FS 0W-40 4 л", brand: "Mobil", category: "sf-motornye-masla", rubles: 4800, stock: 5 },
   { key: "shell-hx8-5w40-4", sku: "550046355", name: "Масло моторное Shell Helix HX8 5W-40 синтетическое 4л", brand: "Shell", category: "sf-motornye-masla", rubles: 3000, stock: 9 },

@@ -106,6 +106,17 @@ describe("searchTokenPlan", () => {
     expect(texts("балонник")).toEqual(expect.arrayContaining(["баллонн", "балонн"]));
   });
 
+  it("reads «в коробку» as the gearbox the names call КПП and «трансмиссионное», and leaves the shelf box «коробка» alone", () => {
+    for (const word of ["коробку", "коробки"]) expect(texts(word), word).toEqual(expect.arrayContaining(["коробк", "кпп", "трансмисс"]));
+    expect(texts("коробка")).not.toContain("кпп");
+  });
+
+  it("reads «глушак» as «глушитель» and «опорник» as the strut mount and its bearing, not as every «опора»", () => {
+    expect(texts("глушак")).toContain("глушител");
+    expect(texts("опорник")).toEqual(expect.arrayContaining(["опора стойки", "опора амортизатора", "подшипник опор"]));
+    expect(texts("опорник")).not.toContain("опора");
+  });
+
   it("reads «воздушник», «салонник», «топливник» as the filter, not as everything with that adjective", () => {
     for (const [word, phrase] of [["воздушник", "фильтр возд"], ["салонник", "фильтр салон"], ["топливник", "фильтр топл"]] as const) {
       const plan = searchTokenPlan(word);
