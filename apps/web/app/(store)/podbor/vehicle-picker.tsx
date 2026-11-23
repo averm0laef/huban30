@@ -8,6 +8,7 @@ import buttons from "../_components/store-button.module.css";
 import {
   FinderError,
   finderGet,
+  pickerStep,
   yearsLabel,
   type PickedVehicle,
   type PickerMake,
@@ -174,7 +175,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
     }
   }
 
-  const step = model ? 4 : family ? 3 : make ? 2 : 1;
+  const step = pickerStep({ family, make, model });
   const families = models.status === "ready" ? groupFamilies(models.data.models) : [];
   const needle = filter.trim().toLowerCase();
   // A make has up to two hundred models: the usual ones first, the rest by first letter.
@@ -216,7 +217,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
         <nav aria-label="Шаги выбора автомобиля" className={styles.steps}>
           <ol>
             <li aria-current={step === 1 ? "step" : undefined}>
-              {make ? <button onClick={() => { setMake(null); setModel(null); }} type="button">{make.name}</button> : <span>Марка</span>}
+              {make ? <button onClick={() => { setMake(null); setFamily(null); setModel(null); }} type="button">{make.name}</button> : <span>Марка</span>}
             </li>
             <li aria-current={step === 2 ? "step" : undefined}>
               <ChevronRight16Regular aria-hidden="true" />

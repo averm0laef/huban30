@@ -230,6 +230,13 @@ function litres(value: unknown): string | null {
   return volume > 0 ? `${volume.toFixed(1).replace(".", ",")} л` : null;
 }
 
+/** The step of the make and model picker. Without a make there is nothing to choose under it, whatever is left of the last choice. */
+export function pickerStep(chosen: { family: unknown; make: unknown; model: unknown }): 1 | 2 | 3 | 4 {
+  if (!chosen.make) return 1;
+  if (chosen.model) return 4;
+  return chosen.family ? 3 : 2;
+}
+
 export const SAVED_VEHICLE_KEY = "an30:parts-finder:vehicle";
 
 export function readSavedVehicle(): string | null {
