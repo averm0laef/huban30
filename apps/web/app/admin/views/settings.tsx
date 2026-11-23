@@ -27,6 +27,7 @@ interface OneCExchangeSummary {
   imagesAttached?: number;
   imagesSkipped?: number;
   hidingSkipped?: boolean;
+  productsAdopted?: number;
   productsHidden?: number;
   kind: "catalog" | "offers";
   rowsRejected: number;
@@ -346,6 +347,9 @@ function LastExchangeResult({
               <dt>Без категории</dt>
               <dd>{summary.rowsUncategorized ?? 0}</dd>
             </div>
+          ) : null}
+          {summary.kind === "catalog" && (summary.productsAdopted ?? 0) > 0 ? (
+            <div><dt>Привязано к 1С</dt><dd>{summary.productsAdopted} (уже были на сайте, обновлены, а не добавлены заново)</dd></div>
           ) : null}
           {summary.kind === "catalog" && (summary.productsHidden ?? 0) > 0 ? (
             <div><dt>Снято с витрины</dt><dd>{summary.productsHidden} (их больше нет в выгрузке 1С)</dd></div>

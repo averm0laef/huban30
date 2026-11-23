@@ -44,6 +44,7 @@ import {
   type ExchangeWarehouseRow,
 } from "./commerce-ml.parser.js";
 import { OneCExchangeImagesService, type ImageTask } from "./one-c-exchange-images.service.js";
+import { keptProductSlug, planProductAdoption } from "./one-c-product-adoption.js";
 
 export type OneCExchangeFileKind = "catalog" | "offers";
 
@@ -276,6 +277,9 @@ export class OneCExchangeService {
   }
 
   private async advanceBody(run: ExchangeRunRow): Promise<OneCExchangeImportOutcome> {
+    // Before the first product is applied: products already on the site under another identifier (their 1С code,
+    // from a list loaded before the exchange) take the identifier of this file. Repeating it finds nothing left.
+    if (run.kind === "catalog" && run.cursor_index === 0) await this.adoptLoadedProducts(run);
     const slice = run.body_rows.slice(run.cursor_index, run.cursor_index + run.batch_size);
     await this.applyChunk(run, slice);
     if (run.cursor_index < run.body_rows.length) {
@@ -337,6 +341,63 @@ export class OneCExchangeService {
     }
     await this.completeRun(run);
     return { kind: "success" };
+  }
+
+  /**
+   * Gives the products of this base that are on the site under another identifier the one this file names them by,
+   * so the exchange updates them instead of adding the catalogue a second time (one-c-product-adoption.ts).
+   * By the 1С code in any catalogue file. By article and name only in a full catalogue and only for file products
+   * without a code: there a product the file does not name is one 1С no longer has under that identifier.
+   * A product taken over counts as changed by the exchange (source_version), so an earlier import of the list can no
+   * longer be rolled back over it and give it its former identifier.
+   */
+  private async adoptLoadedProducts(run: ExchangeRunRow): Promise<void> {
+    const source = run.source_key ?? "one_c";
+    const plan = planProductAdoption(run.body_rows, source);
+    let adopted = 0;
+    if (plan.byCode.length > 0) {
+      adopted += (await this.database.query<{ adopted: number }>(
+        `WITH file AS (
+           SELECT * FROM unnest($1::text[], $2::text[]) AS pair(external_id, code_external_id)
+         ), attached AS (
+           UPDATE app.products product SET external_id = file.external_id, source_version = product.source_version + 1
+           FROM file
+           WHERE product.external_id = file.code_external_id AND product.one_c_source=${sourceSql(source)}
+             AND NOT product.is_demo
+             AND NOT EXISTS (SELECT 1 FROM app.products taken WHERE taken.external_id = file.external_id)
+           RETURNING 1
+         )
+         SELECT count(*)::int AS adopted FROM attached`,
+        [plan.byCode.map((pair) => pair.externalId), plan.byCode.map((pair) => pair.codeExternalId)],
+      )).rows[0]?.adopted ?? 0;
+    }
+    if (plan.byName.length > 0 && !run.contains_only_changes) {
+      const listed = run.body_rows.flatMap((row) => row.entityType === "product" ? [row.externalId] : []);
+      adopted += (await this.database.query<{ adopted: number }>(
+        `WITH file AS (
+           SELECT * FROM unnest($1::text[], $2::text[], $3::text[]) AS item(external_id, sku, name)
+         ), unlisted AS (
+           SELECT id, sku::text AS sku, name, count(*) OVER (PARTITION BY sku::text, name) AS same
+           FROM app.products
+           WHERE external_id IS NOT NULL AND NOT is_demo AND one_c_source=${sourceSql(source)}
+             AND NOT (external_id = ANY($4::text[]))
+         ), attached AS (
+           UPDATE app.products product SET external_id = file.external_id, source_version = product.source_version + 1
+           FROM file JOIN unlisted ON unlisted.sku = file.sku AND unlisted.name = file.name AND unlisted.same = 1
+           WHERE product.id = unlisted.id
+             AND NOT EXISTS (SELECT 1 FROM app.products taken WHERE taken.external_id = file.external_id)
+           RETURNING 1
+         )
+         SELECT count(*)::int AS adopted FROM attached`,
+        [plan.byName.map((item) => item.externalId), plan.byName.map((item) => item.sku),
+          plan.byName.map((item) => item.name), listed],
+      )).rows[0]?.adopted ?? 0;
+    }
+    if (adopted > 0) {
+      await this.database.query(
+        "UPDATE app.one_c_exchange_runs SET products_adopted = products_adopted + $2 WHERE id = $1", [run.id, adopted],
+      );
+    }
   }
 
   /**
@@ -447,11 +508,11 @@ export class OneCExchangeService {
     this.categoryTreeCache.invalidate();
     const totals = (await this.database.query<{
       images_attached: number; images_skipped: number;
-      hiding_skipped: boolean; products_hidden: number;
+      hiding_skipped: boolean; products_adopted: number; products_hidden: number;
       rows_rejected: number; rows_touched: number; rows_uncategorized: number;
     }>(
       `UPDATE app.one_c_exchange_runs SET phase = 'done', status = 'completed'
-       WHERE id = $1 RETURNING rows_touched, rows_rejected, rows_uncategorized, images_attached, images_skipped, products_hidden, hiding_skipped`,
+       WHERE id = $1 RETURNING rows_touched, rows_rejected, rows_uncategorized, images_attached, images_skipped, products_hidden, hiding_skipped, products_adopted`,
       [run.id],
     )).rows[0];
     await this.integration.recordExchangeResult({
@@ -461,6 +522,7 @@ export class OneCExchangeService {
       imagesSkipped: totals?.images_skipped ?? 0,
       hidingSkipped: totals?.hiding_skipped ?? false,
       kind: run.kind,
+      productsAdopted: totals?.products_adopted ?? 0,
       productsHidden: totals?.products_hidden ?? 0,
       rowsRejected: totals?.rows_rejected ?? 0,
       rowsTouched: totals?.rows_touched ?? 0,
@@ -677,7 +739,9 @@ export class OneCExchangeService {
     }
     // A section a staff member chose for this product by hand stays.
     if (current.category_pinned) categoryId = current.category_id;
-    const unchanged = current.sku === row.sku && current.name === row.name && current.slug === row.slug
+    // So does the page address while the name is the same (a product taken over from a list loaded by 1С codes).
+    const slug = keptProductSlug(current.slug, row.slug);
+    const unchanged = current.sku === row.sku && current.name === row.name && current.slug === slug
       && current.brand_id === brandId && current.category_id === categoryId
       && current.description === row.description && current.search_text === row.searchText
       && current.is_active === row.isActive
@@ -691,7 +755,7 @@ export class OneCExchangeService {
               deleted_at = CASE WHEN $10 THEN NULL ELSE COALESCE(deleted_at, clock_timestamp()) END,
               source_version = source_version + 1, one_c_group_external_id = $12
        WHERE id = $1 AND one_c_source=$11`,
-      [current.id, row.sku, row.name, row.slug, brandId, categoryId, row.description,
+      [current.id, row.sku, row.name, slug, brandId, categoryId, row.description,
         attributesJson, row.searchText, row.isActive,source, row.categoryExternalId],
     );
     return { applied: true, rejected, uncategorized };
