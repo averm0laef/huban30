@@ -2,12 +2,13 @@
 
 import { ArrowRight20Regular, ChevronRight16Regular, Dismiss16Regular, Search20Regular } from "@fluentui/react-icons";
 import { useEffect, useId, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 
 import buttons from "../_components/store-button.module.css";
 import {
   FinderError,
   finderGet,
+  isRepeatClick,
   pickerStep,
   yearsLabel,
   type PickedVehicle,
@@ -176,6 +177,8 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
   }
 
   const step = pickerStep({ family, make, model });
+  // Every step replaces the list under the pointer, so the rest of a double click must not choose from the new one.
+  const choose = (action: () => void) => (event: MouseEvent) => { if (!isRepeatClick(event)) action(); };
   const families = models.status === "ready" ? groupFamilies(models.data.models) : [];
   const needle = filter.trim().toLowerCase();
   // A make has up to two hundred models: the usual ones first, the rest by first letter.
@@ -279,7 +282,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
               <p className={styles.groupLabel}>Популярные марки</p>
               <div className={styles.popular}>
                 {makes.data.popular.map((item) => (
-                  <button className={styles.makeButton} key={item.id} onClick={() => openMake(item)} type="button">{item.name}</button>
+                  <button className={styles.makeButton} key={item.id} onClick={choose(() => openMake(item))} type="button">{item.name}</button>
                 ))}
               </div>
               <p className={styles.groupLabel}>Все марки</p>
@@ -289,7 +292,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
                     <span className={styles.letter} aria-hidden="true">{group.letter}</span>
                     <div>
                       {group.makes.map((item) => (
-                        <button className={styles.makeLink} key={item.id} onClick={() => openMake(item)} type="button">{item.name}</button>
+                        <button className={styles.makeLink} key={item.id} onClick={choose(() => openMake(item))} type="button">{item.name}</button>
                       ))}
                     </div>
                   </section>
@@ -327,7 +330,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
               <p className={styles.groupLabel}>{listTitle} · {visibleFamilies.length}</p>
               <div className={styles.modelGrid}>
                 {visibleFamilies.map((item) => (
-                  <button className={styles.choice} key={item.name} onClick={() => openFamily(item)} type="button">
+                  <button className={styles.choice} key={item.name} onClick={choose(() => openFamily(item))} type="button">
                     <strong>{item.name}</strong>
                     <small>{[yearsLabel(item.yearFrom, item.yearTo), item.generations.length > 1 ? `${item.generations.length} ${plural(item.generations.length, "поколение", "поколения", "поколений")}` : null].filter(Boolean).join(" · ") || "годы уточним"}</small>
                   </button>
@@ -345,7 +348,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
           <p className={shared.muted}>Код кузова есть в ПТС и на табличке под капотом. Не уверены — выберите по годам выпуска.</p>
           <div className={styles.generations}>
             {generations.map((item) => (
-              <button className={styles.generation} key={item.id} onClick={() => openModel(make, item)} type="button">
+              <button className={styles.generation} key={item.id} onClick={choose(() => openModel(make, item))} type="button">
                 <span className={styles.generationYears}>{yearsLabel(item.yearFrom, item.yearTo) || "годы не указаны"}</span>
                 <strong>{item.generation ?? item.name}</strong>
                 {item.body ? <small>{item.body}</small> : null}
@@ -363,7 +366,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
           {modifications.status === "ready" ? (
             <div className={styles.grid}>
               {modifications.data.modifications.map((item) => (
-                <button className={styles.choice} key={item.id} onClick={() => pick(item)} type="button">
+                <button className={styles.choice} key={item.id} onClick={choose(() => pick(item))} type="button">
                   <strong>{[item.capacity ? `${item.capacity} л` : null, item.engine].filter(Boolean).join(" · ") || item.label}</strong>
                   <small>{[yearsLabel(item.yearFrom, item.yearTo), item.powerPs ? `${item.powerPs} л.с.` : null, item.fuel, item.body?.toLowerCase()].filter(Boolean).join(" · ") || item.label}</small>
                 </button>
@@ -371,7 +374,7 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
             </div>
           ) : null}
           {modifications.status === "ready" && !modifications.data.available ? <p className={shared.muted}>{modifications.data.message}</p> : null}
-          <button className={`${buttons.button} ${buttons.soft} ${styles.skipEngine}`} onClick={() => pick(null)} type="button">
+          <button className={`${buttons.button} ${buttons.soft} ${styles.skipEngine}`} onClick={choose(() => pick(null))} type="button">
             Не знаю двигатель — продолжить с {make.name} {familyOf(model)}
             <ArrowRight20Regular aria-hidden="true" />
           </button>
