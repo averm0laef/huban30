@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { api } from "../api";
+import { canOpenSection, navigationItem, serviceSection } from "../navigation";
 import type { SessionView } from "../types";
 import { RequestError, SectionHeader, useResource } from "../workspace-utils";
 import styles from "../workspace.module.css";
@@ -159,6 +160,10 @@ export function OverviewView({ session }: { session: SessionView }) {
   ].filter((item) => item.count > 0) : [];
   const problems = data ? data.services.filter((service) => service.state === "error").length : 0;
   const warnings = data ? data.services.filter((service) => service.state === "warn").length : 0;
+  // A card is a link only when the role can open what it leads to: a manager has no reports and no audit,
+  // and a click that ends on «Недостаточно прав» is worse than a card that is plainly not a link.
+  const reportsOpen = canOpenSection(session.role, "reports");
+  const auditOpen = canOpenSection(session.role, "audit");
   return (
     <>
       <SectionHeader
@@ -170,7 +175,7 @@ export function OverviewView({ session }: { session: SessionView }) {
             <Button icon={<ArrowClockwise20Regular />} onClick={reload}>Обновить</Button>
           </div>
         )}
-        description={`Вы вошли как ${session.email}. Все карточки кликабельны и ведут в нужный раздел.`}
+        description={`Вы вошли как ${session.email}. Карточки с цифрами ведут в свой раздел.`}
         eyebrow="Сводка"
         title="Как идут дела"
       />
@@ -185,7 +190,9 @@ export function OverviewView({ session }: { session: SessionView }) {
         <>
           <div className={board.kpis}>
             <Link className={board.kpi} href="/admin/orders"><span>Заказы</span><strong>{number.format(data.kpis.orders.value)}</strong><Change suffix={PREVIOUS[range]} unit="" value={data.kpis.orders.change} /></Link>
-            <Link className={board.kpi} href="/admin/reports"><span>Выручка</span><strong>{data.kpis.revenue.label}</strong><Change suffix={PREVIOUS[range]} value={data.kpis.revenue.change} /></Link>
+            {reportsOpen
+              ? <Link className={board.kpi} href="/admin/reports"><span>Выручка</span><strong>{data.kpis.revenue.label}</strong><Change suffix={PREVIOUS[range]} value={data.kpis.revenue.change} /></Link>
+              : <div className={board.kpi}><span>Выручка</span><strong>{data.kpis.revenue.label}</strong><Change suffix={PREVIOUS[range]} value={data.kpis.revenue.change} /></div>}
             <div className={board.kpi}><span>Поиски</span><strong>{number.format(data.kpis.searches.value)}</strong><Change suffix={PREVIOUS[range]} value={data.kpis.searches.change} /></div>
             <div className={board.kpi}><span>Поиск без результата</span><strong>{data.kpis.zeroShare.value === null ? "—" : `${String(data.kpis.zeroShare.value).replace(".", ",")} %`}</strong><Change goodWhenUp={false} suffix={PREVIOUS[range]} unit=" п.п." value={data.kpis.zeroShare.change} /></div>
             <Link className={board.kpi} href="/admin/chats"><span>Чаты ждут ответа</span><strong>{data.kpis.chatsWaiting}</strong><small>{data.kpis.chatsOldestWaitMinutes === null ? "никто не ждёт" : `дольше всех ждут ${waitLabel(data.kpis.chatsOldestWaitMinutes)}`}</small></Link>
@@ -213,14 +220,23 @@ export function OverviewView({ session }: { session: SessionView }) {
               <table className={board.services}>
                 <thead><tr><th>Сервис</th><th>Состояние</th><th>Последнее событие</th><th><span className={board.visuallyHidden}>Подсказка</span></th></tr></thead>
                 <tbody>
-                  {data.services.map((service) => (
-                    <tr key={service.key}>
-                      <td>{service.name}</td>
-                      <td><span className={board.status} data-state={service.state}><i aria-hidden="true">{STATE_LABEL[service.state].icon}</i>{STATE_LABEL[service.state].text}</span></td>
-                      <td>{service.detail}</td>
-                      <td>{service.hint ?? ""}</td>
-                    </tr>
-                  ))}
+                  {data.services.map((service) => {
+                    const section = serviceSection(service.key);
+                    const target = section && service.state !== "ok" && canOpenSection(session.role, section) ? navigationItem(section) : null;
+                    // The API's own hint may be just the section's name; the link says the same and can be clicked.
+                    const hint = target && service.hint === `раздел «${target.label}»` ? null : service.hint;
+                    return (
+                      <tr key={service.key}>
+                        <td>{service.name}</td>
+                        <td><span className={board.status} data-state={service.state}><i aria-hidden="true">{STATE_LABEL[service.state].icon}</i>{STATE_LABEL[service.state].text}</span></td>
+                        <td>{service.detail}</td>
+                        <td>
+                          {hint ?? ""}
+                          {target ? <>{hint ? " · " : ""}<Link className={board.linkButton} href={target.href}>Открыть «{target.label}»</Link></> : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -228,7 +244,7 @@ export function OverviewView({ session }: { session: SessionView }) {
 
           <div className={`${board.row} ${board.rowEven}`}>
             <section className={board.card}>
-              <header className={board.cardHead}><h2>Лента событий</h2><Link className={board.linkButton} href="/admin/audit">Весь журнал</Link></header>
+              <header className={board.cardHead}><h2>Лента событий</h2>{auditOpen ? <Link className={board.linkButton} href="/admin/audit">Весь журнал</Link> : null}</header>
               {data.events.length ? (
                 <ul className={`${board.list} ${board.events}`}>
                   {data.events.map((event, index) => (

@@ -240,7 +240,7 @@ export class StaffDashboardService {
       list.push({
         detail: state === "off" ? "Выключено" : failed ? `${failed.name ?? "Проверка"}: ${failed.detail ?? "ошибка"}`
           : hub.last_event_at ? `Последнее входящее ${shopTime(hub.last_event_at)}` : "Входящих ещё не было",
-        hint: hub.last_checked_at ? `проверено ${shopTime(hub.last_checked_at)}` : "запустите проверку в «Соцсети и боты»",
+        hint: hub.last_checked_at ? `проверено ${shopTime(hub.last_checked_at)}` : "запустите проверку в «Посты и мессенджеры»",
         key: `hub:${hub.platform}:${hub.name}`,
         name: `${PLATFORM_LABEL[hub.platform] ?? hub.platform} · ${hub.name}${hub.is_test ? " (тест)" : ""}`,
         state,
@@ -248,7 +248,7 @@ export class StaffDashboardService {
     }
     for (const platform of ["telegram", "max", "vk"]) {
       if (hubs.rows.some((hub) => hub.platform === platform)) continue;
-      list.push({ detail: "Бот или сообщество ещё не добавлены", hint: "раздел «Соцсети и боты»", key: `hub:${platform}`, name: PLATFORM_LABEL[platform] ?? platform, state: "off" });
+      list.push({ detail: "Бот или сообщество ещё не добавлены", hint: "раздел «Посты и мессенджеры»", key: `hub:${platform}`, name: PLATFORM_LABEL[platform] ?? platform, state: "off" });
     }
     const mail = outbox.rows[0];
     const waiting = toNumber(mail?.waiting);

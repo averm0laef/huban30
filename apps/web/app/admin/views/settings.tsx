@@ -67,6 +67,26 @@ const FRESHNESS_HINTS: Record<OneCSettings["freshness"], string> = {
   disabled: "Обмен выключен: сайт не принимает данные от этой базы. Включите переключатель и сохраните.",
 };
 
+// The page is several screens long: a short list of its blocks at the top, each a link to its place.
+const PAGE_CONTENTS = [
+  { id: "settings-connection", label: "Подключение 1С" },
+  { id: "settings-last-exchange", label: "Последний обмен" },
+  { id: "settings-exchange-log", label: "Журнал обменов" },
+  { id: "settings-rejected", label: "Отказы на входе" },
+  { id: "settings-parts-finder", label: "Подбор и поставщики" },
+] as const;
+
+/**
+ * Scrolls to a block without adding a history entry: with unsaved edits «Назад» is guarded by a «leave the
+ * page?» question, and a jump inside the page must not be what it asks about.
+ */
+function jumpTo(event: { preventDefault(): void }, id: string): void {
+  const block = document.getElementById(id);
+  if (!block) return;
+  event.preventDefault();
+  block.scrollIntoView();
+}
+
 type Source = "one_c" | "one_c_secondary";
 export function SettingsView() {
   const [source,setSource] = useState<Source>("one_c");
@@ -132,6 +152,8 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
       if (!(event.target instanceof Element)) return;
       const link = event.target.closest<HTMLAnchorElement>("a[href]");
       if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+      // A jump to a block of this same page leaves the form and its edits where they are.
+      if (link.getAttribute("href")?.startsWith("#")) return;
       if (!window.confirm("Есть несохранённые изменения. Уйти со страницы без сохранения?")) {
         event.preventDefault();
         event.stopPropagation();
@@ -204,6 +226,10 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
         eyebrow="Конфигурация"
         title="Настройки интеграций"
       />
+      <nav aria-label="На этой странице" className={styles.pageContents}>
+        <span>На странице:</span>
+        {PAGE_CONTENTS.map((item) => <a href={`#${item.id}`} key={item.id} onClick={(event) => jumpTo(event, item.id)}>{item.label}</a>)}
+      </nav>
       <div className={styles.toolbar} aria-label="Базы 1С">
         {(["one_c","one_c_secondary"] as const).map(value=><Button key={value} appearance={source===value ? "primary":"secondary"} aria-pressed={source===value} disabled={busy} onClick={()=>{
           if(source!==value && (!dirty || window.confirm("Есть несохранённые настройки. Переключить базу без сохранения?"))) onSourceChange(value);
@@ -213,7 +239,7 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
       {resource.error ? <RequestError error={resource.error} onRetry={resource.reload} /> : null}
       {resource.loading && !resource.data ? <div className={styles.loadingPanel}><Spinner label="Загрузка настроек" /></div> : null}
       {resource.data ? (
-        <form className={styles.settingsForm} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        <form className={`${styles.settingsForm} ${styles.settingsAnchor}`} id="settings-connection" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <div className={styles.settingsHeading}>
             <div><h2>{resource.data.displayName}</h2><p>1С подключается к сайту по логину и паролю ниже и только с адресов из списка «Разрешённые сети». Пока переключатель выключен, сайт не принимает данные от этой базы.</p></div>
             <Switch checked={enabled} label={enabled ? "Включено" : "Выключено"} onChange={(_event, data) => setEnabled(data.checked)} disabled={busy} />
@@ -273,12 +299,15 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
           </div>
         </form>
       ) : null}
-      {resource.data ? <LastExchangeResult summary={resource.data.lastExchangeSummary} timestamp={resource.data.lastExchangeAt} /> : null}
-      {resource.data ? <OneCExchangeRuns key={source} source={source} /> : null}
-      {resource.data ? <OneCRejectedRequests key={`rejected-${source}`} source={source} /> : null}
-      <PartsFinderStatusCard />
-      {success ? <MessageBar intent="success"><MessageBarBody>{success}</MessageBarBody></MessageBar> : null}
-      {mutationError ? <RequestError error={mutationError} onRetry={reload} /> : null}
+      {/* The answer to «Сохранить» stays next to the button: below the page's other blocks it was several screens away. */}
+      <div aria-live="polite" className={styles.settingsResult}>
+        {success ? <MessageBar intent="success"><MessageBarBody>{success}</MessageBarBody></MessageBar> : null}
+        {mutationError ? <RequestError error={mutationError} onRetry={reload} /> : null}
+      </div>
+      {resource.data ? <div className={styles.settingsAnchor} id="settings-last-exchange"><LastExchangeResult summary={resource.data.lastExchangeSummary} timestamp={resource.data.lastExchangeAt} /></div> : null}
+      {resource.data ? <div className={styles.settingsAnchor} id="settings-exchange-log"><OneCExchangeRuns key={source} source={source} /></div> : null}
+      {resource.data ? <div className={styles.settingsAnchor} id="settings-rejected"><OneCRejectedRequests key={`rejected-${source}`} source={source} /></div> : null}
+      <div className={styles.settingsAnchor} id="settings-parts-finder"><PartsFinderStatusCard /></div>
     </>
   );
 }
