@@ -22,6 +22,14 @@ export function sha256(value: unknown): Buffer {
   return createHash("sha256").update(canonicalJson(value), "utf8").digest();
 }
 
+/** A row the way the site keeps it: the 1С code only pairs a product with a loaded one and is not stored with it. */
+export function storedCatalogRow(row: OneCCatalogRow): OneCCatalogRow {
+  if (row.entityType !== "product" || row.oneCCode === undefined) return row;
+  const stored = { ...row };
+  delete stored.oneCCode;
+  return stored;
+}
+
 export function rowIdentity(row: OneCCatalogRow): string {
   switch (row.entityType) {
     case "price":

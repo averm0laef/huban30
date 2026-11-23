@@ -31,6 +31,8 @@ interface ExchangeRun {
   phase: string;
   /** The 1С price type an offers file's prices were taken from; null for catalog files. */
   priceTypeName: string | null;
+  /** Products already on the site under their 1С code that this file took over instead of adding them again. */
+  productsAdopted: number;
   /** Products a full catalogue no longer lists and hid from the shop. */
   productsHidden: number;
   rowsInFile: number;
@@ -133,6 +135,8 @@ export function OneCExchangeRuns({ source }: { source: OneCSource }) {
             {row.original.rowsRejected > 0
               ? `${row.original.rowsRejected} не принято (например, цена для товара, которого нет на сайте, или группа, которой нет в выгрузке)`
               : "все записи приняты"}
+            {row.original.kind === "catalog" && row.original.productsAdopted > 0
+              ? ` · ${row.original.productsAdopted} уже были на сайте и привязаны к 1С` : ""}
             {row.original.kind === "catalog" && row.original.rowsUncategorized > 0
               ? ` · ${row.original.rowsUncategorized} без категории` : ""}
             {row.original.imagesAttached + row.original.imagesSkipped > 0
