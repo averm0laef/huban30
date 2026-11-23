@@ -78,6 +78,22 @@ if (count > 0) {
   await sidewaysScroll("карточка товара");
 }
 
+// 2a. A typed VIN: «Подбор по VIN» banner on any page, and one action in the suggestions that opens the decoder.
+await page.goto(`${base}/catalog`, { waitUntil: "networkidle" });
+const banner = page.getByRole("link", { name: /Подбор по VIN/u }).first();
+report(await banner.isVisible().catch(() => false), "блок «Подбор по VIN» под поиском не только на главной");
+const vinInput = page.getByRole("combobox").first();
+await vinInput.tap();
+await vinInput.pressSequentially("XTAGFK330JY144213", { delay: 20 });
+const vinAction = page.getByRole("link", { name: /Подобрать запчасти по VIN/u }).first();
+const vinShown = await vinAction.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false);
+report(vinShown, "набранный VIN даёт «Подобрать запчасти по VIN»");
+if (vinShown) {
+  await vinAction.tap();
+  const opened = await page.waitForURL(/\/podbor\?vin=XTAGFK330JY144213/u, { timeout: 8000 }).then(() => true, () => false);
+  report(opened, "касание открывает подбор по VIN");
+}
+
 // 3. Header folds on the way down and returns on the way up.
 await page.goto(`${base}/catalog`, { waitUntil: "networkidle" });
 const header = page.locator("header").first();

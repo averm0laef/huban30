@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight16Regular, Clock20Regular, Search20Regular } from "@fluentui/react-icons";
+import { ChevronRight16Regular, ChevronRight20Regular, Clock20Regular, Search20Regular, VehicleCar24Regular } from "@fluentui/react-icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -14,7 +14,7 @@ import { catalogSearchHref } from "../_lib/catalog-search-url";
 import { clearRecentCatalogSearches, readRecentCatalogSearches, rememberCatalogSearch } from "../_lib/recent-catalog-searches";
 import { searchServiceLinks, suggestedCatalogSections } from "../_lib/search-guidance";
 import { categoryHrefBySlug, exactCategoryMatch, highlightParts, matchCategories, swapKeyboardLayout, type FlatCategory } from "../_lib/search-assist";
-import { catalogCategoryPhoto, categoryTiles, featuredCategoryKeys } from "../_lib/store-categories";
+import { categoryTiles, featuredCategoryKeys } from "../_lib/store-categories";
 import { EXPERT_HELP_VIN_STORAGE_KEY, isValidVin } from "../_lib/vin";
 import { ExpertHelpQueryLink } from "../catalog/expert-help-query-link";
 import { CatalogPhoto } from "./catalog-photo";
@@ -96,7 +96,8 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
   const layoutHint = state.status === "empty" ? swapKeyboardLayout(query) : null;
   const showHistory = open && !query && history.length > 0;
   const showStart = open && !query;
-  const showPanel = open && (showStart || (query.length >= 2 && !vin));
+  // A typed VIN gets its own one-line panel: «Подобрать запчасти по VIN» (owner, 24.11.2026 — on a phone nothing showed).
+  const showPanel = open && (showStart || query.length >= 2);
 
   // Section names for the "Разделы" row, loaded once the field is first used.
   useEffect(() => {
@@ -308,7 +309,17 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
       {showPanel ? (
         <div aria-label={showStart ? (showHistory ? "Недавние запросы" : "С чего начать поиск") : "Подсказки поиска"}
           className={styles.searchSuggestions} id={popupId} ref={panelRef} role={state.status === "ready" && !showHistory ? "group" : "dialog"}>
-          {showStart ? (
+          {vin ? (
+            <Link className={styles.searchVinAction} href={`/podbor?vin=${encodeURIComponent(query.toUpperCase())}`}
+              onClick={() => {
+                setOpen(false);
+                try { window.sessionStorage.setItem(EXPERT_HELP_VIN_STORAGE_KEY, query.toUpperCase()); } catch { /* The page still opens. */ }
+              }}>
+              <VehicleCar24Regular aria-hidden="true" />
+              <span><strong>Подобрать запчасти по VIN</strong><small>{query.toUpperCase()}</small></span>
+              <ChevronRight20Regular aria-hidden="true" />
+            </Link>
+          ) : showStart ? (
             <>
               {showHistory ? (
                 <>
@@ -382,7 +393,7 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
                     >
                       <span className={styles.searchSuggestionFigure}>
                         <CatalogPhoto className={styles.searchSuggestionMedia} sizes="42px" src={item.primaryImage?.url}
-                          showNote={false} categoryImage={catalogCategoryPhoto(item.category)} />
+                          showNote={false} />
                       </span>
                       <span className={styles.searchSuggestionIdentity}>
                         <span className={styles.searchSuggestionName}><Highlighted query={query} text={item.name} /></span>

@@ -2433,6 +2433,14 @@ button.promoControl {
   text-decoration: none;
 }
 .searchSectionLink small { display: block; color: var(--store-muted); font-size: .75rem; font-weight: 500; }
+/* A typed VIN: one clear action in the suggestions, the car of the VIN banner beside it. */
+.searchVinAction { display: flex; align-items: center; gap: 12px; min-height: 60px; margin: 6px; padding: 10px 14px; border-radius: var(--store-radius-sm); background: var(--store-brand-soft); color: var(--store-brand-strong); text-decoration: none; }
+.searchVinAction > svg:first-child { flex: none; width: 26px; height: 26px; color: var(--store-brand); }
+.searchVinAction > span { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.searchVinAction strong { font-family: var(--store-font-display); font-size: .95rem; font-weight: 800; }
+.searchVinAction small { color: var(--store-muted); font-size: .8rem; letter-spacing: .04em; overflow-wrap: anywhere; }
+.searchVinAction:hover, .searchVinAction:focus-visible { background: var(--store-brand); color: var(--store-on-brand); }
+.searchVinAction:hover small, .searchVinAction:focus-visible small, .searchVinAction:hover > svg, .searchVinAction:focus-visible > svg { color: inherit; }
 .searchSectionLink:hover { background: var(--store-brand-soft); color: var(--store-brand); }
 .searchSectionCount { flex: none; min-width: 28px; padding: 2px 8px; border-radius: var(--store-radius-full); background: var(--store-surface-strong); color: var(--store-muted); font-size: .75rem; font-variant-numeric: tabular-nums; text-align: center; }
 .searchSuggestions mark { background: transparent; color: var(--store-brand); font-weight: 750; }
@@ -2484,15 +2492,26 @@ button.promoControl {
     width: 100%;
     border-radius: 0 0 22px 22px;
   }
-  .searchAssist { transition: opacity var(--store-duration-base) var(--store-ease), margin var(--store-duration-slow) var(--store-ease), min-height var(--store-duration-slow) var(--store-ease); }
+  /* The VIN banner folds with the header as smoothly as the logo row: max-height, margin and padding animate
+     together (an instant `height: 0` made the header jump, owner 24.11.2026). Hidden for assistive tech only once
+     the fold has finished; reduced motion keeps the fold, without the animation. */
+  .mobileSearchRow .searchAssist {
+    max-height: 120px;
+    transition: max-height var(--store-duration-slow) var(--store-ease), min-height var(--store-duration-slow) var(--store-ease),
+      margin var(--store-duration-slow) var(--store-ease), padding var(--store-duration-slow) var(--store-ease),
+      opacity var(--store-duration-base) var(--store-ease), transform var(--store-duration-fast) var(--store-ease);
+  }
   .headerInset[data-collapsed="true"] .searchAssist {
     min-height: 0;
-    height: 0;
+    max-height: 0;
     margin-top: 0;
     padding-block: 0;
     overflow: hidden;
     opacity: 0;
     visibility: hidden;
+    transition: max-height var(--store-duration-slow) var(--store-ease), min-height var(--store-duration-slow) var(--store-ease),
+      margin var(--store-duration-slow) var(--store-ease), padding var(--store-duration-slow) var(--store-ease),
+      opacity var(--store-duration-base) var(--store-ease), visibility 0s linear var(--store-duration-slow);
   }
   /* With the logo row gone the search row sits right under the status bar. */
   .headerInset[data-collapsed="true"] .mobileSearchRow .headerRowInner { padding-top: max(8px, env(safe-area-inset-top)); }
@@ -2632,9 +2651,9 @@ button.promoControl {
 .headerMenuLinks a span { transition: color var(--store-duration-fast) var(--store-ease); }
 .headerMenuLinks a:hover strong { color: var(--store-brand); }
 
-/* Prioritize page content over promotion, retaining search and VIN menu links. */
+/* «Подбор по VIN» stays under the search on every page (owner, 24.11.2026: it had been hidden off the home page);
+   it folds away with the header on scroll. */
 @media (max-width: 767px) {
-  .header:not([data-home]) .searchAssist { display: none; }
   .storefront input:not([type="checkbox"], [type="radio"], [type="file"]),
   .storefront select,
   .storefront textarea { font-size: 1rem; }
