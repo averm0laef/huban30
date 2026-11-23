@@ -54,6 +54,15 @@ describe.skipIf(!url)("shop offers through the cross graph (real PostgreSQL)", (
     expect(await first("w914/2", "MANN")).toMatchObject({ matchedVia: "exact", sku: "W 914/2" });
   });
 
+  it("knows the article 1С keeps with a second number in the same field, by either number", async () => {
+    expect(await shop.filedUnder(["7515"])).toEqual(["7515 (32215)"]);
+    expect(await shop.filedUnder(["322-15", "nothing-such"])).toEqual(["7515 (32215)"]);
+    expect(await first("7515 (32215)", null)).toMatchObject({ matchedVia: "exact", name: "Подшипник 7515 (32215)" });
+    // Too short to be a number, and a number that only begins the same way.
+    expect(await shop.filedUnder(["751"])).toEqual([]);
+    expect(await shop.filedUnder(["75150"])).toEqual([]);
+  });
+
   it("names our product without the staff's notes typed into its name in 1С", async () => {
     expect(await first("KP-170", null)).toMatchObject({ matchedVia: "exact", name: "Клипса крепежная TORSO", sku: "KP-170" });
   });

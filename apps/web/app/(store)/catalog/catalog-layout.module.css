@@ -114,10 +114,10 @@
 .sectionSearch:focus-within { border-color: var(--store-brand); outline: 2px solid color-mix(in srgb, var(--store-brand) 30%, transparent); }
 .sectionSearch > svg { flex: none; }
 /* 16px keeps iOS from zooming the page when the field is focused. */
-.toolbar .sectionSearch input { flex: 1 1 auto; min-width: 0; height: 42px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--store-text); font-size: 16px; }
+.toolbar .sectionSearch input { flex: 1 1 auto; min-width: 0; height: 44px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--store-text); font-size: 16px; }
 .toolbar .sectionSearch button {
   flex: none;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border: 0;
   border-radius: 8px;
@@ -138,7 +138,7 @@
 .sortSelect select {
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding-inline-start: 38px;
   padding-inline-end: 35px;
   border: 1px solid transparent;
@@ -196,8 +196,8 @@
 .viewToggle a {
   display: grid;
   place-items: center;
-  width: 41px;
-  min-height: 36px;
+  width: 44px;
+  min-height: 44px;
   border-radius: 9px;
   color: var(--store-muted);
   text-decoration: none;
@@ -214,7 +214,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 5px 14px;
   border-radius: var(--store-radius-full);
   background: var(--store-surface);
@@ -248,7 +248,7 @@
   .quickFilter { display: none; }
   .mobileFilter { gap: 4px; padding-inline: 7px; font-size: .79rem; }
   .viewToggle { padding: 2px; }
-  .viewToggle a { width: 40px; min-height: 40px; }
+  .viewToggle a { width: 44px; min-height: 44px; }
 }
 @media (max-width: 400px) {
   /* Fluent's own atomic class sets the icon's display, so the hide needs the
@@ -315,3 +315,50 @@
    surrounding grid never moves. */
 .categoryTile span, .subsectionName { transition: font-weight var(--store-duration-fast) var(--store-ease); }
 .categoryTile:hover span, .subsectionTile:hover .subsectionName { font-weight: 750; }
+
+/* «Показывать по 24 / 48 / 96»: the page size, beside the order of the list. */
+.pageSizeSelect { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; min-width: 0; color: var(--store-muted); font-size: .87rem; }
+.pageSizeSelect select {
+  min-height: 44px;
+  padding-inline: 10px 28px;
+  border: 1px solid transparent;
+  border-radius: var(--store-radius-sm);
+  background-color: var(--store-bg);
+  color: var(--store-text);
+  font-size: .87rem;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.pageSizeSelect select:hover { border-color: var(--store-border); }
+@media (max-width: 900px) {
+  /* On a tablet and a phone the words give their place to the controls; the select keeps its accessible name. */
+  .pageSizeSelect > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+@media (max-width: 670px) {
+  /* 16px keeps iOS from zooming the page when the select opens. */
+  .pageSizeSelect select { padding-inline: 8px 24px; font-size: 16px; }
+}
+
+/* Passenger cars / trucks / tractors and machinery: one row of links above the list; on a phone it scrolls sideways
+   inside itself, the page does not. */
+.kindTabs { display: flex; gap: 8px; min-width: 0; margin: 0 0 16px; overflow-x: auto; scrollbar-width: thin; }
+.kindTabs a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding-inline: 14px;
+  border: 1px solid var(--store-border);
+  border-radius: var(--store-radius-sm);
+  background: var(--store-surface);
+  color: var(--store-text);
+  font-size: .9rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.kindTabs a:hover { border-color: var(--store-brand); color: var(--store-brand); }
+.kindTabs a[aria-current] { border-color: var(--store-brand); background: var(--store-brand-soft); color: var(--store-brand); }
+.kindTabs small { color: var(--store-muted); font-size: .8rem; font-weight: 500; font-variant-numeric: tabular-nums; }

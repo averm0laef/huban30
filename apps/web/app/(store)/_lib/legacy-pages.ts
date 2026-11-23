@@ -22,15 +22,7 @@ export interface StoreContentPage {
   title: string;
 }
 
-/**
- * Yandex's map-widget accepts the same `text=` address search as the
- * yandex.ru/maps link already used elsewhere (`STORE_MAP_URL` in
- * site-config.ts) — built from the same two constants here instead of
- * duplicating a hand-encoded string, so the embedded pin and the "open in
- * Яндекс Карты" fallback link can never point at different addresses.
- */
-// The shop's organisation card (oid) centred on its pickup point.
-const MAP_EMBED_SRC = "https://yandex.ru/map-widget/v1/?ll=116.995560%2C52.525390&z=17&oid=207536410283&ol=biz";
+const MAP_EMBED_SRC = "https://yandex.ru/map-widget/v1/?z=12&ol=biz&oid=207536410283";
 
 /**
  * Static storefront content served from `/[page]`.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { partSizeKey, partSpecs, sizeLabel, sizeSearch, specLabels, specsConflict } from "./catalog-part-specs.js";
+import { packLabel, packOf, partSizeKey, partSpecs, sizeLabel, sizeSearch, specLabels, specsConflict } from "./catalog-part-specs.js";
 
 // Names from the owner's 1С base (export of 2026-11-22).
 describe("what a 1С name says about the part", () => {
@@ -106,3 +106,51 @@ describe("finding the parts of one standard size among the names", () => {
   });
 });
 
+
+// Names from the owner's 1С base (export of 2026-11-22).
+describe("the pack a liquid is sold in", () => {
+  it("reads two packs of one oil as one product: only the amount differs", () => {
+    const one = packOf("9066 5W-50 Synthoil High Tech 1л", "9066");
+    const four = packOf("9067 5W-50 Synthoil High Tech 4л", "9067");
+    expect(one).toMatchObject({ amount: 1, unit: "l" });
+    expect(four).toMatchObject({ amount: 4, unit: "l" });
+    expect(four!.key).toBe(one!.key);
+  });
+
+  it("does not mind the word order, the box count or how the litre is written", () => {
+    const key = packOf("Масло моторное Totachi Grand Touring SN CF 5w-40 синт. 4л.", "4562374690820")!.key;
+    expect(packOf("Моторное масло Totachi Grand Touring SN CF 5W-40 синт. 1 л 1/12", "4562374690813")!.key).toBe(key);
+    expect(packOf("Масло моторное Totachi Grand Touring SN CF 5w-40 синт. 20 литров", null)).toMatchObject({ amount: 20, key, unit: "l" });
+    expect(packOf("Масло моторное Totachi Grand Touring SN CF 5w-40 синт. 0,946L 1*4", null)).toMatchObject({ amount: 0.946, key });
+  });
+
+  it("knows an oil by its viscosity when the name does not say «масло»", () => {
+    expect(packOf("ALPHA'S 10W40 SN (бензин, синтетика) 1л", "709741")).toMatchObject({ amount: 1, unit: "l" });
+  });
+
+  it("keeps another viscosity, line or approval another product", () => {
+    const key = packOf("Масло моторное Totachi Grand Touring SN CF 5w-40 синт. 4л", null)!.key;
+    expect(packOf("Масло моторное Totachi Grand Touring SN CF 5w-30 синт. 4л", null)!.key).not.toBe(key);
+    expect(packOf("Масло моторное Totachi Eco Gasoline SN CF 5w-40 синт. 4л", null)!.key).not.toBe(key);
+    expect(packOf("Масло моторное Totachi Grand Touring SP CF 5w-40 синт. 4л", null)!.key).not.toBe(key);
+  });
+
+  it("weighs grease and the like in kilograms, apart from litres", () => {
+    expect(packOf("Антифриз Felix Carbox G12+ красный 10 кг", null)).toMatchObject({ amount: 10, unit: "kg" });
+    expect(packOf("Антифриз Felix Carbox G12+ красный 5кг", null)).toMatchObject({ amount: 5, unit: "kg" });
+  });
+
+  it("says nothing of a part that is not a liquid, or of a name with two amounts or none", () => {
+    expect(packOf("Фильтр масляный двигателя 4л MANN W 712/75", "W71275")?.amount ?? null).not.toBe(712);
+    expect(packOf("Колодки тормозные передние Toyota Corolla", null)).toBeNull();
+    expect(packOf("Масло моторное Mobil Super 3000 5W-40 4л/5л", null)).toBeNull();
+    expect(packOf("Масло моторное Mobil Super 3000 5W-40", null)).toBeNull();
+    expect(packOf("Канистра 20л", null)).toBeNull();
+  });
+
+  it("names a pack the way a price tag does", () => {
+    expect(packLabel({ amount: 4, unit: "l" })).toBe("4 л");
+    expect(packLabel({ amount: 0.5, unit: "l" })).toBe("0,5 л");
+    expect(packLabel({ amount: 10, unit: "kg" })).toBe("10 кг");
+  });
+});

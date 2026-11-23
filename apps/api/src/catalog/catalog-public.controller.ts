@@ -40,6 +40,12 @@ export class CatalogPublicController {
     return this.catalog.brands(category);
   }
 
+  @Get("vehicle-kinds")
+  async vehicleKinds(@Req() request: FastifyRequest, @Query("category") category?: string) {
+    await this.rateLimit.consume("catalog-vehicle-kinds", request.ip, CATALOG_READS_PER_MINUTE, 60);
+    return this.catalog.vehicleKinds(category);
+  }
+
   @Get("products")
   async products(@Query() query: unknown, @Req() request: FastifyRequest) {
     await this.rateLimit.consume("catalog-products", request.ip, CATALOG_READS_PER_MINUTE, 60);

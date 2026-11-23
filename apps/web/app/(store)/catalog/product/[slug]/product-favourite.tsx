@@ -4,6 +4,7 @@ import { Heart24Filled, Heart24Regular } from "@fluentui/react-icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { recordProductView } from "../../../_lib/product-view-history";
 import { apiRequest, errorText, readSession } from "../../../_lib/storefront-api";
 import styles from "./product-page.module.css";
 
@@ -25,6 +26,8 @@ export function ProductFavourite({ productId }: { productId: string }) {
           if (active) setViewer(session ? "staff" : "guest");
           return;
         }
+        // The session is read here once for the page, so the visit goes to «Вы смотрели» from here too.
+        void recordProductView(productId);
         const item = await apiRequest<{ saved: boolean }>(itemPath, { signal: request.signal });
         if (active) {
           setSaved(item.saved);
@@ -35,7 +38,7 @@ export function ProductFavourite({ productId }: { productId: string }) {
       }
     })();
     return () => { active = false; request.abort(); };
-  }, [itemPath]);
+  }, [itemPath, productId]);
 
   async function update() {
     if (viewer === "guest") {

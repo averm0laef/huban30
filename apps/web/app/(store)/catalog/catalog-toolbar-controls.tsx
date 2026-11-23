@@ -2,6 +2,8 @@
 
 import { Filter20Regular, TextSortAscending20Regular } from "@fluentui/react-icons";
 
+import { CATALOG_PAGE_SIZES } from "@an30/contracts";
+
 import type { CatalogSort } from "./catalog-query";
 import styles from "./catalog-layout.module.css";
 
@@ -35,9 +37,24 @@ export function CatalogSortSelect({ value }: { value: CatalogSort }) {
         onChange={event => event.currentTarget.form?.requestSubmit()}
       >
         <option value="relevance">По совпадению</option>
+        <option value="popular">По популярности</option>
         <option value="name">По названию</option>
         <option value="price_asc">Сначала дешевле</option>
         <option value="price_desc">Сначала дороже</option>
+      </select>
+    </label>
+  );
+}
+
+/** How many products a page holds. Changing it submits the catalogue form, which opens the list from its first page. */
+export function CatalogPageSizeSelect({ value }: { value: number }) {
+  return (
+    <label className={styles.pageSizeSelect}>
+      <span>Показывать по</span>
+      <select aria-label="Товаров на странице" defaultValue={value} key={value} name="perPage"
+        onChange={event => event.currentTarget.form?.requestSubmit()}
+      >
+        {CATALOG_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
       </select>
     </label>
   );

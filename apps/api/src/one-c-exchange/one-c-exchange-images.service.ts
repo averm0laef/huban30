@@ -90,6 +90,14 @@ export class OneCExchangeImagesService {
     )).rowCount;
     if (alreadyAttached) return "unchanged";
 
+    // A photo taken down on a rights claim stays down (docs/PRODUCT_PHOTOS.md): 1С keeps sending the file it has.
+    const withdrawn = (await this.database.query(
+      `SELECT 1 FROM app.product_image_withdrawals
+       WHERE (sha256 = $1 AND byte_size = $2) OR (upload_sha256 = $1 AND upload_byte_size = $2) LIMIT 1`,
+      [sha256, content.length],
+    )).rowCount;
+    if (withdrawn) return this.skip(task, "this photo was taken down in «Фото товаров»");
+
     try {
       await this.malwareScanner.assertClean(content);
       await this.mediaValidation.assertValid(content, detected.mime);

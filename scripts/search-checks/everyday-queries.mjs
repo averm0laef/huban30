@@ -4,7 +4,7 @@
 //
 // Usage: node scripts/search-checks/everyday-queries.mjs [API address]      (default http://127.0.0.1:4000)
 // Reads only. Waits a second between queries: the API allows a visitor 60 catalogue searches a minute.
-// Exit code: 0 — as many queries are answered as on the day the list was measured (72 of 75), 1 — fewer.
+// Exit code: 0 — as many queries are answered as on the day the list was measured (74 of 75), 1 — fewer.
 const QUERIES = [
   // suspension and steering
   ["стойки", "амортизатор|стойка аморт|стойк[аи] (перед|зад|газ|масл)"],
@@ -93,7 +93,7 @@ const QUERIES = [
 ];
 
 /** How many of the queries gave the right goods when the list was last measured on the owner's assortment. */
-const EXPECTED = 72;
+const EXPECTED = 74;
 const base = (process.argv[2] ?? "http://127.0.0.1:4000").replace(/\/$/u, "");
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let good = 0;
@@ -113,5 +113,5 @@ for (const [query, expected] of QUERIES) {
   await wait(1100);
 }
 console.log(rows.join("\n"));
-console.log(`\nqueries: ${QUERIES.length} | the first ten are what was meant: ${good} (measured on 22.11.2026: ${EXPECTED})`);
+console.log(`\nqueries: ${QUERIES.length} | the first ten are what was meant: ${good} (measured on 23.11.2026: ${EXPECTED})`);
 process.exitCode = good >= EXPECTED ? 0 : 1;

@@ -11,7 +11,7 @@ corepack pnpm test
 corepack pnpm --filter @an30/web build
 ```
 
-Реальный регрессионный набор поиска (163 запроса) — на отдельной пустой БД:
+Реальный регрессионный набор поиска (188 запросов) — на отдельной пустой БД:
 
 ```bash
 createdb an30_search_scratch
@@ -43,7 +43,7 @@ dropdb an30_search_scratch
 - Справочник машин UMAPI (`app.vehicle_catalog_*`) хранится в нашей базе по лицензии владельца; выбор машины идёт только из него и не тратит запросов платных каталогов. Загрузка, обновление и устройство — `docs/UMAPI.md`; файл лежит в `local-data/umapi/` и в Git не попадает.
 - TecDoc (tecdoc.site): только «запрос — ответ» для посетителя. Нельзя писать его данные в PostgreSQL (в том числе в `app.article_crosses`), вызывать его из фоновых задач и увеличивать кеш без письменного согласия поставщика — см. `docs/TECDOC.md`.
 - Разделы каталога и сортировка товаров из 1С — `docs/OWN_CATALOG.md`; при изменении `storefront-taxonomy.ts` нужна миграция с теми же строками.
-- Описание подбора — `docs/PARTS_FINDER.md`, обмена с 1С — `docs/ONE_C_INTEGRATION.md`, поиска — `docs/SEARCH_ENGINE.md`, хранения фото товаров в S3 — `docs/PRODUCT_PHOTOS_S3.md`.
+- Описание подбора — `docs/PARTS_FINDER.md`, обмена с 1С — `docs/ONE_C_INTEGRATION.md`, поиска — `docs/SEARCH_ENGINE.md`, хранения фото товаров в S3 — `docs/PRODUCT_PHOTOS_S3.md`, источников фото и снятия их с сайта — `docs/PRODUCT_PHOTOS.md` (картинки с чужих сайтов не собирать).
 
 ## Репозиторий
 

@@ -19,6 +19,8 @@ import {
   CATALOG_SITEMAP_PART_SIZE,
   CatalogSitemapQuerySchema,
   type CatalogProductsQuery,
+  CATALOG_VEHICLE_KINDS,
+  type CatalogVehicleKind,
 } from "@an30/contracts";
 
 import { PRODUCT_PHOTO_STORAGE, type ProductPhotoStorage } from "../adapters/product-photo-storage.js";
@@ -31,7 +33,7 @@ import {
 import { buildCategoryTree } from "./catalog-category-tree.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { originalNumbersIn } from "./catalog-original-numbers.js";
-import { partSpecs, specLabels } from "./catalog-part-specs.js";
+import { packLabel, packOf, partSpecs, specLabels, type ProductPack } from "./catalog-part-specs.js";
 import { alternateSearchQueries, catalogPartsAlias, foldYo } from "./catalog-search-normalize.js";
 import { catalogSearchIdentity } from "./catalog-search-identity.js";
 import {
@@ -146,6 +148,9 @@ const PRODUCT_SELECT = `SELECT product.id,product.sku::text,product.name,product
   brand.slug::text AS brand_slug,category.id AS category_id,category.name AS category_name,
   category.slug::text AS category_slug`;
 
+/** How often app.product_popularity is brought up to date. */
+const POPULARITY_REFRESH_MS = 15 * 60_000;
+
 function safeInteger(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
@@ -172,6 +177,9 @@ function withSingleLineSearchText(rawQuery: unknown): unknown {
  */
 function firstPageKey(query: CatalogProductsQuery): string | null {
   if (query.q || query.brand.length > 0 || query.availability !== "all" || query.offset !== 0) return null;
+  // Kept pages are few and the same for everyone: a list narrowed by vehicle kind or ordered by a number that
+  // changes through the day (popularity) is read every time.
+  if (query.vehicleKind || query.sort === "popular") return null;
   if (query.minPriceKopeks !== undefined || query.maxPriceKopeks !== undefined) return null;
   return JSON.stringify([query.category ?? "", query.sort, query.limit]);
 }
@@ -331,7 +339,10 @@ export class CatalogPublicService {
       plan: query.q ? searchTokenPlan(query.q) : { alternatives: [], leads: [], words: [] },
       query,
     };
-    if (this.engine && input.folded !== null && catalogSearchIsFreeText(input)) {
+    if (query.sort === "popular") this.refreshPopularity();
+    // The engine's index knows neither the vehicle kind nor the popularity: PostgreSQL answers those lists.
+    const engineCanAnswer = !query.vehicleKind && query.sort !== "popular";
+    if (this.engine && engineCanAnswer && input.folded !== null && catalogSearchIsFreeText(input)) {
       const viaEngine = await withPublicCatalogQuery(() => this.productsFromEngine(this.engine!, input));
       if (viaEngine) return viaEngine;
     }
@@ -348,6 +359,94 @@ export class CatalogPublicService {
       }
       return { ...strict, matchMode: "all" as const };
     }));
+  }
+
+  private popularityRefreshedAt = 0;
+
+  /**
+   * app.product_popularity is a stored count (migration 0053). It is brought up to date at most once in
+   * POPULARITY_REFRESH_MS, in the background: the list that asked for it does not wait, the next one reads it fresh.
+   */
+  private refreshPopularity(): void {
+    const now = Date.now();
+    if (now - this.popularityRefreshedAt < POPULARITY_REFRESH_MS) return;
+    this.popularityRefreshedAt = now;
+    void this.database.query("SELECT app.refresh_product_popularity()").catch(() => {
+      // Another API process is refreshing it, or the database is busy: the stored count stays as it was.
+      this.popularityRefreshedAt = 0;
+    });
+  }
+
+  /**
+   * How many public products are for each kind of vehicle, in the whole catalogue or in one section with its
+   * subsections; a kind with no products is left out, so the storefront never offers an empty list.
+   */
+  async vehicleKinds(rawCategory?: unknown) {
+    const category = typeof rawCategory === "string" && rawCategory.length <= 180
+      && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(rawCategory)
+      ? rawCategory
+      : null;
+    const result = await this.database.query<{ kind: CatalogVehicleKind; product_count: string }>(
+      `${visibleCategoriesWithSubtreeCte("$1")}
+       SELECT product.vehicle_kind AS kind,count(*)::text AS product_count
+       FROM app.products AS product
+       LEFT JOIN app.brands AS brand ON brand.id=product.brand_id
+       LEFT JOIN app.categories AS category ON category.id=product.category_id
+       WHERE product.vehicle_kind IS NOT NULL AND product.is_active AND product.deleted_at IS NULL
+         AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+         AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
+         AND ($1::text IS NULL OR category.id IN (SELECT id FROM category_subtree))
+       GROUP BY product.vehicle_kind`,
+      [category],
+    );
+    const counts = new Map(result.rows.map((row) => [row.kind, safeInteger(row.product_count, "vehicle kind product count")]));
+    return {
+      items: CATALOG_VEHICLE_KINDS.filter((kind) => (counts.get(kind) ?? 0) > 0)
+        .map((kind) => ({ kind, productCount: counts.get(kind)! })),
+    };
+  }
+
+  /**
+   * The same product in other packs: «Масло Totachi 5W-30 1 л» beside «… 4 л» and «… 20 л». Same maker, same
+   * section and the very same name once the pack and the article are taken out of it — a different viscosity or line is another
+   * product, not another pack. Smallest pack first.
+   */
+  private async packSizes(row: ProductDetailRow) {
+    const own = packOf(row.name, row.sku);
+    if (!own) return [];
+    const result = await this.database.query<ProductRow>(
+      `${VISIBLE_CATEGORIES_CTE}
+       ${PRODUCT_SELECT},NULL::uuid AS primary_image_id,NULL::text AS primary_image_alt_text,
+              NULL::boolean AS primary_image_is_primary,NULL::text AS primary_image_mime_type,
+              NULL::text AS primary_image_byte_size
+       ${PUBLIC_PRODUCT_FROM}
+       WHERE product.is_active AND product.deleted_at IS NULL AND product.id<>$1
+         AND product.brand_id IS NOT DISTINCT FROM $2::uuid AND product.category_id IS NOT DISTINCT FROM $3::uuid
+         AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
+         AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
+         AND product.name_folded % $4
+       ORDER BY similarity(product.name_folded,$4) DESC,product.id LIMIT 60`,
+      [row.id, row.brand_id, row.category_id, foldYo(row.name)],
+    );
+    const packs = new Map<string, { pack: ProductPack; row: ProductRow }>();
+    for (const candidate of result.rows) {
+      const pack = packOf(candidate.name, candidate.sku);
+      if (!pack || pack.key !== own.key || (pack.unit === own.unit && pack.amount === own.amount)) continue;
+      const size = `${pack.unit}:${pack.amount}`;
+      const kept = packs.get(size);
+      // Two cards of one pack (the owner's base has such doubles): the one that can be bought stands for it.
+      if (!kept || (Number(kept.row.available_quantity) <= 0 && Number(candidate.available_quantity) > 0)) packs.set(size, { pack, row: candidate });
+    }
+    return [...packs.values()]
+      .sort((left, right) => left.pack.unit.localeCompare(right.pack.unit) || left.pack.amount - right.pack.amount)
+      .slice(0, 12)
+      .map(({ pack, row: candidate }) => {
+        const summary = this.productSummary(candidate);
+        return {
+          availableQuantity: summary.availableQuantity, label: packLabel(pack), name: summary.name,
+          priceKopeks: summary.priceKopeks, slug: summary.slug,
+        };
+      });
   }
 
   /**
@@ -406,9 +505,8 @@ export class CatalogPublicService {
 
   private async productPage(client: { query: DatabaseService["query"] }, input: CatalogSearchInput, matchAny: boolean) {
     const { query } = input;
-    // A typo must be close to the word in the strict pass; the retry also
-    // accepts e.g. "фольтр" for "фильтр".
-    await client.query(`SET LOCAL pg_trgm.word_similarity_threshold=${matchAny ? "0.4" : "0.5"}`);
+    // Candidates for a typo, for the trigram index; how close the word has to be is decided in wordConditions.
+    await client.query("SET LOCAL pg_trgm.word_similarity_threshold=0.4");
     const p = new SqlParameters();
     const cte = catalogSearchCte(p, input, visibleCategoriesWithSubtreeCte);
     const where = catalogSearchFilter(p, input, matchAny);
@@ -501,6 +599,7 @@ export class CatalogPublicService {
       features: specLabels(partSpecs(row.name)).map(([label, value]) => ({ label, value })),
       images: imageViews,
       originalNumbers: originalNumbersIn(row.name, row.sku),
+      packSizes: await this.packSizes(row),
       primaryImage: imageViews[0] ?? null,
     };
   }
@@ -697,6 +796,11 @@ export class CatalogPublicService {
       // Ranking never lets a fuzzy match outrank an exact one: an exact
       // normalised-article match, then a confirmed cross-equivalent, then an
       // article prefix, and only then text relevance (catalog-search-sql.ts).
+      case "popular": return {
+        join: "LEFT JOIN app.product_popularity AS popularity ON popularity.product_id=product.id",
+        // Among products nobody has chosen yet, what can be bought today stands first.
+        order: `COALESCE(popularity.score,0) DESC,(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,${NAME_ORDER}`,
+      };
       case "relevance": return input.folded !== null
         ? catalogSearchRelevanceOrder(p, input, article)
         // Browsing a section: what can be bought today first, then priced

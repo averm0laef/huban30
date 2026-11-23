@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { JsonLd } from "../../_components/json-ld";
-import { getCatalogBrands, getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
+import { getCatalogBrands, getCatalogVehicleKinds, getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
 import { directSearchProduct } from "../../_lib/search-guidance";
 import { categoryHrefBySlug, exactCategoryMatch, flattenCategoryTree } from "../../_lib/search-assist";
 import { isValidVin } from "../../_lib/vin";
@@ -15,9 +15,9 @@ import { CatalogCategoryTiles } from "../catalog-category-tiles";
 import layoutStyles from "../catalog-layout.module.css";
 import resultsStyles from "../catalog-results.module.css";
 import { CatalogSearchPanel } from "../catalog-search-panel";
+import { CatalogVehicleKindTabs } from "../catalog-vehicle-kind-tabs";
 import type { CatalogEmptyState } from "../catalog-search-panel";
 import {
-  CATALOG_PAGE_SIZE,
   catalogFailureText,
   catalogPageHref,
   catalogProductCount,
@@ -41,9 +41,10 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
   const parameters = await searchParams;
   const state = parseCatalogPageQuery(parameters);
 
-  const [tree, brands] = await Promise.all([
+  const [tree, brands, vehicleKinds] = await Promise.all([
     getCategoryTree().catch(() => []),
     getCatalogBrands().catch(() => []),
+    getCatalogVehicleKinds().catch(() => []),
   ]);
 
   // A query that simply names a section ("аккумулятор", "фильтры") opens
@@ -72,9 +73,10 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
       const response = await searchCatalog({
         availability: state.availability,
         brands: state.brands,
-        limit: CATALOG_PAGE_SIZE,
-        offset: (state.page - 1) * CATALOG_PAGE_SIZE,
+        limit: state.pageSize,
+        offset: (state.page - 1) * state.pageSize,
         sort: state.sort,
+        vehicleKind: state.vehicleKind,
         ...(state.maxPriceRubles === null ? {} : { maxPriceKopeks: priceKopeks(state.maxPriceRubles) }),
         ...(state.minPriceRubles === null ? {} : { minPriceKopeks: priceKopeks(state.minPriceRubles) }),
         ...(state.query ? { query: state.query } : {}),
@@ -87,7 +89,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
       else errorMessage = "Не удалось прочитать ответ каталога.";
     }
   }
-  const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
   if (parameters.direct === "1" && !hasFilters && matchMode === "all") {
     const exactSlug = directSearchProduct(state.query, items, total);
     if (exactSlug) redirect(`/catalog/product/${encodeURIComponent(exactSlug)}`);
@@ -131,8 +133,9 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
       </header>
 
       {!state.query && <CatalogCategoryTiles tiles={catalogSectionTiles(tree)} />}
+      <CatalogVehicleKindTabs basePath="/catalog" kinds={vehicleKinds} state={state} />
       <div className={layoutStyles.layout}>
-        <CatalogFilterRail basePath="/catalog" brands={brands} state={state} tree={tree} />
+        <CatalogFilterRail basePath="/catalog" brands={brands} state={state} tree={tree} vehicleKinds={vehicleKinds} />
         <div className={layoutStyles.main}>
           <CatalogSearchPanel
             action="/catalog"
@@ -141,7 +144,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
             errorHeading={errorHeading}
             errorMessage={errorMessage}
             items={items}
-            pageSize={CATALOG_PAGE_SIZE}
+            pageSize={state.pageSize}
             state={state}
             matchMode={matchMode}
             total={total}

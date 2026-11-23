@@ -2,45 +2,57 @@
 
 import { Image20Regular } from "@fluentui/react-icons";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { CatalogPhoto } from "../../../_components/catalog-photo";
 import buttons from "../../../_components/store-button.module.css";
 import { WheelLoader } from "../../../_components/wheel-loader";
 import { FinderError } from "../../../_lib/parts-finder";
 import { umapiGet, umapiStatus, type UmapiPhotos } from "../../../_lib/umapi";
+import { ExpertHelpQueryLink } from "../../expert-help-query-link";
 import styles from "./product-page.module.css";
 
 type CataloguePhotos =
   | { status: "off" | "idle" | "loading" | "none" }
   | { message: string; status: "error" }
-  | { index: number; note: string; photos: string[]; status: "ready" };
+  | { note: string; photos: string[]; status: "ready" };
 
-/**
- * «Показать фото из каталога» (Claude Design canvas «совместимость и аналоги», «Фото из каталога»): a product without
- * a photo of its own may show the catalogue's photo of the part, on a button — one UMAPI request, never on opening the
- * page. While it loads, the logo's wheel turns, as on the 404 page.
- */
 function useCataloguePhotos(productId: string, wanted: boolean) {
   const [state, setState] = useState<CataloguePhotos>({ status: "off" });
+  const loading = useRef(false);
+
   useEffect(() => {
     if (!wanted) return undefined;
     let live = true;
-    void umapiStatus().then((status) => { if (live && status.photos) setState({ status: "idle" }); });
+    void umapiStatus().then((status) => {
+      if (live && status.photos) setState({ status: "idle" });
+    });
     return () => { live = false; };
   }, [wanted]);
-  function load() {
+
+  async function load() {
+    if (loading.current) return;
+    loading.current = true;
     setState({ status: "loading" });
-    umapiGet<UmapiPhotos>(`product/${encodeURIComponent(productId)}/photos`)
-      .then((data) => {
-        if (data.status === "ok" && "photos" in data && data.photos.length > 0) {
-          const via = data.part.via === "own" ? "" : " — номер-аналог из названия";
-          setState({ index: 0, note: `Фото из каталога: ${data.part.brand} ${data.part.article}${via}. Внешний вид товара на складе может отличаться.`, photos: data.photos, status: "ready" });
-        } else setState({ status: "none" });
-      })
-      .catch((caught: unknown) => setState({ message: caught instanceof FinderError ? caught.message : "Фото сейчас не загрузить.", status: "error" }));
+    try {
+      const data = await umapiGet<UmapiPhotos>(`product/${encodeURIComponent(productId)}/photos`);
+      if (data.status === "ok" && "photos" in data && data.photos.length > 0) {
+        const via = data.part.via === "own" ? "" : " · номер-аналог из названия";
+        const note = `Фото из каталога: ${data.part.brand} ${data.part.article}${via}. Внешний вид детали на складе может отличаться.`;
+        setState({ note, photos: [...new Set(data.photos)], status: "ready" });
+      } else if (data.status === "ambiguous" || data.status === "unknown_part") {
+        setState({ message: "В каталоге не удалось однозначно определить деталь.", status: "error" });
+      } else {
+        setState({ status: "none" });
+      }
+    } catch (error) {
+      setState({ message: error instanceof FinderError ? error.message : "Фото сейчас не загрузить.", status: "error" });
+    } finally {
+      loading.current = false;
+    }
   }
-  return { load, setState, state };
+
+  return { load, state };
 }
 
 export interface GalleryImage {
@@ -49,78 +61,60 @@ export interface GalleryImage {
   url: string;
 }
 
-/**
- * Main photo plus thumbnails. With one photo (or none) it is just the photo;
- * thumbnails appear only when there is something to switch between.
- */
-export function ProductGallery({ catalogPhotos = false, categoryImage, images, productId }: {
-  /** The product may be looked up in the parts catalogue (umapiCatalogueApplies). */
-  catalogPhotos?: boolean;
+export function ProductGallery({ catalogPhotos, categoryImage, images, productId, requestMessage }: {
+  catalogPhotos: boolean;
   categoryImage: string | null;
   images: GalleryImage[];
-  productId?: string;
+  productId: string;
+  requestMessage: string;
 }) {
-  const [activeId, setActiveId] = useState(images[0]?.id ?? "");
-  const active = images.find((image) => image.id === activeId) ?? images[0];
-  const catalogue = useCataloguePhotos(productId ?? "", Boolean(productId) && catalogPhotos && images.length === 0);
-  const shown = catalogue.state.status === "ready" ? catalogue.state : null;
+  const [activeIndex, setActiveIndex] = useState(0);
+  const { load, state } = useCataloguePhotos(productId, catalogPhotos && images.length === 0);
+  const fromCatalogue = state.status === "ready";
+  const photos = fromCatalogue
+    ? state.photos.map((url) => ({ alt: "Фото детали из каталога", url }))
+    : images.map(({ altText, url }) => ({ alt: altText, url }));
+  const active = photos[activeIndex] ?? photos[0];
 
   return (
-    <figure className={styles.gallery} data-multiple={images.length > 1 || (shown !== null && shown.photos.length > 1)}>
+    <figure className={styles.gallery} data-multiple={photos.length > 1}>
       <div className={styles.galleryMain}>
-        {shown ? (
-          <div className={styles.cataloguePhoto}>
-            {/* An address on the catalogue's media host: shown as it is, not through the site's image optimiser. */}
-            <img alt="Фото детали из каталога" src={shown.photos[shown.index]} />
-          </div>
-        ) : catalogue.state.status === "loading" ? (
-          <div className={styles.cataloguePhoto}><WheelLoader label="Ищем фото в каталоге…" /></div>
-        ) : (
         <CatalogPhoto
-          alt={active?.altText}
+          alt={active?.alt}
           categoryImage={categoryImage}
           className={styles.galleryPhoto}
           noteInside
-          preload
+          preload={Boolean(active) && !fromCatalogue && activeIndex === 0}
+          preview={{ images: photos, index: activeIndex }}
           sizes="(max-width: 690px) 100vw, (max-width: 1050px) 50vw, 460px"
           src={active?.url}
+          unoptimized={fromCatalogue}
         />
-        )}
-        {catalogue.state.status === "idle" ? (
-          <button className={`${buttons.button} ${buttons.soft} ${styles.catalogueButton}`} onClick={catalogue.load} type="button">
-            <Image20Regular aria-hidden="true" /> Показать фото из каталога
+      </div>
+      {photos.length > 1 ? (
+        <div className={styles.thumbs} role="group" aria-label={fromCatalogue ? "Фото из каталога" : "Фотографии товара"}>
+          {photos.map((photo, index) => (
+            <button aria-label={`Фото ${index + 1} из ${photos.length}`} aria-pressed={index === activeIndex}
+              className={styles.thumb} key={fromCatalogue ? photo.url : images[index]?.id} onClick={() => setActiveIndex(index)} type="button">
+              <Image alt="" fill referrerPolicy="no-referrer" sizes="64px" src={photo.url} unoptimized={fromCatalogue} />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <figcaption className={styles.photoActions}>
+        {state.status === "loading" ? <WheelLoader label="Ищем фото в каталоге…" /> : null}
+        {state.status === "ready" ? <p className={styles.catalogueNote} role="status">{state.note}</p> : null}
+        {state.status === "none" ? <p className={styles.catalogueNote} role="status">В каталоге нет фото детали.</p> : null}
+        {state.status === "error" ? <p className={styles.catalogueNote} role="alert">{state.message}</p> : null}
+        {state.status === "idle" || state.status === "error" ? (
+          <button className={`${buttons.button} ${buttons.soft}`} onClick={() => { void load(); }} type="button">
+            <Image20Regular aria-hidden="true" /> {state.status === "error" ? "Повторить поиск фото" : "Показать фото из каталога"}
           </button>
         ) : null}
-      </div>
-      {shown ? <figcaption className={styles.catalogueNote}>{shown.note}</figcaption> : null}
-      {catalogue.state.status === "none" ? <figcaption className={styles.catalogueNote}>В каталоге фото нет. <a href="/chat">Попросить фото со склада в чате</a></figcaption> : null}
-      {catalogue.state.status === "error" ? <figcaption className={styles.catalogueNote} role="alert">{catalogue.state.message}</figcaption> : null}
-      {shown && shown.photos.length > 1 ? (
-        <div className={styles.thumbs} role="group" aria-label="Фото из каталога">
-          {shown.photos.map((photo, index) => (
-            <button aria-label={`Фото ${index + 1} из ${shown.photos.length}`} aria-pressed={index === shown.index} className={styles.thumb} key={photo}
-              onClick={() => catalogue.setState({ ...shown, index })} type="button">
-              <img alt="" src={photo} />
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {images.length > 1 ? (
-        <div className={styles.thumbs} role="group" aria-label="Фотографии товара">
-          {images.map((image, index) => (
-            <button
-              key={image.id}
-              type="button"
-              className={styles.thumb}
-              aria-pressed={image.id === active?.id}
-              aria-label={`Фото ${index + 1} из ${images.length}`}
-              onClick={() => setActiveId(image.id)}
-            >
-              <Image alt="" fill sizes="64px" src={image.url} />
-            </button>
-          ))}
-        </div>
-      ) : null}
+        <ExpertHelpQueryLink className={`${buttons.button} ${buttons.quiet}`} prefillMessage={requestMessage}>
+          Запросить фото со склада
+        </ExpertHelpQueryLink>
+      </figcaption>
     </figure>
   );
 }

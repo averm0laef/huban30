@@ -1,0 +1,43 @@
+.modes { display: flex; flex-wrap: wrap; gap: 10px; }
+.modes button { min-height: 44px; border-radius: 999px; padding-inline: 22px; }
+.counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.counts div { padding: 14px 16px; border: 1px solid var(--colorNeutralStroke2); border-radius: 14px; }
+.counts dt { color: var(--colorNeutralForeground2); font-size: 13px; line-height: 1.4; }
+.counts dd { margin: 4px 0 0; font-size: 22px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.filters input[type="search"], .field input, .field select, .field textarea { min-height: 44px; width: 100%; padding: 8px 12px; border: 1px solid var(--colorNeutralStroke1); border-radius: 10px; background: var(--colorNeutralBackground1); color: inherit; font: inherit; }
+.filters input[type="search"] { max-width: 360px; }
+.check { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.check input { width: 20px; height: 20px; }
+.queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; }
+.item { display: grid; gap: 10px; align-content: space-between; padding: 16px; border: 1px solid var(--colorNeutralStroke2); border-radius: 14px; }
+.item strong { display: block; line-height: 1.4; overflow-wrap: anywhere; }
+.item small { display: block; }
+.item small, .meta { color: var(--colorNeutralForeground2); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.done { border-color: var(--colorPaletteGreenBorder2); background: var(--colorPaletteGreenBackground1); }
+.shoot { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 20px; border-radius: 999px; background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); font-weight: 600; cursor: pointer; }
+.shoot:hover { background: var(--colorBrandBackgroundHover); }
+.shoot:focus-within { outline: 2px solid var(--colorStrokeFocus2); outline-offset: 2px; }
+.shoot[aria-disabled="true"] { opacity: .6; cursor: progress; }
+.hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.field { display: grid; gap: 6px; max-width: 640px; }
+.field span { font-weight: 600; }
+.row .field { flex: 1 1 220px; }
+.row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.row button { min-height: 44px; border-radius: 999px; padding-inline: 22px; }
+.more summary { box-sizing: border-box; min-height: 44px; padding-block: 10px; cursor: pointer; }
+.more[open] summary { margin-bottom: 6px; }
+.log { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.log li { padding: 12px 14px; border: 1px solid var(--colorNeutralStroke2); border-radius: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; }
+.photo { display: grid; align-content: start; grid-template-columns: 88px minmax(0, 1fr); gap: 14px; padding: 14px; border: 1px solid var(--colorNeutralStroke2); border-radius: 14px; }
+.photo img { width: 88px; height: 88px; border-radius: 10px; object-fit: contain; background: #fff; border: 1px solid var(--colorNeutralStroke2); }
+.photo button { min-height: 44px; border-radius: 999px; }
+.photo form { display: grid; gap: 8px; grid-column: 1 / -1; }
+.sources { display: grid; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.sources li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--colorNeutralStroke2); border-radius: 12px; }
+.sources p { margin: 4px 0 0; }
+.sources button { min-height: 44px; border-radius: 999px; }
+@media (max-width: 900px) { .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .filters input[type="search"] { max-width: none; } .shoot { width: 100%; } }
+.pager button { min-height: 44px; }

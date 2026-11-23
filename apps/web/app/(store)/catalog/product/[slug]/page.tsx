@@ -14,7 +14,7 @@ import { findCatalogItem, formatRubles, getCategoryTree } from "../../../_lib/ca
 import { categoryPath, findCategorySlugPath } from "../../../_lib/catalog-tree";
 import { breadcrumbJsonLd, pageMetadata, privatePageMetadata, productJsonLd } from "../../../_lib/seo";
 import { catalogCategoryPhoto, publicSectionName } from "../../../_lib/store-categories";
-import { productCompatibilityPrefillMessage } from "../../../_lib/expert-help-prefill";
+import { productCompatibilityPrefillMessage, productPhotoPrefillMessage } from "../../../_lib/expert-help-prefill";
 import { catalogFailureText } from "../../catalog-query";
 import { ExpertHelpQueryLink } from "../../expert-help-query-link";
 import { ProductAnalogs, ProductInStockAlternative } from "./product-analogs";
@@ -158,7 +158,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <span className={layout.crumbCurrent} aria-current="page">{product.name}</span>
       </nav>
       <article className={layout.hero}>
-        <ProductGallery catalogPhotos={catalogueApplies} categoryImage={catalogCategoryPhoto(product.category, categoryAncestors)} images={images} key={`gallery-${product.id}`} productId={product.id} />
+        <ProductGallery catalogPhotos={catalogueApplies} categoryImage={catalogCategoryPhoto(product.category, categoryAncestors)} images={images} key={`gallery-${product.id}`} productId={product.id}
+          requestMessage={productPhotoPrefillMessage(product.name, product.sku)} />
 
         <div className={layout.info}>
           <div className={layout.identity}>
@@ -167,6 +168,22 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
           <h1>{product.name}</h1>
           {specs.length > 1 ? <SpecTable specs={specs.filter(([label]) => label !== "Бренд" && label !== "Артикул").slice(0, 4)} /> : null}
+          {product.packSizes.length > 0 ? (
+            <nav aria-label="Другие фасовки" className={layout.packSizes}>
+              <strong>Другие фасовки</strong>
+              <ul>
+                {product.packSizes.map((pack) => (
+                  <li key={pack.slug}>
+                    <Link href={`/catalog/product/${encodeURIComponent(pack.slug)}`} title={pack.name}>
+                      <b>{pack.label}</b>
+                      <span>{pack.priceKopeks === null ? "Цена по запросу" : formatRubles(pack.priceKopeks)}</span>
+                      <small data-available={pack.availableQuantity > 0}>{pack.availableQuantity > 0 ? "В наличии" : "Под заказ"}</small>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ) : null}
           <ProductCatalogueCheck applies={catalogueApplies} key={`check-${product.id}`} prefill={prefill} productId={product.id} />
         </div>
 

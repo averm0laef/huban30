@@ -6,7 +6,7 @@ import { Fragment } from "react";
 import { Search20Regular } from "../../_components/home-icons";
 import { JsonLd } from "../../_components/json-ld";
 import buttons from "../../_components/store-button.module.css";
-import { getCatalogBrands, getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
+import { getCatalogBrands, getCatalogVehicleKinds, getCategoryTree, searchCatalog, StorefrontApiError } from "../../_lib/catalog-api";
 import { isValidVin } from "../../_lib/vin";
 import type { CatalogItem } from "../../_lib/catalog-api";
 import { buildCategoryBreadcrumb, categoryPath, resolveCategoryPath, resolveTaxonomyPath } from "../../_lib/catalog-tree";
@@ -17,10 +17,10 @@ import { CatalogSubsectionTiles } from "../catalog-subsection-tiles";
 import layoutStyles from "../catalog-layout.module.css";
 import resultsStyles from "../catalog-results.module.css";
 import { CatalogSearchPanel } from "../catalog-search-panel";
+import { CatalogVehicleKindTabs } from "../catalog-vehicle-kind-tabs";
 import { ExpertHelpQueryLink } from "../expert-help-query-link";
 import type { CatalogEmptyState } from "../catalog-search-panel";
 import {
-  CATALOG_PAGE_SIZE,
   catalogFailureText,
   catalogPageHref,
   catalogProductCount,
@@ -71,7 +71,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   if (!location) notFound();
   const { ancestors, node } = location;
   // Only brands present in this section, with this section's counts.
-  const brands = await getCatalogBrands(node.slug).catch(() => []);
+  const [brands, vehicleKinds] = await Promise.all([
+    getCatalogBrands(node.slug).catch(() => []),
+    getCatalogVehicleKinds(node.slug).catch(() => []),
+  ]);
   const path = categoryPath([...ancestors, node].map((entry) => entry.slug));
   const breadcrumbTrail = buildCategoryBreadcrumb(ancestors, node);
 
@@ -101,9 +104,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
         availability: state.availability,
         brands: state.brands,
         category: node.slug,
-        limit: CATALOG_PAGE_SIZE,
-        offset: (state.page - 1) * CATALOG_PAGE_SIZE,
+        limit: state.pageSize,
+        offset: (state.page - 1) * state.pageSize,
         sort: state.sort,
+        vehicleKind: state.vehicleKind,
         ...(state.maxPriceRubles === null ? {} : { maxPriceKopeks: priceKopeks(state.maxPriceRubles) }),
         ...(state.minPriceRubles === null ? {} : { minPriceKopeks: priceKopeks(state.minPriceRubles) }),
         ...(state.query ? { query: state.query } : {}),
@@ -116,7 +120,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
       else errorMessage = "Не удалось прочитать ответ каталога.";
     }
   }
-  const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
   if (!errorMessage && total > 0 && state.page > totalPages) {
     redirect(catalogPageHref(path, state, totalPages));
   }
@@ -161,8 +165,9 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           query={catalogPageHref("", sectionLinkState(state))}
         />
       ) : null}
+      <CatalogVehicleKindTabs basePath={path} kinds={vehicleKinds} state={state} />
       <div className={layoutStyles.layout}>
-        <CatalogFilterRail activePath={[...ancestors, node].map((entry) => entry.slug)} basePath={path} brands={brands} state={state} tree={tree} />
+        <CatalogFilterRail activePath={[...ancestors, node].map((entry) => entry.slug)} basePath={path} brands={brands} state={state} tree={tree} vehicleKinds={vehicleKinds} />
         <div className={layoutStyles.main}>
           {isSearch && !isVin && !errorMessage ? (
             <p className={resultsStyles.looseMatchNote} role="status">
@@ -186,7 +191,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             errorHeading={errorHeading}
             errorMessage={errorMessage}
             items={items}
-            pageSize={CATALOG_PAGE_SIZE}
+            pageSize={state.pageSize}
             sectionName={node.name}
             state={state}
             matchMode={matchMode}

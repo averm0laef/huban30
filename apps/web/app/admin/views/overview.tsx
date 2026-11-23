@@ -3,7 +3,7 @@
 import { Button, Spinner } from "@fluentui/react-components";
 import { ArrowClockwise20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "../api";
 import type { SessionView } from "../types";
@@ -73,7 +73,7 @@ function Change({ value, suffix, goodWhenUp = true, unit = " %" }: { goodWhenUp?
   const good = value > 0 === goodWhenUp;
   return (
     <small className={good ? board.up : board.down}>
-      {value > 0 ? "▲" : "▼"} {number.format(Math.abs(value))}{unit} <span style={{ color: "#8b8fa8" }}>{suffix}</span>
+      {value > 0 ? "▲" : "▼"} {number.format(Math.abs(value))}{unit} <span style={{ color: "#5b5f78" }}>{suffix}</span>
     </small>
   );
 }
@@ -81,17 +81,29 @@ function Change({ value, suffix, goodWhenUp = true, unit = " %" }: { goodWhenUp?
 function SearchChart({ series }: { series: Dashboard["searchSeries"] }) {
   const [hover, setHover] = useState<number | null>(null);
   const [asTable, setAsTable] = useState(false);
+  const chart = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(760);
+  useEffect(() => {
+    const element = chart.current;
+    if (!element) return;
+    // Keep SVG user units at screen-pixel scale, so labels stay readable
+    // instead of shrinking along with a fixed desktop-sized viewBox.
+    const resize = () => setWidth(Math.max(160, element.getBoundingClientRect().width - 44));
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [asTable]);
   const buckets = series.buckets;
   const max = Math.max(4, ...buckets.map((bucket) => Math.max(bucket.value, bucket.average)));
   const step = Math.ceil(max / 3);
   const top = step * 3;
-  const width = 760;
   const height = 190;
   const slot = width / Math.max(buckets.length, 1);
   const y = (value: number) => height - (value / top) * height;
   const peak = buckets.reduce((best, bucket, index) => (bucket.value > (buckets[best]?.value ?? -1) ? index : best), 0);
   const average = buckets.map((bucket, index) => `${(index * slot + slot / 2).toFixed(1)},${y(bucket.average).toFixed(1)}`).join(" ");
-  const labelEvery = buckets.length > 12 ? Math.ceil(buckets.length / 8) : 1;
+  const labelEvery = Math.max(1, Math.ceil(buckets.length / Math.max(1, Math.floor(width / 52))));
   const hovered = hover === null ? null : buckets[hover];
   const total = buckets.reduce((sum, bucket) => sum + bucket.value, 0);
   return (
@@ -108,12 +120,12 @@ function SearchChart({ series }: { series: Dashboard["searchSeries"] }) {
           </table>
         </div>
       ) : (
-        <div className={board.chart} onMouseLeave={() => setHover(null)}>
+        <div className={board.chart} onMouseLeave={() => setHover(null)} ref={chart}>
           <svg aria-label={`Поиски: всего ${total}, пик ${buckets[peak]?.value ?? 0}`} role="img" viewBox={`-34 -12 ${width + 44} ${height + 32}`}>
             {[0, 1, 2, 3].map((line) => (
               <g key={line}>
                 <line stroke="#eef0f5" x1={0} x2={width} y1={y(line * step)} y2={y(line * step)} />
-                <text fill="#8b8fa8" fontSize={11} textAnchor="end" x={-8} y={y(line * step) + 4}>{line * step}</text>
+                <text fill="#5b5f78" fontSize={12} textAnchor="end" x={-8} y={y(line * step) + 4}>{line * step}</text>
               </g>
             ))}
             {buckets.map((bucket, index) => {
@@ -124,7 +136,7 @@ function SearchChart({ series }: { series: Dashboard["searchSeries"] }) {
                   <rect className={future ? board.future : board.bar} data-dim={hover !== null && hover !== index} height={barHeight} rx={3} width={Math.max(slot - 8, 2)} x={index * slot + 4} y={height - barHeight} />
                   {/* Hit target taller and wider than the bar. */}
                   <rect fill="transparent" height={height} onMouseEnter={() => setHover(index)} width={slot} x={index * slot} y={0} />
-                  {index % labelEvery === 0 ? <text fill="#8b8fa8" fontSize={11} textAnchor="middle" x={index * slot + slot / 2} y={height + 16}>{bucket.label}</text> : null}
+                  {index % labelEvery === 0 ? <text fill="#5b5f78" fontSize={12} textAnchor="middle" x={index * slot + slot / 2} y={height + 16}>{bucket.label}</text> : null}
                 </g>
               );
             })}

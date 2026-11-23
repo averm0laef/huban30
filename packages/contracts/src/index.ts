@@ -577,17 +577,32 @@ const CatalogBrandFilterSchema = z.union([
 ]).optional().transform((value) => value === undefined ? [] : Array.isArray(value) ? value : [value])
   .refine((value) => new Set(value).size === value.length, "brand filters must be unique");
 
+/** What a product is for, read from the owner's 1С top groups or the make its name calls: catalog-vehicle-kind.ts. */
+export const CATALOG_VEHICLE_KINDS = ["passenger", "truck", "tractor"] as const;
+export type CatalogVehicleKind = typeof CATALOG_VEHICLE_KINDS[number];
+export const CATALOG_VEHICLE_KIND_LABELS: Readonly<Record<CatalogVehicleKind, string>> = {
+  passenger: "Легковые",
+  tractor: "Тракторы и спецтехника",
+  truck: "Грузовые",
+};
+
+/** How many products a catalogue page may hold; the first is what a list opens with. */
+export const CATALOG_PAGE_SIZES = [24, 48, 96] as const;
+export const CATALOG_MAX_PAGE_SIZE = 96;
+
 export const CatalogProductsQuerySchema = z.object({
   availability: z.enum(["all", "in_stock", "out_of_stock"]).default("all"),
   brand: CatalogBrandFilterSchema,
   category: CatalogPublicSlugSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(48).default(24),
+  limit: z.coerce.number().int().min(1).max(CATALOG_MAX_PAGE_SIZE).default(24),
   maxPriceKopeks: CatalogOptionalMoneyQuerySchema,
   minPriceKopeks: CatalogOptionalMoneyQuerySchema,
   offset: z.coerce.number().int().min(0).max(4_800).default(0),
   q: z.string().trim().min(2).max(120).regex(SAFE_SINGLE_LINE).optional(),
-  sort: z.enum(["relevance", "newest", "name", "price_asc", "price_desc"])
+  // "popular": what customers order, keep in favourites and open most (app.product_popularity, migration 0052).
+  sort: z.enum(["relevance", "popular", "newest", "name", "price_asc", "price_desc"])
     .default("relevance"),
+  vehicleKind: z.enum(CATALOG_VEHICLE_KINDS).optional(),
 }).strict().refine(
   (value) => value.minPriceKopeks === undefined
     || value.maxPriceKopeks === undefined
@@ -595,6 +610,14 @@ export const CatalogProductsQuerySchema = z.object({
   { message: "minimum price must not exceed maximum price", path: ["minPriceKopeks"] },
 );
 export type CatalogProductsQuery = z.infer<typeof CatalogProductsQuerySchema>;
+
+export const CatalogVehicleKindsResponseSchema = z.object({
+  items: z.array(z.object({
+    kind: z.enum(CATALOG_VEHICLE_KINDS),
+    productCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  }).strict()).max(CATALOG_VEHICLE_KINDS.length),
+}).strict();
+export type CatalogVehicleKindsResponse = z.infer<typeof CatalogVehicleKindsResponseSchema>;
 
 export const CatalogFeaturedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(24).default(8),
@@ -675,8 +698,8 @@ export const CatalogProductSummarySchema = z.object({
 export type CatalogProductSummary = z.infer<typeof CatalogProductSummarySchema>;
 
 export const CatalogProductsResponseSchema = z.object({
-  items: z.array(CatalogProductSummarySchema).max(48),
-  limit: z.number().int().min(1).max(48),
+  items: z.array(CatalogProductSummarySchema).max(CATALOG_MAX_PAGE_SIZE),
+  limit: z.number().int().min(1).max(CATALOG_MAX_PAGE_SIZE),
   // "any": nothing matched every word of the query, so the page shows items
   // matching at least one word — the storefront says so above the list.
   matchMode: z.enum(["all", "any"]).optional(),
@@ -693,6 +716,14 @@ export const CatalogProductDetailSchema = CatalogProductSummarySchema.extend({
   images: z.array(CatalogImageViewSchema).max(100),
   /** A vehicle maker's original numbers the name carries besides the article («Втулка TG-48815-60121» → 48815-60121). */
   originalNumbers: z.array(z.string().min(1).max(40)).max(12).default([]),
+  /** The same product in other packs («1 л», «4 л», «20 л»), smallest first; this product's own pack is not listed. */
+  packSizes: z.array(z.object({
+    availableQuantity: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    label: z.string().min(1).max(40),
+    name: z.string().min(1).max(500),
+    priceKopeks: MoneySchema.nullable(),
+    slug: CatalogPublicSlugSchema,
+  }).strict()).max(12).default([]),
 }).strict();
 export type CatalogProductDetail = z.infer<typeof CatalogProductDetailSchema>;
 

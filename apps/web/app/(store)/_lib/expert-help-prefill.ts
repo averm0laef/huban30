@@ -9,3 +9,7 @@ export function catalogQueryPrefillMessage(query: string): string {
 export function productCompatibilityPrefillMessage(name: string, sku: string): string {
   return `Проверьте совместимость детали «${name.trim()}», артикул ${sku.trim()}.\nАвтомобиль: `;
 }
+
+export function productPhotoPrefillMessage(name: string, sku: string): string {
+  return `Пришлите, пожалуйста, фото детали «${name.trim()}» со склада. Артикул: ${sku.trim()}.`;
+}

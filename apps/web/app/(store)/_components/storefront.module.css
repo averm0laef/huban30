@@ -348,8 +348,8 @@
 
 .headerMessengers { display: flex; align-items: center; gap: 2px; }
 .headerMessengerLink {
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -409,7 +409,7 @@
   border-radius: var(--store-radius-full);
   background: var(--store-brand-soft);
   color: var(--store-brand-strong);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: var(--store-weight-black);
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -873,7 +873,7 @@
 .searchForm input::-webkit-search-cancel-button { margin-right: 2px; }
 .searchForm button {
   flex: 0 0 auto;
-  height: 40px;
+  height: 44px;
   margin-right: 6px;
   padding: 0 var(--store-space-md);
   border: 0;
@@ -949,7 +949,7 @@
   text-align: end;
   overflow-wrap: anywhere;
 }
-.searchSuggestionPrice small { display: block; margin-top: 3px; color: var(--store-muted); font-size: .7rem; font-weight: 500; }
+.searchSuggestionPrice small { display: block; margin-top: 3px; color: var(--store-muted); font-size: .75rem; font-weight: 500; }
 @media (max-width: 550px) {
   .searchSuggestion {
     grid-template-columns: 42px minmax(0, 1fr);
@@ -1291,7 +1291,7 @@ button.promoControl {
 .categoryChipSection { margin-top: 4px; }
 .categoryChipGrid { display: grid; gap: 2px; }
 .categoryChip {
-  min-height: 40px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1472,7 +1472,7 @@ button.promoControl {
 .productHelp { display: grid; gap: 4px; padding: var(--store-space-md); border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
 .productHelp > strong { font-size: 0.96rem; }
 .productHelp > span { color: var(--store-muted); font-size: 0.88rem; line-height: 1.4; }
-.productHelp .secondaryAction { justify-self: start; min-height: 42px; margin-top: 2px; }
+.productHelp .secondaryAction { justify-self: start; min-height: 44px; margin-top: 2px; }
 .breadcrumbStep { display: inline-flex; gap: var(--store-space-xs); }
 .productGallery { min-width: 0; display: grid; gap: var(--store-space-sm); }
 .productThumbs { display: flex; flex-wrap: wrap; gap: var(--store-space-xs); }
@@ -1556,7 +1556,7 @@ button.promoControl {
 .formPanel > h2 { margin: 0; font-size: clamp(1.45rem, 3vw, 2rem); font-weight: var(--store-weight-black); letter-spacing: var(--store-tracking-tight); }
 .formPanel > p { color: var(--store-muted); line-height: 1.55; }
 .segmentedNav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 0 0 var(--store-space-xl); padding: 3px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); }
-.segmentedNav a { min-height: 40px; display: grid; place-items: center; padding: 4px 8px; border-radius: 8px; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-bold); text-align: center; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.segmentedNav a { min-height: 44px; display: grid; place-items: center; padding: 4px 8px; border-radius: 8px; color: var(--store-muted); font-size: 0.82rem; font-weight: var(--store-weight-bold); text-align: center; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
 .segmentedNav a:hover { color: var(--store-text); }
 .segmentedNav a[aria-current="page"] { background: var(--store-surface-strong); color: var(--store-text); box-shadow: var(--store-shadow-xs); }
 .stackForm { display: grid; gap: var(--store-space-md); }
@@ -1627,7 +1627,7 @@ button.promoControl {
 .accountPanelHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px var(--store-space-md); margin-bottom: var(--store-space-lg); }
 .accountPanelHead h2 { margin: 0; font-size: clamp(1.4rem, 2.4vw, 1.75rem); letter-spacing: var(--store-tracking-tight); }
 .accountPanelHead p { margin: 0; color: var(--store-muted); font-size: 0.9rem; }
-.accountPanelHead .secondaryAction { min-height: 42px; border-radius: var(--store-radius-full); }
+.accountPanelHead .secondaryAction { min-height: 44px; border-radius: var(--store-radius-full); }
 
 .accountEmpty { display: grid; justify-items: center; gap: 10px; padding: clamp(28px, 5vw, 48px) var(--store-space-md); border: 1px dashed var(--store-border); border-radius: var(--store-radius); background: var(--store-bg); text-align: center; }
 .accountEmpty h3 { margin: 0; font-size: 1.12rem; }
@@ -1692,7 +1692,7 @@ button.promoControl {
 .accountProductActions :global(.storefront-add-cart) { margin-top: 0; }
 .accountProductHelp { display: inline-flex; min-height: 44px; align-items: center; padding: 0 6px; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; text-underline-offset: 3px; }
 .accountTextButton,
-.accountTextButtonDanger { min-height: 40px; padding: 0 6px; border: 0; background: none; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; cursor: pointer; }
+.accountTextButtonDanger { min-height: 44px; padding: 0 6px; border: 0; background: none; color: var(--store-brand); font-size: 0.86rem; font-weight: 600; cursor: pointer; }
 .accountTextButtonDanger { color: var(--store-danger); }
 .accountTextButton:hover,
 .accountTextButtonDanger:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -1739,7 +1739,7 @@ button.promoControl {
 .profileHeading p:last-child,
 .orderHeading p:last-child { margin: 10px 0 0; color: var(--store-muted); }
 .profileNav { position: sticky; top: 154px; z-index: 2; display: flex; gap: 6px; margin: var(--store-space-xl) 0 40px; padding: 7px; overflow-x: auto; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); box-shadow: var(--store-shadow-xs); }
-.profileNav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 13px; border-radius: 8px; color: var(--store-text); font-size: 0.88rem; font-weight: var(--store-weight-bold); white-space: nowrap; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
+.profileNav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 13px; border-radius: 8px; color: var(--store-text); font-size: 0.88rem; font-weight: var(--store-weight-bold); white-space: nowrap; text-decoration: none; transition: background var(--store-duration-fast) var(--store-ease); }
 .profileNav a:hover { background: var(--store-surface-strong); }
 .profileSection,
 .detailSection { padding: 0 0 42px; margin: 0 0 42px; border-bottom: 1px solid var(--store-border); scroll-margin-top: 164px; }
@@ -1774,7 +1774,7 @@ button.promoControl {
 .addressList p { margin: 7px 0 0; color: var(--store-muted); line-height: 1.45; }
 .addressList article > div:last-child { display: flex; align-items: flex-start; gap: var(--store-space-xs); }
 .addressList button,
-.compactProductActions button { min-height: 38px; padding: 0 11px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.compactProductActions button { min-height: 44px; padding: 0 11px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-text); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
 .addressList button:hover,
 .compactProductActions button:hover { border-color: var(--store-brand); color: var(--store-brand); }
 .compactProductList article { min-height: 82px; display: flex; justify-content: space-between; align-items: center; gap: var(--store-space-lg); padding: 14px 4px; border-bottom: 1px solid var(--store-border); }
@@ -1807,7 +1807,7 @@ button.promoControl {
 .checkoutLines { border-top: 1px solid var(--store-border); }
 .checkoutLines > div { display: grid; grid-template-columns: 1fr auto; gap: var(--store-space-sm); padding: var(--store-space-md) 0; border-bottom: 1px solid var(--store-border); }
 .checkoutLines > div > div { min-width: 0; display: grid; gap: 5px; }
-.checkoutLines small { overflow-wrap: anywhere; color: var(--store-muted); font-size: 0.7rem; }
+.checkoutLines small { overflow-wrap: anywhere; color: var(--store-muted); font-size: 0.75rem; }
 .checkoutLines label { display: grid; gap: 5px; color: var(--store-muted); font-size: .75rem; }
 .checkoutLines input { width: 74px; min-height: 44px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-bg); color: var(--store-text); text-align: center; }
 .checkoutLines button { grid-column: 1 / -1; justify-self: start; border: 0; background: none; color: var(--store-danger); cursor: pointer; }
@@ -2100,7 +2100,7 @@ button.promoControl {
   .headerActions :global(.storefront-account-label),
   .headerActions :global(.storefront-vehicle-label) { font-size: 0; }
   .headerActions :global(.storefront-vehicle-button) { width: auto; }
-  .headerActions :global(.storefront-cart-count) { font-size: 0.66rem; }
+  .headerActions :global(.storefront-cart-count) { font-size: 0.75rem; }
   /* Icon-only on narrow tablets; the visible word stays in the
      accessibility tree, only its glyphs shrink to zero. */
   .headerCatalogButton { gap: 0; padding: 0 14px; }
@@ -2175,14 +2175,14 @@ button.promoControl {
   /* On a phone the «Найти» button already says what the field is for, so the
      leading magnifier goes and the placeholder gets the room instead. */
   .mobileSearchRow .searchForm > svg { display: none; }
-  .mobileSearchRow .searchForm button { padding-inline: 14px; height: 38px; font-family: var(--store-font-display); }
+  .mobileSearchRow .searchForm button { padding-inline: 14px; height: 44px; font-family: var(--store-font-display); }
   /* VIN selection as a real control under the search, not bare underlined text. */
   .searchAssist {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     width: fit-content;
-    min-height: 36px;
+    min-height: 44px;
     margin: 8px 0 0;
     padding: 0 14px 0 10px;
     border-radius: var(--store-radius-full);
@@ -2370,7 +2370,7 @@ button.promoControl {
   font-weight: 660;
 }
 .searchRecentHead button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 4px;
   border: 0;
   background: none;
@@ -2387,7 +2387,7 @@ button.promoControl {
   display: flex;
   gap: 8px;
   align-items: center;
-  min-height: 42px;
+  min-height: 44px;
   padding: 7px 8px;
   border-radius: var(--store-radius-sm);
   color: var(--store-text);
@@ -2410,7 +2410,7 @@ button.promoControl {
 .searchChip {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: var(--store-radius-full);
   background: var(--store-bg);
@@ -2553,18 +2553,18 @@ button.promoControl {
 .footerV2Contact > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #b9b6e8; font-size: .88rem; }
 .footerV2Contact > span svg { width: 16px; height: 16px; color: #8f8bd0; }
 .footerV2Channels { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
-.footerV2Channels a { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; border-radius: 12px; background: rgb(255 255 255 / 10%); font-size: .88rem; font-weight: 600; }
+.footerV2Channels a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 12px; background: rgb(255 255 255 / 10%); font-size: .88rem; font-weight: 600; }
 .footerV2Channels a:hover { background: rgb(255 255 255 / 18%); }
 .footerV2Channels svg { width: 18px; height: 18px; }
 .footerV2 .footerV2Chat { background: var(--store-accent); color: var(--store-accent-text); min-height: 44px; }
 .footerV2 .footerV2Chat:hover { background: var(--store-accent-hover); color: var(--store-accent-text); }
 .footerV2Nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; padding-top: 24px; border-top: 1px solid rgb(255 255 255 / 14%); }
 .footerV2Nav > div { display: grid; align-content: start; gap: 4px; }
-.footerV2Nav h2 { margin: 0 0 6px; color: #8f8bd0; font-family: var(--store-font-sans); font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.footerV2Nav a { display: inline-flex; align-items: center; min-height: 34px; font-size: .92rem; line-height: 1.3; }
-.footerV2Legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; padding-top: 16px; border-top: 1px solid rgb(255 255 255 / 14%); color: #8f8bd0; font-size: .8rem; line-height: 1.5; }
+.footerV2Nav h2 { margin: 0 0 6px; color: #b9b6e8; font-family: var(--store-font-sans); font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.footerV2Nav a { display: inline-flex; align-items: center; min-height: 44px; font-size: .92rem; line-height: 1.3; }
+.footerV2Legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; padding-top: 16px; border-top: 1px solid rgb(255 255 255 / 14%); color: #b9b6e8; font-size: .8rem; line-height: 1.5; }
 .footerV2Legal span:last-child { display: inline-flex; flex-wrap: wrap; gap: 6px 18px; }
-.footerV2Legal a { color: #8f8bd0; }
+.footerV2Legal a { display: inline-flex; align-items: center; min-height: 44px; color: #b9b6e8; }
 @media (max-width: 900px) {
   .footerV2Nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .footerV2Contact { justify-items: start; }
@@ -2633,14 +2633,12 @@ button.promoControl {
 .headerMenuLinks a span { transition: color var(--store-duration-fast) var(--store-ease); }
 .headerMenuLinks a:hover strong { color: var(--store-brand); }
 
-/* ---------- Touch targets (UI/UX Pro Max: touch-target-size, web-target-size) ----------
-   On a phone every control gets at least a 44px tap zone; small text links in
-   breadcrumbs and the footer get at least 32px. Visual size stays the same where
-   the hit area can grow invisibly. */
-@media (max-width: 760px) {
-  .mobileSearchRow .searchForm button { position: relative; }
-  .mobileSearchRow .searchForm button::after { content: ""; position: absolute; inset: -5px -5px; }
+/* Prioritize page content over promotion, retaining search and VIN menu links. */
+@media (max-width: 767px) {
+  .header:not([data-home]) .searchAssist { display: none; }
+  .storefront input:not([type="checkbox"], [type="radio"], [type="file"]),
+  .storefront select,
+  .storefront textarea { font-size: 1rem; }
   .breadcrumbs a { display: inline-flex; align-items: center; min-height: 32px; }
-  .footerV2Legal a, .footerV2Phone { display: inline-flex; align-items: center; min-height: 32px; }
-  .footerV2Nav a { min-height: 40px; }
+  .footerV2Phone { min-height: 44px; }
 }

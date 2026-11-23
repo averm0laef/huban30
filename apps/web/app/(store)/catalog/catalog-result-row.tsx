@@ -82,7 +82,7 @@ export function CatalogResultRow({
     <article className={styles.resultRow} data-catalog-view={view}>
       <div className={styles.resultRowItem}>
         <CatalogPhoto alt={imageAlt} categoryImage={categoryImage} className={styles.resultRowMedia}
-          noteInside showNote={view === "grid"}
+          noteInside preview showNote={view === "grid"}
           sizes={view === "list" ? "64px" : "(max-width: 640px) 42vw, 270px"} src={imageUrl} />
         <div className={styles.resultRowIdentity}>
           {badges ? <div className={styles.resultRowBadges}>{badges}</div> : null}

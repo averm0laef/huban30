@@ -251,6 +251,28 @@ export class PartsFinderShopService {
   }
 
   /**
+   * 1С keeps two numbers of one part in one field — «04152-40060 (O-117)», «7515 (32215)» — and the lookup compares
+   * the whole field. The articles under which the shop files a part asked by either of its numbers; what stands in
+   * the brackets of «6СТ-62 (0)» or «SP-5026 (M)» is not a number, so nothing shorter than four characters is asked.
+   */
+  async filedUnder(articles: readonly string[]): Promise<string[]> {
+    const keys = [...new Set(articles.map(articleKey))].filter((key) => key.length >= 4 && key.length <= 64).slice(0, 4);
+    if (keys.length === 0) return [];
+    const patterns = keys.flatMap((key) => {
+      const literal = key.replace(/[\\%_]/gu, "\\$&");
+      return [`${literal}(%`, `%(${literal})%`];
+    });
+    const result = await this.database.query<{ sku: string }>(
+      `SELECT DISTINCT product.sku::text AS sku FROM app.products AS product
+       WHERE product.is_active AND product.deleted_at IS NULL
+         AND (${patterns.map((_, index) => `product.sku_normalized LIKE $${index + 1}`).join(" OR ")})
+       ORDER BY 1 LIMIT 8`,
+      patterns,
+    );
+    return result.rows.map((row) => row.sku);
+  }
+
+  /**
    * Parts of any maker of the product's standard size — a belt, a lamp (type, voltage and base), a bearing, a seal,
    * a tyre (catalog-part-specs.ts): «Тот же типоразмер» on the product card. Null when the name gives no size.
    */
