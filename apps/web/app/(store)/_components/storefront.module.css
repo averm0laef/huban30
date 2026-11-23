@@ -2657,6 +2657,12 @@ button.promoControl {
   .storefront input:not([type="checkbox"], [type="radio"], [type="file"]),
   .storefront select,
   .storefront textarea { font-size: 1rem; }
+  /* One line that scrolls sideways, as in the marketplaces' apps: wrapped one link per line, the crumbs took a third
+     of the phone's screen (24.11.2026). The current page ends the line and may be cut with an ellipsis. */
+  .breadcrumbs { flex-wrap: nowrap; align-items: center; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
+  .breadcrumbs::-webkit-scrollbar { display: none; }
+  .breadcrumbs > * { flex: none; }
+  .breadcrumbs span[aria-current] { max-width: 70vw; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; padding-right: 24px; }
   .breadcrumbs a { display: inline-flex; align-items: center; min-height: 32px; }
   .footerV2Phone { min-height: 44px; }
 }
