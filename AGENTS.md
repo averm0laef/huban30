@@ -40,6 +40,10 @@ dropdb an30_search_scratch
 
 Сквозные тесты (`corepack pnpm test:e2e`) идут на сайте без API. На 22.11.2026 семь из девятнадцати не проходят (чат, поиск по VIN, подтверждение регистрации, настройка подключений) — они отстали от сайта и не разобраны; не принимайте их падение за последствие своей правки, не сверившись с этим списком.
 
+## Выкладка на an30.ru (закрытый production)
+
+Только по слову владельца в чате. Сервер — VPS Beget `45.153.190.25`, вход `ssh -i ~/.ssh/an30_deploy -o IdentitiesOnly=yes root@45.153.190.25` (ключ, не пароль). Проект Compose `an30-production`, настройки и пароль сайта — `/etc/an30/production.env`, секреты — `/etc/an30/production-secrets`, релизы — `/opt/an30/releases/<sha>`. Порядок — в шапке `scripts/deploy/production-release.sh` (резервная копия → новый релиз → сборка → миграции). После выкладки: `SITE_USER=an30 SITE_PASSWORD=$(cat secrets/site_password.txt)` и `scripts/storefront-checks/mobile-webkit.mjs https://an30.ru` и `pages-audit.mjs https://an30.ru`. Откат — тот же скрипт с прежним sha.
+
 ## Локальный стенд
 
 - Сайт: `corepack pnpm --filter @an30/web dev` → http://192.168.1.92:3000 (порт 3000).
