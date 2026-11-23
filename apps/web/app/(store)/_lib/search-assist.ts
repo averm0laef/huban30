@@ -150,7 +150,8 @@ export function categoryHrefBySlug(categories: readonly FlatCategory[], slug: st
  * The section a query *names* — "аккумулятор", "фильтры", "моторное масло" —
  * as opposed to a product search ("масляный фильтр W914/2"). Every word must
  * match the section name word for word (by stem, ё-insensitive) and the word
- * counts must agree, so "масляный фильтр" never jumps into «Фильтры».
+ * counts must agree, so "масляный фильтр" never jumps into «Фильтры». Only a
+ * section that has products (its own or its subsections') is opened.
  */
 export function exactCategoryMatch(categories: readonly FlatCategory[], query: string): FlatCategory | null {
   const split = (value: string) => normalize(value).split(/[\s,.;/-]+/u).filter(Boolean).map(stem);
@@ -158,6 +159,8 @@ export function exactCategoryMatch(categories: readonly FlatCategory[], query: s
   if (words.length === 0 || words.length > 3) return null;
   const same = (a: string, b: string) => a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a));
   const hits = categories.filter((category) => {
+    // An empty section answers «В разделе пока нет товаров» while the product sits elsewhere: search by the word instead.
+    if (category.productCount <= 0) return false;
     const name = split(category.name);
     return name.length === words.length && name.every((word, index) => same(word, words[index]!));
   });

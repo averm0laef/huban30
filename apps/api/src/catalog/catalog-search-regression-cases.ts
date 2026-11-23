@@ -126,6 +126,18 @@ export const SEARCH_REGRESSION_CASES: SearchCase[] = [
   { group: "typo", q: "амартизатор", expect: { top: ["kyb-334834"] } },
   { group: "typo", q: "аккамулятор", expect: { minTotal: 5 } },
   { group: "typo", q: "антифирз", expect: { top: ["felix-g12-5"] } },
+  { group: "typo", q: "фольтр", expect: { minTotal: 20, pageNames: "фильтр" } },
+  { group: "typo", q: "акумулятор", expect: { minTotal: 3, pageNames: "аккумулятор" } },
+  { group: "typo", q: "mobli", expect: { top: ["mobil-1-0w40-4"], topN: 24, pageNames: "mobil" } },
+  // A long word that only shares its ending with other words is not their typo: the shop has no generators
+  // or resonators among the samples, and says so instead of showing shock absorbers, fixatives and radiators.
+  // A word of the assortment finds its own goods, not the «очиститель» that shares its ending.
+  { group: "typo", q: "глушитель", expect: { first: "muffler-2101", pageNames: "глушител" } },
+  { group: "typo", q: "глушытель", expect: { first: "muffler-2101", pageNames: "глушител" } },
+  { group: "synonym", q: "глушак", expect: { first: "muffler-2101", pageNames: "глушител" } },
+  { group: "typo", q: "дмрв", expect: { first: "dmrv-cleaner", pageNames: "дмрв" } },
+  { group: "typo", q: "генератор", expect: { empty: true } },
+  { group: "typo", q: "резонатор", expect: { empty: true } },
   // Word order, partial words.
   { group: "order", q: "масляный фильтр", expect: { top: ["mann-w914-2", "mahle-oc90"], topN: 24 } },
   { group: "order", q: "тормозные колодки передние", expect: { top: ["bosch-0986494104", "trw-gdb1330"], topN: 24 } },
@@ -225,6 +237,11 @@ export const SEARCH_REGRESSION_CASES: SearchCase[] = [
   { group: "synonym", q: "пахучка", expect: { top: ["scent-plain", "scent-shorthand"], pageNames: "аром" } },
   { group: "synonym", q: "балонник", expect: { top: ["wheel-wrench-one-l", "wheel-wrench-two-l"], pageNames: "ключ" } },
   { group: "synonym", q: "баллонный ключ", expect: { top: ["wheel-wrench-one-l", "wheel-wrench-two-l"], pageNames: "ключ" } },
+  // The gearbox is «коробка» to the customer and «трансмиссионное», «АКПП», «МКПП» in the names.
+  { group: "synonym", q: "масло в коробку", expect: { top: ["castrol-syntrans-75w90", "zic-atf"], pageNames: "трансмисс|кпп" } },
+  { group: "synonym", q: "масло для коробки", expect: { top: ["castrol-syntrans-75w90", "zic-atf"], pageNames: "трансмисс|кпп" } },
+  // «коробка 9» is the shelf box written into a name: it stays a literal word.
+  { group: "synonym", q: "коробка 9", expect: { first: "clip-noted" } },
   // …and the plain query next to an everyday one keeps its answer.
   { group: "synonym", q: "стойки стабилизатора", expect: { top: ["link-front"], pageNames: "стабилизатор" } },
   { group: "synonym", q: "незамерзайка", expect: { top: ["sintec-washer-4"], topN: 3 } },

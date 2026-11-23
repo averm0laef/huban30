@@ -108,7 +108,18 @@ const WORD_SYNONYMS: ReadonlyArray<{ words: readonly string[]; texts: readonly s
   { words: ["гидрач", "гурка", "гур"], texts: ["гур", "гидроусил", "psf"], lead: "жидкост" },
   // Parts. Measured on the owner's assortment (22.11.2026): each of these words found nothing or the wrong goods,
   // because the names in 1С call the part by another word. Words that already found the right goods («линки»,
-  // «сайлент», «стойки», «помпа», «глушак») are left to the names themselves.
+  // «сайлент», «стойки», «помпа») are left to the names themselves.
+  // «глушак» and «опорник» used to be found as typos of «глушитель» and «опорный»; they are other words, said so here.
+  { words: ["глушак", "глушака", "глушаки", "глушаков"], texts: ["глушител"], lead: "глушител" },
+  {
+    words: ["опорник", "опорника", "опорники", "опорников"],
+    // Seven: with the word itself that is all one word may have (MAX_ALTERNATIVES_PER_WORD).
+    texts: [
+      "опора стойки", "опора передней стойки", "опора задней стойки", "опора амортизатора", "опора переднего амортизатора",
+      "подшипник опор", "опорный подшипник",
+    ],
+    lead: "опор",
+  },
   { words: ["граната", "гранаты", "гранату", "гранатой", "гранат", "гранаток"], texts: ["шрус", "гранат"], lead: "шрус" },
   { words: ["косточка", "косточки", "косточку", "косточек"], texts: ["стойка стабилизатора", "стойки стабилизатора", "тяга стабилизатора", "линк"], lead: "стойк" },
   // The base spells it «сайлентблок» 1 393 times and «сайленблок» six times; customers also drop the «й».
@@ -124,6 +135,9 @@ const WORD_SYNONYMS: ReadonlyArray<{ words: readonly string[]; texts: readonly s
   { words: ["секретка", "секретки", "секретку", "секреток"], texts: ["секрет"], lead: "секрет" },
   { words: ["вонючка", "вонючки", "вонючку", "пахучка", "пахучки", "пахучку"], texts: ["ароматизатор", "освежител"], lead: "ароматизатор" },
   // «Ключ балонный» is typed with one «л» in 49 names of the base and with two in 26.
+  // «Масло в коробку»: the base names gearbox oils «трансмиссионное», «для АКПП», «для МКПП», never «коробка».
+  // The nominative «коробка» is left alone: «коробка 9» in a name is the shelf box the staff look up.
+  { words: ["коробку", "коробки", "коробке"], texts: ["коробк", "кпп", "трансмисс"], lead: "коробк" },
   { words: ["балонник", "балонника", "баллонник", "баллонника", "балонный", "баллонный", "балонного", "баллонного"], texts: ["баллонн", "балонн"], lead: "ключ" },
 ];
 const SYNONYMS_BY_WORD = new Map(WORD_SYNONYMS.flatMap((entry) => entry.words.map((word) => [foldYo(word), entry] as const)));

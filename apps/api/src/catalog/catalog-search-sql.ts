@@ -24,7 +24,7 @@
 import type { CatalogProductsQuery } from "@an30/contracts";
 
 import { normalizeArticleNumber } from "./catalog-search-normalize.js";
-import type { SearchTokenPlan } from "./catalog-search-tokens.js";
+import { lightRussianStem, type SearchTokenPlan } from "./catalog-search-tokens.js";
 
 export class SqlParameters {
   readonly values: unknown[] = [];
@@ -94,7 +94,37 @@ export const CROSS_MATCH = `(product.sku_normalized<>'' AND EXISTS (
 // recheck: the article alone never decides a cross match.
 const CROSS_FILTER = `(product.sku_normalized=ANY(ARRAY(SELECT article FROM cross_equivalents)) AND ${CROSS_MATCH})`;
 
-function wordConditions(p: SqlParameters, plan: SearchTokenPlan, word: number): string[] {
+/**
+ * How far a typed word may be from a word of the product and still be read as its typo. A missing or an extra letter
+ * costs 1, a wrong letter 2, a swapped pair («mobli») 2. The budget is 1 up to four letters («дмрв» is not «дм»),
+ * 2 up to eight and 3 from nine on. Null for a word with a hyphen or a dot in it, which the product's text cannot
+ * be cut into the same way.
+ */
+export function typoBudget(word: string): number | null {
+  if (!/^[a-zа-я]{1,40}$/u.test(word)) return null;
+  return word.length <= 4 ? 1 : word.length <= 8 ? 2 : 3;
+}
+
+/**
+ * Shared trigrams alone called «резонатор» a typo of «фиксатор» and «радиатор», and «генератор» a typo of
+ * «амортизатор»: long words share their endings. A typo is a letter away from a word of the product. That word is
+ * compared by its beginning, as long as the typed word without its ending (give or take a letter), so «калодки»
+ * reads as «колодка» and «фольтр» as «фильтры»; a word two letters shorter than the typed one is another word.
+ * Needs fuzzystrmatch (migration 0053); runs only on the rows the trigram index has already picked.
+ */
+function misspelledWordOf(p: SqlParameters, word: string): string {
+  const base = lightRussianStem(word) ?? word;
+  const typed = p.add(base);
+  const limit = `${p.add(typoBudget(base) ?? 2)}::integer`;
+  const near = (length: string) => `levenshtein_less_equal(left(written.word,${length}),${typed},1,1,2,${limit})<=${limit}`;
+  return `EXISTS (SELECT 1 FROM regexp_split_to_table(lower(product.search_text_folded),'[^a-zа-я0-9]+') AS written(word)
+      WHERE char_length(written.word)>=char_length(${typed})-1
+        AND (${near(`char_length(${typed})`)} OR ${near(`char_length(${typed})+1`)} OR ${near(`char_length(${typed})-1`)}))`;
+}
+
+const STRICT_WORD_SIMILARITY = 0.5;
+
+function wordConditions(p: SqlParameters, plan: SearchTokenPlan, word: number, matchAny: boolean): string[] {
   const conditions: string[] = [];
   const texts = plan.alternatives.filter((alternative) => alternative.word === word && alternative.text !== null).map((alternative) => alternative.text!);
   for (const alternative of plan.alternatives) {
@@ -120,9 +150,15 @@ function wordConditions(p: SqlParameters, plan: SearchTokenPlan, word: number): 
       const article = normalizeArticleNumber(text);
       if (article) conditions.push(`product.sku_normalized LIKE ${p.add(`${escapeLike(article)}%`)}`);
     }
-    // word_similarity(text, document) >= pg_trgm.word_similarity_threshold,
-    // set per pass by the service (stricter first, looser in the retry).
-    if (alternative.fuzzy) conditions.push(`${p.add(text)} <% product.search_text_folded`);
+    // The trigram index picks the candidates (word_similarity >= pg_trgm.word_similarity_threshold, 0.4, set by the
+    // service); the count of wrong letters decides. A word that cannot be counted that way («ф-р») has to be closer
+    // in trigrams in the strict pass instead.
+    if (alternative.fuzzy) {
+      const typed = p.add(text);
+      const close = `${typed} <% product.search_text_folded`;
+      if (typoBudget(text) !== null) conditions.push(`(${close} AND ${misspelledWordOf(p, text)})`);
+      else conditions.push(matchAny ? close : `(${close} AND word_similarity(${typed},product.search_text_folded)>=${STRICT_WORD_SIMILARITY})`);
+    }
   }
   return conditions;
 }
@@ -161,7 +197,7 @@ function searchHits(p: SqlParameters, input: CatalogSearchInput, matchAny: boole
       }
     }
   }
-  const words = input.plan.words.map((_word, index) => anyOf(wordConditions(p, input.plan, index + 1).map((condition) => idsWhere(condition))));
+  const words = input.plan.words.map((_word, index) => anyOf(wordConditions(p, input.plan, index + 1, matchAny).map((condition) => idsWhere(condition))));
   if (words.length > 0) branches.push(`SELECT id FROM (${words.join(matchAny ? "\n    UNION " : "\n    INTERSECT ")}) AS word_hits`);
   // The whole phrase / whole-query closeness ignore which words matched
   // (and "5w-40" is a substring of "15W-40"), so they only serve the retry
@@ -169,7 +205,10 @@ function searchHits(p: SqlParameters, input: CatalogSearchInput, matchAny: boole
   if ((matchAny || words.length === 0) && folded.length >= 3) {
     branches.push(idsWhere(`product.name_folded ILIKE ${p.add(`%${escapeLike(folded)}%`)}`));
   }
-  if (matchAny && folded.length >= 3) branches.push(idsWhere(`product.name_folded % ${q}`));
+  // One plain word is a typo of a word of the product or it is not (wordConditions): the closeness of the whole
+  // name to it only added short names with the same ending («резистор» for «резонатор»).
+  const oneWord = input.plan.words.length === 1 && typoBudget(input.plan.words[0]!) !== null;
+  if (matchAny && folded.length >= 3 && !oneWord) branches.push(idsWhere(`product.name_folded % ${q}`));
   branches.push(idsWhere(`to_tsvector('simple',product.search_text_folded) @@ websearch_to_tsquery('simple',${q})`));
   // Snowball stemming (PostgreSQL's 'russian' configuration), see migration 0025.
   branches.push(idsWhere(`to_tsvector('russian',product.search_text_folded) @@ websearch_to_tsquery('russian',${q})`));

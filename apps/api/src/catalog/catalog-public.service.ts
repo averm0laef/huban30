@@ -406,9 +406,8 @@ export class CatalogPublicService {
 
   private async productPage(client: { query: DatabaseService["query"] }, input: CatalogSearchInput, matchAny: boolean) {
     const { query } = input;
-    // A typo must be close to the word in the strict pass; the retry also
-    // accepts e.g. "фольтр" for "фильтр".
-    await client.query(`SET LOCAL pg_trgm.word_similarity_threshold=${matchAny ? "0.4" : "0.5"}`);
+    // Candidates for a typo, for the trigram index; how close the word has to be is decided in wordConditions.
+    await client.query("SET LOCAL pg_trgm.word_similarity_threshold=0.4");
     const p = new SqlParameters();
     const cte = catalogSearchCte(p, input, visibleCategoriesWithSubtreeCte);
     const where = catalogSearchFilter(p, input, matchAny);

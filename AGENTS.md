@@ -11,7 +11,7 @@ corepack pnpm test
 corepack pnpm --filter @an30/web build
 ```
 
-Реальный регрессионный набор поиска (163 запроса) — на отдельной пустой БД:
+Реальный регрессионный набор поиска (188 запросов) — на отдельной пустой БД:
 
 ```bash
 createdb an30_search_scratch

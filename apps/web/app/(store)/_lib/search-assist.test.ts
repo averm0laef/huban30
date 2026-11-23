@@ -56,6 +56,12 @@ describe("exactCategoryMatch", () => {
     expect(exactCategoryMatch(categories, "Фильтры")?.slug).toBe("filtry");
     expect(exactCategoryMatch(categories, "моторное масло")?.slug).toBe("motornye-masla");
   });
+  it("searches by the word when the section it names holds no products", () => {
+    // A filter filed elsewhere («Демонстрационные расходники», «Без категории») is found by its name, not lost behind an empty page.
+    const empty = categories.map((category) => (category.slug === "filtry" ? { ...category, productCount: 0 } : category));
+    expect(exactCategoryMatch(empty, "фильтр")).toBeNull();
+    expect(exactCategoryMatch(empty, "аккумулятор")?.slug).toBe("akkumulyatory");
+  });
   it("keeps product searches as searches", () => {
     expect(exactCategoryMatch(categories, "масляный фильтр")).toBeNull();
     expect(exactCategoryMatch(categories, "W914/2")).toBeNull();
