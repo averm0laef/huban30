@@ -251,4 +251,26 @@ describe.skipIf(!url || !hasFfmpeg)("product photos with a known origin (real Po
     await expect(photos.attach(ids.get("lamp"), {}, { content: photo("orange"), fileName: "из-1с.jpg" }, auth)).rejects.toThrow("уже снимали");
     expect(await imagesOf("lamp")).toEqual(lamp);
   });
+
+  it("does not publish under a permission that ended while the file was being checked", async () => {
+    const { id } = await photos.createRightsSource({ name: `${PREFIX}Поставщик`, basis: "Договор поставки № 7, п. 4.2" }, auth);
+    const normalizer = new ProductPhotoNormalizer({ get: () => undefined } as unknown as ConfigService);
+    const slow = new ProductPhotosService(
+      database,
+      { record: async () => undefined } as unknown as AuditService,
+      { assertClean: async () => undefined } as unknown as MalwareScannerService,
+      { assertValid: async () => undefined } as unknown as MediaValidationService,
+      {
+        normalize: async (content: Buffer) => {
+          await photos.revokeRightsSource(id, { reason: "Договор расторгнут" }, auth);
+          return normalizer.normalize(content);
+        },
+      } as unknown as ProductPhotoNormalizer,
+      new ProductPhotoStorage(storage),
+    );
+    const kept = files.size;
+    await expect(slow.attachByFileName({ rightsSourceId: id }, { content: photo("teal"), fileName: "PHFX-6PK1200.jpg" }, auth)).rejects.toThrow("отозвано");
+    expect(await imagesOf("belt")).toEqual([]);
+    expect(files.size).toBe(kept);
+  });
 });

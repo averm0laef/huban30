@@ -431,6 +431,13 @@ export class ProductPhotosService {
         )).rows[0]!;
         removeStored = object.storage_key !== stored.storageKey;
         if (object.status !== "available") throw new ConflictException(TAKEN_DOWN);
+        if (rightsSourceId) {
+          // The permission may have been revoked while the file was being checked; the lock makes the two wait for each other.
+          const rights = (await client.query<{ revoked_at: Date | null }>(
+            "SELECT revoked_at FROM app.image_rights_sources WHERE id=$1 FOR SHARE", [rightsSourceId],
+          )).rows[0];
+          if (!rights || rights.revoked_at) throw new ConflictException(REVOKED);
+        }
         const image = (await client.query<{ id: string }>(
           `INSERT INTO app.product_images
              (product_id,storage_object_id,alt_text,sort_order,is_primary,source,rights_source_id,uploaded_by,upload_sha256,upload_byte_size)
