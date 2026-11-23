@@ -74,6 +74,8 @@ export interface OneCExchangeSummary {
   /** A full catalogue named less than half of the live products, so the ones it does not list stayed on the shop. */
   hidingSkipped?: boolean;
   kind: "catalog" | "offers";
+  /** Products already on the site (loaded under their 1С code before the exchange) that this file took over instead of adding them again. */
+  productsAdopted?: number;
   /** Products a full catalogue no longer lists and hid from the shop. */
   productsHidden?: number;
   rowsRejected: number;
@@ -394,12 +396,13 @@ export class OneCIntegrationService {
       body_count: number; contains_only_changes: boolean; created_at: Date; cursor_index: number;
       error_message: string | null; filename: string; hiding_skipped: boolean; id: string; images_attached: number;
       images_skipped: number; kind: "catalog" | "offers"; phase: string; price_type_name: string | null; rows_rejected: number;
-      products_hidden: number; rows_touched: number; rows_uncategorized: number; status: "completed" | "failed" | "running"; updated_at: Date;
+      products_adopted: number; products_hidden: number; rows_touched: number; rows_uncategorized: number; status: "completed" | "failed" | "running"; updated_at: Date;
     }>(
       `SELECT id::text, kind, filename, contains_only_changes, status, phase, cursor_index,
               jsonb_array_length(header_rows) + jsonb_array_length(body_rows)
                 + COALESCE(jsonb_array_length(tail_rows), 0) AS body_count, rows_touched, rows_rejected, rows_uncategorized,
-              images_attached, images_skipped, error_message, created_at, updated_at, price_type_name, products_hidden, hiding_skipped
+              images_attached, images_skipped, error_message, created_at, updated_at, price_type_name, products_hidden, hiding_skipped,
+              products_adopted
        FROM app.one_c_exchange_runs
        WHERE source_key = ${sourceSql(source)}
        ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
@@ -421,6 +424,7 @@ export class OneCIntegrationService {
         kind: row.kind,
         phase: row.phase,
         priceTypeName: row.price_type_name,
+        productsAdopted: row.products_adopted,
         productsHidden: row.products_hidden,
         rowsInFile: row.body_count,
         rowsRejected: row.rows_rejected,
