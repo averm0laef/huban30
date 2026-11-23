@@ -178,7 +178,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
           {available ? null : <ProductInStockAlternative article={product.sku} brand={product.brand?.name ?? null} productId={product.id} key={`alternative-${product.id}`} />}
           <div className={layout.buyActions}>
-            {priced && available ? <ProductBuyButton productId={product.id} /> : (
+            {priced && available ? <ProductBuyButton available={product.availableQuantity} productId={product.id} /> : (
               <ExpertHelpQueryLink className={`${styles.primaryAction} ${layout.buyHelp}`} prefillMessage={prefill}>
                 {available ? "Узнать цену" : "Узнать о поступлении"}
               </ExpertHelpQueryLink>
