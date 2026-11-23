@@ -24,6 +24,12 @@ if [ -f "$PF" ]; then
     [ -n "$value" ] && export "$name=$value"
   done
 fi
+# UMAPI: the key the owner put in secrets/umapi_api_key.txt (docs/UMAPI_INTEGRATION.md).
+if [ -s "$ROOT/secrets/umapi_api_key.txt" ]; then
+  export UMAPI_API_KEY_FILE="$ROOT/secrets/umapi_api_key.txt"
+  # Photos of parts on the local stand only: showing them on the public site waits for UMAPI's written permission.
+  export UMAPI_MEDIA_BASE_URL="${UMAPI_MEDIA_BASE_URL:-https://image.umapi.ru/IMAGE}"
+fi
 if [ -s "$ROOT/secrets/rossko_key1.txt" ] && [ -s "$ROOT/secrets/rossko_key2.txt" ]; then
   export ROSSKO_ENABLED=true ROSSKO_KEY1_FILE="$ROOT/secrets/rossko_key1.txt" ROSSKO_KEY2_FILE="$ROOT/secrets/rossko_key2.txt"
 fi

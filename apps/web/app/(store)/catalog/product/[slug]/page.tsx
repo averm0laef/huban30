@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
-import { partNumberCatalogueApplies } from "@an30/contracts";
+import { partNumberCatalogueApplies, umapiCatalogueApplies } from "@an30/contracts";
 
 import { STORE_HOURS, STORE_LOCALITY, STORE_STREET } from "../../../../site-config";
 import { ProductBuyButton } from "../../../_components/cart-actions";
-import { ChevronRight20Regular, Location24Regular, ShieldCheckmark20Regular, VehicleTruck24Regular } from "../../../_components/home-icons";
+import { ChevronRight20Regular, Location24Regular, VehicleTruck24Regular } from "../../../_components/home-icons";
 import { JsonLd } from "../../../_components/json-ld";
 import buttons from "../../../_components/store-button.module.css";
 import styles from "../../../_components/storefront.module.css";
@@ -18,6 +18,7 @@ import { productCompatibilityPrefillMessage } from "../../../_lib/expert-help-pr
 import { catalogFailureText } from "../../catalog-query";
 import { ExpertHelpQueryLink } from "../../expert-help-query-link";
 import { ProductAnalogs, ProductInStockAlternative } from "./product-analogs";
+import { ProductCatalogueCheck } from "./product-catalogue-check";
 import { ProductFitment } from "./product-fitment";
 import { ProductDetails } from "./product-details";
 import { ProductFavourite } from "./product-favourite";
@@ -114,6 +115,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
     : "Нет в наличии";
 
   const prefill = productCompatibilityPrefillMessage(product.name, product.sku);
+  // The parts catalogue (UMAPI) may be asked about it on a button: compatibility, photo, analogs.
+  const catalogueApplies = umapiCatalogueApplies({
+    brand: product.brand?.name ?? null, name: product.name, section: categoryAncestors[0] ?? product.category?.slug ?? null, sku: product.sku,
+  });
   const detailPanels = [
     ...(product.description ? [{ id: "about", label: "Описание", content: <p className={layout.detailsText}>{product.description}</p> }] : []),
     { id: "specs", label: "Характеристики", content: <SpecTable specs={specs} /> },
@@ -153,7 +158,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <span className={layout.crumbCurrent} aria-current="page">{product.name}</span>
       </nav>
       <article className={layout.hero}>
-        <ProductGallery images={images} categoryImage={catalogCategoryPhoto(product.category, categoryAncestors)} />
+        <ProductGallery catalogPhotos={catalogueApplies} categoryImage={catalogCategoryPhoto(product.category, categoryAncestors)} images={images} key={`gallery-${product.id}`} productId={product.id} />
 
         <div className={layout.info}>
           <div className={layout.identity}>
@@ -162,13 +167,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
           <h1>{product.name}</h1>
           {specs.length > 1 ? <SpecTable specs={specs.filter(([label]) => label !== "Бренд" && label !== "Артикул").slice(0, 4)} /> : null}
-          <div className={layout.compatibility}>
-            <strong>Подойдёт к вашему автомобилю?</strong>
-            <ExpertHelpQueryLink className={`${buttons.button} ${buttons.soft}`} prefillMessage={prefill}>
-              <ShieldCheckmark20Regular aria-hidden="true" />
-              Проверить по VIN
-            </ExpertHelpQueryLink>
-          </div>
+          <ProductCatalogueCheck applies={catalogueApplies} key={`check-${product.id}`} prefill={prefill} productId={product.id} />
         </div>
 
         <aside className={layout.buy} aria-label="Цена и получение">
@@ -193,7 +192,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       </article>
 
       <ProductDetails panels={detailPanels} key={product.id} />
-      <ProductAnalogs article={product.sku} brand={product.brand?.name ?? null} productId={product.id} key={`analogs-${product.id}`} />
+      <ProductAnalogs article={product.sku} brand={product.brand?.name ?? null} catalogueApplies={catalogueApplies} productId={product.id} key={`analogs-${product.id}`} />
       <ProductFitment
         checkable={partNumberCatalogueApplies({ brand: product.brand?.name ?? null, section: categoryAncestors[0] ?? product.category?.slug ?? null, sku: product.sku })}
         key={`fitment-${product.id}`}

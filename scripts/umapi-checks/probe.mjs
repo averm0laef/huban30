@@ -129,16 +129,15 @@ for (const candidate of CANDIDATES) {
 console.log("\n4. Каталожный номер (ART_ID) и применимость");
 let checked = false;
 for (const candidate of found) {
-  // The API has no «article by number and brand» method; the searched article is expected among the analogs it returns.
-  const analogs = await get(`${auto}/Analogs/${encodeURIComponent(candidate.article)}/${encodeURIComponent(candidate.apiBrand)}`, { limit: 50 });
-  const rows = list(analogs);
-  console.log(`  аналогов у ${candidate.apiBrand} ${candidate.article}: ${analogs?.rows ?? rows.length} (содержимое не выводится и не сохраняется)`);
-  const self = rows.find((row) => String(row.ARTICLE_NR).replace(/[\s-]/gu, "").toUpperCase() === candidate.article && String(row.BRAND).toUpperCase() === String(candidate.apiBrand).toUpperCase());
-  if (!self) {
-    console.log("    сама деталь среди ответа не найдена: ART_ID придётся получать иначе (спросить UMAPI или /v2/cross/parts/Analogs/getCrossInfo)");
+  // The autocatalog has no «article by number and brand» method; getCrossInfo names the part's catalogue id.
+  const info = await get("/v2/cross/parts/Analogs/getCrossInfo", { article: candidate.article, brand: candidate.apiBrand });
+  const artId = info?.td?.ART_ID ?? info?.catalogId;
+  if (!artId) {
+    console.log(`    ${candidate.apiBrand} ${candidate.article}: каталожный номер не найден`);
     continue;
   }
-  console.log(`    ART_ID найден: ${self.ART_ID}`);
+  const self = { ART_ID: artId };
+  console.log(`    ART_ID ${candidate.apiBrand} ${candidate.article}: ${self.ART_ID}; фото в ответе: ${list(info?.td?.MEDIAS).length}`);
   const links = await get(`${auto}/ArticleLinks/${self.ART_ID}`);
   const pcs = list(links?.PC);
   const ours = pcs.filter((row) => apiPcIds.has(Number(row.PC_ID)));

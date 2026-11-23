@@ -1,11 +1,15 @@
 "use client";
 
-import { ArrowSwap20Regular } from "@fluentui/react-icons";
+import { ArrowSwap20Regular, Search20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import buttons from "../../../_components/store-button.module.css";
 import { formatRubles } from "../../../_lib/catalog-format";
 import type { ShopOffer } from "../../../_lib/parts-finder";
+import { WheelLoader } from "../../../_components/wheel-loader";
+import { FinderError } from "../../../_lib/parts-finder";
+import { umapiGet, umapiStatus, type UmapiAnalogs } from "../../../_lib/umapi";
 import { analogGroups, basisText, inStockAlternative } from "./analog-groups";
 import styles from "./product-analogs.module.css";
 import { useShopAnalogs } from "./shop-analogs-request";
@@ -46,8 +50,36 @@ function Group({ offers, sizeLabel = null, title }: { offers: ShopOffer[]; sizeL
  * possible analogs to check by VIN. Each line says why it is there. Free — no paid catalogue is asked; supplier
  * offers and paid crosses stay on /podbor behind a button.
  */
-export function ProductAnalogs({ article, brand, productId }: { article: string; brand: string | null; productId: string }) {
+type CatalogueAnalogs = { status: "off" | "idle" | "loading" } | { message: string; status: "done" } | { offers: ShopOffer[]; status: "ready" };
+
+/**
+ * «Найти ещё аналоги в каталоге»: UMAPI's analogs of the part matched against our products, on a button. Only our
+ * products are shown; the catalogue's own list is neither shown nor kept (docs/UMAPI_INTEGRATION.md).
+ */
+function useCatalogueAnalogs(productId: string, wanted: boolean, known: ReadonlySet<string>) {
+  const [state, setState] = useState<CatalogueAnalogs>({ status: "off" });
+  useEffect(() => {
+    if (!wanted) return undefined;
+    let live = true;
+    void umapiStatus().then((status) => { if (live && status.enabled) setState({ status: "idle" }); });
+    return () => { live = false; };
+  }, [wanted]);
+  function load() {
+    setState({ status: "loading" });
+    umapiGet<UmapiAnalogs>(`product/${encodeURIComponent(productId)}/analogs`)
+      .then((data) => {
+        const offers = data.status === "ok" && "offers" in data ? data.offers.filter((offer) => !known.has(offer.productId)) : [];
+        setState(offers.length > 0 ? { offers, status: "ready" } : { message: "Других аналогов из каталога у нас в магазине нет.", status: "done" });
+      })
+      .catch((caught: unknown) => setState({ message: caught instanceof FinderError ? caught.message : "Каталог сейчас недоступен.", status: "done" }));
+  }
+  return { load, state };
+}
+
+export function ProductAnalogs({ article, brand, catalogueApplies = false, productId }: { article: string; brand: string | null; catalogueApplies?: boolean; productId: string }) {
   const state = useShopAnalogs(article, brand, productId);
+  const known = new Set(state.status === "ready" ? [...state.result.offers, ...(state.result.sameSize?.offers ?? [])].map((offer) => offer.productId) : []);
+  const catalogue = useCatalogueAnalogs(productId, catalogueApplies, known);
   const groups = state.status === "ready" ? analogGroups(state.result, productId) : null;
   const empty = groups !== null && [groups.same, groups.checked, groups.sameSize, groups.possible].every((list) => list.length === 0);
 
@@ -56,10 +88,15 @@ export function ProductAnalogs({ article, brand, productId }: { article: string;
     <section className={styles.analogs} aria-labelledby="product-analogs-title">
       <div className={styles.head}>
         <h2 id="product-analogs-title">Аналоги и замены</h2>
-        <Link className={`${buttons.button} ${buttons.quiet}`} href={podbor}><ArrowSwap20Regular aria-hidden="true" />Все аналоги и под заказ</Link>
+        <div className={styles.headActions}>
+          {catalogue.state.status === "idle" ? (
+            <button className={`${buttons.button} ${buttons.soft}`} onClick={catalogue.load} type="button"><Search20Regular aria-hidden="true" />Найти ещё аналоги в каталоге</button>
+          ) : null}
+          <Link className={`${buttons.button} ${buttons.quiet}`} href={podbor}><ArrowSwap20Regular aria-hidden="true" />Все аналоги и под заказ</Link>
+        </div>
       </div>
       {state.status === "loading" ? <p className={styles.muted} role="status">Ищем аналоги в магазине…</p> : null}
-      {state.status === "error" || empty ? (
+      {(state.status === "error" || empty) && catalogue.state.status !== "ready" ? (
         <p className={styles.muted}>В магазине других вариантов этой детали нет. Аналоги других брендов и позиции под заказ — по ссылке выше.</p>
       ) : null}
       {groups ? (
@@ -75,6 +112,9 @@ export function ProductAnalogs({ article, brand, productId }: { article: string;
           ) : null}
         </>
       ) : null}
+      {catalogue.state.status === "loading" ? <WheelLoader label="Ищем аналоги в каталоге…" size="sm" /> : null}
+      {catalogue.state.status === "ready" ? <Group offers={catalogue.state.offers} title="Аналоги по каталогу — есть у нас" /> : null}
+      {catalogue.state.status === "done" ? <p className={styles.muted}>{catalogue.state.message}</p> : null}
     </section>
   );
 }

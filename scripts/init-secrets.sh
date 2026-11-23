@@ -35,7 +35,7 @@ generate_secret data_encryption_key.txt
 # enables the matching adapter and supplies the real value.
 for optional_secret in smtp_password.txt telegram_bot_token.txt vk_access_token.txt \
   rossko_key1.txt rossko_key2.txt gemini_api_key.txt reefapi_key.txt fapi_key.txt api_ninjas_key.txt \
-  tecdoc_api_key.txt s3_access_key_id.txt s3_secret_access_key.txt; do
+  tecdoc_api_key.txt umapi_api_key.txt s3_access_key_id.txt s3_secret_access_key.txt; do
   target="$secrets_dir/$optional_secret"
   if [ ! -e "$target" ]; then
     : > "$target"

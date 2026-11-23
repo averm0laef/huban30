@@ -183,6 +183,13 @@ services:
       TECDOC_VISITOR_DAILY_LIMIT: ${TECDOC_VISITOR_DAILY_LIMIT:-150}
       TECDOC_CACHE_TTL_SECONDS: ${TECDOC_CACHE_TTL_SECONDS:-86400}
       TECDOC_CACHE_MAX_ENTRIES: ${TECDOC_CACHE_MAX_ENTRIES:-20000}
+      # UMAPI: compatibility, analogs and photos by a visitor's button; see docs/UMAPI_INTEGRATION.md.
+      UMAPI_API_KEY_FILE: /run/secrets/umapi_api_key
+      UMAPI_ENABLED: ${UMAPI_ENABLED:-true}
+      UMAPI_LOCALE: ${UMAPI_LOCALE:-ru-WWW}
+      UMAPI_DAILY_LIMIT: ${UMAPI_DAILY_LIMIT:-9000}
+      UMAPI_VISITOR_DAILY_LIMIT: ${UMAPI_VISITOR_DAILY_LIMIT:-120}
+      UMAPI_MEDIA_BASE_URL: ${UMAPI_MEDIA_BASE_URL:-}
       API_NINJAS_MODE: ${API_NINJAS_MODE:-off}
       POSTGRES_PASSWORD_FILE: /run/secrets/app_database_password
       REDIS_HOST: redis
@@ -227,6 +234,7 @@ services:
       - fapi_key
       - api_ninjas_key
       - tecdoc_api_key
+      - umapi_api_key
       - s3_access_key_id
       - s3_secret_access_key
     depends_on:
@@ -428,6 +436,8 @@ secrets:
     file: ${AN30_SECRETS_DIR:-./secrets}/api_ninjas_key.txt
   tecdoc_api_key:
     file: ${AN30_SECRETS_DIR:-./secrets}/tecdoc_api_key.txt
+  umapi_api_key:
+    file: ${AN30_SECRETS_DIR:-./secrets}/umapi_api_key.txt
   s3_access_key_id:
     file: ${AN30_SECRETS_DIR:-./secrets}/s3_access_key_id.txt
   s3_secret_access_key:

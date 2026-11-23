@@ -129,6 +129,24 @@ const RawEnvironmentSchema = z.object({
   // TECDOC_CACHE_MAX_ENTRIES answers. Raise only with the provider's written consent.
   TECDOC_CACHE_TTL_SECONDS: z.coerce.number().int().min(60).max(604_800).default(86_400),
   TECDOC_CACHE_MAX_ENTRIES: z.coerce.number().int().min(100).max(200_000).default(20_000),
+  // UMAPI (docs/UMAPI_INTEGRATION.md): compatibility, analogs and photos of a part, asked
+  // only when a visitor presses a button. Enabled by the key alone. The tariff counts
+  // requests per day; UMAPI_DAILY_LIMIT keeps a margin under it.
+  UMAPI_ENABLED: z.enum(["true", "false"]).default("true"),
+  UMAPI_API_KEY: z.string().optional(),
+  UMAPI_API_KEY_FILE: z.string().min(1).optional(),
+  UMAPI_BASE_URL: z.string().url().default("https://api.umapi.ru"),
+  // Language and region of the answers, as in /v2/autocatalog/{language}-{region}/.
+  UMAPI_LOCALE: z.string().regex(/^[a-z]{2}-[A-Z]{1,3}$/u).default("ru-WWW"),
+  UMAPI_DAILY_LIMIT: z.coerce.number().int().min(10).max(1_000_000).default(9_000),
+  // 0 = automatic: a fifth of the day in any one hour.
+  UMAPI_HOURLY_LIMIT: z.coerce.number().int().min(0).max(200_000).default(0),
+  // Provider calls one visitor may cause in a day (cache answers are not counted).
+  UMAPI_VISITOR_DAILY_LIMIT: z.coerce.number().int().min(5).max(10_000).default(120),
+  UMAPI_CACHE_TTL_SECONDS: z.coerce.number().int().min(60).max(604_800).default(86_400),
+  UMAPI_CACHE_MAX_ENTRIES: z.coerce.number().int().min(100).max(200_000).default(20_000),
+  // Where the catalogue's photo files are served from; empty = the «show photo» button is hidden.
+  UMAPI_MEDIA_BASE_URL: z.union([z.literal(""), z.string().url()]).optional(),
 });
 
 /** Optional provider key: a missing or empty secret file simply means "not configured". */
@@ -264,6 +282,9 @@ export function validateEnvironment(raw: Record<string, unknown>) {
     TECDOC_API_KEY: environment.TECDOC_API_KEY?.trim() || readOptionalSecret(environment.TECDOC_API_KEY_FILE),
     TECDOC_ENABLED: environment.TECDOC_ENABLED === "true",
     TECDOC_PERIOD_START: environment.TECDOC_PERIOD_START || undefined,
+    UMAPI_API_KEY: environment.UMAPI_API_KEY?.trim() || readOptionalSecret(environment.UMAPI_API_KEY_FILE),
+    UMAPI_ENABLED: environment.UMAPI_ENABLED !== "false",
+    UMAPI_MEDIA_BASE_URL: environment.UMAPI_MEDIA_BASE_URL || undefined,
     ROSSKO_ENABLED: environment.ROSSKO_ENABLED === "true",
     ROSSKO_KEY1: rosskoKey1,
     ROSSKO_KEY2: rosskoKey2,

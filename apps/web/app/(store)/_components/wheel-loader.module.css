@@ -1,0 +1,8 @@
+.loader { display: inline-flex; flex-direction: column; align-items: center; gap: 12px; color: var(--store-text); font-family: var(--store-font-display); font-size: .92rem; font-weight: 700; text-align: center; }
+.loader[data-size="sm"] { flex-direction: row; gap: 10px; font-size: .88rem; }
+.wheel { width: 56px; height: 56px; color: var(--store-brand); }
+.loader[data-size="sm"] .wheel { width: 24px; height: 24px; }
+@media (prefers-reduced-motion: no-preference) {
+  .wheel { animation: wheelTurn 1.1s linear infinite; }
+}
+@keyframes wheelTurn { to { transform: rotate(360deg); } }

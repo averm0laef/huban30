@@ -1,0 +1,151 @@
+import type { ShopOffer } from "@an30/contracts";
+import { describe, expect, it } from "vitest";
+
+import type { DatabaseService } from "../infrastructure/database.service.js";
+import type { PartsFinderShopService, ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
+import type { UmapiGateway } from "./umapi.gateway.js";
+import { UmapiService } from "./umapi.service.js";
+
+// UMAPI answers in the shapes of its OpenAPI 2.1.1 schemas, made up for the tests: no paid call is made.
+const SPRINTER_313 = { CI_FROM: "2009-01-01", MANUFACTURER: "MERCEDES-BENZ", MFA_ID: 74, MODEL_SERIES: "SPRINTER 3,5-t Фургон (B906)", MS_ID: 5590, PASSENGER_CAR: "313 CDI", PC_ID: 32001 };
+const SPRINTER_316 = { ...SPRINTER_313, PASSENGER_CAR: "316 CDI", PC_ID: 32002 };
+
+type Answers = Record<string, unknown>;
+
+const FILTER_ANSWERS: Answers = {
+  "/BrandRefinement/AFW1272": [],
+  // «IAMNumber»: another maker's cross of the number, not a maker of it.
+  "/BrandRefinement/K1288": [{ BRAND: "FILTRON", DISPLAY_NR: "K 1288", TYPE: "ArticleNumber" }, { BRAND: "SAMPA", DISPLAY_NR: "K1288", TYPE: "IAMNumber" }],
+  "/BrandRefinement/CU3569": [{ BRAND: "MANN-FILTER", DISPLAY_NR: "CU 3569", TYPE: "ArticleNumber" }, { BRAND: "SAMPA", DISPLAY_NR: "CU3569", TYPE: "IAMNumber" }],
+  "/v2/cross/parts/Analogs/getCrossInfo?article=K1288&brand=FILTRON": {
+    article: "K 1288", brand: "FILTRON", catalogId: 7001,
+    td: { ARTICLE_NR: "K 1288", ART_ID: 7001, BRAND: "FILTRON", MEDIAS: [{ FILE_NAME: "k1288.webp", SORT: 1, SUP_ID: 256 }], SUP_ID: 256 },
+  },
+  "/v2/cross/parts/Analogs/getCrossInfo?article=CU3569&brand=MANN-FILTER": { article: "CU 3569", brand: "MANN-FILTER", catalogId: 7002, td: { ARTICLE_NR: "CU 3569", ART_ID: 7002, BRAND: "MANN-FILTER" } },
+  "/Analogs/K1288/FILTRON": { data: [{ ARTICLE_NR: "CU 3569", ART_ID: 7002, BRAND: "MANN-FILTER" }] },
+  "/Analogs/CU3569/MANN-FILTER": { data: [{ ARTICLE_NR: "K 1288", ART_ID: 7001, BRAND: "FILTRON" }, { ARTICLE_NR: "1 987 432 377", ART_ID: 7003, BRAND: "BOSCH" }] },
+  "/ArticleLinks/7001": { PC: [SPRINTER_313, SPRINTER_316] },
+  "/ArticleLinks/7002": { PC: [SPRINTER_313] },
+};
+
+interface TestProduct { brand: string | null; id: string; name: string; section: string; sku: string }
+
+const AFW: TestProduct = { brand: null, id: "00000000-0000-4000-8000-000000000001", name: "Фильтр салона MB SPRINTER/VW CRAFTER 06- AFW1272 (FILTRON K1288, MANN CU3569) AFW1272", section: "filtry", sku: "AFW1272" };
+
+function offer(productId: string, brand: string, sku: string, matchedVia: ShopOffer["matchedVia"] = "exact", available = 1): ShopOffer {
+  return { availableQuantity: available, brand, matchedVia, name: `${brand} ${sku}`, priceKopeks: 50_000, productId, sku, slug: productId };
+}
+
+function setup(options: { answers?: Answers; media?: string | null; product?: TestProduct | null; shop?: Record<string, ShopOffer[]> } = {}) {
+  const answers = options.answers ?? FILTER_ANSWERS;
+  const asked: string[] = [];
+  const gateway = {
+    available: true,
+    get: async (path: string, parameters: Record<string, string | number | boolean>, _caller: unknown, reduce: (payload: unknown) => unknown, settings?: { whenNotFound?: unknown }) => {
+      asked.push(path);
+      // getCrossInfo is one path for every part: its number and maker are in the parameters.
+      const key = path.startsWith("/v2/") ? `${path}?${new URLSearchParams(Object.entries(parameters).map(([name, value]) => [name, String(value)])).toString()}` : path;
+      return key in answers ? reduce(answers[key]) : settings?.whenNotFound !== undefined ? settings.whenNotFound : reduce([]);
+    },
+    mediaBaseUrl: options.media === undefined ? "https://media.example" : options.media,
+  };
+  const database = {
+    query: async (sql: string) => {
+      if (sql.includes("FROM app.products")) return { rows: options.product === null ? [] : [options.product ?? AFW] };
+      if (sql.includes("vehicle_catalog_modifications")) return { rows: [{ ms: 5590, pc: 32001 }] };
+      if (sql.includes("vehicle_catalog_models")) return { rows: [{ ms: 5590 }] };
+      return { rows: [] };
+    },
+  };
+  const shopOffers = options.shop ?? {};
+  const shop = {
+    lookup: async () => ({ for: (request: ShopOfferRequest) => shopOffers[`${request.brand}|${request.article}`] ?? [] }),
+  };
+  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService);
+  return { asked, service };
+}
+
+const VISITOR = { ip: "203.0.113.7" };
+
+describe("UmapiService: compatibility", () => {
+  it("checks a part without a maker of ours through the analogue numbers of its name, when they agree", async () => {
+    const { service } = setup();
+    const answer = await service.productFitment(AFW.id, { modificationId: 100_000_123 }, VISITOR, "check");
+    expect(answer).toMatchObject({ status: "ok", verdict: "fits", via: "name" });
+    if (answer.status !== "ok") throw new Error("expected an answer");
+    expect(answer.parts.map((part) => [part.brand, part.article, part.verdict])).toEqual([["FILTRON", "K 1288", "fits"], ["MANN-FILTER", "CU 3569", "fits"]]);
+  });
+
+  it("is not sure when the analogue numbers disagree", async () => {
+    const { service } = setup({ answers: { ...FILTER_ANSWERS, "/ArticleLinks/7002": { PC: [] } } });
+    expect(await service.productFitment(AFW.id, { modificationId: 100_000_123 }, VISITOR, "check")).toMatchObject({ status: "ok", verdict: null });
+  });
+
+  it("tells another engine of the same model, and asks for a car when none is chosen", async () => {
+    const { service } = setup({ answers: { ...FILTER_ANSWERS, "/ArticleLinks/7001": { PC: [SPRINTER_316] }, "/ArticleLinks/7002": { PC: [SPRINTER_316] } } });
+    expect(await service.productFitment(AFW.id, { modificationId: 100_000_123 }, VISITOR, "check")).toMatchObject({ verdict: "other_engine" });
+    expect(await service.productFitment(AFW.id, {}, VISITOR, "check")).toEqual({ status: "vehicle_required" });
+  });
+
+  it("lets the product's own maker and number decide alone", async () => {
+    const product = { ...AFW, brand: "FILTRON", name: "Фильтр салона FILTRON K1288 (MANN CU3569)", sku: "K1288" };
+    // Our own number «K1288» with our maker FILTRON: resolved by itself, the bracketed number is never asked.
+    const { asked, service } = setup({ product });
+    expect(await service.productFitment(product.id, { modificationId: 100_000_123 }, VISITOR, "check")).toMatchObject({ status: "ok", verdict: "fits", via: "own" });
+    expect(asked).not.toContain("/BrandRefinement/CU3569");
+  });
+
+  it("asks the catalogue with the bare number: «W 914/2» as «W9142»", async () => {
+    const product = { ...AFW, brand: "MANN-FILTER", name: "Фильтр масляный MANN W 914/2", sku: "W 914/2" };
+    const answers = {
+      ...FILTER_ANSWERS,
+      "/BrandRefinement/W9142": [{ BRAND: "MANN-FILTER", DISPLAY_NR: "W 914/2", TYPE: "ArticleNumber" }],
+      "/v2/cross/parts/Analogs/getCrossInfo?article=W9142&brand=MANN-FILTER": { article: "W 914/2", brand: "MANN-FILTER", catalogId: 9674543, td: { ARTICLE_NR: "W 914/2", ART_ID: 9674543, BRAND: "MANN-FILTER" } },
+    };
+    const { asked, service } = setup({ answers, product });
+    expect(await service.productFitment(product.id, {}, VISITOR, "list")).toMatchObject({ parts: [{ artId: 9674543, asked: "W9142" }], status: "ok" });
+    expect(asked.some((path) => path.includes("/") && path.includes("914%2F2"))).toBe(false);
+    expect(asked).toContain("/BrandRefinement/W9142");
+  });
+
+  it("answers «ambiguous» for a bare number several makers use, and never asks about oils", async () => {
+    const product = { ...AFW, name: "Деталь 1234567", sku: "1234567" };
+    const { service } = setup({ answers: { "/BrandRefinement/1234567": [{ BRAND: "A", DISPLAY_NR: "1234567", TYPE: "ArticleNumber" }, { BRAND: "B", DISPLAY_NR: "1234567", TYPE: "ArticleNumber" }] }, product });
+    expect(await service.productFitment(product.id, {}, VISITOR, "list")).toEqual({ status: "ambiguous" });
+    const oil = { ...AFW, brand: "LIQUI MOLY", name: "Масло 5W-40", section: "motornye-masla", sku: "3930" };
+    const { asked, service: oilService } = setup({ product: oil });
+    expect(await oilService.productFitment(oil.id, {}, VISITOR, "list")).toEqual({ status: "not_applicable" });
+    expect(asked).toEqual([]);
+  });
+
+  it("lists the cars of all the analogue numbers once each, the customer's first", async () => {
+    const { service } = setup();
+    const answer = await service.productFitment(AFW.id, { modificationId: 100_000_123 }, VISITOR, "list");
+    if (answer.status !== "ok") throw new Error("expected an answer");
+    expect(answer.total).toBe(2);
+    expect(answer.makes[0]!.models[0]!.cars.map((car) => [car.name, car.mine])).toEqual([["313 CDI", true], ["316 CDI", false]]);
+  });
+});
+
+describe("UmapiService: analogs and photo", () => {
+  it("returns only our products whose number AND maker match an analog, never the product itself", async () => {
+    const { service } = setup({
+      shop: {
+        "BOSCH|1 987 432 377": [offer("p-bosch", "BOSCH", "1987432377")],
+        "FILTRON|K 1288": [offer("p-filtron", "FILTRON", "K1288"), offer(AFW.id, "FILTRON", "K1288")],
+        "MANN-FILTER|CU 3569": [offer("p-other-maker", "SAKURA", "CU3569"), offer("p-cross", "MANN-FILTER", "CU3569", "cross")],
+      },
+    });
+    const answer = await service.productAnalogs(AFW.id, VISITOR);
+    if (answer.status !== "ok") throw new Error("expected an answer");
+    expect(answer.offers.map((item) => [item.productId, item.basis])).toEqual([["p-filtron", "catalogue"], ["p-bosch", "catalogue"]]);
+  });
+
+  it("gives photo addresses on the media host, and nothing without one", async () => {
+    const { service } = setup();
+    expect(await service.productPhotos(AFW.id, VISITOR)).toMatchObject({ photos: ["https://media.example/256/k1288.webp"], status: "ok" });
+    const { asked, service: noMedia } = setup({ media: null });
+    expect(await noMedia.productPhotos(AFW.id, VISITOR)).toEqual({ status: "not_available" });
+    expect(asked).toEqual([]);
+  });
+});

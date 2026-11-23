@@ -9,6 +9,7 @@ export * from "./catalog-enrichment.js";
 export * from "./catalog-search-normalize.js";
 export * from "./one-c-exchange.js";
 export * from "./parts-finder.js";
+export * from "./part-identity.js";
 export * from "./suppliers.js";
 
 const SAFE_SINGLE_LINE = /^[^\u0000-\u001F\u007F]+$/u;

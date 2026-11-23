@@ -1,0 +1,86 @@
+/**
+ * Browser client for the product page's catalogue buttons (apps/api/src/umapi, docs/UMAPI_INTEGRATION.md):
+ * compatibility with the customer's car, the cars a part fits, our products among its analogs, its photo. Every call
+ * is a press of a button: nothing here runs when a page opens.
+ */
+import { FinderError, VEHICLE_CATALOG_ID_BASE, type PickedVehicle, type ShopOffer } from "./parts-finder";
+
+export type UmapiVerdict = "fits" | "other_engine" | "model" | "not_listed";
+export interface UmapiPart { article: string; artId: number; asked: string; brand: string; via: "own" | "name" }
+export interface FitCar { mine: boolean; name: string; pcId: number }
+export interface FitModel { cars: FitCar[]; mine: boolean; model: string; msId: number | null; yearFrom: number | null; yearTo: number | null }
+export interface FitMake { make: string; mine: boolean; models: FitModel[] }
+
+/** Answers about a product the catalogue cannot be asked about, or could not match. */
+export type UmapiProductStatus = "not_found" | "not_applicable" | "unknown_part" | "ambiguous";
+
+export type UmapiFitment =
+  | { status: UmapiProductStatus | "vehicle_required" }
+  | {
+    makes: FitMake[];
+    parts: Array<UmapiPart & { verdict: UmapiVerdict | null }>;
+    status: "ok";
+    total: number;
+    /** For a check: null — the analogue numbers of the name disagree («не уверены»). */
+    verdict: UmapiVerdict | null;
+    via: "own" | "name";
+  };
+
+export type UmapiAnalogs = { status: UmapiProductStatus } | { offers: ShopOffer[]; parts: UmapiPart[]; status: "ok" };
+export type UmapiPhotos = { status: UmapiProductStatus | "not_available" } | { part: UmapiPart; photos: string[]; status: "ok" | "none" };
+
+const UNAVAILABLE = "Проверка по каталогу сейчас недоступна. Попробуйте через несколько минут или спросите специалиста.";
+
+let statusRequest: Promise<{ enabled: boolean; photos: boolean }> | null = null;
+
+/** Whether the catalogue buttons are offered at all (a key is set and UMAPI answers): asked once per page. */
+export function umapiStatus(): Promise<{ enabled: boolean; photos: boolean }> {
+  statusRequest ??= fetch("/api/v1/umapi/status", { headers: { Accept: "application/json" } })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data: { enabled?: unknown; photos?: unknown } | null) => ({ enabled: data?.enabled === true, photos: data?.photos === true }))
+    .catch(() => ({ enabled: false, photos: false }));
+  return statusRequest;
+}
+
+export async function umapiGet<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1/umapi/${path}`, { headers: { Accept: "application/json" } });
+  } catch {
+    throw new FinderError("Нет связи с сервером. Проверьте интернет и повторите.", null, 0);
+  }
+  let data: unknown = null;
+  try { data = await response.json(); } catch { /* handled below */ }
+  if (!response.ok) {
+    const record = (data && typeof data === "object" ? data : {}) as { code?: unknown; error?: unknown };
+    throw new FinderError(typeof record.error === "string" ? record.error : UNAVAILABLE, typeof record.code === "string" ? record.code : null, response.status);
+  }
+  if (!data || typeof data !== "object") throw new FinderError(UNAVAILABLE, null, response.status);
+  return data as T;
+}
+
+/** The car of the check in our vehicle catalog's numbers; a car picked before the switch to it has none. */
+export function catalogCar(car: PickedVehicle | null): { model?: number; mod?: number } | null {
+  if (!car) return null;
+  const valid = (value: number | undefined) => (value !== undefined && value >= VEHICLE_CATALOG_ID_BASE ? value : undefined);
+  const mod = valid(car.modificationId);
+  const model = valid(car.modelId);
+  return mod || model ? { ...(model ? { model } : {}), ...(mod ? { mod } : {}) } : null;
+}
+
+export function fitmentPath(productId: string, mode: "check" | "list", car: { model?: number; mod?: number } | null): string {
+  const query = new URLSearchParams({ mode });
+  if (car?.model) query.set("model", String(car.model));
+  if (car?.mod) query.set("mod", String(car.mod));
+  return `product/${encodeURIComponent(productId)}/fitment?${query.toString()}`;
+}
+
+/**
+ * «MERCEDES-BENZ» -> «Mercedes-Benz», «COROLLA седан (_E12_)» -> «Corolla седан (E12)»: catalogue capitals read as
+ * names, and the catalogue's «_» marks inside codes are dropped.
+ */
+export function readableName(name: string): string {
+  return name
+    .replace(/\(([^()]*)\)/gu, (_whole, inside: string) => `(${inside.replace(/_/gu, "").replace(/\s*,\s*/gu, ", ").trim()})`)
+    .replace(/[A-ZА-ЯЁ][A-ZА-ЯЁ]{3,}/gu, (word) => word[0] + word.slice(1).toLowerCase());
+}

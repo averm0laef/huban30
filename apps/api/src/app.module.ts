@@ -24,6 +24,7 @@ import { StaffModule } from "./staff/staff.module.js";
 import { StorefrontModule } from "./storefront/storefront.module.js";
 import { SuppliersModule } from "./suppliers/suppliers.module.js";
 import { TecdocModule } from "./tecdoc/tecdoc.module.js";
+import { UmapiModule } from "./umapi/umapi.module.js";
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { TecdocModule } from "./tecdoc/tecdoc.module.js";
     StorefrontModule,
     SuppliersModule,
     TecdocModule,
+    UmapiModule,
     GarageModule,
     HealthModule,
   ],
