@@ -17,14 +17,17 @@ const CONTENT_TYPES: ReadonlyMap<string, string> = new Map([
 ]);
 // Above the 10 MB a product photo may weigh; read() never buffers more.
 const DEFAULT_MAX_READ_BYTES = 16 * 1024 * 1024;
+const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 
 export interface S3StorageSettings {
   accessKeyId: string;
   bucket: string;
   endpoint: string;
   forcePathStyle: boolean;
+  maxAttempts?: number;
   maxReadBytes?: number;
   region: string;
+  requestTimeoutMs?: number;
   secretAccessKey: string;
 }
 
@@ -37,16 +40,25 @@ export class S3StorageProvider implements StorageProvider {
   constructor(settings: S3StorageSettings) {
     this.bucket = settings.bucket;
     this.maxReadBytes = settings.maxReadBytes ?? DEFAULT_MAX_READ_BYTES;
+    const requestTimeout = settings.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.client = new S3Client({
       credentials: { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey },
       endpoint: settings.endpoint,
       forcePathStyle: settings.forcePathStyle,
-      maxAttempts: 3,
+      maxAttempts: settings.maxAttempts ?? 3,
       region: settings.region,
       // The SDK's newer CRC32 trailers are an AWS extension that several
       // S3-compatible stores reject; integrity is checked by SHA-256 on read.
       requestChecksumCalculation: "WHEN_REQUIRED",
-      requestHandler: { connectionTimeout: 5_000, requestTimeout: 20_000 },
+      // Without throwOnRequestTimeout the SDK only logs a warning and keeps
+      // waiting, so a bucket that goes silent would hold the 1C import
+      // forever; socketTimeout ends a download that stalls mid-body.
+      requestHandler: {
+        connectionTimeout: 5_000,
+        requestTimeout,
+        socketTimeout: requestTimeout,
+        throwOnRequestTimeout: true,
+      },
       responseChecksumValidation: "WHEN_REQUIRED",
     });
   }

@@ -18,6 +18,7 @@ interface SeenRequest { authorization: string | undefined; method: string; url: 
 const objects = new Map<string, FakeObject>();
 const seen: SeenRequest[] = [];
 let oversizedKey: string | null = null;
+let stalled = false;
 let server: Server;
 let endpoint: string;
 
@@ -32,6 +33,8 @@ beforeAll(async () => {
     void (async () => {
       const key = decodeURIComponent(new URL(request.url ?? "/", "http://fake").pathname).slice(1);
       seen.push({ authorization: request.headers.authorization, method: request.method ?? "", url: request.url ?? "" });
+      // A bucket that takes the connection and then goes silent.
+      if (stalled) return;
       if (request.method === "PUT") {
         objects.set(key, { body: await body(request), contentType: request.headers["content-type"] });
         response.writeHead(200, { ETag: '"fake"' }).end();
@@ -67,6 +70,7 @@ afterEach(() => {
   objects.clear();
   seen.length = 0;
   oversizedKey = null;
+  stalled = false;
 });
 
 afterAll(async () => {
@@ -144,6 +148,17 @@ describe("S3StorageProvider", () => {
 
     await expect(provider.read(stored.storageKey)).rejects.toThrow(/larger than/u);
   });
+
+  it("gives up on a bucket that accepts the connection and then stops answering", async () => {
+    const provider = new S3StorageProvider(settings({ maxAttempts: 1, requestTimeoutMs: 200 }));
+    stalled = true;
+
+    const started = Date.now();
+    await expect(provider.store(Buffer.from("stalled"), "jpg")).rejects.toThrow();
+    await expect(provider.read("catalog/2026-11/019bf9ea-0d3e-7def-8c9a-000000000012.jpg")).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(3_000);
+  }, 6_000);
 
   it("signs every request with the access key and never sends the secret", async () => {
     const provider = new S3StorageProvider(settings());

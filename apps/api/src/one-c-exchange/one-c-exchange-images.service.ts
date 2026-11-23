@@ -22,6 +22,8 @@ import { OneCExchangeTempStorageService } from "./one-c-exchange-temp-storage.se
 import { sourceSql, type OneCSource } from "./one-c-source.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+// After a failed store the photo storage is left alone this long.
+const STORAGE_RETRY_PAUSE_MS = 60_000;
 const IMAGE_EXTENSIONS: ReadonlyMap<string, string> = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
@@ -39,6 +41,7 @@ export interface ImageTask {
 @Injectable()
 export class OneCExchangeImagesService {
   private readonly logger = new Logger(OneCExchangeImagesService.name);
+  private storagePausedUntil = 0;
 
   constructor(
     private readonly database: DatabaseService,
@@ -95,11 +98,17 @@ export class OneCExchangeImagesService {
     }
 
     const storage = this.photos.target;
+    // A bucket that stopped answering costs a full timeout per photo; the rest
+    // of the exchange's photos must not each wait for it while imports queue.
+    if (Date.now() < this.storagePausedUntil) {
+      return this.skip(task, `photo storage "${storage.name}" is not answering`);
+    }
     let stored: StoredObject;
     try {
       stored = await storage.store(content, extension);
     } catch (error) {
       // An unreachable bucket must not abort the price and stock update.
+      this.storagePausedUntil = Date.now() + STORAGE_RETRY_PAUSE_MS;
       return this.skip(task, `photo storage "${storage.name}" did not accept it (${error instanceof Error ? error.name : "error"})`);
     }
     let removeStored = false;

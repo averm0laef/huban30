@@ -58,4 +58,25 @@ describe("OneCExchangeImagesService", () => {
 
     expect(inserted).toHaveLength(0);
   });
+
+  it("does not make every photo of an exchange wait for a storage that just failed", async () => {
+    vi.useFakeTimers({ now: new Date("2026-11-23T03:00:00Z"), toFake: ["Date"] });
+    try {
+      const store = vi.fn(async (content: Buffer) => {
+        if (store.mock.calls.length === 1) throw Object.assign(new Error("stalled"), { name: "TimeoutError" });
+        return { byteSize: content.length, storageKey: "catalog/2026-11/019bf9ea-0d3e-7def-8c9a-000000000011.png" };
+      });
+      const { service } = setup({ name: "s3", read: vi.fn(), remove: vi.fn(), store });
+
+      await expect(service.attach(TASK, "one_c")).resolves.toBe("skipped");
+      await expect(service.attach(TASK, "one_c")).resolves.toBe("skipped");
+      expect(store).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(new Date("2026-11-23T03:01:01Z"));
+      await expect(service.attach(TASK, "one_c")).resolves.toBe("attached");
+      expect(store).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
