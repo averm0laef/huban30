@@ -5,6 +5,7 @@ import type { RedisService } from "../../infrastructure/redis.service.js";
 import type { RateLimitService } from "../../security/rate-limit.service.js";
 import {
   ROSSKO_REQUEST_TIMEOUT_MS,
+  rosskoDay,
   RosskoSupplierProvider,
 } from "./rossko-supplier.provider.js";
 import { supplierCacheKey } from "./rossko-soap.js";
@@ -31,7 +32,23 @@ function makeRedis() {
   const store = new Map<string, string>();
   return {
     client: {
+      // The provider's only script is the daily-allowance counter. This
+      // stand-in keeps the same contract (KEYS: total, background; ARGV:
+      // daily limit, background limit, background lane, background ceiling);
+      // the Lua itself is checked against a real Redis by hand.
+      eval: vi.fn(async (_script: string, _keys: number, totalKey: string, backgroundKey: string, limit: string, backgroundLimit: string, background: string, ceiling: string) => {
+        const total = Number(store.get(totalKey) ?? 0);
+        if (total >= Number(limit)) return 0;
+        if (background === "1") {
+          const used = Number(store.get(backgroundKey) ?? 0);
+          if (used >= Number(backgroundLimit) || total >= Number(ceiling)) return 0;
+          store.set(backgroundKey, String(used + 1));
+        }
+        store.set(totalKey, String(total + 1));
+        return 1;
+      }),
       get: vi.fn(async (key: string) => store.get(key) ?? null),
+      mget: vi.fn(async (...keys: string[]) => keys.map((key) => store.get(key) ?? null)),
       set: vi.fn(async (key: string, value: string) => { store.set(key, value); return "OK"; }),
     },
     ensureConnected: vi.fn(async () => undefined),
@@ -266,5 +283,113 @@ describe("RosskoSupplierProvider", () => {
     const result = await provider.search("   ");
     expect(result.success).toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+  describe("daily allowance", () => {
+    const NOT_FOUND_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="https://api.rossko.ru/"><SOAP-ENV:Body><ns1:GetSearchResponse><ns1:SearchResult><ns1:success>false</ns1:success><ns1:message>Ничего не найдено</ns1:message></ns1:SearchResult></ns1:GetSearchResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+
+    function stubFetch(xml = SUCCESS_XML) {
+      const fetchSpy = vi.fn(async () => new Response(xml, { status: 200 }));
+      globalThis.fetch = fetchSpy as unknown as typeof fetch;
+      return fetchSpy;
+    }
+
+    it("follows the Moscow date, the day the supplier resets its count", () => {
+      expect(rosskoDay(new Date("2026-11-22T20:59:59Z"))).toBe("2026-11-22");
+      expect(rosskoDay(new Date("2026-11-22T21:00:00Z"))).toBe("2026-11-23");
+    });
+
+    it("sends nothing once the day's allowance is used up", async () => {
+      const fetchSpy = stubFetch();
+      const provider = new RosskoSupplierProvider(makeConfig({ ROSSKO_DAILY_LIMIT: 2 }), makeRedis(), makeRateLimit());
+
+      expect((await provider.search("A1000")).success).toBe(true);
+      expect((await provider.search("A2000")).success).toBe(true);
+      const refused = await provider.search("A3000");
+
+      expect(refused).toEqual({ message: "Поставщик временно недоступен", parts: [], success: false });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not count an answer served from the cache", async () => {
+      const fetchSpy = stubFetch();
+      const provider = new RosskoSupplierProvider(makeConfig({ ROSSKO_DAILY_LIMIT: 1 }), makeRedis(), makeRateLimit());
+
+      await provider.search("A1000");
+      expect((await provider.search("A1000")).success).toBe(true);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect((await provider.usage())?.used).toBe(1);
+    });
+
+    it("stops the shop's own background lookups at their share and keeps serving customers", async () => {
+      const fetchSpy = stubFetch();
+      const provider = new RosskoSupplierProvider(
+        makeConfig({ ROSSKO_CROSS_FILL_DAILY_LIMIT: 2, ROSSKO_DAILY_LIMIT: 100 }), makeRedis(), makeRateLimit(),
+      );
+
+      expect((await provider.search("B1000", "background")).success).toBe(true);
+      expect((await provider.search("B2000", "background")).success).toBe(true);
+      expect((await provider.search("B3000", "background")).success).toBe(false);
+      expect((await provider.search("C1000")).success).toBe(true);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      expect(await provider.usage()).toEqual({ backgroundLimit: 2, backgroundUsed: 2, dailyLimit: 100, day: rosskoDay(), used: 3 });
+    });
+
+    it("never lets background lookups into the last fifth of the day's allowance", async () => {
+      const fetchSpy = stubFetch();
+      const provider = new RosskoSupplierProvider(
+        makeConfig({ ROSSKO_CROSS_FILL_DAILY_LIMIT: 10, ROSSKO_DAILY_LIMIT: 5 }), makeRedis(), makeRateLimit(),
+      );
+
+      for (const query of ["B1000", "B2000", "B3000", "B4000"]) await provider.search(query, "background");
+      expect((await provider.search("B5000", "background")).success).toBe(false);
+      expect((await provider.search("C1000")).success).toBe(true);
+
+      // 4 background calls (80 % of 5) + the customer's.
+      expect(fetchSpy).toHaveBeenCalledTimes(5);
+    });
+
+    it("makes no background call at all when the background share is not configured", async () => {
+      const fetchSpy = stubFetch();
+      const provider = new RosskoSupplierProvider(makeConfig(), makeRedis(), makeRateLimit());
+
+      expect((await provider.search("B1000", "background")).success).toBe(false);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("sends nothing when the count cannot be kept", async () => {
+      const fetchSpy = stubFetch();
+      const redis = makeRedis();
+      (redis.client.eval as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("redis down"));
+      const provider = new RosskoSupplierProvider(makeConfig(), redis, makeRateLimit());
+
+      expect((await provider.search("A1000")).success).toBe(false);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("does not keep a background answer in the customer cache", async () => {
+      stubFetch();
+      const redis = makeRedis();
+      const provider = new RosskoSupplierProvider(makeConfig({ ROSSKO_CROSS_FILL_DAILY_LIMIT: 5 }), redis, makeRateLimit());
+
+      expect((await provider.search("B1000", "background")).parts).toHaveLength(1);
+      expect(redis.client.set).not.toHaveBeenCalled();
+    });
+
+    it("treats «Ничего не найдено» as an answer and caches it instead of asking again", async () => {
+      const fetchSpy = stubFetch(NOT_FOUND_XML);
+      const provider = new RosskoSupplierProvider(makeConfig(), makeRedis(), makeRateLimit());
+
+      expect(await provider.search("ZZQX998877")).toEqual({ message: "", parts: [], success: true });
+      expect((await provider.search("ZZQX998877")).success).toBe(true);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports no usage while the supplier is off", async () => {
+      const provider = new RosskoSupplierProvider(makeConfig({ ROSSKO_ENABLED: false }), makeRedis(), makeRateLimit());
+      expect(await provider.usage()).toBeNull();
+    });
   });
 });

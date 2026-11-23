@@ -6,7 +6,8 @@ import type { SupplierPart } from "../adapters/provider-contracts.js";
 // MAX_CROSSES_PER_PART, MAX_PART_DEPTH): a pathological or hostile response
 // could otherwise turn a single search into an unbounded write burst against
 // the crosses queue. In practice a real response tops out far below this.
-const MAX_PAIRS = 500;
+// Equal to one ingestion job (MAX_PAIRS_PER_JOB in supplier-cross-queue.service.ts).
+const MAX_PAIRS = 1_000;
 
 /**
  * Flattens every parent-child edge in a Rossko search result's cross tree

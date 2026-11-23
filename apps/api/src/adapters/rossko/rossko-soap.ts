@@ -21,9 +21,14 @@ const CACHE_KEY_PREFIX = "an30:rossko:search:";
 // stop a malformed or hostile payload from allocating an unbounded tree.
 const MAX_TOP_LEVEL_PARTS = 500;
 const MAX_STOCKS_PER_PART = 50;
-const MAX_CROSSES_PER_PART = 50;
+// A live answer for one oil filter number carried 78 analogs under a single
+// part: a cap of 50 silently dropped the rest from the shop's cross base.
+export const MAX_CROSSES_PER_PART = 300;
 const MAX_PART_DEPTH = 6;
-const MAX_XML_NODE_VISITS = 20_000;
+// A live answer of 581 KB (450 parts, 1 285 stock lines) is 16 800 nodes, so
+// a 20 000 ceiling refused only slightly broader, valid answers. The body is
+// already limited to 5 MiB by the provider.
+const MAX_XML_NODE_VISITS = 100_000;
 const MAX_STOCK_QUANTITY = 1_000_000;
 
 export interface RosskoSearchParams {
