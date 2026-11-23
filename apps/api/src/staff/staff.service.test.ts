@@ -188,6 +188,33 @@ describe("StaffService.chats visibility of a brand-new guest thread", () => {
     })]);
   });
 
+  it("orders the default queue by who is waiting for an answer, and reports since when", async () => {
+    const waitingSince = new Date("2026-08-05T08:30:02.000Z");
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ ...freshGuestThreadRow, waiting_since: waitingSince }] })
+      .mockResolvedValueOnce({ rows: [{ count: "1" }] });
+    const service = new StaffService({} as AuditService, {} as ChatEventBus, { query } as unknown as DatabaseService);
+
+    const result = await service.chats({}, auth);
+
+    const [rowsSql] = query.mock.calls[0] as [string, unknown[]];
+    expect(rowsSql).toMatch(/ORDER BY CASE thread\.status WHEN 'waiting_staff' THEN 0/u);
+    expect(result.items[0]).toMatchObject({ waitingSince: waitingSince.toISOString() });
+  });
+
+  it("still sorts by the last message when a caller asks for it", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [freshGuestThreadRow] })
+      .mockResolvedValueOnce({ rows: [{ count: "1" }] });
+    const service = new StaffService({} as AuditService, {} as ChatEventBus, { query } as unknown as DatabaseService);
+
+    const result = await service.chats({ sort: "lastMessageAt" }, auth);
+
+    const [rowsSql] = query.mock.calls[0] as [string, unknown[]];
+    expect(rowsSql).toContain("ORDER BY thread.last_message_at DESC NULLS LAST,thread.id");
+    expect(result.items[0]).toMatchObject({ waitingSince: null });
+  });
+
   it("also surfaces it when a manager explicitly asks for unassigned threads", async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [freshGuestThreadRow] })

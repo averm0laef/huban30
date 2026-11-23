@@ -20,6 +20,7 @@ import {
   ArrowClockwise20Regular,
   CheckmarkCircle20Regular,
   Delete20Regular,
+  PersonAvailable20Regular,
   Search20Regular,
   Send20Regular,
 } from "@fluentui/react-icons";
@@ -38,9 +39,20 @@ import {
   useResource,
 } from "../workspace-utils";
 import styles from "../workspace.module.css";
+import { chatComposerHint, chatOwnerLabel, chatTakeAction, chatWaitLabel } from "./chat-assignment";
 import { randomUuid } from "../../_lib/browser-crypto";
 
 type ConnectionState = "connecting" | "live" | "offline";
+
+/** Below this width the queue and the conversation are stacked (see `.chatWorkspace` in workspace.module.css). */
+const STACKED_LAYOUT = "(max-width: 820px)";
+
+/** Shows the whole conversation when it fits under the sticky top bar, otherwise its end: the latest messages and the reply box. */
+function revealConversation(element: HTMLElement | null): void {
+  if (!element) return;
+  const fits = element.getBoundingClientRect().height <= window.innerHeight - 76;
+  element.scrollIntoView({ block: fits ? "start" : "end" });
+}
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const messages = new Map(current.map((message) => [message.id, message]));
@@ -99,6 +111,15 @@ export function ChatsView({ session }: { session: SessionView }) {
   const olderRequestRef = useRef<symbol | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const conversationRef = useRef<HTMLElement | null>(null);
+  const revealThreadRef = useRef<string | null>(null);
+  const [loadedThreadId, setLoadedThreadId] = useState<string | null>(null);
+  // «Ждёт ответа N мин» in the queue keeps counting without a reload.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
   const limit = 25;
   const renderedMessages = useMemo(() => historyView === "latest"
     ? messages.slice(-RENDERED_MESSAGE_LIMIT)
@@ -131,8 +152,18 @@ export function ChatsView({ session }: { session: SessionView }) {
   const reloadQueue = resource.reload;
 
   useEffect(() => {
-    if (historyView === "latest") messageEndRef.current?.scrollIntoView({ block: "end" });
-  }, [historyView, renderedMessages]);
+    if (historyView !== "latest") return;
+    const conversation = conversationRef.current;
+    if (!conversation || !window.matchMedia(STACKED_LAYOUT).matches) {
+      messageEndRef.current?.scrollIntoView({ block: "end" });
+      return;
+    }
+    // Phone: the queue sits above the conversation. Follow new messages only while the
+    // conversation is on screen or was just tapped — a message must not pull the user out of the queue.
+    const tapped = loadedThreadId !== null && revealThreadRef.current === loadedThreadId;
+    if (tapped) revealThreadRef.current = null;
+    if (tapped || conversation.getBoundingClientRect().top < window.innerHeight * 0.6) revealConversation(conversation);
+  }, [historyView, renderedMessages, loadedThreadId]);
 
   // Keeps the queue list (left column) live for this whole view — independent
   // of whichever single thread is open on the right. Without this, a second
@@ -259,6 +290,7 @@ export function ChatsView({ session }: { session: SessionView }) {
     }
 
     setMessages([]);
+    setLoadedThreadId(null);
     olderRequestRef.current = null;
     setOlderCursor(null);
     setOlderLoading(false);
@@ -274,6 +306,7 @@ export function ChatsView({ session }: { session: SessionView }) {
         if (!active) return;
         cursor = history.nextSequence;
         setMessages(history.items);
+        setLoadedThreadId(selectedId);
         setOlderCursor(history.olderCursor);
         markLatestIncomingRead(history.items);
       })
@@ -392,7 +425,7 @@ export function ChatsView({ session }: { session: SessionView }) {
     <>
       <SectionHeader
         actions={<Button icon={<ArrowClockwise20Regular />} onClick={resource.reload}>Обновить очередь</Button>}
-        description="Включите «Принимать обращения» в верхней панели. Новые диалоги назначаются доступным менеджерам автоматически."
+        description="Сверху — покупатели, которые ждут ответа дольше всех. Включите «Принимать обращения», и новые диалоги будут назначаться вам автоматически; любой чат из очереди можно взять и самому."
         eyebrow="Поддержка"
         title="Чаты и обращения"
       />
@@ -433,7 +466,14 @@ export function ChatsView({ session }: { session: SessionView }) {
               className={styles.threadCard}
               data-active={thread.id === selectedId || undefined}
               key={thread.id}
-              onClick={() => setSelectedId(thread.id)}
+              onClick={() => {
+                // On a phone the conversation is below the queue: bring it into view once it has loaded.
+                if (window.matchMedia(STACKED_LAYOUT).matches) {
+                  if (thread.id === selectedId) revealConversation(conversationRef.current);
+                  else revealThreadRef.current = thread.id;
+                }
+                setSelectedId(thread.id);
+              }}
               type="button"
             >
               <span className={styles.threadTopline}>
@@ -449,11 +489,18 @@ export function ChatsView({ session }: { session: SessionView }) {
                 <Badge appearance="tint">{CHAT_LABELS[thread.status]}</Badge>
                 <time>{formatDate(thread.lastMessageAt ?? thread.createdAt)}</time>
               </span>
+              <span className={styles.threadMeta}>
+                <span className={styles.threadOwner}>{chatOwnerLabel(session, thread)}</span>
+                {(() => {
+                  const wait = chatWaitLabel(thread, now);
+                  return wait ? <span className={styles.threadWait} data-overdue={wait.overdue || undefined}>{wait.text}</span> : null;
+                })()}
+              </span>
             </button>
           ))}
           {resource.data ? <Pagination limit={limit} offset={offset} onChange={setOffset} total={resource.data.total} /> : null}
         </section>
-        <section className={styles.conversation} aria-label="Переписка">
+        <section className={styles.conversation} aria-label="Переписка" ref={conversationRef}>
           {!selected ? (
             <div className={styles.tableState}><strong>Выберите обращение</strong><span>Переписка и действия откроются здесь.</span></div>
           ) : (
@@ -471,10 +518,26 @@ export function ChatsView({ session }: { session: SessionView }) {
                 </Badge>
               </header>
               <div className={styles.threadActions}>
-                <span className={styles.muted}>{selected.assignedStaffId ? `Менеджер: ${selected.assignedName ?? "сотрудник АН30"}` : "В очереди. Менеджер назначается автоматически."}</span>
+                <span className={styles.muted}>
+                  {selected.assignedStaffId || selected.status === "closed" ? chatOwnerLabel(session, selected) : "В очереди: возьмите чат сами или дождитесь автоматического назначения."}
+                  {(() => {
+                    const wait = chatWaitLabel(selected, now);
+                    return wait ? <> · <span className={styles.threadWait} data-overdue={wait.overdue || undefined}>{wait.text}</span></> : null;
+                  })()}
+                </span>
+                {chatTakeAction(session, selected) ? (
+                  <Button
+                    appearance="primary"
+                    disabled={busy || resource.loading}
+                    icon={<PersonAvailable20Regular />}
+                    onClick={() => void updateThread({ assignedStaffId: session.userId, reason: "Сотрудник взял чат в работу" })}
+                  >
+                    {chatTakeAction(session, selected) === "take" ? "Взять в работу" : "Забрать себе"}
+                  </Button>
+                ) : null}
                 {selected.status !== "closed" ? (
                   <>
-                    <Button disabled={busy || resource.loading} onClick={() => void updateThread({ status: "waiting_customer" })}>Ждём клиента</Button>
+                    <Button disabled={busy || resource.loading || selected.status === "waiting_customer"} onClick={() => void updateThread({ status: "waiting_customer" })}>Ждём клиента</Button>
                     <Button disabled={busy || resource.loading} icon={<CheckmarkCircle20Regular />} onClick={() => void updateThread({ status: "closed" })}>Закрыть</Button>
                   </>
                 ) : canReopen(session.role) ? (
@@ -576,7 +639,13 @@ export function ChatsView({ session }: { session: SessionView }) {
                     if (data.value !== messageText) setMessageAttemptId(null);
                     setMessageText(data.value);
                   }}
-                  placeholder={selected.status === "closed" ? "Чат закрыт" : selected.assignedStaffId !== session.userId ? "Ожидаем автоматического назначения" : "Напишите ответ"}
+                  onKeyDown={(event) => {
+                    // Enter sends, Shift+Enter starts a new line — as in the customer's chat.
+                    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+                    event.preventDefault();
+                    if (!busy && messageText.trim()) void sendMessage();
+                  }}
+                  placeholder={chatComposerHint(session, selected)}
                   resize="vertical"
                   value={messageText}
                 />

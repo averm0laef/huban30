@@ -629,10 +629,28 @@
   font-size: 0.7rem;
 }
 
+.threadOwner {
+  color: var(--colorNeutralForeground3);
+  font-size: 0.75rem;
+}
+
+.threadWait {
+  color: var(--colorNeutralForeground2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.threadWait[data-overdue] {
+  color: var(--colorPaletteRedForeground1);
+}
+
 .conversation {
   min-width: 0;
   display: grid;
   grid-template-rows: auto auto minmax(300px, 1fr) auto;
+  /* Scrolled into view on a phone: stop below the sticky top bar (64px). */
+  scroll-margin-top: 76px;
 }
 
 .requestDetail {

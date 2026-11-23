@@ -232,7 +232,8 @@ export const StaffChatsQuerySchema = StaffPageQuerySchema.extend({
   assigned: z.enum(["any", "mine", "unassigned"]).default("any"),
   direction: SortDirectionSchema,
   q: StaffSearchSchema,
-  sort: z.enum(["createdAt", "lastMessageAt", "status"]).default("lastMessageAt"),
+  // "attention": customers still waiting for an answer first, longest wait on top.
+  sort: z.enum(["attention", "createdAt", "lastMessageAt", "status"]).default("attention"),
   status: ChatThreadStatusSchema.optional(),
 }).strict();
 export type StaffChatsQuery = z.infer<typeof StaffChatsQuerySchema>;
