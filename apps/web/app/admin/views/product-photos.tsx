@@ -136,6 +136,15 @@ function ShootQueue({ onChange }: { onChange: () => void }) {
     }
   };
 
+  // A product that got its photo leaves the queue, so the products after this page have moved up by that many.
+  const turnPage = (next: number) => {
+    const shot = queue.data?.items.filter((item) => done[item.id] !== undefined).length ?? 0;
+    const target = Math.max(0, next > offset ? next - shot : next);
+    setDone({});
+    if (target === offset) queue.reload();
+    else setOffset(target);
+  };
+
   return (
     <>
       <p className={panel.note}>
@@ -144,9 +153,9 @@ function ShootQueue({ onChange }: { onChange: () => void }) {
         экраны и картинки из интернета: на сайт идут только свои снимки.
       </p>
       <div className={styles.filters}>
-        <input aria-label="Найти товар: название, артикул или код 1С" onChange={(event) => { setSearch(event.target.value); setOffset(0); }} placeholder="Название, артикул или код 1С" type="search" value={search} />
+        <input aria-label="Найти товар: название, артикул или код 1С" onChange={(event) => { setSearch(event.target.value); setOffset(0); setDone({}); }} placeholder="Название, артикул или код 1С" type="search" value={search} />
         <label className={styles.check}>
-          <input checked={inStock} onChange={(event) => { setInStock(event.target.checked); setOffset(0); }} type="checkbox" />
+          <input checked={inStock} onChange={(event) => { setInStock(event.target.checked); setOffset(0); setDone({}); }} type="checkbox" />
           Только то, что в наличии
         </label>
       </div>
@@ -180,7 +189,7 @@ function ShootQueue({ onChange }: { onChange: () => void }) {
           </li>
         ))}
       </ul>
-      {queue.data ? <div className={styles.pager}><Pagination limit={limit} offset={offset} onChange={(next) => { setOffset(next); setDone({}); }} total={queue.data.total} /></div> : null}
+      {queue.data ? <div className={styles.pager}><Pagination limit={limit} offset={offset} onChange={turnPage} total={queue.data.total} /></div> : null}
     </>
   );
 }
