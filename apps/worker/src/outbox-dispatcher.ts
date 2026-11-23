@@ -5,6 +5,7 @@ import { renderBrandedEmailHtml, renderBrandedEmailText, type BrandedEmail } fro
 
 import type { readWorkerConfig } from "./config.js";
 import { NotificationProviders } from "./notification-providers.js";
+import { ONE_C_EXCHANGE_LATE_TOPIC } from "./one-c-exchange-watch.js";
 import { decryptSecret } from "./secret-crypto.js";
 
 interface OutboxRow {
@@ -36,11 +37,35 @@ const ContactPayloadSchema = z.object({
   source: z.enum(["contacts", "expert_help", "vin_request"]),
 }).strict();
 
+const LateExchangePayloadSchema = z.object({
+  displayName: z.string().max(200),
+  expectedSyncMinutes: z.number().int().positive(),
+  lastOffersExchangeAt: z.iso.datetime(),
+  sourceKey: z.enum(["one_c", "one_c_secondary"]),
+}).strict();
+
+const STAFF_ALERT_TOPICS = new Set(["chat.staff.notify", "contact.staff.notify", ONE_C_EXCHANGE_LATE_TOPIC]);
+
+function hoursOrDays(minutes: number): string {
+  const hours = Math.max(1, Math.round(minutes / 60));
+  return hours < 48 ? `${hours} ч` : `${Math.floor(hours / 24)} сут.`;
+}
+
 export function buildStaffAlert(
   topic: string,
   payload: unknown,
   publicBaseUrl: string,
+  now: Date = new Date(),
 ): string {
+  if (topic === ONE_C_EXCHANGE_LATE_TOPIC) {
+    const late = LateExchangePayloadSchema.parse(payload);
+    const name = late.displayName || (late.sourceKey === "one_c" ? "Основная база 1С" : "Дополнительная база 1С");
+    const silent = hoursOrDays((now.getTime() - new Date(late.lastOffersExchangeAt).getTime()) / 60_000);
+    const expected = late.expectedSyncMinutes === 1440 ? "раз в сутки" : `каждые ${late.expectedSyncMinutes} мин.`;
+    const url = new URL("/admin/settings", publicBaseUrl);
+    return `Обмен с 1С задерживается: «${name}» не присылала цены и остатки ${silent} (ожидается ${expected}). `
+      + `Сайт показывает данные последнего обмена. Проверьте расписание обмена в 1С и «Отказы на входе». ${url}`;
+  }
   if (topic === "chat.staff.notify") {
     const chat = ChatPayloadSchema.parse(payload);
     const url = new URL(`/admin/chats/${chat.threadId}`, publicBaseUrl);
@@ -206,7 +231,7 @@ export class OutboxDispatcher {
       await this.providers.sendEmail(payload.recipient, template.subject, template.text, template.html);
       return;
     }
-    if (event.topic === "chat.staff.notify" || event.topic === "contact.staff.notify") {
+    if (STAFF_ALERT_TOPICS.has(event.topic)) {
       await this.providers.sendStaffAlert(
         buildStaffAlert(event.topic, event.payload, this.config.notifications.publicBaseUrl),
         event.id,

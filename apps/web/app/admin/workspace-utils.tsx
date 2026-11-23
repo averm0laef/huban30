@@ -55,6 +55,15 @@ export function formatDate(value: string | null, withTime = true): string {
     : { dateStyle: "medium" }).format(new Date(value));
 }
 
+/** An interval in minutes the way a schedule is spoken: «раз в сутки», «каждые 2 ч», «каждые 30 мин». */
+export function formatSchedule(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "по расписанию 1С";
+  if (minutes === 1440) return "раз в сутки";
+  if (minutes % 1440 === 0) return `раз в ${minutes / 1440} сут.`;
+  if (minutes % 60 === 0) return `каждые ${minutes / 60} ч`;
+  return `каждые ${minutes} мин.`;
+}
+
 export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Неизвестная ошибка";
 }

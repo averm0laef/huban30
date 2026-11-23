@@ -110,7 +110,7 @@ export function typoBudget(word: string): number | null {
  * «амортизатор»: long words share their endings. A typo is a letter away from a word of the product. That word is
  * compared by its beginning, as long as the typed word without its ending (give or take a letter), so «калодки»
  * reads as «колодка» and «фольтр» as «фильтры»; a word two letters shorter than the typed one is another word.
- * Needs fuzzystrmatch (migration 0052); runs only on the rows the trigram index has already picked.
+ * Needs fuzzystrmatch (migration 0053); runs only on the rows the trigram index has already picked.
  */
 function misspelledWordOf(p: SqlParameters, word: string): string {
   const base = lightRussianStem(word) ?? word;
