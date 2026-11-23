@@ -138,11 +138,11 @@ const RawEnvironmentSchema = z.object({
   UMAPI_BASE_URL: z.string().url().default("https://api.umapi.ru"),
   // Language and region of the answers, as in /v2/autocatalog/{language}-{region}/.
   UMAPI_LOCALE: z.string().regex(/^[a-z]{2}-[A-Z]{1,3}$/u).default("ru-WWW"),
-  UMAPI_DAILY_LIMIT: z.coerce.number().int().min(10).max(1_000_000).default(9_000),
-  // 0 = automatic: a fifth of the day in any one hour.
+  UMAPI_DAILY_LIMIT: z.coerce.number().int().min(10).max(1_000_000).default(10_000),
+  // 0 = no hourly share: the whole day may be spent in any hour (owner, 24.11.2026: no limits while the site is closed).
   UMAPI_HOURLY_LIMIT: z.coerce.number().int().min(0).max(200_000).default(0),
-  // Provider calls one visitor may cause in a day (cache answers are not counted).
-  UMAPI_VISITOR_DAILY_LIMIT: z.coerce.number().int().min(5).max(10_000).default(120),
+  // Provider calls one visitor may cause in a day (cache answers are not counted); 0 = no visitor limit.
+  UMAPI_VISITOR_DAILY_LIMIT: z.coerce.number().int().min(0).max(10_000).default(0),
   UMAPI_CACHE_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(86_400),
   UMAPI_CACHE_MAX_ENTRIES: z.coerce.number().int().min(100).max(200_000).default(20_000),
   // Where the catalogue's photo files are served from; empty = the «show photo» button is hidden.

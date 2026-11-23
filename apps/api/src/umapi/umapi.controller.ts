@@ -14,9 +14,6 @@ const id = z.coerce.number().int().min(1).max(2_000_000_000);
 // «check» — does it fit the customer's car (needs the car); «list» — which cars it fits.
 const FitmentQuery = z.object({ mode: z.enum(["check", "list"]).default("list"), model: id.optional(), mod: id.optional() });
 
-/** Buttons one visitor may press in a day (docs/UMAPI_INTEGRATION.md, part 7): the package is not spent on curiosity. */
-export const UMAPI_BUTTONS_PER_DAY = 40;
-
 const MESSAGES = {
   disabled: "Проверка по каталогу пока не подключена. Специалист проверит деталь по VIN.",
   limited: "Сегодня проверок по каталогу больше нет. Оставьте VIN — специалист проверит вручную.",
@@ -45,31 +42,23 @@ function caller(request: FastifyRequest): UmapiCaller {
 
 /**
  * The product page's catalogue buttons: compatibility, the cars a part fits, our products among its analogs, its
- * photo. Each answers one visitor's press; the routes sit under /api/ (closed to crawlers) and are limited per address.
+ * photo. Each answers one visitor's press; the routes sit under /api/ (closed to crawlers). No per-address limit on
+ * presses (owner, 24.11.2026): only the store's day of the tariff (UMAPI_DAILY_LIMIT) and the proxy's flood guard.
  */
 @Public()
 @Controller("umapi")
 export class UmapiController {
-  constructor(
-    private readonly umapi: UmapiService,
-    private readonly limits: RateLimitService,
-  ) {}
+  constructor(private readonly umapi: UmapiService) {}
 
   @Get("status")
   status() {
     return this.umapi.status();
   }
 
-  private async press(request: FastifyRequest): Promise<void> {
-    await this.limits.consume("umapi-button", request.ip, 20, 60);
-    await this.limits.consume("umapi-button-day", request.ip, UMAPI_BUTTONS_PER_DAY, 86_400);
-  }
-
   @Get("product/:productId/fitment")
   async fitment(@Param("productId") productId: string, @Query() query: unknown, @Req() request: FastifyRequest) {
     const product = parse(z.uuid(), productId);
     const { mode, model, mod } = parse(FitmentQuery, query);
-    await this.press(request);
     return this.umapi.productFitment(product, { ...(model ? { modelId: model } : {}), ...(mod ? { modificationId: mod } : {}) }, caller(request), mode)
       .catch((error: unknown) => { throw umapiHttpError(error); });
   }
@@ -77,7 +66,6 @@ export class UmapiController {
   @Get("product/:productId/analogs")
   async analogs(@Param("productId") productId: string, @Req() request: FastifyRequest) {
     const product = parse(z.uuid(), productId);
-    await this.press(request);
     return this.umapi.productAnalogs(product, caller(request)).catch((error: unknown) => { throw umapiHttpError(error); });
   }
 
@@ -85,7 +73,6 @@ export class UmapiController {
   @Header("Cache-Control", "no-store")
   async numberAnalogs(@Query() input: unknown, @Req() request: FastifyRequest) {
     const { article, brand } = parse(z.object({ article: z.string().trim().min(2).max(64), brand: z.string().trim().min(1).max(80).optional() }), input);
-    await this.press(request);
     return this.umapi.numberAnalogs(article, brand, caller(request)).catch((error: unknown) => { throw umapiHttpError(error); });
   }
 
@@ -93,7 +80,6 @@ export class UmapiController {
   @Header("Cache-Control", "no-store")
   async photos(@Param("productId") productId: string, @Req() request: FastifyRequest) {
     const product = parse(z.uuid(), productId);
-    await this.press(request);
     return this.umapi.productPhotos(product, caller(request)).catch((error: unknown) => { throw umapiHttpError(error); });
   }
 }

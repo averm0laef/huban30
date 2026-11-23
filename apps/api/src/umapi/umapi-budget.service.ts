@@ -17,13 +17,15 @@ const TAKE_HOUR = `
   return 1
 `;
 const FLUSH_MS = 10_000;
-const MIN_HOURLY = 20;
 
 interface Tally { cacheHits: number; errors: number; refused: number }
 
-/** The hour's share of a day: a fifth, so one busy hour or a script cannot spend the day. */
+/**
+ * The hour's share of a day. Unset (0), an hour may spend the whole day: the owner asked for no limits but the
+ * tariff's own day while the site is closed (24.11.2026). A positive UMAPI_HOURLY_LIMIT brings the share back.
+ */
 export function hourlyShare(daily: number, configured: number): number {
-  return Math.min(daily, configured > 0 ? configured : Math.max(MIN_HOURLY, Math.ceil(daily * 0.2)));
+  return configured > 0 ? Math.min(daily, configured) : daily;
 }
 
 /**
@@ -44,7 +46,7 @@ export class UmapiBudgetService implements OnModuleDestroy {
     private readonly redis: RedisService,
     config: ConfigService,
   ) {
-    this.dailyLimit = config.get<number>("UMAPI_DAILY_LIMIT") ?? 9_000;
+    this.dailyLimit = config.get<number>("UMAPI_DAILY_LIMIT") ?? 10_000;
     this.hourlyLimit = hourlyShare(this.dailyLimit, config.get<number>("UMAPI_HOURLY_LIMIT") ?? 0);
     this.timer = setInterval(() => { void this.flush(); }, FLUSH_MS);
     this.timer.unref();

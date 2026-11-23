@@ -86,7 +86,7 @@ export class UmapiGateway {
     this.host = (config.get<string>("UMAPI_BASE_URL") ?? "https://api.umapi.ru").replace(/\/+$/u, "");
     this.catalogPrefix = `/v2/autocatalog/${config.get<string>("UMAPI_LOCALE") ?? "ru-WWW"}`;
     this.switchedOn = config.get<boolean>("UMAPI_ENABLED") !== false;
-    this.visitorDailyLimit = config.get<number>("UMAPI_VISITOR_DAILY_LIMIT") ?? 120;
+    this.visitorDailyLimit = config.get<number>("UMAPI_VISITOR_DAILY_LIMIT") ?? 0;
     this.mediaBaseUrl = config.get<string>("UMAPI_MEDIA_BASE_URL")?.replace(/\/+$/u, "") || null;
   }
 
@@ -162,7 +162,9 @@ export class UmapiGateway {
     return value;
   }
 
+  /** One visitor's share of the day; off while UMAPI_VISITOR_DAILY_LIMIT is 0 (the default since 24.11.2026). */
   private async takeVisitorShare(caller: UmapiCaller): Promise<void> {
+    if (this.visitorDailyLimit <= 0) return;
     const identity = caller.userId ? `user:${caller.userId}` : `ip:${caller.ip}`;
     const digest = this.crypto.opaqueHash("umapi-visitor", identity).toString("hex").slice(0, 40);
     let used: number;
