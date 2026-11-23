@@ -52,6 +52,7 @@ function stubMessageView(): ChatMessageView {
 function makeService(overrides: {
   aiEnabled?: boolean;
   answerCustomerQuestion?: ReturnType<typeof vi.fn>;
+  assistantAnswered?: ReturnType<typeof vi.fn>;
   insertAssistantReply?: ReturnType<typeof vi.fn>;
   search?: ReturnType<typeof vi.fn>;
   threadAssignment?: ReturnType<typeof vi.fn>;
@@ -65,6 +66,7 @@ function makeService(overrides: {
     search: overrides.search ?? vi.fn(async () => ({ items: [catalogItem()] })),
   } as unknown as CatalogSearchService;
   const chat = {
+    assistantAnswered: overrides.assistantAnswered ?? vi.fn(async () => false),
     insertAssistantReply: overrides.insertAssistantReply ?? vi.fn(async () => stubMessageView()),
     threadAssignment: overrides.threadAssignment
       ?? vi.fn(async () => ({ assignedStaffId: null, status: "waiting_staff" as const })),
@@ -104,6 +106,18 @@ describe("ChatAssistantService.respond", () => {
       identity: "user-1", question: "Есть фильтр?", replyToId: MESSAGE_ID, threadId: THREAD_ID,
     });
     expect(result).toBeNull();
+    expect(chat.insertAssistantReply).not.toHaveBeenCalled();
+  });
+
+  it("answers a message sent twice only once, without a second search or model call", async () => {
+    const { ai, catalogSearch, chat, service } = makeService({ assistantAnswered: vi.fn(async () => true) });
+    const result = await service.respond({
+      identity: "user-1", question: "Есть фильтр?", replyToId: MESSAGE_ID, threadId: THREAD_ID,
+    });
+    expect(result).toBeNull();
+    expect(chat.assistantAnswered).toHaveBeenCalledWith(THREAD_ID, MESSAGE_ID);
+    expect(catalogSearch.search).not.toHaveBeenCalled();
+    expect(ai.answerCustomerQuestion).not.toHaveBeenCalled();
     expect(chat.insertAssistantReply).not.toHaveBeenCalled();
   });
 

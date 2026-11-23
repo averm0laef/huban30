@@ -409,6 +409,9 @@ export const OneCCatalogRowSchema = z.discriminatedUnion("entityType", [
     externalId: ExternalIdSchema,
     isActive: z.boolean().default(true),
     name: CatalogNameSchema,
+    // The item's code in 1С («Код»), when the file carries it: a product loaded before the exchange under its code
+    // is recognised by it once 1С starts sending its own identifier.
+    oneCCode: ExternalIdSchema.optional(),
     searchText: z.string().trim().max(10_000).nullable().default(null),
     sku: z.string().trim().min(1).max(128).regex(SAFE_SINGLE_LINE),
     slug: SlugSchema,
@@ -567,7 +570,8 @@ export const CatalogSearchQuerySchema = z.object({
 }).strict();
 export type CatalogSearchQuery = z.infer<typeof CatalogSearchQuerySchema>;
 
-const CatalogPublicSlugSchema = z.string().trim().min(1).max(180)
+export const CATALOG_PUBLIC_SLUG_MAX_LENGTH = 180;
+const CatalogPublicSlugSchema = z.string().trim().min(1).max(CATALOG_PUBLIC_SLUG_MAX_LENGTH)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
 const CatalogOptionalMoneyQuerySchema = z.preprocess(
   (value) => value === "" ? undefined : value,

@@ -13,7 +13,7 @@ import { AccountAvatarUpdateSchema, customerAvatarKey, publicProductName } from 
 
 import type { AuthContext } from "../auth/auth-context.js";
 import { assertStrongPassword } from "../auth/auth.service.js";
-import { STORAGE_PROVIDER, type StorageProvider } from "../adapters/provider-contracts.js";
+import { PRODUCT_PHOTO_STORAGE, type ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { AuditService } from "../security/audit.service.js";
 import { PasswordService } from "../security/password.service.js";
@@ -130,7 +130,7 @@ export class AccountService {
     private readonly audit: AuditService,
     private readonly database: DatabaseService,
     private readonly passwords: PasswordService,
-    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    @Inject(PRODUCT_PHOTO_STORAGE) private readonly photos: ProductPhotoStorage,
   ) {}
 
   async read(auth: AuthContext) {
@@ -281,7 +281,7 @@ export class AccountService {
        JOIN app.wishlist_items AS wishlist ON wishlist.product_id=product.id
        WHERE wishlist.user_id=$1 AND ${PUBLIC_ACCOUNT_PRODUCT_FILTERS}
        ORDER BY wishlist.created_at DESC LIMIT $2`,
-      [auth.userId, query.limit, this.storage.name],
+      [auth.userId, query.limit, [...this.photos.providerNames]],
     )).rows;
     return { items: rows.map(productView) };
   }
@@ -333,7 +333,7 @@ export class AccountService {
        JOIN app.product_views AS viewed ON viewed.product_id=product.id
        WHERE viewed.user_id=$1 AND ${PUBLIC_ACCOUNT_PRODUCT_FILTERS}
        ORDER BY viewed.last_viewed_at DESC LIMIT $2`,
-      [auth.userId, query.limit, this.storage.name],
+      [auth.userId, query.limit, [...this.photos.providerNames]],
     )).rows;
     return { items: rows.map(productView) };
   }
@@ -374,6 +374,49 @@ export class AccountService {
     const body = parseBody(AddressCreateSchema, input);
     return this.database.transaction(async (client) => {
       await client.query("SELECT id FROM app.users WHERE id=$1 FOR UPDATE", [auth.userId]);
+      // A double click or a retried request sends the same address again: the
+      // customer asked for one address, so the saved one is the answer.
+      const existing = (await client.query<AddressRow>(
+        `${this.addressSelect()}
+         WHERE address.user_id=$1 AND address.deleted_at IS NULL
+           AND address.label=$2 AND address.recipient_name=$3 AND address.phone=$4
+           AND address.postal_code IS NOT DISTINCT FROM $5
+           AND address.region=$6 AND address.city=$7 AND address.street=$8 AND address.house=$9
+           AND address.apartment IS NOT DISTINCT FROM $10
+           AND address.delivery_note IS NOT DISTINCT FROM $11
+         ORDER BY address.is_default DESC,address.created_at,address.id LIMIT 1
+         FOR UPDATE`,
+        [
+          auth.userId,
+          body.label,
+          body.recipientName,
+          body.phone,
+          body.postalCode ?? null,
+          body.region,
+          body.city,
+          body.street,
+          body.house,
+          body.apartment ?? null,
+          body.deliveryNote ?? null,
+        ],
+      )).rows[0];
+      if (existing) {
+        if (!body.isDefault || existing.is_default) return this.addressView(existing);
+        // Saved before as an ordinary address, sent again as the main one.
+        await client.query(
+          "UPDATE app.customer_addresses SET is_default=false WHERE user_id=$1 AND deleted_at IS NULL",
+          [auth.userId],
+        );
+        const promoted = (await client.query<AddressRow>(
+          `UPDATE app.customer_addresses SET is_default=true,updated_at=clock_timestamp()
+           WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL
+           RETURNING id,label,recipient_name,phone,postal_code,region,city,street,house,
+                     apartment,delivery_note,is_default,created_at,updated_at`,
+          [existing.id, auth.userId],
+        )).rows[0];
+        if (!promoted) throw new Error("Address promotion did not return a row");
+        return this.addressView(promoted);
+      }
       const addressCount = Number((await client.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM app.customer_addresses
          WHERE user_id=$1 AND deleted_at IS NULL`,
@@ -564,7 +607,7 @@ export class AccountService {
               SELECT product_image.id FROM app.product_images AS product_image
               JOIN app.storage_objects AS storage ON storage.id=product_image.storage_object_id
               WHERE product_image.product_id=product.id AND storage.status='available'
-                AND storage.deleted_at IS NULL AND storage.provider=$3
+                AND storage.deleted_at IS NULL AND storage.provider=ANY($3::text[])
                 AND storage.mime_type IN ('image/avif','image/jpeg','image/png','image/webp')
               ORDER BY product_image.is_primary DESC,product_image.sort_order,product_image.created_at
               LIMIT 1

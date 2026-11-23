@@ -57,7 +57,7 @@ PDF, SVG, HTML и документы сейчас намеренно запре�
 
 ## Адаптеры
 
-- `StorageProvider`: рабочий локальный provider; S3 можно подключить без изменения чата.
+- `StorageProvider`: рабочий локальный provider для вложений чата и баннеров. Фото товаров идут через `ProductPhotoStorage`: локальный диск или S3-совместимое хранилище (`docs/PRODUCT_PHOTOS_S3.md`).
 - `NotificationProvider`: API-граница с безопасным disabled provider.
 - Worker содержит реальные opt-in SMTP, Telegram Bot API и VK Messages providers. SMTP требует TLS; VK использует стабильный `random_id` из outbox id.
 - `SocialAuthProvider` и `AiProvider`: fail-closed disabled providers. Они не влияют на каталог, checkout, заказы, кабинет и рабочее место.

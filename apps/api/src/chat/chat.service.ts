@@ -593,6 +593,19 @@ export class ChatService {
     return { assignedStaffId: thread.assigned_staff_id, status: thread.status };
   }
 
+  /** Whether the assistant has already answered this customer message. */
+  async assistantAnswered(
+    threadId: string,
+    replyToId: string,
+    client?: PoolClient,
+  ): Promise<boolean> {
+    const sql = `SELECT 1 FROM app.chat_messages
+       WHERE thread_id=$1 AND reply_to_id=$2 AND sender_kind='system' LIMIT 1`;
+    const values = [threadId, replyToId];
+    const answered = client ? await client.query(sql, values) : await this.database.query(sql, values);
+    return (answered.rowCount ?? 0) > 0;
+  }
+
   /**
    * Stores one automated assistant reply as a real chat message, attributed
    * as `sender_kind='system'` (never 'staff') so it is never mistaken for a
@@ -620,6 +633,10 @@ export class ChatService {
         [threadId],
       )).rows[0];
       if (!current || current.status === "closed" || current.assigned_staff_id) return null;
+      // A retried or double-sent customer message reaches the assistant once
+      // per HTTP request; the thread lock above makes this check the single
+      // place where "one question, one automated answer" is decided.
+      if (replyToId && await this.assistantAnswered(threadId, replyToId, client)) return null;
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO app.chat_messages
            (thread_id,sender_user_id,sender_kind,message_type,body,client_message_id,reply_to_id)
