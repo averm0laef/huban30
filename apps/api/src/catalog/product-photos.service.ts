@@ -39,6 +39,9 @@ export const PHOTO_SOURCES = ["one_c", "own_photo", "licensed"] as const;
 export type PhotoSource = (typeof PHOTO_SOURCES)[number];
 
 const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const TAKEN_DOWN = "Это фото уже снимали с сайта. Сделайте другой снимок";
+const REVOKED = "Разрешение этого источника отозвано: его фото публиковать нельзя";
+
 export const MAX_PHOTO_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 export interface PhotoUpload {
@@ -379,6 +382,14 @@ export class ProductPhotosService {
     return parsed.data;
   }
 
+  private async takenDown(sha256: Buffer, byteSize: number) {
+    return Boolean((await this.database.query(
+      `SELECT 1 FROM app.product_image_withdrawals
+       WHERE (sha256=$1 AND byte_size=$2) OR (upload_sha256=$1 AND upload_byte_size=$2) LIMIT 1`,
+      [sha256, byteSize],
+    )).rowCount);
+  }
+
   private async store(product: ProductRow, upload: PhotoUpload | undefined, rightsSourceId: string | undefined, auth: AuthContext) {
     if (!upload) throw new BadRequestException("Файл не передан");
     if (rightsSourceId) {
@@ -386,15 +397,14 @@ export class ProductPhotosService {
         "SELECT revoked_at FROM app.image_rights_sources WHERE id=$1", [rightsSourceId],
       )).rows[0];
       if (!rights) throw new BadRequestException("Источник фото не найден");
-      if (rights.revoked_at) throw new ConflictException("Разрешение этого источника отозвано: его фото публиковать нельзя");
+      if (rights.revoked_at) throw new ConflictException(REVOKED);
     }
+    // A file taken down is refused both as it was sent and as it is stored: 1С keeps the untouched file, the site the reshaped one.
+    const uploadSha256 = createHash("sha256").update(upload.content).digest();
+    if (await this.takenDown(uploadSha256, upload.content.length)) throw new ConflictException(TAKEN_DOWN);
     const picture = await this.prepare(upload.content);
     const sha256 = createHash("sha256").update(picture).digest();
-    if ((await this.database.query(
-      "SELECT 1 FROM app.product_image_withdrawals WHERE sha256=$1 AND byte_size=$2 LIMIT 1", [sha256, picture.length],
-    )).rowCount) {
-      throw new ConflictException("Это фото уже снимали с сайта. Сделайте другой снимок");
-    }
+    if (await this.takenDown(sha256, picture.length)) throw new ConflictException(TAKEN_DOWN);
     const source: PhotoSource = rightsSourceId ? "licensed" : "own_photo";
     const storage = this.photos.target;
     let stored: StoredObject;
@@ -420,16 +430,16 @@ export class ProductPhotosService {
           [storage.name, stored.storageKey, `${source}:${upload.fileName}`.slice(0, 255), picture.length, sha256, auth.userId],
         )).rows[0]!;
         removeStored = object.storage_key !== stored.storageKey;
-        if (object.status !== "available") throw new ConflictException("Это фото уже снимали с сайта. Сделайте другой снимок");
+        if (object.status !== "available") throw new ConflictException(TAKEN_DOWN);
         const image = (await client.query<{ id: string }>(
           `INSERT INTO app.product_images
-             (product_id,storage_object_id,alt_text,sort_order,is_primary,source,rights_source_id,uploaded_by)
+             (product_id,storage_object_id,alt_text,sort_order,is_primary,source,rights_source_id,uploaded_by,upload_sha256,upload_byte_size)
            VALUES ($1,$2,$3,
              COALESCE((SELECT max(sort_order)+1 FROM app.product_images WHERE product_id=$1),0),
              NOT EXISTS (SELECT 1 FROM app.product_images WHERE product_id=$1 AND is_primary),
-             $4,$5,$6)
+             $4,$5,$6,$7,$8)
            ON CONFLICT (product_id,storage_object_id) DO NOTHING RETURNING id`,
-          [product.id, object.id, product.name, source, rightsSourceId ?? null, auth.userId],
+          [product.id, object.id, product.name, source, rightsSourceId ?? null, auth.userId, uploadSha256, upload.content.length],
         )).rows[0];
         if (!image) return undefined;
         await this.audit.record({
@@ -482,8 +492,8 @@ export class ProductPhotosService {
          RETURNING image.*
        )
        INSERT INTO app.product_image_withdrawals
-         (sha256,byte_size,product_id,product_external_id,source,rights_source_id,original_name,published_at,reason,withdrawn_by)
-       SELECT storage.sha256,storage.byte_size,removed.product_id,product.external_id,removed.source,
+         (sha256,byte_size,upload_sha256,upload_byte_size,product_id,product_external_id,source,rights_source_id,original_name,published_at,reason,withdrawn_by)
+       SELECT storage.sha256,storage.byte_size,removed.upload_sha256,removed.upload_byte_size,removed.product_id,product.external_id,removed.source,
          removed.rights_source_id,storage.original_name,removed.created_at,$2,$3
        FROM removed
        JOIN app.storage_objects AS storage ON storage.id=removed.storage_object_id

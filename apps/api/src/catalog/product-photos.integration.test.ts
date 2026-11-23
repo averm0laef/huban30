@@ -242,4 +242,13 @@ describe.skipIf(!url || !hasFfmpeg)("product photos with a known origin (real Po
     expect(summary.withdrawn).toBeGreaterThanOrEqual(4);
     expect(summary.withoutPhoto).toBeLessThan(summary.products);
   });
+
+  it("keeps a file taken down from one route out of the other: staff's from 1С, 1С's from staff", async () => {
+    const lamp = await imagesOf("lamp");
+    // «red» was a staff shot: the site stored it reshaped, 1С would send the untouched file.
+    expect(await fromOneC("lamp", photo("red"))).toEqual({ id: undefined, outcome: "skipped" });
+    // «orange» came from 1С and was stored untouched: staff sending that file is reshaped first.
+    await expect(photos.attach(ids.get("lamp"), {}, { content: photo("orange"), fileName: "из-1с.jpg" }, auth)).rejects.toThrow("уже снимали");
+    expect(await imagesOf("lamp")).toEqual(lamp);
+  });
 });
