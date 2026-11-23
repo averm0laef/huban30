@@ -87,6 +87,8 @@ export function fetchCartProduct(productId: string): Promise<CartProductState> {
   const running = inflight.get(productId);
   if (running) return running;
   const request = loadProduct(productId).then((state) => {
+    // An answer that was requested before a refresh is not kept as the fresh one.
+    if (inflight.get(productId) !== request) return state;
     if (state.status !== "error") cache.set(productId, state);
     inflight.delete(productId);
     return state;
@@ -103,6 +105,26 @@ export function overStockNote(availableQuantity: number): string {
 export function resetCartProductCache(): void {
   cache.clear();
   inflight.clear();
+}
+
+const refreshListeners = new Set<() => void>();
+
+export function subscribeToCartProductRefresh(listener: () => void): () => void {
+  refreshListeners.add(listener);
+  return () => {
+    refreshListeners.delete(listener);
+  };
+}
+
+/**
+ * Forgets what the catalog said and makes every open cart ask again.
+ *
+ * Checkout calls it when the server refuses an order: price or stock changed
+ * after the page read them, and the page must show the current ones.
+ */
+export function refreshCartProducts(): void {
+  resetCartProductCache();
+  for (const listener of refreshListeners) listener();
 }
 
 /** Builds the rendered cart rows and the indicative total, without any I/O. */
@@ -143,6 +165,9 @@ export function summariseCart(
 export function useCartProducts(items: CartLine[]): Record<string, CartProductState> {
   const key = items.map((item) => item.productId).join(",");
   const [products, setProducts] = useState<Record<string, CartProductState>>({});
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => subscribeToCartProductRefresh(() => setRevision((current) => current + 1)), []);
 
   useEffect(() => {
     const ids = key ? key.split(",") : [];
@@ -165,7 +190,7 @@ export function useCartProducts(items: CartLine[]): Record<string, CartProductSt
     return () => {
       active = false;
     };
-  }, [key]);
+  }, [key, revision]);
 
   return products;
 }

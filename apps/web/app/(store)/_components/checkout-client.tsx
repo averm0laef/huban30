@@ -8,7 +8,7 @@ import type { FormEvent } from "react";
 
 import { CHECKOUT_PERSONAL_DATA_CONSENT_TEXT } from "@an30/contracts";
 
-import { resetCartProductCache, summariseCart, useCartProducts } from "../_lib/cart-products";
+import { refreshCartProducts, summariseCart, useCartProducts } from "../_lib/cart-products";
 import { formatRubles } from "../_lib/catalog-format";
 import { checkoutConfirmationMessage, checkoutPayload } from "../_lib/checkout";
 import { checkoutDraftStorage, clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from "../_lib/checkout-draft";
@@ -188,7 +188,7 @@ export function CheckoutClient({
       router.replace(`/checkout?order=${encodeURIComponent(checkout.order.id)}`);
     } catch (caught) {
       // Stock or price changed under the cart: show the cart what the catalog says now.
-      if (caught instanceof StorefrontApiError && caught.status === 409) resetCartProductCache();
+      if (caught instanceof StorefrontApiError && caught.status === 409) refreshCartProducts();
       setError(errorText(caught));
     } finally {
       setPending(false);
