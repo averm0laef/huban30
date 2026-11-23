@@ -15,7 +15,7 @@ import {
 import { ArrowClockwise20Regular, Save20Regular } from "@fluentui/react-icons";
 
 import { api } from "../api";
-import { formatDate, RequestError, SectionHeader, useResource } from "../workspace-utils";
+import { formatDate, formatSchedule, RequestError, SectionHeader, useResource } from "../workspace-utils";
 import styles from "../workspace.module.css";
 import { OneCExchangeRuns } from "./one-c-exchange-runs";
 import { OneCRejectedRequests } from "./one-c-rejected-requests";
@@ -26,6 +26,8 @@ interface OneCExchangeSummary {
   filename: string;
   imagesAttached?: number;
   imagesSkipped?: number;
+  hidingSkipped?: boolean;
+  productsHidden?: number;
   kind: "catalog" | "offers";
   rowsRejected: number;
   rowsTouched: number;
@@ -59,7 +61,7 @@ const EXCHANGE_KIND_LABELS: Record<OneCExchangeSummary["kind"], string> = {
 
 const FRESHNESS_HINTS: Record<OneCSettings["freshness"], string> = {
   current: "Цены и остатки приходят вовремя.",
-  stale: "Цены и остатки не обновлялись дольше двух ожидаемых интервалов. Проверьте, что в 1С включено регламентное задание обмена, компьютер с 1С работает, а в журнале ниже нет ошибок.",
+  stale: "Цены и остатки не обновлялись дольше двух ожидаемых интервалов: витрина показывает данные последнего обмена. Сотрудникам ушло оповещение в Telegram или VK, если они подключены. Проверьте, что в 1С включено регламентное задание обмена, компьютер с 1С работает, а в журнале и в «Отказах на входе» ниже нет ошибок.",
   never: "От этой базы ещё не приходили цены и остатки. Запустите обмен в 1С и проверьте журнал ниже.",
   disabled: "Обмен выключен: сайт не принимает данные от этой базы. Включите переключатель и сохраните.",
 };
@@ -83,7 +85,7 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
   const settingsPath=`/catalog/1c/settings?source=${source}`;
   const resource = useResource(() => api<OneCSettings>(settingsPath), [source]);
   const [displayName,setDisplayName]=useState("");
-  const [expectedSyncMinutes,setExpectedSyncMinutes]=useState("60");
+  const [expectedSyncMinutes,setExpectedSyncMinutes]=useState("1440");
   const [enabled, setEnabled] = useState(false);
   const [publishDescriptions, setPublishDescriptions] = useState(false);
   const [username, setUsername] = useState("");
@@ -229,7 +231,7 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
             <Switch checked={enabled} label={enabled ? "Включено" : "Выключено"} onChange={(_event, data) => setEnabled(data.checked)} disabled={busy} />
           </div>
           <Field label="Название базы" required><Input value={displayName} onChange={(_event,data)=>setDisplayName(data.value)} maxLength={120} disabled={busy}/></Field>
-          <Field label="Ожидаемый интервал обновления остатков, минут" hint="Только контроль актуальности. Само расписание обмена задаётся в 1С; сайт не запускает выгрузку вместо неё."><Input type="number" min={5} max={10080} value={expectedSyncMinutes} onChange={(_event,data)=>setExpectedSyncMinutes(data.value)} disabled={busy}/></Field>
+          <Field label="Ожидаемый интервал обновления остатков, минут" hint="То же, что в расписании обмена в 1С: 1440 — раз в сутки. Обмен запускает 1С; сайт по этому числу следит, что он пришёл, и оповещает сотрудников, если его нет дольше двух интервалов."><Input type="number" min={5} max={10080} value={expectedSyncMinutes} onChange={(_event,data)=>setExpectedSyncMinutes(data.value)} disabled={busy}/></Field>
           <Badge appearance="tint" color={resource.data.freshness === "current" ? "success":resource.data.freshness === "stale" ? "warning":"informative"}>{resource.data.freshness === "current" ? "Обновления приходят":resource.data.freshness === "stale" ? "Обновление задерживается":resource.data.freshness === "disabled" ? "Обмен выключен":"Цены и остатки ещё не приходили"}</Badge>
           <p className={styles.muted}>{FRESHNESS_HINTS[resource.data.freshness]}</p>
           <dl className={styles.detailList}><div><dt>Каталог и категории</dt><dd>{formatDate(resource.data.lastCatalogExchangeAt)}</dd></div><div><dt>Цены и остатки</dt><dd>{formatDate(resource.data.lastOffersExchangeAt)}</dd></div></dl>
@@ -247,7 +249,7 @@ function OneCSettingsForm({source,onSourceChange}:{source:Source;onSourceChange:
               <div><dt>Пароль</dt><dd>{resource.data.hasPassword ? "тот, что сохранён здесь (сайт его не показывает; забыли — задайте новый)" : "задайте ниже, не короче 16 символов"}</dd></div>
               <div><dt>Что выгружать</dt><dd>товары с картинками, цены и остатки; выгрузку заказов не включайте — сайт её не принимает</dd></div>
               <div><dt>Сжатие</dt><dd>не включайте сжатие архивом; размер частей файла 1С узнаёт от сайта сама</dd></div>
-              <div><dt>Расписание</dt><dd>первый раз полная выгрузка, затем цены и остатки каждые {resource.data.expectedSyncMinutes} мин.</dd></div>
+              <div><dt>Расписание</dt><dd>первый раз полная выгрузка, затем обмен {formatSchedule(resource.data.expectedSyncMinutes)}</dd></div>
               <div><dt>Доступ</dt><dd>внешний IP компьютера или сервера, где работает 1С, должен быть в «Разрешённых сетях»</dd></div>
             </dl>
           </section>
@@ -331,6 +333,12 @@ function LastExchangeResult({
               <dt>Без категории</dt>
               <dd>{summary.rowsUncategorized ?? 0}</dd>
             </div>
+          ) : null}
+          {summary.kind === "catalog" && (summary.productsHidden ?? 0) > 0 ? (
+            <div><dt>Снято с витрины</dt><dd>{summary.productsHidden} (их больше нет в выгрузке 1С)</dd></div>
+          ) : null}
+          {summary.kind === "catalog" && summary.hidingSkipped ? (
+            <div><dt>Лишние товары</dt><dd>остались на витрине: в файле меньше половины товаров сайта. Запустите в 1С полную выгрузку каталога.</dd></div>
           ) : null}
           <div><dt>Завершён</dt><dd>{formatDate(timestamp)}</dd></div>
         </dl>
