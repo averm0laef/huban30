@@ -155,7 +155,7 @@ export const VEHICLE_LABELS: Record<string, string> = {
   series: "Серия",
   body: "Кузов",
   engine_model: "Двигатель",
-  displacement_l: "Объём, л",
+  displacement_l: "Объём двигателя",
   engine_hp: "Мощность, л. с.",
   fuel: "Топливо",
   transmission: "Коробка передач",
@@ -213,10 +213,56 @@ export function vehicleRows(result: VehicleResult): Array<[string, string]> {
   const rows: Array<[string, string]> = [];
   for (const [key, label] of Object.entries(VEHICLE_LABELS)) {
     const value = vehicle[key];
-    const shown = Array.isArray(value) ? value.map(text).filter(Boolean).join(", ") : text(value);
+    const shown = key === "displacement_l" ? litres(value)
+      : Array.isArray(value) ? value.map(text).filter(Boolean).join(", ") : text(value);
     if (shown) rows.push([label, shown]);
   }
   return rows;
+}
+
+/** Engine volume the way a buyer reads it: vPIC converts cubic inches and answers «2.998832712» for a 3.0. */
+function litres(value: unknown): string | null {
+  const raw = text(value);
+  if (!raw) return null;
+  const plain = raw.replace(",", ".");
+  const volume = /^\d+(?:\.\d+)?$/u.test(plain) ? Number(plain) : Number.NaN;
+  if (Number.isNaN(volume)) return raw;
+  return volume > 0 ? `${volume.toFixed(1).replace(".", ",")} л` : null;
+}
+
+/** The step of the make and model picker. Without a make there is nothing to choose under it, whatever is left of the last choice. */
+export function pickerStep(chosen: { family: unknown; make: unknown; model: unknown }): 1 | 2 | 3 | 4 {
+  if (!chosen.make) return 1;
+  if (chosen.model) return 4;
+  return chosen.family ? 3 : 2;
+}
+
+/**
+ * The second click of a double click lands on what the first one put under the pointer, a list the visitor
+ * has not seen yet: it is not a choice. The keyboard reports 0, a single click 1.
+ */
+export function isRepeatClick(event: { detail: number }): boolean {
+  return event.detail > 1;
+}
+
+type ClickEvent = { detail: number; preventDefault(): void; stopPropagation(): void };
+type ClickSource = {
+  addEventListener(type: "click", listener: (event: ClickEvent) => void, capture: boolean): void;
+  removeEventListener(type: "click", listener: (event: ClickEvent) => void, capture: boolean): void;
+};
+
+/**
+ * The click that closes a panel puts the page under the pointer. Until a click of its own (or the keyboard)
+ * comes, the rest of that double click is dropped before the page hears it.
+ */
+export function dropRestOfDoubleClick(source: ClickSource = document): void {
+  const drop = (event: ClickEvent) => {
+    if (isRepeatClick(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+    } else source.removeEventListener("click", drop, true);
+  };
+  source.addEventListener("click", drop, true);
 }
 
 export const SAVED_VEHICLE_KEY = "an30:parts-finder:vehicle";
