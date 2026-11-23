@@ -237,6 +237,14 @@ export function pickerStep(chosen: { family: unknown; make: unknown; model: unkn
   return chosen.family ? 3 : 2;
 }
 
+/**
+ * The second click of a double click lands on what the first one put under the pointer, a list the visitor
+ * has not seen yet: it is not a choice. The keyboard reports 0, a single click 1.
+ */
+export function isRepeatClick(event: { detail: number }): boolean {
+  return event.detail > 1;
+}
+
 export const SAVED_VEHICLE_KEY = "an30:parts-finder:vehicle";
 
 export function readSavedVehicle(): string | null {

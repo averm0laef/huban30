@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pickerStep, vehicleRows } from "./parts-finder";
+import { isRepeatClick, pickerStep, vehicleRows } from "./parts-finder";
 
 const toyota = { id: 2, name: "Toyota", slug: "toyota" };
 const allion = { id: 33, name: "Allion" };
@@ -18,6 +18,17 @@ describe("which step the make and model picker of /podbor shows", () => {
   it("goes back to the list of makes when the make is gone, whatever was chosen under it", () => {
     expect(pickerStep({ family: "Allion", make: null, model: null })).toBe(1);
     expect(pickerStep({ family: "Allion", make: null, model: allion })).toBe(1);
+  });
+});
+
+describe("a double click in the picker", () => {
+  // The first click on «Toyota» puts the list of models under the pointer; the second one used to land on
+  // «Allion» and open its engines, though the visitor never saw the list.
+  it("takes the first click and the keyboard, and drops the second and later clicks of one series", () => {
+    expect(isRepeatClick({ detail: 1 })).toBe(false);
+    expect(isRepeatClick({ detail: 0 })).toBe(false);
+    expect(isRepeatClick({ detail: 2 })).toBe(true);
+    expect(isRepeatClick({ detail: 3 })).toBe(true);
   });
 });
 
