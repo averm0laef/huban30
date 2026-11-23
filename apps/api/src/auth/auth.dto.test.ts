@@ -26,6 +26,15 @@ describe("registration consent validation", () => {
     expect(registration.email).toBe("client@example.com");
   });
 
+  it("rejects control characters and direction overrides in the display name", async () => {
+    for (const displayName of ["ab\u0000cd", "Иван\r\nBcc: evil@example.com", "\u202Eevil", "Иван\tИванов"]) {
+      await expect(registrationErrors({ ...validRegistration, displayName }), JSON.stringify(displayName))
+        .resolves.not.toEqual([]);
+    }
+    await expect(registrationErrors({ ...validRegistration, displayName: "Анна-Мария О'Нил" }))
+      .resolves.toEqual([]);
+  });
+
   it("rejects missing, false and stale consent values", async () => {
     const missing = { ...validRegistration };
     delete (missing as Partial<typeof validRegistration>).personalDataConsent;

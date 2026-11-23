@@ -34,6 +34,7 @@ import { canonicalJson } from "../catalog/catalog-import.utils.js";
 import { loadPlacementContext, placeProduct, type PlacementContext } from "../catalog/catalog-recategorize.service.js";
 import { OneCIntegrationService } from "../catalog/one-c-integration.service.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
+import { decodeCommerceMl } from "./commerce-ml-encoding.js";
 import {
   CommerceMlParseError,
   parseImportXml,
@@ -193,7 +194,7 @@ export class OneCExchangeService {
     source?: OneCSource;
   }): Promise<ExchangeRunRow> {
     const source=params.source ?? "one_c";
-    const xml = params.assembled.toString("utf8");
+    const xml = decodeCommerceMl(params.assembled);
     // ONE_C_PRICE_TYPE names the 1C price type shown on the site; without it
     // the parser picks a selling type and never a cost one (selectPriceType).
     const parsed = params.kind === "catalog"
@@ -338,21 +339,33 @@ export class OneCExchangeService {
     return { kind: "success" };
   }
 
+  /**
+   * Hides the products of this base a full catalogue no longer lists and
+   * writes down what happened: how many were hidden, or that none were
+   * because the file named less than half of the live products.
+   */
   private async deactivateMissingProducts(run: ExchangeRunRow): Promise<void> {
     const listed = run.body_rows
       .filter((row): row is Extract<OneCCatalogRow, { entityType: "product" }> => row.entityType === "product")
       .map((row) => row.externalId);
     if (listed.length === 0) return;
-    await this.database.query(
+    const outcome = (await this.database.query<{ hidden: number; live_total: number }>(
       `WITH live AS (
          SELECT count(*) AS total FROM app.products
          WHERE external_id IS NOT NULL AND is_active AND deleted_at IS NULL AND NOT is_demo AND one_c_source=${sourceSql(run.source_key ?? 'one_c')}
+       ), hidden AS (
+         UPDATE app.products SET is_active = false, updated_at = clock_timestamp()
+         WHERE external_id IS NOT NULL AND is_active AND deleted_at IS NULL AND NOT is_demo AND one_c_source=${sourceSql(run.source_key ?? 'one_c')}
+           AND NOT (external_id = ANY($1::text[]))
+           AND cardinality($1::text[]) * 2 >= (SELECT total FROM live)
+         RETURNING 1
        )
-       UPDATE app.products SET is_active = false, updated_at = clock_timestamp()
-       WHERE external_id IS NOT NULL AND is_active AND deleted_at IS NULL AND NOT is_demo AND one_c_source=${sourceSql(run.source_key ?? 'one_c')}
-         AND NOT (external_id = ANY($1::text[]))
-         AND cardinality($1::text[]) * 2 >= (SELECT total FROM live)`,
+       SELECT (SELECT total FROM live)::int AS live_total, (SELECT count(*) FROM hidden)::int AS hidden`,
       [listed],
+    )).rows[0];
+    await this.database.query(
+      "UPDATE app.one_c_exchange_runs SET products_hidden = $2, hiding_skipped = $3 WHERE id = $1",
+      [run.id, outcome?.hidden ?? 0, listed.length * 2 < (outcome?.live_total ?? 0)],
     );
   }
 
@@ -434,10 +447,11 @@ export class OneCExchangeService {
     this.categoryTreeCache.invalidate();
     const totals = (await this.database.query<{
       images_attached: number; images_skipped: number;
+      hiding_skipped: boolean; products_hidden: number;
       rows_rejected: number; rows_touched: number; rows_uncategorized: number;
     }>(
       `UPDATE app.one_c_exchange_runs SET phase = 'done', status = 'completed'
-       WHERE id = $1 RETURNING rows_touched, rows_rejected, rows_uncategorized, images_attached, images_skipped`,
+       WHERE id = $1 RETURNING rows_touched, rows_rejected, rows_uncategorized, images_attached, images_skipped, products_hidden, hiding_skipped`,
       [run.id],
     )).rows[0];
     await this.integration.recordExchangeResult({
@@ -445,7 +459,9 @@ export class OneCExchangeService {
       filename: run.filename,
       imagesAttached: totals?.images_attached ?? 0,
       imagesSkipped: totals?.images_skipped ?? 0,
+      hidingSkipped: totals?.hiding_skipped ?? false,
       kind: run.kind,
+      productsHidden: totals?.products_hidden ?? 0,
       rowsRejected: totals?.rows_rejected ?? 0,
       rowsTouched: totals?.rows_touched ?? 0,
       // How many products this run could not confidently place in a real

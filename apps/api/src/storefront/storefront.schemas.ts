@@ -2,8 +2,9 @@ import { z } from "zod";
 
 import { CONTACT_CONSENT_POLICY_VERSION } from "@an30/contracts";
 
+// As at sign-up: no control characters and no bidirectional overrides.
 const SingleLineSchema = z.string().trim().min(2).max(160)
-  .regex(/^[^\u0000-\u001F\u007F]+$/u, "Недопустимые символы");
+  .regex(/^[^\u0000-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]+$/u, "Недопустимые символы");
 const PhoneSchema = z.string().trim().regex(/^\+[1-9]\d{6,14}$/u, "Телефон укажите в международном формате");
 const AddressLineSchema = z.string().trim().min(1).max(200)
   .regex(/^[^\u0000-\u001F\u007F]+$/u, "Недопустимые символы");
