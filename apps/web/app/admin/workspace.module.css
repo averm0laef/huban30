@@ -166,6 +166,10 @@
 .workspaceBrand {
   min-height: 64px;
   display: flex;
+  /* The two words sit on one baseline, and the line itself is centred in the bar: on a single unwrapped
+     line `baseline` alone pins it to the top edge, where the name was cut off. */
+  flex-wrap: wrap;
+  align-content: center;
   align-items: baseline;
   gap: 8px;
   padding: 0 18px;
@@ -944,6 +948,9 @@
 .settingsForm {
   max-width: 760px;
   display: grid;
+  /* Without an explicit track the single column grows to its widest child (a row of fields, a wide table)
+     and pushes the whole page sideways on a phone. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   padding: 22px;
   border: 1px solid var(--colorNeutralStroke2);
@@ -1280,8 +1287,14 @@
   display: grid;
   gap: 4px;
   min-width: min(100%, 200px);
+  /* The section list has long names; without a cap the select is as wide as its longest option. */
+  max-width: 100%;
   font-size: 13px;
   color: var(--colorNeutralForeground2);
+}
+.ruleForm label :global(.fui-Select) {
+  min-width: 0;
+  max-width: 100%;
 }
 .ruleForm input {
   min-height: 36px;
