@@ -319,7 +319,9 @@ class FakeCatalogDatabase {
       const run = this.mustRun(id);
       run.phase = "done";
       run.status = "completed";
+      const hiding = run as RunRow & { hiding_skipped?: boolean; products_hidden?: number };
       return [{
+        hiding_skipped: hiding.hiding_skipped ?? false, products_hidden: hiding.products_hidden ?? 0,
         rows_rejected: run.rows_rejected, rows_touched: run.rows_touched,
         rows_uncategorized: run.rows_uncategorized,
       }];
@@ -561,8 +563,17 @@ class FakeCatalogDatabase {
     if (sql.startsWith("WITH live AS (") && sql.includes("UPDATE app.products SET is_active = false")) {
       const listed = new Set(values[0] as string[]);
       const live = [...this.products.values()].filter((row) => row.is_active && row.deleted_at === null);
-      if (listed.size * 2 < live.length) return [];
-      for (const row of live) if (!listed.has(row.external_id)) row.is_active = false;
+      if (listed.size * 2 < live.length) return [{ hidden: 0, live_total: live.length }];
+      let hidden = 0;
+      for (const row of live) {
+        if (listed.has(row.external_id)) continue;
+        row.is_active = false;
+        hidden += 1;
+      }
+      return [{ hidden, live_total: live.length }];
+    }
+    if (sql.startsWith("UPDATE app.one_c_exchange_runs SET products_hidden = $2, hiding_skipped = $3")) {
+      Object.assign(this.mustRun(values[0] as string), { hiding_skipped: values[2], products_hidden: values[1] });
       return [];
     }
 

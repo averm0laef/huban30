@@ -9,6 +9,7 @@ import { WorkerJobSchema } from "@an30/contracts";
 
 import { ingestArticleCrosses } from "./article-cross-ingest.js";
 import { readWorkerConfig } from "./config.js";
+import { queueLateExchangeAlerts } from "./one-c-exchange-watch.js";
 import { OutboxDispatcher } from "./outbox-dispatcher.js";
 import { HubDispatcher } from "./hub-dispatcher.js";
 import { createSearchIndexer } from "./search-index/create-search-indexer.js";
@@ -91,6 +92,24 @@ const supplierWaitlistRetentionTimer = setInterval(
 supplierWaitlistRetentionTimer.unref();
 void anonymizeExpiredSupplierWaitlistRequests();
 
+// 1С starts every exchange itself; the site can only notice that one did not come.
+let oneCExchangeWatchRunning = false;
+async function watchOneCExchange() {
+  if (oneCExchangeWatchRunning) return;
+  oneCExchangeWatchRunning = true;
+  try {
+    await queueLateExchangeAlerts(database, logger);
+  } catch (error) {
+    logger.error({ error }, "1C exchange watch failed");
+  } finally {
+    oneCExchangeWatchRunning = false;
+  }
+}
+
+const oneCExchangeWatchTimer = setInterval(() => void watchOneCExchange(), 60 * 60 * 1_000);
+oneCExchangeWatchTimer.unref();
+void watchOneCExchange();
+
 // Optional search engine (docs/SEARCH_ENGINE.md); null unless SEARCH_ENGINE=opensearch.
 const searchIndexer = createSearchIndexer(database, process.env, logger);
 const searchIndexTimer = searchIndexer
@@ -147,6 +166,7 @@ async function shutdown(signal: string) {
   healthServer.close();
   clearInterval(contactRetentionTimer);
   clearInterval(supplierWaitlistRetentionTimer);
+  clearInterval(oneCExchangeWatchTimer);
   clearInterval(outboxTimer);
   if (searchIndexTimer) clearInterval(searchIndexTimer);
   clearInterval(hubTimer);
