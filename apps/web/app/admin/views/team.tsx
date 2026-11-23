@@ -5,6 +5,7 @@ import { Badge, Button, Input, MessageBar, MessageBarBody, Select } from "@fluen
 import { ArrowClockwise20Regular, MailAdd20Regular, Search20Regular } from "@fluentui/react-icons";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import { canOpenSection, NAVIGATION, STAFF_ROLES } from "../navigation";
 import { api, queryString } from "../api";
 import { DataTable } from "../data-table";
 import type { Page, SessionView, TeamRow } from "../types";
@@ -125,6 +126,46 @@ export function TeamView({ session }: { session: SessionView }) {
         loading={resource.loading}
       />
       {resource.data ? <Pagination limit={limit} offset={offset} onChange={setOffset} total={resource.data.total} /> : null}
+      <AccessMatrix ownRole={session.role} />
     </>
+  );
+}
+
+/**
+ * Who sees which section. Built from the same list as the menu and the same role permissions the server
+ * checks, so the table cannot promise an access the server would refuse.
+ */
+function AccessMatrix({ ownRole }: { ownRole: SessionView["role"] }) {
+  return (
+    <section aria-labelledby="access-matrix-title" className={styles.accessMatrix}>
+      <header>
+        <h2 id="access-matrix-title">Что видит каждая роль</h2>
+        <p>Роль выбирается при приглашении. Закрытый раздел не показывается в меню, а сервер не отдаёт его данные и по прямой ссылке.</p>
+      </header>
+      <div className={styles.accessScroller} role="region" aria-labelledby="access-matrix-title" tabIndex={0}>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Раздел</th>
+              {STAFF_ROLES.map((role) => (
+                <th data-own={role === ownRole || undefined} key={role} scope="col">{ROLE_LABELS[role]}{role === ownRole ? <small>ваша роль</small> : null}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {NAVIGATION.map((item) => (
+              <tr key={item.section}>
+                <th scope="row">{item.label}<small>{item.about}</small></th>
+                {STAFF_ROLES.map((role) => {
+                  const open = canOpenSection(role, item.section);
+                  return <td data-open={open || undefined} data-own={role === ownRole || undefined} key={role}>{open ? "Да" : "Нет"}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className={styles.muted}>Сверх разделов: приглашать сотрудников и подключать площадки может только администратор; удалять чаты — директор и администратор.</p>
+    </section>
   );
 }

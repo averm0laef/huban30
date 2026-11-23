@@ -32,6 +32,17 @@ function errorMessage(payload: unknown, status: number): string {
         : "Не удалось выполнить запрос.";
 }
 
+/** Fired when a working request is answered «not signed in»: the workspace re-checks the session itself. */
+export const SESSION_LOST_EVENT = "an30:staff-session-lost";
+
+/**
+ * A 401 on a working request means the session ended (expired, signed out in another tab). The sign-in
+ * requests themselves answer 401 for a wrong password or code — that is not a lost session.
+ */
+export function isSessionLoss(path: string, status: number): boolean {
+  return status === 401 && !path.startsWith("/auth/");
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
@@ -52,7 +63,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     : contentType.includes("application/json")
       ? await response.json()
       : await response.text();
-  if (!response.ok) throw new ApiError(errorMessage(payload, response.status), response.status, payload);
+  if (!response.ok) {
+    if (isSessionLoss(path, response.status) && typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_LOST_EVENT));
+    throw new ApiError(errorMessage(payload, response.status), response.status, payload);
+  }
   return payload as T;
 }
 

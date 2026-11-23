@@ -19,7 +19,19 @@ import {
   webLightTheme,
 } from "@fluentui/react-components";
 import {
+  ArrowSync20Regular,
+  Board20Regular,
+  Box20Regular,
+  Cart20Regular,
+  Chat20Regular,
+  DataBarVertical20Regular,
+  DocumentText20Regular,
+  History20Regular,
+  Megaphone20Regular,
   Navigation20Regular,
+  People20Regular,
+  PersonSupport20Regular,
+  Settings20Regular,
   Shield20Regular,
   SignOut20Regular,
   WeatherMoon20Regular,
@@ -27,9 +39,8 @@ import {
 } from "@fluentui/react-icons";
 import Link from "next/link";
 
-import { ROLE_PERMISSIONS, type Permission } from "@an30/contracts";
-
-import { api, ApiError } from "./api";
+import { api, ApiError, SESSION_LOST_EVENT } from "./api";
+import { canOpenSection, counterLabel, groupedNavigation, navigationItem, rolesWithAccess, sectionCounters, type WorkQueue } from "./navigation";
 import type { SessionView } from "./types";
 import { ROLE_LABELS } from "./workspace-utils";
 import { StaffAvailability, availabilityPreferenceKey } from "./staff-availability";
@@ -53,27 +64,23 @@ import styles from "./workspace.module.css";
 export { STAFF_SECTIONS };
 export type { StaffSection };
 
-interface NavigationItem {
-  href: string;
-  label: string;
-  permission: Permission;
-  section: StaffSection;
-}
+const SECTION_ICONS: Record<StaffSection, ReactElement> = {
+  audit: <History20Regular />,
+  catalog: <Box20Regular />,
+  chats: <Chat20Regular />,
+  "client-hub": <Megaphone20Regular />,
+  imports: <ArrowSync20Regular />,
+  invoices: <DocumentText20Regular />,
+  orders: <Cart20Regular />,
+  overview: <Board20Regular />,
+  reports: <DataBarVertical20Regular />,
+  requests: <PersonSupport20Regular />,
+  settings: <Settings20Regular />,
+  staff: <People20Regular />,
+};
 
-const NAVIGATION: NavigationItem[] = [
-  { href: "/admin", label: "Сводка", permission: "orders:read:any", section: "overview" },
-  { href: "/admin/orders", label: "Заказы", permission: "orders:read:any", section: "orders" },
-  { href: "/admin/requests", label: "Обращения", permission: "requests:read:any", section: "requests" },
-  { href: "/admin/chats", label: "Чаты", permission: "chat:manage:any", section: "chats" },
-  { href: "/admin/client-hub", label: "Посты и мессенджеры", permission: "content:manage", section: "client-hub" },
-  { href: "/admin/catalog", label: "Каталог", permission: "catalog:read", section: "catalog" },
-  { href: "/admin/imports", label: "Импорт 1С", permission: "catalog:import", section: "imports" },
-  { href: "/admin/invoices", label: "Накладные", permission: "orders:read:any", section: "invoices" },
-  { href: "/admin/staff", label: "Персонал", permission: "staff:read", section: "staff" },
-  { href: "/admin/reports", label: "Отчёты", permission: "reports:read", section: "reports" },
-  { href: "/admin/settings", label: "Настройки", permission: "settings:manage", section: "settings" },
-  { href: "/admin/audit", label: "Аудит", permission: "audit:read", section: "audit" },
-];
+/** How often the menu counters are refreshed while the tab is in front. */
+const QUEUE_REFRESH_MS = 60_000;
 
 type AuthState = "loading" | "ready" | "signed_out";
 
@@ -110,12 +117,17 @@ export function StaffWorkspace({ initialSection }: { initialSection: StaffSectio
     setOnline(window.navigator.onLine);
     const goOnline = () => setOnline(true);
     const goOffline = () => setOnline(false);
+    // A request answered «not signed in» does not sign anyone out by itself: the session is asked again, and
+    // only its own 401 brings the sign-in form back instead of a row of «не удалось загрузить» in every block.
+    const recheck = () => { void loadSession(); };
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
+    window.addEventListener(SESSION_LOST_EVENT, recheck);
     void loadSession();
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
+      window.removeEventListener(SESSION_LOST_EVENT, recheck);
     };
   }, [loadSession]);
 
@@ -339,9 +351,34 @@ function WorkspaceFrame({
   session: SessionView;
   theme: "dark" | "light";
 }) {
-  const permissions: readonly Permission[] = ROLE_PERMISSIONS[session.role];
-  const items = useMemo(() => NAVIGATION.filter((item) => permissions.includes(item.permission)), [permissions]);
-  const allowed = items.some((item) => item.section === initialSection);
+  const groups = useMemo(() => groupedNavigation(session.role), [session.role]);
+  const allowed = canOpenSection(session.role, initialSection);
+  const current = navigationItem(initialSection);
+  const [queue, setQueue] = useState<WorkQueue | null>(null);
+  const counters = useMemo(() => sectionCounters(queue), [queue]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      if (document.visibilityState !== "visible") return;
+      api<WorkQueue>("/staff/summary").then((value) => { if (!cancelled) setQueue(value); }).catch(() => undefined);
+    };
+    load();
+    const timer = window.setInterval(load, QUEUE_REFRESH_MS);
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    };
+  }, [initialSection]);
+
+  useEffect(() => {
+    if (!navigationOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") onNavigationClose(); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [navigationOpen, onNavigationClose]);
 
   async function logout(): Promise<void> {
     try { window.localStorage.removeItem(availabilityPreferenceKey(session.userId)); } catch { /* Optional local preference. */ }
@@ -359,16 +396,26 @@ function WorkspaceFrame({
           <strong>АН-30</strong><span>персонал</span>
         </Link>
         <nav aria-label="Разделы рабочего места" className={styles.workspaceNav}>
-          {items.map((item) => (
-            <Link
-              aria-current={item.section === initialSection ? "page" : undefined}
-              className={styles.navItem}
-              href={item.href}
-              key={item.section}
-              onClick={onNavigationClose}
-            >
-              <span>{item.label}</span>
-            </Link>
+          {groups.map((group) => (
+            <div aria-labelledby={group.label ? `nav-group-${group.id}` : undefined} className={styles.navGroup} key={group.id} role="group">
+              {group.label ? <span className={styles.navGroupLabel} id={`nav-group-${group.id}`}>{group.label}</span> : null}
+              {group.items.map((item) => {
+                const waiting = counters[item.section];
+                return (
+                  <Link
+                    aria-current={item.section === initialSection ? "page" : undefined}
+                    className={styles.navItem}
+                    href={item.href}
+                    key={item.section}
+                    onClick={onNavigationClose}
+                  >
+                    {SECTION_ICONS[item.section]}
+                    <span>{item.label}</span>
+                    {waiting ? <b aria-label={`ждут: ${waiting}`} className={styles.navCounter}>{counterLabel(waiting)}</b> : null}
+                  </Link>
+                );
+              })}
+            </div>
           ))}
         </nav>
         <div className={styles.sidebarFooter}>
@@ -399,7 +446,8 @@ function WorkspaceFrame({
             <section className={styles.forbiddenState}>
               <Shield20Regular />
               <h1>Недостаточно прав</h1>
-              <p>Раздел скрыт для роли «{ROLE_LABELS[session.role]}». Даже прямой запрос будет отклонён сервером.</p>
+              <p>Раздел «{current.label}» закрыт для роли «{ROLE_LABELS[session.role]}»: сервер не отдаёт его данные и по прямой ссылке.</p>
+              <p>Он открыт ролям: {rolesWithAccess(initialSection).map((role) => ROLE_LABELS[role]).join(", ")}. Роль сотрудника назначает администратор магазина.</p>
               <Button as="a" href="/admin">Вернуться к сводке</Button>
             </section>
           )}
