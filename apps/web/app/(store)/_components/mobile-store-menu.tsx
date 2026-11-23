@@ -42,7 +42,14 @@ function openMobileMenu(opener: HTMLElement) {
   const dialog = document.getElementById(MOBILE_MENU_DIALOG_ID);
   if (!(dialog instanceof HTMLDialogElement) || dialog.open) return;
   lastOpener = opener;
+  if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur();
   dialog.showModal();
+  if (opener.dataset.openCatalogue) {
+    const catalogue = dialog.querySelector<HTMLElement>("[data-mobile-catalogue]");
+    if (catalogue) dialog.scrollTop += catalogue.getBoundingClientRect().top - (dialog.querySelector("header")?.getBoundingClientRect().bottom ?? 0);
+  } else {
+    dialog.scrollTop = 0;
+  }
 }
 
 /**
@@ -54,6 +61,16 @@ export function CompactMenuButton() {
     <button type="button" className={styles.compactMenu} aria-label="Открыть меню" aria-haspopup="dialog"
       aria-controls={MOBILE_MENU_DIALOG_ID} onClick={(event) => openMobileMenu(event.currentTarget)}>
       <Navigation24Regular aria-hidden="true" />
+    </button>
+  );
+}
+
+export function MobileCatalogButton({ current, children }: { current: boolean; children: React.ReactNode }) {
+  return (
+    <button aria-controls={MOBILE_MENU_DIALOG_ID} aria-current={current ? "page" : undefined}
+      aria-haspopup="dialog" className={styles.mobileNavItem} data-open-catalogue="true"
+      onClick={(event) => openMobileMenu(event.currentTarget)} type="button">
+      {children}
     </button>
   );
 }
@@ -114,7 +131,7 @@ export function MobileStoreMenu({ catalogMenu }: { catalogMenu: CatalogMenuSecti
             <span><strong>{STORE_LOCALITY}, {STORE_STREET}</strong><small>{STORE_HOURS}</small></span>
           </Link>
 
-          <nav className={styles.drawerCatalog} aria-labelledby={`${dialogId}-catalog`}>
+          <nav className={styles.drawerCatalog} aria-labelledby={`${dialogId}-catalog`} data-mobile-catalogue>
             <h2 id={`${dialogId}-catalog`}>Каталог</h2>
             <ul>
               {(allSections ? sections : sections.slice(0, COLLAPSED_SECTIONS)).map((section) => {

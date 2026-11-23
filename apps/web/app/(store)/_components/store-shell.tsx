@@ -27,7 +27,7 @@ import { CatalogMenu } from "./catalog-menu";
 import { ChatWidget } from "./chat-widget";
 import { createHeaderCollapseState, getNextHeaderCollapseState } from "./header-scroll-collapse";
 import { HeaderVehicle } from "./header-vehicle";
-import { CompactMenuButton, MobileStoreMenu } from "./mobile-store-menu";
+import { CompactMenuButton, MobileCatalogButton, MobileStoreMenu } from "./mobile-store-menu";
 import { HeaderSearchForm } from "./search-box";
 import { AccountNavigation, SessionNavigationProvider, useAccountDestination } from "./session-navigation";
 import { MessengerIcon } from "./messenger-icon";
@@ -69,7 +69,6 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
   const [collapsed, setCollapsed] = useState(false);
   const collapseStateRef = useRef(createHeaderCollapseState());
   const focusWithinCollapsibleContentRef = useRef(false);
-  const reducedMotionRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const layoutSettleTimerRef = useRef<number | null>(null);
   const layoutSettlingRef = useRef(false);
@@ -84,7 +83,6 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
     const previous = collapseStateRef.current;
     const next = getNextHeaderCollapseState(previous, {
       focusWithinCollapsibleContent: focusWithinCollapsibleContentRef.current,
-      reducedMotion: reducedMotionRef.current,
       scrollY,
     });
     collapseStateRef.current = next;
@@ -116,8 +114,6 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
   }, [pathname]);
 
   useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    reducedMotionRef.current = query.matches;
     collapseStateRef.current = createHeaderCollapseState(window.scrollY);
     layoutSettlingRef.current = false;
 
@@ -129,16 +125,9 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
       });
     };
 
-    const onMotionPreferenceChange = (event: MediaQueryListEvent) => {
-      reducedMotionRef.current = event.matches;
-      updateCollapseState(window.scrollY, true);
-    };
-
     window.addEventListener("scroll", onScroll, { passive: true });
-    query.addEventListener("change", onMotionPreferenceChange);
     return () => {
       window.removeEventListener("scroll", onScroll);
-      query.removeEventListener("change", onMotionPreferenceChange);
       if (animationFrameRef.current !== null) {
         window.cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -153,6 +142,7 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
 
   function handleFocus(event: FocusEvent<HTMLDivElement>) {
     const target = event.target as Element;
+    if (target.closest("dialog")) return;
     // Only keyboard focus pins the header open. A tap or click also focuses
     // the link/button, and because the header survives client navigation
     // that focus used to stay put on the next page — the header then never
@@ -304,7 +294,7 @@ function StoreFooter({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
   );
 }
 
-function MobileNavigation() {
+function MobileNavigation({ hasCatalog }: { hasCatalog: boolean }) {
   const pathname = usePathname() ?? "/";
   const accountDestination = useAccountDestination();
   const accountPath = accountDestination.href.split("?")[0];
@@ -316,7 +306,9 @@ function MobileNavigation() {
   return (
     <nav className={styles.mobileNav} aria-label="Быстрая навигация">
       <Link className={styles.mobileNavItem} href="/" aria-current={isHome ? "page" : undefined}><Home24Regular aria-hidden="true" /><span>Главная</span></Link>
-      <Link className={styles.mobileNavItem} href="/catalog" aria-current={isCatalog ? "page" : undefined}><Grid24Regular aria-hidden="true" /><span>Каталог</span></Link>
+      {hasCatalog
+        ? <MobileCatalogButton current={isCatalog}><Grid24Regular aria-hidden="true" /><span>Каталог</span></MobileCatalogButton>
+        : <Link className={styles.mobileNavItem} href="/catalog" aria-current={isCatalog ? "page" : undefined}><Grid24Regular aria-hidden="true" /><span>Каталог</span></Link>}
       <CartButton className={styles.mobileNavItem} icon={<Cart24Regular aria-hidden="true" />} />
       {isChat
         ? <Link className={styles.mobileNavItem} href="/chat" aria-current="page"><Chat24Regular aria-hidden="true" /><span>Чат</span></Link>
@@ -339,7 +331,7 @@ export function StoreShell({ catalogMenu, children, initialSessionPresent }: {
           <StoreHeader catalogMenu={catalogMenu} />
           <main className={styles.main} id="main-content">{children}</main>
           <StoreFooter catalogMenu={catalogMenu} />
-          <MobileNavigation />
+          <MobileNavigation hasCatalog={catalogMenu.length > 0} />
         </div>
       </CartProvider>
     </SessionNavigationProvider>

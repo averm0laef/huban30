@@ -622,7 +622,7 @@
 .mobileHeaderActions svg,
 .headerTopLocation svg { color: var(--store-brand); }
 
-:global(html):has(.mobileDrawer[open]) { overflow: hidden; }
+:global(html):has(.mobileDrawer[open]) { overflow: hidden; overscroll-behavior: none; }
 .mobileDrawer {
   position: fixed;
   inset: 0 auto 0 0;
@@ -2138,9 +2138,7 @@ button.promoControl {
      on the grid item (`.headerRowInner`) is required for it to actually
      shrink past its content size; `overflow: hidden` there (not on the row
      itself, which still owns the border) keeps the content from spilling
-     out while it does. Reduced-motion and focus-within visitors never see
-     `data-collapsed="true"` at all (see getNextHeaderCollapseState), so
-     nothing here needs its own motion guard. */
+     out while it does. The reduced-motion rule removes the transitions. */
   .headerMainRow {
     display: grid;
     grid-template-rows: 1fr;
@@ -2470,9 +2468,10 @@ button.promoControl {
    No parallax, no tilt, no looping decoration; all of it is skipped for
    people who asked their system for less motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .storefront :global(.storefront-add-cart[data-added]) { background: var(--store-success); animation: store-add-confirm 360ms var(--store-ease); }
+  .storefront :global(.storefront-add-cart[data-added]) { animation: store-add-confirm 360ms var(--store-ease); }
   .storefront :global(.storefront-cart-count) { animation: store-badge-pop 420ms cubic-bezier(.34, 1.4, .64, 1); }
 }
+.storefront :global(.storefront-add-cart[data-added]) { background: var(--store-success); }
 @keyframes store-add-confirm { 0% { transform: scale(.97); } 55% { transform: scale(1.02); } 100% { transform: none; } }
 @keyframes store-badge-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: none; } }
 
@@ -2641,4 +2640,14 @@ button.promoControl {
   .storefront textarea { font-size: 1rem; }
   .breadcrumbs a { display: inline-flex; align-items: center; min-height: 32px; }
   .footerV2Phone { min-height: 44px; }
+}
+
+@media (max-width: 767px) {
+  .mobileSearchRow .searchSuggestions {
+    top: 58px;
+    max-height: min(64dvh, 520px, var(--search-available-height, calc(100dvh - 156px)));
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scroll-padding-block: 6px;
+  }
 }

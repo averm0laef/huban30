@@ -166,3 +166,6 @@
   .signIn { grid-template-columns: auto minmax(0, 1fr); }
   .signIn a { grid-column: 2; }
 }
+
+.summary a.checkoutAction { background: var(--store-accent); color: var(--store-accent-text); }
+.summary a.checkoutAction:hover { background: var(--store-accent-hover); }

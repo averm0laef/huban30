@@ -2,7 +2,7 @@
 
 import { CheckmarkCircle20Regular, Info20Regular, List20Regular, ShieldCheckmark20Regular, VehicleCar20Regular, Warning20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import buttons from "../../../_components/store-button.module.css";
 import { WheelLoader } from "../../../_components/wheel-loader";
@@ -13,7 +13,10 @@ import { ExpertHelpQueryLink } from "../../expert-help-query-link";
 import layout from "./product-page.module.css";
 import styles from "./product-catalogue-check.module.css";
 
-type Load = { status: "idle" | "loading" } | { message: string; status: "error" } | { data: UmapiFitment; status: "ready" };
+type Mode = "check" | "list";
+type Result = { mode: Mode; status: "loading" }
+  | { message: string; mode: Mode; status: "error" }
+  | { data: UmapiFitment; mode: Mode; status: "ready" };
 
 const CARS_SHOWN = 8;
 
@@ -78,13 +81,20 @@ function CarList({ makes, total }: { makes: FitMake[]; total: number }) {
 export function ProductCatalogueCheck({ applies, prefill, productId }: { applies: boolean; prefill: string; productId: string }) {
   const [enabled, setEnabled] = useState(false);
   const [car, setCar] = useState<PickedVehicle | null>(null);
-  const [check, setCheck] = useState<Load>({ status: "idle" });
-  const [list, setList] = useState<Load>({ status: "idle" });
+  const [result, setResult] = useState<Result | null>(null);
+  const requestVersion = useRef(0);
 
   useEffect(() => {
     if (!applies) return undefined;
     let live = true;
-    const read = () => { void activeCar().then((next) => { if (live) { setCar(next); setCheck({ status: "idle" }); } }); };
+    let carVersion = 0;
+    const read = () => {
+      const version = ++carVersion;
+      requestVersion.current++;
+      setResult(null);
+      setCar(null);
+      void activeCar().then((next) => { if (live && version === carVersion) setCar(next); });
+    };
     void umapiStatus().then((status) => { if (live) setEnabled(status.enabled); });
     read();
     const stop = onActiveCarChange(read);
@@ -104,12 +114,16 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
   const ids = catalogCar(car);
   const name = car ? carName(car) : null;
 
-  function load(mode: "check" | "list") {
-    const set = mode === "check" ? setCheck : setList;
-    set({ status: "loading" });
-    umapiGet<UmapiFitment>(fitmentPath(productId, mode, mode === "check" ? ids : ids ?? null))
-      .then((data) => set({ data, status: "ready" }))
-      .catch((caught: unknown) => set({ message: caught instanceof FinderError ? caught.message : "Проверка сейчас недоступна.", status: "error" }));
+  async function load(mode: Mode) {
+    const version = ++requestVersion.current;
+    setResult({ mode, status: "loading" });
+    try {
+      const data = await umapiGet<UmapiFitment>(fitmentPath(productId, mode, ids));
+      if (version === requestVersion.current) setResult({ data, mode, status: "ready" });
+    } catch (caught) {
+      if (version !== requestVersion.current) return;
+      setResult({ message: caught instanceof FinderError ? caught.message : "Проверка сейчас недоступна.", mode, status: "error" });
+    }
   }
 
   return (
@@ -117,30 +131,32 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
       <strong>{name && ids ? `Подойдёт к вашему ${name}?` : "Подойдёт к вашему автомобилю?"}</strong>
       <div className={styles.actions}>
         {ids ? (
-          <button className={`${buttons.button} ${buttons.primary}`} disabled={check.status === "loading"} onClick={() => load("check")} type="button">
+          <button className={`${buttons.button} ${buttons.primary}`} disabled={result?.status === "loading" && result.mode === "check"} onClick={() => { void load("check"); }} type="button">
             <CheckmarkCircle20Regular aria-hidden="true" /> Проверить совместимость
           </button>
         ) : (
           <Link className={`${buttons.button} ${buttons.primary}`} href="/podbor"><VehicleCar20Regular aria-hidden="true" /> Выбрать мой автомобиль</Link>
         )}
-        <button className={`${buttons.button} ${buttons.soft}`} disabled={list.status === "loading"} onClick={() => load("list")} type="button">
+        <button className={`${buttons.button} ${buttons.soft}`} disabled={result?.status === "loading" && result.mode === "list"} onClick={() => { void load("list"); }} type="button">
           <List20Regular aria-hidden="true" /> К каким машинам подходит
         </button>
       </div>
       {car && ids ? <span className={styles.muted}>{car.label} · <Link href="/podbor">сменить</Link></span> : null}
 
-      {check.status === "loading" ? <WheelLoader label="Проверяем по каталогу…" size="sm" /> : null}
-      {check.status === "error" ? <Answer title={check.message} tone="mute">{vin}</Answer> : null}
-      {check.status === "ready" ? <CheckAnswer car={name ?? "автомобиль"} data={check.data} engineKnown={Boolean(ids?.mod)} vin={vin} /> : null}
-
-      {list.status === "loading" ? <WheelLoader label="Собираем список машин…" size="sm" /> : null}
-      {list.status === "error" ? <Answer title={list.message} tone="mute" /> : null}
-      {list.status === "ready" ? (list.data.status === "ok" ? <CarList makes={list.data.makes} total={list.data.total} /> : <CheckAnswer car={name ?? "автомобиль"} data={list.data} engineKnown={false} vin={vin} />) : null}
+      {result?.status === "loading" ? (
+        <WheelLoader label={result.mode === "check" ? "Проверяем по каталогу…" : "Собираем список машин…"} size="sm" />
+      ) : null}
+      {result?.status === "error" ? <Answer title={result.message} tone="mute">{vin}</Answer> : null}
+      {result?.status === "ready" ? (
+        result.mode === "list" && result.data.status === "ok"
+          ? <CarList makes={result.data.makes} total={result.data.total} />
+          : <CheckAnswer car={name ?? "автомобиль"} data={result.data} vin={vin} />
+      ) : null}
     </div>
   );
 }
 
-function CheckAnswer({ car, data, engineKnown, vin }: { car: string; data: UmapiFitment; engineKnown: boolean; vin: ReactNode }) {
+function CheckAnswer({ car, data, vin }: { car: string; data: UmapiFitment; vin: ReactNode }) {
   if (data.status === "vehicle_required") return <Answer title="Выберите автомобиль, чтобы проверить" tone="info"><Link href="/podbor">Выбрать автомобиль</Link></Answer>;
   if (data.status === "ambiguous") return <Answer title="Не удалось однозначно определить деталь" tone="info"><span>Номер есть у нескольких производителей. Специалист проверит по VIN.</span>{vin}</Answer>;
   if (data.status === "unknown_part") return <Answer title="У этой детали нет данных для проверки по каталогу" tone="info"><span>Специалист сверит её по VIN вашего автомобиля.</span>{vin}</Answer>;
@@ -160,7 +176,7 @@ function CheckAnswer({ car, data, engineKnown, vin }: { car: string; data: Umapi
   if (data.verdict === "other_engine") {
     return <Answer title={`Подходит к ${car}, но с другим двигателем`} tone="warn"><span>Сверьте двигатель в ПТС или уточните у специалиста. {source}</span>{vin}</Answer>;
   }
-  if (data.verdict === "model" || !engineKnown) {
+  if (data.verdict === "model") {
     return <Answer title={`Подходит к ${car} — укажите двигатель, чтобы проверить точно`} tone="info"><span>{source}</span><Link href="/podbor">Указать двигатель</Link></Answer>;
   }
   return (

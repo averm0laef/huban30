@@ -84,6 +84,7 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
   const [activeIndex, setActiveIndex] = useState(-1);
   const [categories, setCategories] = useState<FlatCategory[] | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const listboxId = `${id}-listbox`;
   const popupId = `${id}-suggestions`;
   const query = value.trim();
@@ -156,6 +157,31 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const panel = panelRef.current;
+    if (!compact || !showPanel || !viewport || !panel) return;
+    let frame = 0;
+    const measure = () => {
+      const visibleBottom = viewport.offsetTop + viewport.height;
+      panel.style.setProperty("--search-available-height", `${Math.max(48, Math.floor(visibleBottom - panel.getBoundingClientRect().top - 12))}px`);
+    };
+    function schedule() {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(measure);
+    }
+    measure();
+    viewport.addEventListener("resize", schedule);
+    viewport.addEventListener("scroll", schedule);
+    window.addEventListener("scroll", schedule, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", schedule);
+      viewport.removeEventListener("scroll", schedule);
+      window.removeEventListener("scroll", schedule);
+    };
+  }, [compact, showPanel]);
 
   function navigateResult() {
     rememberCatalogSearch(query);
@@ -236,7 +262,9 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
 
   return (
     <div className={styles.searchBox} ref={rootRef} onBlur={event => {
-      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      // Safari can clear focus before a touch activates a suggestion, and also
+      // when the keyboard is dismissed. The outside pointer handler covers taps away.
+      if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false);
     }}>
       <form action="/catalog" autoComplete="off" className={styles.searchForm} method="get" onSubmit={submit} role="search">
         <label className={styles.visuallyHidden} htmlFor={id}>Поиск по VIN, названию или артикулу</label>
@@ -279,7 +307,7 @@ export function HeaderSearchForm({ id, compact = false }: { id: string; compact?
       </Link>
       {showPanel ? (
         <div aria-label={showStart ? (showHistory ? "Недавние запросы" : "С чего начать поиск") : "Подсказки поиска"}
-          className={styles.searchSuggestions} id={popupId} role={state.status === "ready" && !showHistory ? "group" : "dialog"}>
+          className={styles.searchSuggestions} id={popupId} ref={panelRef} role={state.status === "ready" && !showHistory ? "group" : "dialog"}>
           {showStart ? (
             <>
               {showHistory ? (

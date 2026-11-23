@@ -32,8 +32,6 @@ export interface HeaderScrollSample {
   scrollY: number;
   /** Focus is inside content that would be hidden (not the pinned search). */
   focusWithinCollapsibleContent: boolean;
-  /** `matchMedia("(prefers-reduced-motion: reduce)").matches`. */
-  reducedMotion: boolean;
 }
 
 function normaliseScrollY(scrollY: number): number {
@@ -55,14 +53,8 @@ export function getNextHeaderCollapseState(
 ): HeaderCollapseState {
   const scrollY = normaliseScrollY(sample.scrollY);
 
-  // Reduced-motion users keep a stable header. Likewise, a focused control
-  // must never move or disappear beneath the keyboard user. Resetting the
-  // anchor prevents an immediate re-collapse as soon as either guard clears.
-  if (
-    sample.reducedMotion
-    || sample.focusWithinCollapsibleContent
-    || scrollY <= HEADER_COLLAPSE_START_PX
-  ) {
+  // Keep a focused control in view. Reset the anchor before the next gesture.
+  if (sample.focusWithinCollapsibleContent || scrollY <= HEADER_COLLAPSE_START_PX) {
     return { anchorScrollY: scrollY, collapsed: false };
   }
 

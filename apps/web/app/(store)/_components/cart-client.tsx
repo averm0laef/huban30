@@ -71,7 +71,7 @@ export function CartClient() {
             </div>
             {hasUnavailable ? <p className={commerce.notice} role="status">Удалите недоступные позиции, чтобы оформить заявку.</p>
               : hasOverStock ? <p className={commerce.notice} role="status">В корзине больше, чем есть в наличии. Уменьшите количество, чтобы оформить заявку.</p> : (
-              <Link className={`${styles.primaryAction} ${commerce.action}`} href="/checkout">Перейти к оформлению</Link>
+              <Link className={`${styles.primaryAction} ${commerce.action} ${commerce.checkoutAction}`} href="/checkout">Перейти к оформлению</Link>
             )}
             <p>Оформить заявку можно без регистрации. Итоговую сумму подтвердит менеджер.</p>
           </aside>

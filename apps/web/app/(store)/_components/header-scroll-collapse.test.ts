@@ -12,7 +12,6 @@ import type { HeaderCollapseState, HeaderScrollSample } from "./header-scroll-co
 const baseSample: HeaderScrollSample = {
   scrollY: 0,
   focusWithinCollapsibleContent: false,
-  reducedMotion: false,
 };
 
 function sample(state: HeaderCollapseState, scrollY: number, overrides: Partial<HeaderScrollSample> = {}) {
@@ -77,13 +76,6 @@ describe("getNextHeaderCollapseState", () => {
     expect(sample(hidden, -28)).toEqual({ anchorScrollY: 0, collapsed: false });
   });
 
-  it("stays expanded for reduced-motion users", () => {
-    const hidden: HeaderCollapseState = { anchorScrollY: 500, collapsed: true };
-    expect(sample(hidden, 500, { reducedMotion: true })).toEqual({
-      anchorScrollY: 500,
-      collapsed: false,
-    });
-  });
 
   it("expands for focus in collapsible content and resets the direction anchor", () => {
     const hidden: HeaderCollapseState = { anchorScrollY: 500, collapsed: true };
