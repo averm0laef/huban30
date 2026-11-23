@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { RedisService } from "../infrastructure/redis.service.js";
-import { requestJson, UpstreamStatusError, type RequestJson } from "../parts-finder/engine/http.js";
+import { requestJson, UpstreamStatusError, UpstreamUnavailableError, type RequestJson } from "../parts-finder/engine/http.js";
 import { CryptoService } from "../security/crypto.service.js";
 import { storeDay } from "../tecdoc/tecdoc-budget.js";
 import { UmapiBudgetService } from "./umapi-budget.service.js";
@@ -148,7 +148,11 @@ export class UmapiGateway {
     try {
       payload = (await this.http(url.href, { headers: { "X-App-Key": this.key! }, timeoutMs: TIMEOUT_MS })).data;
     } catch (error) {
-      if (options.whenNotFound !== undefined && error instanceof UpstreamStatusError && error.status === 404) {
+      // «Not found» comes as a 404 or, from getCrossInfo, as an empty 200: an answer about the number, not an outage
+      // (it had put «Проверка по каталогу сейчас недоступна» on every part the catalogue does not know, 24.11.2026).
+      const notFound = (error instanceof UpstreamStatusError && error.status === 404)
+        || (error instanceof UpstreamUnavailableError && error.reason === "empty_body");
+      if (options.whenNotFound !== undefined && notFound) {
         await this.cache.set(cacheKey, options.whenNotFound, EMPTY_TTL_SECONDS).catch(() => undefined);
         return options.whenNotFound;
       }

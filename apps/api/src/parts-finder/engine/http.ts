@@ -29,7 +29,7 @@ export class UpstreamStatusError extends Error {
 
 /** Network failure, timeout, redirect, oversize or non-JSON body. */
 export class UpstreamUnavailableError extends Error {
-  constructor(reason: string) {
+  constructor(readonly reason: string) {
     super(`upstream unavailable: ${reason}`);
     this.name = "UpstreamUnavailableError";
   }
@@ -75,7 +75,10 @@ export const requestJson: RequestJson = async (url, options = {}) => {
         chunks.push(chunk.value);
       }
     }
-    return { data: JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown, headers };
+    const text = Buffer.concat(chunks).toString("utf8");
+    // An empty 200 is its own reason: UMAPI's getCrossInfo answers so for a number it does not know (24.11.2026).
+    if (!text.trim()) throw new UpstreamUnavailableError("empty_body");
+    return { data: JSON.parse(text) as unknown, headers };
   } catch (error) {
     if (error instanceof UpstreamUnavailableError) throw error;
     throw new UpstreamUnavailableError("invalid_body");
