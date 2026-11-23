@@ -56,9 +56,10 @@ describe.skipIf(!url)("the first exchange from 1С takes over products loaded un
   };
   /** The products of this test as the site keeps them, in the order of their names. */
   const products = async () => (await database.query<{
-    active: boolean; id: string; name: string; pinned: boolean; sku: string; slug: string;
+    active: boolean; id: string; name: string; pinned: boolean; sku: string; slug: string; version: number;
   }>(
-    `SELECT id::text, sku::text, replace(name, $2, '') AS name, slug::text, is_active AS active, category_pinned AS pinned
+    `SELECT id::text, sku::text, replace(name, $2, '') AS name, slug::text, is_active AS active, category_pinned AS pinned,
+            source_version::int AS version
      FROM app.products WHERE name LIKE $1 ORDER BY name, created_at`, [`%${WORD}%`, ` ${WORD}`],
   )).rows;
   const journal = async (name: string) => (await database.query<{ adopted: number; hidden: number; touched: number }>(
@@ -97,6 +98,8 @@ describe.skipIf(!url)("the first exchange from 1С takes over products loaded un
     expect(after.map(({ active, id, name, sku, slug }) => ({ active, id, name, sku, slug })))
       .toEqual(before.map(({ id, name, sku, slug }) => ({ active: true, id, name, sku, slug })));
     expect(after[1]?.pinned).toBe(true);
+    // An import made before the exchange cannot be rolled back over a product the exchange took over.
+    expect(after.map((row) => row.version)).toEqual(before.map((row) => row.version + 1));
     // Nothing about the products changed, so nothing is rewritten; nothing is hidden either.
     expect(await journal("first")).toEqual({ adopted: 4, hidden: 0, touched: 0 });
 

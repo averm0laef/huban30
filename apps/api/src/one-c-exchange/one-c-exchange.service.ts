@@ -348,6 +348,8 @@ export class OneCExchangeService {
    * so the exchange updates them instead of adding the catalogue a second time (one-c-product-adoption.ts).
    * By the 1С code in any catalogue file. By article and name only in a full catalogue and only for file products
    * without a code: there a product the file does not name is one 1С no longer has under that identifier.
+   * A product taken over counts as changed by the exchange (source_version), so an earlier import of the list can no
+   * longer be rolled back over it and give it its former identifier.
    */
   private async adoptLoadedProducts(run: ExchangeRunRow): Promise<void> {
     const source = run.source_key ?? "one_c";
@@ -358,7 +360,7 @@ export class OneCExchangeService {
         `WITH file AS (
            SELECT * FROM unnest($1::text[], $2::text[]) AS pair(external_id, code_external_id)
          ), attached AS (
-           UPDATE app.products product SET external_id = file.external_id
+           UPDATE app.products product SET external_id = file.external_id, source_version = product.source_version + 1
            FROM file
            WHERE product.external_id = file.code_external_id AND product.one_c_source=${sourceSql(source)}
              AND NOT product.is_demo
@@ -380,7 +382,7 @@ export class OneCExchangeService {
            WHERE external_id IS NOT NULL AND NOT is_demo AND one_c_source=${sourceSql(source)}
              AND NOT (external_id = ANY($4::text[]))
          ), attached AS (
-           UPDATE app.products product SET external_id = file.external_id
+           UPDATE app.products product SET external_id = file.external_id, source_version = product.source_version + 1
            FROM file JOIN unlisted ON unlisted.sku = file.sku AND unlisted.name = file.name AND unlisted.same = 1
            WHERE product.id = unlisted.id
              AND NOT EXISTS (SELECT 1 FROM app.products taken WHERE taken.external_id = file.external_id)
