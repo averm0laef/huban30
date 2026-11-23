@@ -5,6 +5,8 @@ import {
   Controller,
   Get,
   Headers,
+  HttpException,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -67,6 +69,13 @@ async function withUploadAbort<T>(
   if (request.raw.aborted) abort();
   try {
     return await work(controller.signal);
+  } catch (error) {
+    // A request that is not multipart at all is the sender's mistake, answered 406 by Fastify anyway; as an
+    // HttpException it no longer writes a stack trace to the log for every bot (pentest, 24.11.2026).
+    if (error instanceof Error && (error as { code?: unknown }).code === "FST_INVALID_MULTIPART_CONTENT_TYPE") {
+      throw new HttpException({ code: "not_multipart", error: "Прикрепите файл." }, HttpStatus.NOT_ACCEPTABLE);
+    }
+    throw error;
   } finally {
     request.raw.off("aborted", abort);
     request.raw.off("close", close);
