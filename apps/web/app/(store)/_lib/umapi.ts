@@ -3,7 +3,7 @@
  * compatibility with the customer's car, the cars a part fits, our products among its analogs, its photo. Every call
  * is a press of a button: nothing here runs when a page opens.
  */
-import { FinderError, VEHICLE_CATALOG_ID_BASE, type PickedVehicle, type ShopOffer } from "./parts-finder";
+import { FinderError, readableFailure, VEHICLE_CATALOG_ID_BASE, type PickedVehicle, type ShopOffer } from "./parts-finder";
 
 export type UmapiVerdict = "fits" | "other_engine" | "model" | "not_listed";
 export interface UmapiPart { article: string; artId: number; asked: string; brand: string; via: "own" | "name" }
@@ -52,8 +52,8 @@ export async function umapiGet<T>(path: string): Promise<T> {
   let data: unknown = null;
   try { data = await response.json(); } catch { /* handled below */ }
   if (!response.ok) {
-    const record = (data && typeof data === "object" ? data : {}) as { code?: unknown; error?: unknown };
-    throw new FinderError(typeof record.error === "string" ? record.error : UNAVAILABLE, typeof record.code === "string" ? record.code : null, response.status);
+    const record = (data && typeof data === "object" ? data : {}) as { code?: unknown };
+    throw new FinderError(readableFailure(data, UNAVAILABLE), typeof record.code === "string" ? record.code : null, response.status);
   }
   if (!data || typeof data !== "object") throw new FinderError(UNAVAILABLE, null, response.status);
   return data as T;

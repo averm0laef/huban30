@@ -104,6 +104,19 @@ export class FinderError extends Error {
 
 const UNAVAILABLE = "Подбор по автомобилю временно недоступен. Попробуйте поиск по каталогу.";
 
+/**
+ * The customer's text of a failed answer. Our routes put Russian in `error`; Nest's own refusals put an English
+ * reason phrase there («Forbidden») and the Russian in `message`, and a raw «Forbidden» once reached the VIN page
+ * (24.11.2026). Only Russian text is shown; anything else becomes the general message.
+ */
+export function readableFailure(data: unknown, fallback: string): string {
+  const record = (data && typeof data === "object" ? data : {}) as { error?: unknown; message?: unknown };
+  for (const value of [record.error, record.message]) {
+    if (typeof value === "string" && /[А-Яа-яЁё]/u.test(value)) return value;
+  }
+  return fallback;
+}
+
 export async function finderRequest<T>(path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
@@ -118,8 +131,8 @@ export async function finderRequest<T>(path: string, body?: unknown): Promise<T>
   let data: unknown = null;
   try { data = await response.json(); } catch { /* handled below */ }
   if (!response.ok) {
-    const record = (data && typeof data === "object" ? data : {}) as { code?: unknown; error?: unknown; message?: unknown };
-    const message = typeof record.error === "string" ? record.error : typeof record.message === "string" ? record.message : UNAVAILABLE;
+    const record = (data && typeof data === "object" ? data : {}) as { code?: unknown };
+    const message = readableFailure(data, UNAVAILABLE);
     throw new FinderError(response.status === 429 ? "Слишком много запросов подряд. Подождите минуту и повторите." : message,
       typeof record.code === "string" ? record.code : null, response.status);
   }
