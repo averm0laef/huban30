@@ -5,6 +5,7 @@
 import type { ConfigService } from "@nestjs/config";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { CatalogCategoryTreeCache } from "./catalog-category-tree-cache.service.js";
 import { CatalogPublicService } from "./catalog-public.service.js";
@@ -27,7 +28,7 @@ describe.skipIf(!url)("products in the order of their names (real PostgreSQL)", 
 
   beforeAll(async () => {
     database = new DatabaseService({ get: () => "test", getOrThrow: () => url } as unknown as ConfigService);
-    service = new CatalogPublicService(new CatalogCategoryTreeCache(), database, { name: "local", read: async () => null, remove: async () => undefined, store: async () => ({}) } as never, null);
+    service = new CatalogPublicService(new CatalogCategoryTreeCache(), database, new ProductPhotoStorage({ name: "local", read: async () => null, remove: async () => undefined, store: async () => ({}) } as never), null);
     await remove();
     const category = await database.query<{ id: string }>(
       "INSERT INTO app.categories (external_id,name,slug) VALUES ($1,'Порядок имён','name-order-fixture') RETURNING id", [`${PREFIX}category`],

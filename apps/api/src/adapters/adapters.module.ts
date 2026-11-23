@@ -1,4 +1,5 @@
 import { Global, Module } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 
 import {
   AI_PROVIDER,
@@ -15,11 +16,19 @@ import {
 } from "./disabled.providers.js";
 import { GeminiAiProvider } from "./gemini-ai.provider.js";
 import { LocalStorageProvider } from "./local-storage.provider.js";
+import { createProductPhotoStorage, PRODUCT_PHOTO_STORAGE } from "./product-photo-storage.js";
 import { RosskoSupplierProvider } from "./rossko/rossko-supplier.provider.js";
 
 @Global()
 @Module({
-  exports: [AI_PROVIDER, NOTIFICATION_PROVIDER, SOCIAL_AUTH_PROVIDER, STORAGE_PROVIDER, SUPPLIER_PROVIDER],
+  exports: [
+    AI_PROVIDER,
+    NOTIFICATION_PROVIDER,
+    PRODUCT_PHOTO_STORAGE,
+    SOCIAL_AUTH_PROVIDER,
+    STORAGE_PROVIDER,
+    SUPPLIER_PROVIDER,
+  ],
   providers: [
     DisabledAiProvider,
     DisabledNotificationProvider,
@@ -42,6 +51,11 @@ import { RosskoSupplierProvider } from "./rossko/rossko-supplier.provider.js";
     { provide: NOTIFICATION_PROVIDER, useExisting: DisabledNotificationProvider },
     { provide: SOCIAL_AUTH_PROVIDER, useExisting: DisabledSocialAuthProvider },
     { provide: STORAGE_PROVIDER, useExisting: LocalStorageProvider },
+    {
+      provide: PRODUCT_PHOTO_STORAGE,
+      useFactory: createProductPhotoStorage,
+      inject: [ConfigService, LocalStorageProvider],
+    },
     {
       provide: SUPPLIER_PROVIDER,
       // ADR-004: the shop must stay fully functional with the integration

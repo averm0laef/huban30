@@ -21,7 +21,7 @@ import {
   type CatalogProductsQuery,
 } from "@an30/contracts";
 
-import { STORAGE_PROVIDER, type StorageProvider } from "../adapters/provider-contracts.js";
+import { PRODUCT_PHOTO_STORAGE, type ProductPhotoStorage } from "../adapters/product-photo-storage.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import {
   etagMatches,
@@ -117,6 +117,7 @@ interface ProductImageRow {
 interface MediaRow {
   byte_size: string;
   mime_type: string;
+  provider: string;
   sha256: Buffer;
   storage_key: string;
 }
@@ -182,7 +183,7 @@ export class CatalogPublicService {
   constructor(
     private readonly categoryTreeCache: CatalogCategoryTreeCache,
     private readonly database: DatabaseService,
-    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
+    @Inject(PRODUCT_PHOTO_STORAGE) private readonly photos: ProductPhotoStorage,
     // Optional external search engine (docs/SEARCH_ENGINE.md). Not
     // registered by default: then SEARCH_ENGINE in the environment decides,
     // and with it unset PostgreSQL alone answers every search.
@@ -380,7 +381,7 @@ export class CatalogPublicService {
          SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
          FROM app.product_images AS image
          JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-         WHERE image.product_id=product.id AND storage.provider=${p.add(this.storage.name)}
+         WHERE image.product_id=product.id AND storage.provider=ANY(${p.add([...this.photos.providerNames])}::text[])
            AND storage.status='available' AND storage.deleted_at IS NULL
            AND storage.mime_type=ANY(${p.add([...PUBLIC_IMAGE_MIME_TYPES])}::text[])
          ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
@@ -426,7 +427,7 @@ export class CatalogPublicService {
          SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
          FROM app.product_images AS image
          JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-         WHERE image.product_id=product.id AND storage.provider=${p.add(this.storage.name)}
+         WHERE image.product_id=product.id AND storage.provider=ANY(${p.add([...this.photos.providerNames])}::text[])
            AND storage.status='available' AND storage.deleted_at IS NULL
            AND storage.mime_type=ANY(${p.add([...PUBLIC_IMAGE_MIME_TYPES])}::text[])
          ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
@@ -485,11 +486,11 @@ export class CatalogPublicService {
               storage.mime_type,storage.byte_size::text
        FROM app.product_images AS image
        JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-       WHERE image.product_id=$1 AND storage.provider=$2
+       WHERE image.product_id=$1 AND storage.provider=ANY($2::text[])
          AND storage.status='available' AND storage.deleted_at IS NULL
          AND storage.mime_type=ANY($3::text[])
        ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id`,
-      [row.id, this.storage.name, [...PUBLIC_IMAGE_MIME_TYPES]],
+      [row.id, [...this.photos.providerNames], [...PUBLIC_IMAGE_MIME_TYPES]],
     );
     const imageViews = images.rows.map((image) => this.imageView(image));
     return {
@@ -574,7 +575,7 @@ export class CatalogPublicService {
          SELECT image.id,image.alt_text,image.is_primary,storage.mime_type,storage.byte_size
          FROM app.product_images AS image
          JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-         WHERE image.product_id=product.id AND storage.provider=$1
+         WHERE image.product_id=product.id AND storage.provider=ANY($1::text[])
            AND storage.status='available' AND storage.deleted_at IS NULL
            AND storage.mime_type=ANY($3::text[])
          ORDER BY image.is_primary DESC,image.sort_order,image.created_at,image.id LIMIT 1
@@ -584,7 +585,7 @@ export class CatalogPublicService {
          AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
          AND price.amount_kopeks IS NOT NULL AND stock.available_quantity>0
        ORDER BY product.updated_at DESC,product.id LIMIT $2`,
-      [this.storage.name, parsed.data.limit, [...PUBLIC_IMAGE_MIME_TYPES]],
+      [[...this.photos.providerNames], parsed.data.limit, [...PUBLIC_IMAGE_MIME_TYPES]],
     );
     return {
       items: result.rows.map((row) => this.productSummary(row)),
@@ -599,20 +600,20 @@ export class CatalogPublicService {
     }
     const media = (await this.database.query<MediaRow>(
       `${VISIBLE_CATEGORIES_CTE}
-       SELECT storage.storage_key,storage.mime_type,storage.byte_size::text,storage.sha256
+       SELECT storage.provider,storage.storage_key,storage.mime_type,storage.byte_size::text,storage.sha256
        FROM app.product_images AS image
        JOIN app.products AS product ON product.id=image.product_id
        LEFT JOIN app.brands AS brand ON brand.id=product.brand_id
        LEFT JOIN app.categories AS category ON category.id=product.category_id
        JOIN app.storage_objects AS storage ON storage.id=image.storage_object_id
-       WHERE image.id=$1 AND storage.provider=$2
+       WHERE image.id=$1 AND storage.provider=ANY($2::text[])
          AND product.is_active AND product.deleted_at IS NULL
          AND (product.brand_id IS NULL OR (brand.is_active AND brand.deleted_at IS NULL))
          AND (product.category_id IS NULL OR category.id IN (SELECT id FROM visible_categories))
          AND storage.status='available' AND storage.deleted_at IS NULL
          AND storage.mime_type=ANY($3::text[])
        LIMIT 1`,
-      [parsed.data, this.storage.name, [...PUBLIC_IMAGE_MIME_TYPES]],
+      [parsed.data, [...this.photos.providerNames], [...PUBLIC_IMAGE_MIME_TYPES]],
     )).rows[0];
     if (!media) throw new NotFoundException("Изображение не найдено");
 
@@ -629,7 +630,9 @@ export class CatalogPublicService {
     return withPublicMediaRead(async () => {
       let content: Buffer;
       try {
-        content = await this.storage.read(media.storage_key);
+        const storage = this.photos.provider(media.provider);
+        if (!storage) throw new Error("Unknown photo storage");
+        content = await storage.read(media.storage_key);
       } catch {
         throw new NotFoundException("Изображение не найдено");
       }
