@@ -68,9 +68,9 @@ describe("what kind of vehicle a product is for", () => {
     expect(vehicleKindOf({ groupNames: [], productName: "Лампа H7" })).toBeNull();
   });
 
-  it("fills the products already loaded (migration 0053) with the very same makes", () => {
+  it("fills the products already loaded (migration 0056) with the very same makes", () => {
     const sql = readFileSync(path.join(
-      path.dirname(fileURLToPath(import.meta.url)), "../../../../packages/database/migrations/0053_vehicle_kind_and_popularity.sql",
+      path.dirname(fileURLToPath(import.meta.url)), "../../../../packages/database/migrations/0056_vehicle_kind_and_popularity.sql",
     ), "utf8");
     for (const [kind, words] of Object.entries(VEHICLE_KIND_NAME_WORDS)) {
       expect(sql).toContain(`(${words.join("|")})($|[^a-zа-я])' THEN '${kind}'`);

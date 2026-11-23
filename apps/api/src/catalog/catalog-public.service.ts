@@ -364,7 +364,7 @@ export class CatalogPublicService {
   private popularityRefreshedAt = 0;
 
   /**
-   * app.product_popularity is a stored count (migration 0053). It is brought up to date at most once in
+   * app.product_popularity is a stored count (migration 0056). It is brought up to date at most once in
    * POPULARITY_REFRESH_MS, in the background: the list that asked for it does not wait, the next one reads it fresh.
    */
   private refreshPopularity(): void {

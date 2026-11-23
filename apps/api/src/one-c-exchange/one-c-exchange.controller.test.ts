@@ -580,6 +580,36 @@ class FakeCatalogDatabase {
       return [];
     }
 
+    // Products already here under their 1С code, or under the same article and name, take the file's identifier.
+    if (sql.startsWith("WITH file AS (") && sql.includes("UPDATE app.products product SET external_id")) {
+      const ids = values[0] as string[];
+      const taken = (id: string) => this.byExternalId(this.products, id) !== undefined;
+      let adopted = 0;
+      if (sql.includes("code_external_id")) {
+        (values[1] as string[]).forEach((code, index) => {
+          const loaded = this.byExternalId(this.products, code);
+          if (!loaded || taken(ids[index]!)) return;
+          loaded.external_id = ids[index]!;
+          adopted += 1;
+        });
+        return [{ adopted }];
+      }
+      const listed = new Set(values[3] as string[]);
+      const unlisted = [...this.products.values()].filter((row) => !listed.has(row.external_id));
+      ids.forEach((id, index) => {
+        const same = unlisted.filter((row) => row.sku === (values[1] as string[])[index] && row.name === (values[2] as string[])[index]);
+        if (same.length !== 1 || taken(id)) return;
+        same[0]!.external_id = id;
+        adopted += 1;
+      });
+      return [{ adopted }];
+    }
+    if (sql.startsWith("UPDATE app.one_c_exchange_runs SET products_adopted = products_adopted + $2")) {
+      const run = this.mustRun(values[0] as string) as RunRow & { products_adopted?: number };
+      run.products_adopted = (run.products_adopted ?? 0) + (values[1] as number);
+      return [];
+    }
+
     throw new Error(`FakeCatalogDatabase received an unrecognised query: ${sql}`);
   }
 

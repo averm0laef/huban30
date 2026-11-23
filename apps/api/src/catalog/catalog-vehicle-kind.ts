@@ -5,7 +5,7 @@
 // every product of a base loaded without groups) is read by the make its NAME calls: «… КАМАЗ», «… МТЗ-82»,
 // «… Toyota Corolla». That is what the name says, not a confirmed fitment, and the storefront words it so.
 //
-// The make words below stand in migration 0053 as well (the backfill of products already loaded): change both.
+// The make words below stand in migration 0056 as well (the backfill of products already loaded): change both.
 import type { CatalogVehicleKind } from "@an30/contracts";
 
 import { cleanGroupName } from "./catalog-group-names.js";

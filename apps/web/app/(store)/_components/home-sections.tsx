@@ -138,7 +138,7 @@ export async function HomeShowcase() {
                 </span>
               </Link>
               {item.priceKopeks !== null && item.availableQuantity > 0 && (
-                <div className={styles.availableActions}><ProductBuyButton productId={item.id} /></div>
+                <div className={styles.availableActions}><ProductBuyButton available={item.availableQuantity} productId={item.id} /></div>
               )}
             </article>
           ))}

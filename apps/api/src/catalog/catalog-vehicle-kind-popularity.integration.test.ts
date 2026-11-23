@@ -1,4 +1,4 @@
-// The kind of vehicle, «по популярности» and the other packs on real PostgreSQL: the make words of migration 0053
+// The kind of vehicle, «по популярности» and the other packs on real PostgreSQL: the make words of migration 0056
 // against the ones the exchange uses, the stored popularity count from the shop's own orders, favourites and
 // views, and the packs found through the trigram index. Skipped unless CATALOG_SEARCH_DATABASE_URL points at a
 // migrated scratch database.
@@ -74,9 +74,9 @@ describe.skipIf(!url)("kind of vehicle, popularity and other packs (real Postgre
     await database?.onModuleDestroy?.();
   });
 
-  it("reads the makes in migration 0053 exactly as the exchange reads them", async () => {
+  it("reads the makes in migration 0056 exactly as the exchange reads them", async () => {
     const sql = readFileSync(path.join(
-      path.dirname(fileURLToPath(import.meta.url)), "../../../../packages/database/migrations/0053_vehicle_kind_and_popularity.sql",
+      path.dirname(fileURLToPath(import.meta.url)), "../../../../packages/database/migrations/0056_vehicle_kind_and_popularity.sql",
     ), "utf8");
     const backfill = /SET vehicle_kind = (CASE[\s\S]+?END)\s+WHERE/u.exec(sql)?.[1];
     expect(backfill).toBeDefined();
