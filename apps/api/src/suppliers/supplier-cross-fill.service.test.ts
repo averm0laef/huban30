@@ -31,8 +31,11 @@ function makeDatabase(products: Product[], switchedOn = true) {
   const query = vi.fn(async (text: string, values: unknown[] = []) => {
     if (text.includes("FROM app.brand_identities")) return { rows: [] };
     if (text.includes("INSERT INTO app.site_settings")) {
-      setting.enabled = (JSON.parse(values[1] as string) as { enabled: boolean }).enabled;
-      return { rows: [] };
+      const enabled = (JSON.parse(values[1] as string) as { enabled: boolean }).enabled;
+      // The statement writes, and returns the key, only when the value differs from the stored one.
+      const changed = text.includes("IS DISTINCT FROM") ? setting.enabled !== enabled : true;
+      setting.enabled = enabled;
+      return { rows: changed ? [{ key: values[0] }] : [] };
     }
     if (text.includes("FROM app.site_settings")) return { rows: [{ value: { enabled: setting.enabled } }] };
     if (text.includes("INSERT INTO app.supplier_cross_lookups")) {
@@ -318,6 +321,19 @@ describe("SupplierCrossFillService", () => {
     ["2026-11-23T22:00:00Z", false], // 07:00
   ])("night hours in Chita: %s -> %s", (at, expected) => {
     expect(isCrossFillHour(new Date(at))).toBe(expected);
+  });
+
+  it("writes one audit record when the same switch arrives twice (a double click)", async () => {
+    const { database, setting } = makeDatabase([], false);
+    const { audit, records } = makeAudit();
+    const service = makeService({ audit, database, provider: makeSupplier().provider, queue: makeQueue().queue });
+    const actor = { userId: "user-1" } as AuthContext;
+
+    expect(await service.setEnabled(true, actor, {})).toEqual({ switchedOn: true });
+    expect(await service.setEnabled(true, actor, {})).toEqual({ switchedOn: true });
+
+    expect(setting.enabled).toBe(true);
+    expect(records.map((entry) => entry.afterState)).toEqual([{ enabled: true }]);
   });
 
   it("is switched on and off by staff, and the change is written to the audit log", async () => {

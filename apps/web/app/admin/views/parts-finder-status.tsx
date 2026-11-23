@@ -2,7 +2,7 @@
 
 import { Badge, Button, Spinner } from "@fluentui/react-components";
 import { ArrowClockwise20Regular } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { ApiError, api } from "../api";
 import { formatDate, RequestError, useResource } from "../workspace-utils";
@@ -310,18 +310,25 @@ function SupplierCrossFillBlock() {
   const resource = useResource(() => api<SupplierCrossFill>("/staff/suppliers/cross-fill"), []);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  // A second click can arrive before the disabled button is drawn; the ref is set at once.
+  const saving = useRef(false);
   const data = resource.data;
   if (!data) return resource.error ? <RequestError error={resource.error} onRetry={resource.reload} /> : null;
   async function toggle(enabled: boolean) {
+    if (saving.current) return;
+    saving.current = true;
     setPending(true);
     setMessage("");
     try {
-      await api("/staff/suppliers/cross-fill/switch", { body: JSON.stringify({ enabled }), method: "POST" });
+      const saved = await api<{ switchedOn: boolean }>("/staff/suppliers/cross-fill/switch", { body: JSON.stringify({ enabled }), method: "POST" });
+      // The button shows the saved state at once, so the next click cannot repeat this one.
+      resource.setData({ ...data!, switchedOn: saved.switchedOn });
       setMessage(enabled ? `Проверка включена. Она работает ночью, ${data!.nightHours}.` : "Проверка выключена.");
       resource.reload();
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Не удалось сохранить.");
     } finally {
+      saving.current = false;
       setPending(false);
     }
   }
@@ -344,7 +351,7 @@ function SupplierCrossFillBlock() {
         Включайте её после письменного согласия поставщика на такую проверку.
       </p>
       <div>
-        <Button disabled={!data.enabled || backgroundOff || pending} onClick={() => { void toggle(!data.switchedOn); }}>
+        <Button disabled={!data.enabled || backgroundOff || pending} onClick={() => { void toggle(!data.switchedOn); }} style={{ minHeight: 44 }}>
           {data.switchedOn ? "Выключить ночную проверку" : "Включить ночную проверку"}
         </Button>
       </div>

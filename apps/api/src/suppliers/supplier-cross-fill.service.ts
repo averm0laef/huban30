@@ -254,13 +254,16 @@ export class SupplierCrossFillService implements OnModuleDestroy, OnModuleInit {
     };
   }
 
-  /** The staff switch. Every change is in the audit log. */
+  /** The staff switch. Every change is in the audit log; asking for the state it is already in changes nothing and is not logged. */
   async setEnabled(enabled: boolean, actor: AuthContext, request: { ipAddress?: string; userAgent?: string }) {
-    await this.database.query(
+    const written = await this.database.query<{ key: string }>(
       `INSERT INTO app.site_settings (key,value,is_public,updated_by) VALUES ($1,$2::jsonb,false,$3)
-       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by`,
+       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by
+       WHERE app.site_settings.value IS DISTINCT FROM EXCLUDED.value
+       RETURNING key`,
       [SETTING_KEY, JSON.stringify({ enabled }), actor.userId],
     );
+    if (written.rows.length === 0) return { switchedOn: enabled };
     await this.audit.record({
       action: "supplier.cross_fill.switch",
       actorRole: actor.role,
