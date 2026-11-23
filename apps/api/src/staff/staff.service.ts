@@ -441,9 +441,22 @@ export class StaffService {
     // for an answer come first, the longest wait on top; then the rest by
     // recency, closed chats last. Sorting by the last message alone pushed a
     // customer who had waited an hour below every chat that was just answered.
+    // Since when the customer has had no answer: their first message after the
+    // last staff reply. A follow-up («Вы тут?») must not restart the wait, so
+    // the queue is ordered by this and not by the last message.
+    const waitingSince = `CASE WHEN thread.status='waiting_staff' THEN (
+      SELECT min(pending.created_at) FROM app.chat_messages AS pending
+      WHERE pending.thread_id=thread.id AND pending.deleted_at IS NULL
+        AND pending.sender_kind IN ('customer','guest')
+        AND pending.sequence_number>COALESCE((
+          SELECT max(answer.sequence_number) FROM app.chat_messages AS answer
+          WHERE answer.thread_id=thread.id AND answer.deleted_at IS NULL AND answer.sender_kind='staff'
+        ),0)
+    ) END`;
     const orderBy = query.sort === "attention"
       ? `CASE thread.status WHEN 'waiting_staff' THEN 0 WHEN 'open' THEN 1 WHEN 'waiting_customer' THEN 2 ELSE 3 END,
-         CASE WHEN thread.status='waiting_staff' THEN COALESCE(thread.last_message_at,thread.created_at) END ASC NULLS LAST,
+         CASE WHEN thread.status='waiting_staff'
+           THEN COALESCE(${waitingSince},thread.last_message_at,thread.created_at) END ASC NULLS LAST,
          thread.last_message_at DESC NULLS LAST,thread.id`
       : `${{
         createdAt: "thread.created_at",
@@ -497,16 +510,7 @@ export class StaffService {
                  WHERE unread.thread_id=thread.id AND unread.deleted_at IS NULL
                    AND unread.sender_kind IN ('customer','guest') AND receipt.read_at IS NULL
                 ) AS unread_count,
-                -- Since when the customer has had no answer: their first message after the last staff reply.
-                CASE WHEN thread.status='waiting_staff' THEN (
-                  SELECT min(pending.created_at) FROM app.chat_messages AS pending
-                  WHERE pending.thread_id=thread.id AND pending.deleted_at IS NULL
-                    AND pending.sender_kind IN ('customer','guest')
-                    AND pending.sequence_number>COALESCE((
-                      SELECT max(answer.sequence_number) FROM app.chat_messages AS answer
-                      WHERE answer.thread_id=thread.id AND answer.deleted_at IS NULL AND answer.sender_kind='staff'
-                    ),0)
-                ) END AS waiting_since
+                ${waitingSince} AS waiting_since
          FROM app.chat_threads AS thread
          LEFT JOIN app.users AS customer ON customer.id=thread.customer_user_id
          LEFT JOIN app.users AS assigned ON assigned.id=thread.assigned_staff_id
