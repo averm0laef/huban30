@@ -20,9 +20,12 @@ export function verdictFor(links: readonly UmapiCarLink[], car: UmapiCar): Umapi
  * One answer from several parts: the product's own number decides alone; numbers read from its name decide only
  * when they all say the same, otherwise the answer is «не уверены» (null).
  */
+const VERDICT_RANK: Readonly<Record<UmapiVerdict, number>> = { fits: 3, other_engine: 2, model: 1, not_listed: 0 };
+
 export function combinedVerdict(answers: ReadonlyArray<{ verdict: UmapiVerdict; via: "own" | "name" }>): UmapiVerdict | null {
-  const own = answers.find((answer) => answer.via === "own");
-  if (own) return own.verdict;
+  // Our own number may stand in through several analogues of it (one part, many makers): the best of their answers.
+  const own = answers.filter((answer) => answer.via === "own");
+  if (own.length > 0) return own.reduce((best, answer) => (VERDICT_RANK[answer.verdict] > VERDICT_RANK[best.verdict] ? answer : best)).verdict;
   const verdicts = new Set(answers.map((answer) => answer.verdict));
   return verdicts.size === 1 ? [...verdicts][0]! : null;
 }

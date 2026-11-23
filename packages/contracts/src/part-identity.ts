@@ -29,8 +29,11 @@ export function bracketedNumbers(name: string): Array<{ article: string; brand: 
  * name, or a number of five characters or more whose maker UMAPI can tell. Unlike partNumberCatalogueApplies a
  * product without a maker of ours is not excluded: half of the owner's base names none.
  */
+/** Besides UNLINKABLE_SECTIONS, what the UMAPI parts catalogue does not describe: tyres and wheels, fasteners (24.11.2026). */
+export const UMAPI_UNLINKABLE_SECTIONS: readonly string[] = [...UNLINKABLE_SECTIONS, "shiny-i-diski", "krepezh"];
+
 export function umapiCatalogueApplies(product: { brand: string | null; name: string; section: string | null; sku: string }): boolean {
-  if (product.section && UNLINKABLE_SECTIONS.includes(product.section)) return false;
+  if (product.section && UMAPI_UNLINKABLE_SECTIONS.includes(product.section)) return false;
   const number = normalizeArticleNumber(product.sku).length;
   if (product.brand) return number >= 4;
   return number >= 5 || bracketedNumbers(product.name).length > 0;

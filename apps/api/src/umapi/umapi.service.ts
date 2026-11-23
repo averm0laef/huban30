@@ -5,7 +5,7 @@ import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { PartsFinderShopService, type ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
 import { combinedVerdict, groupCars, verdictFor, type FitMake, type UmapiCar, type UmapiVerdict } from "./umapi-fitment.js";
-import { partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
+import { makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
 import {
   normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, type UmapiArticleRow, type UmapiBrandRow, type UmapiCarLink, type UmapiCrossInfo,
 } from "./umapi-normalize.js";
@@ -19,6 +19,12 @@ export interface UmapiPart {
   brand: string;
   /** The number it was found by (ours or from the name), as asked: the same question is then answered from the cache. */
   asked: string;
+  /**
+   * Set when the part is an analogue of the number we looked up, not that number itself: an original number
+   * («TOYOTA 23300-31090» behind SAT's «ST-23300-31090») or a maker the catalogue has no card of (MASUMA). Its cars
+   * and photo are those of the analogue, and the page says so.
+   */
+  through?: { article: string; brand: string };
   via: "own" | "name";
 }
 
@@ -46,10 +52,13 @@ export type UmapiFitmentAnswer = UmapiProductAnswer
   };
 
 const ANALOG_ROWS = 100;
+/** Analogues whose cars stand in for a number without a card of its own: enough for a full list, few calls. */
+const STAND_INS = 3;
 const SHOP_OFFERS_PER_ANALOG = 2;
 const MAX_ANALOG_OFFERS = 24;
 
-interface ResolvedPart { part: UmapiPart; info: UmapiCrossInfo }
+/** `info` (the card with photos) is known for an exact match; for an analogue stand-in it is asked only for a photo. */
+interface ResolvedPart { part: UmapiPart; info: UmapiCrossInfo | null }
 
 interface ProductRow { brand: string | null; id: string; name: string; section: string | null; sku: string }
 
@@ -105,43 +114,80 @@ export class UmapiService {
   }
 
   /**
-   * The catalogue part for one number: the maker as UMAPI writes it (BrandRefinement — only its makers' own numbers,
-   * «ArticleNumber»; the others are other makers' crosses), then the part's catalogue id (getCrossInfo). A number
-   * without a maker counts only when UMAPI knows a single maker for it.
+   * The catalogue part for one number (docs/UMAPI_INTEGRATION.md, part 4):
+   * 1. whose number it is — BrandRefinement, the makers' own numbers («ArticleNumber»; the rest are crosses). With
+   *    our maker, that maker; without one, the only maker, or the one the product's name mentions;
+   * 2. its card — getCrossInfo, the catalogue id and the photos;
+   * 3. no card (the catalogue knows the number only as an original one, «OENumber», or knows the maker but has no
+   *    card of it): the number's analogues stand in for it, at most three, each with its own card.
    */
-  private async resolve(candidate: PartCandidate, caller: UmapiCaller, fresh: boolean): Promise<ResolvedPart | "ambiguous" | null> {
+  private async resolve(candidate: PartCandidate, product: ProductRow, caller: UmapiCaller, fresh: boolean): Promise<ResolvedPart[] | "ambiguous" | null> {
     // UMAPI is asked with the bare number: «W 914/2» as «W9142» (a «/» in the address breaks the path; checked 23.11.2026).
     const number = normalizeArticleNumber(candidate.article);
     if (number.length < 3) return null;
     const all = await this.brandsOf(number, caller, fresh);
-    const own = all.filter((row) => row.type === "ArticleNumber");
-    const brands = own.length > 0 ? own : all;
+    const makers = [...new Set(all.filter((row) => row.type === "ArticleNumber").map((row) => row.brand))];
     let brand: string | undefined;
     if (candidate.brand) {
-      brand = brands.find((row) => sameMaker(row.brand, candidate.brand!))?.brand;
-    } else {
-      const makers = [...new Set(brands.map((row) => row.brand))];
-      if (makers.length > 1) return "ambiguous";
+      brand = makers.find((maker) => sameMaker(maker, candidate.brand!));
+    } else if (makers.length === 1) {
       brand = makers[0];
+    } else if (makers.length > 1) {
+      brand = makerNamedIn(product.name, makers) ?? undefined;
+      if (!brand) return "ambiguous";
+    } else {
+      // Only an original number of a car maker («TOYOTA 23300-31090»): the parts made to it stand in for it.
+      const original = [...new Set(all.filter((row) => row.type === "OENumber").map((row) => row.brand))];
+      const maker = makerNamedIn(product.name, original) ?? original[0];
+      return maker ? this.standIns(number, maker, candidate, caller, fresh) : null;
     }
     if (!brand) return null;
     const info = await this.crossInfo(number, brand, caller, fresh);
-    if (!info || normalizeArticleNumber(info.article) !== number || !sameMaker(info.brand, brand)) return null;
-    return { info, part: { article: info.article, artId: info.artId, asked: number, brand: info.brand, via: candidate.via } };
+    if (info && normalizeArticleNumber(info.article) === number && sameMaker(info.brand, brand)) {
+      return [{ info, part: { article: info.article, artId: info.artId, asked: number, brand: info.brand, via: candidate.via } }];
+    }
+    // The catalogue knows the maker's number but keeps no card of it (MASUMA, many Asian makers).
+    return this.standIns(number, brand, candidate, caller, fresh);
   }
 
-  /** Our own number decides alone; without it, the analogue numbers in the name (at most three). */
-  private async identify(product: ProductRow, caller: UmapiCaller, fresh = false): Promise<ResolvedPart[] | "ambiguous" | null> {
-    const [own, ...named] = partCandidates(product);
-    const ownPart = await this.resolve(own!, caller, fresh);
-    if (ownPart && ownPart !== "ambiguous") return [ownPart];
+  /** Up to three analogues of a number that has no card of its own, each a part with its own card id. */
+  private async standIns(number: string, maker: string, candidate: PartCandidate, caller: UmapiCaller, fresh: boolean): Promise<ResolvedPart[] | null> {
+    const rows = await this.articlesOf(number, maker, caller, fresh);
+    const seen = new Set<number>();
     const parts: ResolvedPart[] = [];
-    for (const candidate of named) {
-      const part = await this.resolve(candidate, caller, fresh);
-      if (part && part !== "ambiguous") parts.push(part);
+    for (const row of rows) {
+      if (seen.has(row.artId)) continue;
+      seen.add(row.artId);
+      parts.push({
+        info: null,
+        part: { article: row.article, artId: row.artId, asked: normalizeArticleNumber(row.article), brand: row.brand, through: { article: candidate.article, brand: maker }, via: candidate.via },
+      });
+      if (parts.length >= STAND_INS) break;
+    }
+    return parts.length > 0 ? parts : null;
+  }
+
+  /**
+   * Our own number decides alone (it may be several stand-in analogues of it); without it, the numbers of the name,
+   * at most three.
+   */
+  private async identify(product: ProductRow, caller: UmapiCaller, fresh = false): Promise<ResolvedPart[] | "ambiguous" | null> {
+    const candidates = partCandidates(product);
+    let ambiguous = false;
+    for (const candidate of candidates.filter((item) => item.via === "own")) {
+      const found = await this.resolve(candidate, product, caller, fresh);
+      if (found === "ambiguous") ambiguous = true;
+      else if (found) return found;
+    }
+    const parts: ResolvedPart[] = [];
+    for (const candidate of candidates.filter((item) => item.via === "name")) {
+      const found = await this.resolve(candidate, product, caller, fresh);
+      if (found === "ambiguous") ambiguous = true;
+      // A name number standing in through analogues counts as one answer: its first analogue.
+      else if (found) parts.push(...(found[0]!.part.through ? [found[0]!] : found));
     }
     if (parts.length > 0) return parts;
-    return ownPart === "ambiguous" ? "ambiguous" : null;
+    return ambiguous ? "ambiguous" : null;
   }
 
   private async checkable(productId: string): Promise<ProductRow | UmapiProductAnswer> {
@@ -269,9 +315,16 @@ export class UmapiService {
     const identified = await this.identify(product, caller, true);
     if (identified === "ambiguous") return { status: "ambiguous" };
     if (!identified) return { status: "unknown_part" };
-    const { info, part } = identified[0]!;
-    const photos = cataloguePhotoUrls(info.medias, base);
-    if (photos.length > 0 && part.via === "own" && product.brand && sameMaker(product.brand, part.brand)) {
+    // The first part with a photo: an analogue stand-in has its card asked only now.
+    let part = identified[0]!.part;
+    let photos: string[] = [];
+    for (const found of identified.slice(0, STAND_INS)) {
+      const info = found.info ?? await this.crossInfo(found.part.asked, found.part.brand, caller, false);
+      photos = info ? cataloguePhotoUrls(info.medias, base) : [];
+      part = found.part;
+      if (photos.length > 0) break;
+    }
+    if (photos.length > 0 && part.via === "own" && !part.through && product.brand && sameMaker(product.brand, part.brand)) {
       await this.archive.remember({ ...product, brand: product.brand }, part, photos).catch(() => {
         this.logger.warn("Could not record UMAPI photo references for staff");
       });

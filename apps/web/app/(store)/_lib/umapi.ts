@@ -6,7 +6,8 @@
 import { FinderError, readableFailure, VEHICLE_CATALOG_ID_BASE, type PickedVehicle, type ShopOffer } from "./parts-finder";
 
 export type UmapiVerdict = "fits" | "other_engine" | "model" | "not_listed";
-export interface UmapiPart { article: string; artId: number; asked: string; brand: string; via: "own" | "name" }
+/** `through`: the part stands in for a number without a card of its own (an original number, a maker without cards). */
+export interface UmapiPart { article: string; artId: number; asked: string; brand: string; through?: { article: string; brand: string }; via: "own" | "name" }
 export interface FitCar { mine: boolean; name: string; pcId: number }
 export interface FitModel { cars: FitCar[]; mine: boolean; model: string; msId: number | null; yearFrom: number | null; yearTo: number | null }
 export interface FitMake { make: string; mine: boolean; models: FitModel[] }

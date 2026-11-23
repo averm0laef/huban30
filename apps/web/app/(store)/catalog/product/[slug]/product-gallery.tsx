@@ -39,7 +39,9 @@ function useCataloguePhotos(productId: string, wanted: boolean) {
     try {
       const data = await umapiGet<UmapiPhotos>(`product/${encodeURIComponent(productId)}/photos`);
       if (data.status === "ok" && "photos" in data && data.photos.length > 0) {
-        setState({ label: `${data.part.brand} ${data.part.article}`, photos: [...new Set(data.photos)], status: "ready" });
+        // An analogue standing in for a number without a card is named as such: the photo is of that analogue.
+        const kind = data.part.through ? "Фото аналога" : "Фото производителя";
+        setState({ label: `${kind} · ${data.part.brand} ${data.part.article}`, photos: [...new Set(data.photos)], status: "ready" });
       } else if (data.status === "ambiguous" || data.status === "unknown_part") {
         setState({ message: "Не удалось точно определить деталь в каталоге", retry: false, status: "error" });
       } else {
@@ -113,7 +115,7 @@ export function ProductGallery({ catalogPhotos, images, productId, requestMessag
   const { load, state } = useCataloguePhotos(productId, catalogPhotos && images.length === 0);
   const fromCatalogue = state.status === "ready";
   const photos = fromCatalogue
-    ? state.photos.map((url) => ({ alt: `Фото производителя: ${state.label}`, url }))
+    ? state.photos.map((url) => ({ alt: state.label, url }))
     : images.map(({ altText, url }) => ({ alt: altText, url }));
   const active = photos[activeIndex] ?? photos[0];
   const askShop = (soft: boolean) => (
@@ -137,7 +139,7 @@ export function ProductGallery({ catalogPhotos, images, productId, requestMessag
               src={active.url}
               unoptimized={fromCatalogue}
             />
-            {fromCatalogue ? <span className={styles.photoBadge}>Фото производителя · {state.label}</span> : null}
+            {fromCatalogue ? <span className={styles.photoBadge}>{state.label}</span> : null}
           </>
         ) : <MissingPhoto ask={askShop(state.status !== "error")} load={() => { setActiveIndex(0); void load(); }} state={state} />}
       </div>

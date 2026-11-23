@@ -186,3 +186,59 @@ describe("UmapiService: analogs and photo", () => {
   });
 
 });
+
+describe("UmapiService: products our own number alone did not find (sample of 24.11.2026)", () => {
+  const SAT: TestProduct = { brand: null, id: "00000000-0000-4000-8000-000000000101", name: "Фильтр топливный TOYOTA HILUX SURF/4RUNNER 3RZ 02-09", section: "filtry", sku: "ST-23300-31090" };
+  const OE_ANSWERS: Answers = {
+    "/BrandRefinement/ST2330031090": [],
+    // Only original numbers: the catalogue keeps no card of TOYOTA 23300-31090 itself.
+    "/BrandRefinement/2330031090": [{ BRAND: "TOYOTA", DISPLAY_NR: "23300-31090", TYPE: "OENumber" }, { BRAND: "LEXUS", DISPLAY_NR: "23300-31090", TYPE: "OENumber" }],
+    "/Analogs/2330031090/TOYOTA": { data: [{ ARTICLE_NR: "WK 6015", ART_ID: 9101, BRAND: "MANN-FILTER" }, { ARTICLE_NR: "PP 968/1", ART_ID: 9102, BRAND: "FILTRON" }] },
+    "/ArticleLinks/9101": { PC: [SPRINTER_313] },
+    "/ArticleLinks/9102": { PC: [SPRINTER_316] },
+    "/v2/cross/parts/Analogs/getCrossInfo?article=WK6015&brand=MANN-FILTER": { article: "WK 6015", brand: "MANN-FILTER", catalogId: 9101, td: { ARTICLE_NR: "WK 6015", ART_ID: 9101, BRAND: "MANN-FILTER", MEDIAS: [{ FILE_NAME: "wk6015.webp", SORT: 1, SUP_ID: 4 }], SUP_ID: 4 } },
+  };
+
+  it("finds SAT's copy of an original part through the analogues of the original number", async () => {
+    const { service } = setup({ answers: OE_ANSWERS, product: SAT });
+    const answer = await service.productFitment(SAT.id, {}, VISITOR, "list");
+    expect(answer).toMatchObject({ status: "ok", total: 2, via: "own" });
+    expect(answer.status === "ok" && answer.parts[0]!.through).toEqual({ article: "23300-31090", brand: "TOYOTA" });
+    // The customer's 313 CDI is listed for one of the analogues: it fits.
+    expect(await service.productFitment(SAT.id, { modificationId: 100_000_123 }, VISITOR, "check")).toMatchObject({ verdict: "fits" });
+  });
+
+  it("shows an analogue's photo for it, and never keeps it as the product's own", async () => {
+    const { remember, service } = setup({ answers: OE_ANSWERS, product: SAT });
+    expect(await service.productPhotos(SAT.id, VISITOR)).toMatchObject({ part: { article: "WK 6015", through: { brand: "TOYOTA" } }, photos: ["https://media.example/4/wk6015.webp"], status: "ok" });
+    expect(remember).not.toHaveBeenCalled();
+  });
+
+  it("finds a maker the catalogue has no card of through its analogues, and a maker named otherwise", async () => {
+    const masuma: TestProduct = { brand: "MASUMA", id: "00000000-0000-4000-8000-000000000102", name: "Насос подкачки топлива MASUMA", section: "toplivnaya-sistema", sku: "MPU-1014" };
+    const answers: Answers = {
+      "/BrandRefinement/MPU1014": [{ BRAND: "MASUMA", DISPLAY_NR: "MPU-1014", TYPE: "ArticleNumber" }],
+      "/Analogs/MPU1014/MASUMA": { data: [{ ARTICLE_NR: "0 440 008 090", ART_ID: 9201, BRAND: "BOSCH" }] },
+      "/ArticleLinks/9201": { PC: [SPRINTER_313] },
+    };
+    expect(await setup({ answers, product: masuma }).service.productFitment(masuma.id, {}, VISITOR, "list")).toMatchObject({ status: "ok", total: 1 });
+    const osram: TestProduct = { brand: "OSRAM", id: "00000000-0000-4000-8000-000000000103", name: "64193SUP Лампа H4 12V 60/55W Osram", section: "avtolampy", sku: "64193SUP" };
+    const lamp: Answers = {
+      "/BrandRefinement/64193SUP": [{ BRAND: "ams-OSRAM", DISPLAY_NR: "64193SUP", TYPE: "ArticleNumber" }],
+      "/v2/cross/parts/Analogs/getCrossInfo?article=64193SUP&brand=ams-OSRAM": { article: "64193SUP", brand: "ams-OSRAM", catalogId: 9301, td: { ARTICLE_NR: "64193SUP", ART_ID: 9301, BRAND: "ams-OSRAM" } },
+      "/ArticleLinks/9301": { PC: [SPRINTER_313] },
+    };
+    expect(await setup({ answers: lamp, product: osram }).service.productFitment(osram.id, {}, VISITOR, "list")).toMatchObject({ parts: [{ brand: "ams-OSRAM", via: "own" }], status: "ok" });
+  });
+
+  it("tries the number written in the name when ours is unknown, and picks the maker the name mentions", async () => {
+    const sheft: TestProduct = { brand: "SHEFT", id: "00000000-0000-4000-8000-000000000104", name: "(LX1734) Фильтр воздушный MB Actros MAHLE SHEFT 16015-FS", section: "filtry", sku: "16015FS" };
+    const answers: Answers = {
+      "/BrandRefinement/16015FS": [],
+      "/BrandRefinement/LX1734": [{ BRAND: "MAHLE", DISPLAY_NR: "LX 1734", TYPE: "ArticleNumber" }, { BRAND: "KNECHT", DISPLAY_NR: "LX 1734", TYPE: "ArticleNumber" }],
+      "/v2/cross/parts/Analogs/getCrossInfo?article=LX1734&brand=MAHLE": { article: "LX 1734", brand: "MAHLE", catalogId: 9401, td: { ARTICLE_NR: "LX 1734", ART_ID: 9401, BRAND: "MAHLE" } },
+      "/ArticleLinks/9401": { PC: [SPRINTER_313] },
+    };
+    expect(await setup({ answers, product: sheft }).service.productFitment(sheft.id, {}, VISITOR, "list")).toMatchObject({ parts: [{ article: "LX 1734", brand: "MAHLE", via: "name" }], status: "ok" });
+  });
+});

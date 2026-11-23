@@ -185,7 +185,10 @@ function CheckAnswer({ car, data, vin }: { car: string; data: UmapiFitment; vin:
   if (data.status === "ambiguous") return <Answer title="Не удалось однозначно определить деталь" tone="info"><span>Номер есть у нескольких производителей. Специалист проверит по VIN.</span>{vin}</Answer>;
   if (data.status === "unknown_part") return <Answer title="У этой детали нет данных для проверки по каталогу" tone="info"><span>Специалист сверит её по VIN вашего автомобиля.</span>{vin}</Answer>;
   if (data.status !== "ok") return <Answer title="Проверка по каталогу для этого товара не проводится" tone="mute">{vin}</Answer>;
-  const source = data.via === "own"
+  const through = data.parts.find((part) => part.through)?.through;
+  const source = through
+    ? `По каталогу — по аналогам номера ${through.brand} ${through.article}.`
+    : data.via === "own"
     ? data.verdict === "fits" ? "По каталогу для вашей модификации." : "По каталогу."
     : `По каталогу — по номеру-аналогу ${data.parts.map((part) => `${part.brand} ${part.article}`).join(", ")} из названия товара.`;
   if (data.verdict === null) {
