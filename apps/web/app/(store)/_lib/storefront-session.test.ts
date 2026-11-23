@@ -32,4 +32,22 @@ describe("one answer about the visitor's session per page", () => {
     await api.readSession();
     expect(fetch.mock.calls.filter(([url]) => String(url).endsWith("/auth/session"))).toHaveLength(2);
   });
+
+  it("forgets a guest answer read while the sign-in was on its way", async () => {
+    let signedIn = false;
+    let finishLogin: () => void = () => undefined;
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return new Promise<Response>((resolve) => { finishLogin = () => { signedIn = true; resolve(answer(200, { ok: true })); }; });
+      return Promise.resolve(signedIn
+        ? answer(200, { email: "a@b.c", mfaSetupRequired: false, mfaVerified: true, role: "customer", userId: "u1" })
+        : answer(401, { error: "Unauthorized" }));
+    });
+    vi.stubGlobal("fetch", fetch);
+    vi.stubGlobal("document", { cookie: "" });
+    const login = api.apiRequest("/auth/login", { body: {}, method: "POST" });
+    expect(await api.readSession()).toBeNull();
+    finishLogin();
+    await login;
+    expect(await api.readSession()).toMatchObject({ userId: "u1" });
+  });
 });

@@ -71,7 +71,8 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
-  if (!new Set(["GET", "HEAD", "OPTIONS"]).has(method)) {
+  const changing = !new Set(["GET", "HEAD", "OPTIONS"]).has(method);
+  if (changing) {
     // Sign-in, sign-out, registration and every other change may change who is signed in.
     sessionAnswer = null;
     const csrf = readCookie("an30_csrf");
@@ -90,6 +91,9 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     });
   } catch {
     throw new StorefrontApiError("Нет соединения с сервером", 0, null);
+  } finally {
+    // And once more when it is answered: a session read during the change still saw the old cookie.
+    if (changing) sessionAnswer = null;
   }
 
   if (response.status === 204) return undefined as T;
