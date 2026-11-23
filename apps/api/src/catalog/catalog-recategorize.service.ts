@@ -9,7 +9,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import type { PoolClient } from "pg";
 import { z } from "zod";
 
-import { STOREFRONT_TAXONOMY } from "@an30/contracts";
+import { STOREFRONT_TAXONOMY, type CatalogVehicleKind } from "@an30/contracts";
 
 import type { AuthContext } from "../auth/auth-context.js";
 import { AuditService } from "../security/audit.service.js";
@@ -31,6 +31,7 @@ import {
 } from "./catalog-known-categories.js";
 import { partHeadNoun } from "./catalog-part-dictionary.js";
 import { normalizeArticleNumber, normalizeBrand } from "./catalog-search-normalize.js";
+import { vehicleKindOf } from "./catalog-vehicle-kind.js";
 
 const SECTION_LABELS: ReadonlyMap<string, string> = new Map([
   ...STOREFRONT_TAXONOMY.flatMap((section) => [
@@ -88,6 +89,8 @@ export interface Placement {
   danglingGroup: boolean;
   slug: string;
   source: CategoryDecisionSource;
+  /** A passenger car, a truck or a tractor: the 1С groups say it, else the make in the name (catalog-vehicle-kind.ts). */
+  vehicleKind: CatalogVehicleKind | null;
 }
 
 const MAX_GROUP_DEPTH = 64;
@@ -170,6 +173,7 @@ export function placeProduct(
     danglingGroup: input.groupExternalId !== null && !groups?.has(input.groupExternalId),
     slug: categoryId === null ? UNCATEGORIZED_CATEGORY_SLUG : decision.slug,
     source: decision.source,
+    vehicleKind: vehicleKindOf({ groupNames: chain.names, productName: input.productName }),
   };
 }
 
@@ -438,11 +442,11 @@ export class CatalogRecategorizeService {
       const slugById = new Map([...context.categoryIds].map(([slug, id]) => [id, slug]));
       const products = (await client.query<{
         brand_name: string | null; category_id: string | null; external_id: string | null; id: string; name: string;
-        one_c_group_external_id: string | null; one_c_source: OneCSource; sku: string;
+        one_c_group_external_id: string | null; one_c_source: OneCSource; sku: string; vehicle_kind: CatalogVehicleKind | null;
       }>(
         // A section chosen by hand for one product (category_pinned) is never re-sorted.
         `SELECT product.id, product.name, product.sku::text AS sku, product.external_id, product.category_id,
-                product.one_c_source, product.one_c_group_external_id,
+                product.one_c_source, product.one_c_group_external_id, product.vehicle_kind,
                 (SELECT brand.name FROM app.brands AS brand WHERE brand.id = product.brand_id) AS brand_name
          FROM app.products AS product WHERE NOT product.is_demo AND product.deleted_at IS NULL AND NOT product.category_pinned
          ORDER BY product.id FOR UPDATE OF product`,
@@ -453,6 +457,9 @@ export class CatalogRecategorizeService {
           brandName: product.brand_name, groupExternalId: product.one_c_group_external_id, productName: product.name,
           sku: product.sku, source: product.one_c_source,
         });
+        if (placement.vehicleKind !== product.vehicle_kind) {
+          await client.query("UPDATE app.products SET vehicle_kind = $2 WHERE id = $1", [product.id, placement.vehicleKind]);
+        }
         let target = placement.categoryId;
         const currentSlug = product.category_id ? slugById.get(product.category_id) : undefined;
         if (product.external_id === null && currentSlug && currentSlug !== UNCATEGORIZED_CATEGORY_SLUG) {

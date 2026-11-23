@@ -656,10 +656,10 @@ export class OneCExchangeService {
       attributes: Record<string, unknown>; brand_id: string | null; category_id: string | null; category_pinned: boolean;
       deleted_at: Date | null; description: string | null; id: string; is_active: boolean; name: string;
       one_c_group_external_id: string | null; search_text: string | null;
-      sku: string; slug: string;
+      sku: string; slug: string; vehicle_kind: string | null;
     }>(
       `SELECT id, sku::text, name, slug::text, brand_id, category_id, description, attributes, search_text,
-              is_active, deleted_at, one_c_group_external_id, category_pinned
+              is_active, deleted_at, one_c_group_external_id, category_pinned, vehicle_kind
        FROM app.products WHERE external_id = $1 AND one_c_source=${sourceSql(source)} FOR UPDATE`,
       [row.externalId],
     )).rows[0];
@@ -667,11 +667,11 @@ export class OneCExchangeService {
       await client.query(
         `INSERT INTO app.products (
            external_id, sku, name, slug, brand_id, category_id, description, attributes, search_text,
-           is_active, source_version, deleted_at,one_c_source, one_c_group_external_id
+           is_active, source_version, deleted_at,one_c_source, one_c_group_external_id, vehicle_kind
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, 1,
-           CASE WHEN $10 THEN NULL ELSE clock_timestamp() END,$11,$12)`,
+           CASE WHEN $10 THEN NULL ELSE clock_timestamp() END,$11,$12,$13)`,
         [row.externalId, row.sku, row.name, row.slug, brandId, categoryId, row.description,
-          attributesJson, row.searchText, row.isActive,source, row.categoryExternalId],
+          attributesJson, row.searchText, row.isActive,source, row.categoryExternalId, placed.vehicleKind],
       );
       return { applied: true, rejected, uncategorized };
     }
@@ -683,16 +683,17 @@ export class OneCExchangeService {
       && current.is_active === row.isActive
       && (row.isActive ? current.deleted_at === null : current.deleted_at !== null)
       && (current.one_c_group_external_id ?? null) === row.categoryExternalId
+      && (current.vehicle_kind ?? null) === placed.vehicleKind
       && canonicalJson(current.attributes) === canonicalJson(row.attributes);
     if (unchanged) return { applied: false, rejected, uncategorized };
     await client.query(
       `UPDATE app.products SET sku = $2, name = $3, slug = $4, brand_id = $5, category_id = $6, description = $7,
               attributes = $8::jsonb, search_text = $9, is_active = $10,
               deleted_at = CASE WHEN $10 THEN NULL ELSE COALESCE(deleted_at, clock_timestamp()) END,
-              source_version = source_version + 1, one_c_group_external_id = $12
+              source_version = source_version + 1, one_c_group_external_id = $12, vehicle_kind = $13
        WHERE id = $1 AND one_c_source=$11`,
       [current.id, row.sku, row.name, row.slug, brandId, categoryId, row.description,
-        attributesJson, row.searchText, row.isActive,source, row.categoryExternalId],
+        attributesJson, row.searchText, row.isActive,source, row.categoryExternalId, placed.vehicleKind],
     );
     return { applied: true, rejected, uncategorized };
   }

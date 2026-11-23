@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import type { CatalogBrand, CatalogCategoryNode } from "../_lib/catalog-api";
+import { CATALOG_VEHICLE_KIND_LABELS, CATALOG_VEHICLE_KINDS } from "@an30/contracts";
+
+import type { CatalogBrand, CatalogCategoryNode, CatalogVehicleKindCount } from "../_lib/catalog-api";
 import styles from "../_components/storefront.module.css";
 import { PICKED_VEHICLE_EVENT, readPickedVehicle, readSavedVehicle } from "../_lib/parts-finder";
 import { BrandFacet } from "./brand-facet";
@@ -51,9 +53,10 @@ function FilterGroup({ title, children }: { title: string; children: ReactNode }
 }
 
 const pricePresetFormat = new Intl.NumberFormat("ru-RU");
+const kindCountFormat = new Intl.NumberFormat("ru-RU");
 
 /** Controls submit with the same GET form on desktop and in the mobile dialog. */
-export function CatalogFilterRail({ activePath = [], basePath, brands, state, tree }: {
+export function CatalogFilterRail({ activePath = [], basePath, brands, state, tree, vehicleKinds = [] }: {
   /** Slug chain of the category being viewed; empty on `/catalog`. */
   activePath?: readonly string[];
   basePath: string;
@@ -61,6 +64,8 @@ export function CatalogFilterRail({ activePath = [], basePath, brands, state, tr
   state: CatalogPageQuery;
   /** The whole category tree — the rail shows it with the current branch open. */
   tree: CatalogCategoryNode[];
+  /** Kinds of vehicle that have products in this list's scope, with their counts; none — the group is not shown. */
+  vehicleKinds?: CatalogVehicleKindCount[];
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [mobile, setMobile] = useState(false);
@@ -78,7 +83,10 @@ export function CatalogFilterRail({ activePath = [], basePath, brands, state, tr
   }, []);
 
   const populatedBrands = sortBrandsForFacet(brands, state.brands);
-  const formKey = JSON.stringify([state.availability, state.brands, state.minPriceRubles, state.maxPriceRubles, draft]);
+  const kindCounts = new Map(vehicleKinds.map((entry) => [entry.kind, entry.productCount]));
+  // The chosen kind stays in the list even when the counts did not arrive, so it can be seen and taken off.
+  const kindOptions = CATALOG_VEHICLE_KINDS.filter((kind) => kindCounts.has(kind) || kind === state.vehicleKind);
+  const formKey = JSON.stringify([state.vehicleKind, state.availability, state.brands, state.minPriceRubles, state.maxPriceRubles, draft]);
 
   const car = useChosenCar();
 
@@ -98,6 +106,27 @@ export function CatalogFilterRail({ activePath = [], basePath, brands, state, tr
             aria-current={basePath === "/catalog" ? "page" : undefined}>Все категории</Link>
           <CategoryTree activePath={activePath} onNavigate={() => dialogRef.current?.close()} state={sectionLinkState(state)} tree={tree} />
       </FilterGroup>
+
+      {kindOptions.length > 0 && <FilterGroup title="Техника">
+        <fieldset className={filterStyles.filterGroup}>
+          <legend className={styles.visuallyHidden}>Техника</legend>
+          <div className={filterStyles.brandOptions}>
+            <label className={filterStyles.optionRow}>
+              <input defaultChecked={state.vehicleKind === null} form={CATALOG_SEARCH_FORM_ID} name="kind" type="radio" value="all" />
+              <span>Вся техника</span>
+            </label>
+            {kindOptions.map((kind) => (
+              <label className={filterStyles.optionRow} key={kind}>
+                <input defaultChecked={state.vehicleKind === kind} form={CATALOG_SEARCH_FORM_ID} name="kind" type="radio" value={kind} />
+                <span>{CATALOG_VEHICLE_KIND_LABELS[kind]}</span>
+                {kindCounts.has(kind) ? <small>{kindCountFormat.format(kindCounts.get(kind)!)}</small> : null}
+              </label>
+            ))}
+          </div>
+          {/* The 1С groups or the make in the name say it; it is not a fitment check of a particular car. */}
+          <p className={filterStyles.groupNote}>По группам 1С и марке в названии. Применимость к вашей машине уточнит специалист.</p>
+        </fieldset>
+      </FilterGroup>}
 
       <FilterGroup title="Цена, ₽">
       <fieldset className={filterStyles.filterGroup}>

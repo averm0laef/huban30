@@ -224,6 +224,7 @@ export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput,
   if (query.brand.length > 0) filters.push(`brand.slug::text=ANY(${p.add(query.brand)}::text[])`);
   if (query.minPriceKopeks !== undefined) filters.push(`price.amount_kopeks >= ${p.add(query.minPriceKopeks)}`);
   if (query.maxPriceKopeks !== undefined) filters.push(`price.amount_kopeks <= ${p.add(query.maxPriceKopeks)}`);
+  if (query.vehicleKind) filters.push(`product.vehicle_kind=${p.add(query.vehicleKind)}`);
   if (query.availability === "in_stock") filters.push("stock.available_quantity>0");
   if (query.availability === "out_of_stock") filters.push("stock.available_quantity=0");
   if (input.folded !== null) filters.push(searchHits(p, input, matchAny));

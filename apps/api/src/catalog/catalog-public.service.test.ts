@@ -796,3 +796,107 @@ describe("CatalogPublicService first page of a section", () => {
     }
   });
 });
+
+describe("CatalogPublicService: kind of vehicle, popularity, page size and other packs", () => {
+  const query = vi.fn();
+  const service = new CatalogPublicService(
+    new CatalogCategoryTreeCache(),
+    {
+      query,
+      transaction: async <T>(work: (client: { query: typeof query }) => Promise<T>) => work({
+        query: vi.fn((text: string, values?: unknown[]) => (
+          text.startsWith("SET LOCAL") ? Promise.resolve({ rows: [] }) : query(text, values)
+        )),
+      }),
+    } as unknown as DatabaseService,
+    new ProductPhotoStorage({ name: "local", read: vi.fn(), remove: vi.fn(), store: vi.fn() }),
+  );
+  const listSql = () => (query.mock.calls.find(([text]) => String(text).includes("LIMIT"))?.[0] ?? "") as string;
+
+  beforeEach(() => {
+    query.mockReset();
+    query.mockResolvedValue({ rows: [productRow()] });
+  });
+
+  it("narrows a list to one kind of vehicle and refuses a kind the catalogue does not know", async () => {
+    await service.products({ category: "filters", vehicleKind: "truck" });
+    const [sql, values] = query.mock.calls.find(([text]) => String(text).includes("LIMIT")) as [string, unknown[]];
+    expect(sql).toMatch(/product\.vehicle_kind=\$\d+/u);
+    expect(values).toContain("truck");
+    await expect(service.products({ vehicleKind: "bus" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("orders «по популярности» by the shop's own count, then what can be bought, then the name", async () => {
+    await service.products({ sort: "popular" });
+    const sql = listSql();
+    expect(sql).toContain("LEFT JOIN app.product_popularity AS popularity ON popularity.product_id=product.id");
+    expect(sql).toContain(`COALESCE(popularity.score,0) DESC,(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,${NAME_ORDER}`);
+    // The stored count is brought up to date in the background, once — not on every list.
+    await service.products({ sort: "popular", offset: "24" });
+    expect(query.mock.calls.filter(([text]) => String(text).includes("refresh_product_popularity"))).toHaveLength(1);
+  });
+
+  it("does not read the popularity table for any other order", async () => {
+    await service.products({ sort: "name" });
+    expect(listSql()).not.toContain("product_popularity");
+  });
+
+  it("never answers a kind or a popularity list from memory kept for the plain first page", async () => {
+    for (const filters of [{ vehicleKind: "passenger" }, { sort: "popular" }]) {
+      query.mockClear();
+      await service.products({ category: "filters", ...filters });
+      await service.products({ category: "filters", ...filters });
+      expect(query.mock.calls.filter(([text]) => String(text).includes("LIMIT")).length).toBe(2);
+    }
+  });
+
+  it("gives up to 96 products a page and no more", async () => {
+    await expect(service.products({ limit: "96" })).resolves.toMatchObject({ limit: 96 });
+    await expect(service.products({ limit: "97" })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("counts the products of each kind, in the catalogue's order, and leaves out a kind with none", async () => {
+    query.mockResolvedValueOnce({ rows: [{ kind: "tractor", product_count: "261" }, { kind: "passenger", product_count: "8630" }] });
+    await expect(service.vehicleKinds("filters")).resolves.toEqual({
+      items: [{ kind: "passenger", productCount: 8630 }, { kind: "tractor", productCount: 261 }],
+    });
+    const [sql, values] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("category.id IN (SELECT id FROM visible_categories)");
+    expect(sql).toContain("category.id IN (SELECT id FROM category_subtree)");
+    expect(values).toEqual(["filters"]);
+    // A section name that is not a slug is not sent to the database as one.
+    query.mockResolvedValueOnce({ rows: [] });
+    await service.vehicleKinds("../etc");
+    expect(query.mock.calls[1]?.[1]).toEqual([null]);
+  });
+
+  it("shows the other packs of the same oil — and not another viscosity, the same pack or a second card of one pack", async () => {
+    const oil = (overrides: Record<string, unknown>) => productRow({ description: null, public_attributes: {}, ...overrides });
+    query.mockReset();
+    query.mockImplementation((text: string) => Promise.resolve({ rows: String(text).includes("similarity(product.name_folded") ? [
+      oil({ available_quantity: "0", id: "p-4a", name: "9067 5W-50 Synthoil High Tech 4л", price_kopeks: "450000", sku: "9067", slug: "oil-4l-out" }),
+      oil({ available_quantity: "3", id: "p-4b", name: "9067A 5W-50 Synthoil High Tech 4л", price_kopeks: "460000", sku: "9067A", slug: "oil-4l" }),
+      oil({ available_quantity: "2", id: "p-20", name: "9068 5W-50 Synthoil High Tech 20л", price_kopeks: null, sku: "9068", slug: "oil-20l" }),
+      oil({ id: "p-1b", name: "9070 5W-50 Synthoil High Tech 1л", sku: "9070", slug: "oil-1l-double" }),
+      oil({ id: "p-x", name: "9100 5W-40 Synthoil High Tech 4л", sku: "9100", slug: "oil-other-viscosity" }),
+    ] : String(text).includes("product.slug::text=$1")
+      ? [oil({ name: "9066 5W-50 Synthoil High Tech 1л", sku: "9066", slug: "oil-1l" })]
+      : [] }));
+    const detail = await service.product("oil-1l");
+    expect(detail.packSizes).toEqual([
+      { availableQuantity: 3, label: "4 л", name: expect.stringContaining("Synthoil High Tech 4л"), priceKopeks: 460000, slug: "oil-4l" },
+      { availableQuantity: 2, label: "20 л", name: expect.stringContaining("Synthoil High Tech 20л"), priceKopeks: null, slug: "oil-20l" },
+    ]);
+    const packsSql = query.mock.calls.map(([text]) => String(text)).find((text) => text.includes("similarity(product.name_folded"))!;
+    expect(packsSql).toContain("product.brand_id IS NOT DISTINCT FROM $2::uuid");
+    expect(packsSql).toContain("product.category_id IS NOT DISTINCT FROM $3::uuid");
+    expect(packsSql).toContain("category.id IN (SELECT id FROM visible_categories)");
+  });
+
+  it("asks for no other packs of a product that is not sold by the litre or the kilogram", async () => {
+    query.mockReset();
+    query.mockResolvedValueOnce({ rows: [productRow({ description: null, public_attributes: {} })] }).mockResolvedValue({ rows: [] });
+    expect((await service.product("oil-filter-1")).packSizes).toEqual([]);
+    expect(query.mock.calls.some(([text]) => String(text).includes("similarity(product.name_folded"))).toBe(false);
+  });
+});

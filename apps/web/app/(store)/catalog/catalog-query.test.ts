@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CATALOG_LAST_PAGE,
+  catalogLastPage,
   catalogFailureText,
   catalogPageHref,
   catalogPageNumbers,
@@ -31,11 +32,39 @@ describe("catalog query", () => {
       maxPriceRubles: 9000,
       minPriceRubles: 500,
       page: 3,
+      pageSize: 24,
       priceRangeValid: true,
       query: "фильтр",
       sort: "price_asc",
+      vehicleKind: null,
       view: "grid",
     });
+  });
+
+  it("reads the kind of vehicle, the popularity order and the page size, and refuses what the catalogue does not offer", () => {
+    const parsed = parseCatalogPageQuery({ kind: "truck", perPage: "96", sort: "popular" });
+    expect(parsed).toMatchObject({ pageSize: 96, sort: "popular", vehicleKind: "truck" });
+    expect(parseCatalogPageQuery({ kind: "bus", perPage: "1000", sort: "random" }))
+      .toMatchObject({ pageSize: 24, sort: "relevance", vehicleKind: null });
+    // «Вся техника» in the filter form sends kind=all: no kind.
+    expect(parseCatalogPageQuery({ kind: "all", perPage: "25" })).toMatchObject({ pageSize: 24, vehicleKind: null });
+  });
+
+  it("carries the kind and the page size in every link of the list and leaves the usual page size out", () => {
+    const state = parseCatalogPageQuery({ kind: "tractor", perPage: "48", sort: "popular" });
+    expect(catalogPageHref("/catalog", state, 2)).toBe("/catalog?sort=popular&kind=tractor&perPage=48&page=2");
+    expect(catalogPageHref("/catalog", parseCatalogPageQuery({ perPage: "24" }))).toBe("/catalog");
+    expect(hasActiveCatalogFilters(state)).toBe(true);
+    // «Сбросить фильтры» takes the kind off and keeps how the list is shown.
+    expect(clearCatalogFiltersHref("/catalog", state)).toBe("/catalog?sort=popular&perPage=48");
+  });
+
+  it("opens the last reachable page of a longer page size instead of a page the catalogue cannot give", () => {
+    expect(catalogLastPage(24)).toBe(201);
+    expect(catalogLastPage(48)).toBe(101);
+    expect(catalogLastPage(96)).toBe(51);
+    expect(parseCatalogPageQuery({ page: "201", perPage: "96" }).page).toBe(51);
+    expect(parseCatalogPageQuery({ page: "201" }).page).toBe(201);
   });
 
   it("does not silently swap an inverted price range", () => {

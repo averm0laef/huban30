@@ -15,6 +15,9 @@ import {
   type CatalogProductDetail,
   type CatalogProductSummary,
   type CatalogProductsResponse,
+  CatalogVehicleKindsResponseSchema,
+  type CatalogVehicleKind,
+  type CatalogVehicleKindsResponse,
 } from "@an30/contracts";
 
 import { fetchWithOneRetry } from "./api-fetch";
@@ -116,7 +119,8 @@ export interface CatalogSearchOptions {
   minPriceKopeks?: number;
   offset?: number;
   query?: string;
-  sort?: "relevance" | "newest" | "name" | "price_asc" | "price_desc";
+  sort?: "relevance" | "popular" | "newest" | "name" | "price_asc" | "price_desc";
+  vehicleKind?: CatalogVehicleKind | null;
 }
 
 export const searchCatalog = cache(async (
@@ -133,6 +137,7 @@ export const searchCatalog = cache(async (
   // category level browses with no search text (see catalog/[...slug]).
   if (options.query) parameters.set("q", options.query);
   if (options.category) parameters.set("category", options.category);
+  if (options.vehicleKind) parameters.set("vehicleKind", options.vehicleKind);
   for (const brand of options.brands ?? []) parameters.append("brand", brand);
   if (options.minPriceKopeks !== undefined) {
     parameters.set("minPriceKopeks", String(options.minPriceKopeks));
@@ -169,6 +174,28 @@ export const getCatalogBrands = cache(async (categorySlug?: string): Promise<Cat
     ? `/catalog/brands?category=${encodeURIComponent(categorySlug)}`
     : "/catalog/brands"))
 ));
+
+export type CatalogVehicleKindCount = CatalogVehicleKindsResponse["items"][number];
+
+async function readVehicleKinds(categorySlug?: string): Promise<CatalogVehicleKindCount[]> {
+  const parsed = CatalogVehicleKindsResponseSchema.safeParse(await getJson(categorySlug
+    ? `/catalog/vehicle-kinds?category=${encodeURIComponent(categorySlug)}`
+    : "/catalog/vehicle-kinds"));
+  if (!parsed.success) throw new Error("Некорректный ответ каталога.");
+  return parsed.data.items;
+}
+
+/** The whole catalogue's split is the same for every visitor: kept like the category tree, not asked on every page. */
+const allVehicleKinds = timedMemo(() => readVehicleKinds(), CATEGORY_TREE_TTL_MS);
+const sectionVehicleKinds = cache((categorySlug: string) => readVehicleKinds(categorySlug));
+
+/**
+ * How many products are for passenger cars, trucks, tractors and machinery — in the whole catalogue or in one
+ * section. A kind with no products is absent, so the storefront never offers an empty list.
+ */
+export function getCatalogVehicleKinds(categorySlug?: string): Promise<CatalogVehicleKindCount[]> {
+  return categorySlug ? sectionVehicleKinds(categorySlug) : allVehicleKinds();
+}
 
 export const findCatalogItem = cache(async (slug: string): Promise<CatalogProduct | null> => {
   const normalized = slug.trim().toLowerCase();

@@ -207,3 +207,36 @@ export function sizeLabel(specs: PartSpecs): string | null {
   if (key.startsWith("tyre:")) return specs.tyreSize!.replace("R", " R");
   return specs.belt ?? specs.bearing ?? null;
 }
+
+const PACK_AMOUNT = /(?<![0-9.,/*])(\d{1,3}(?:[.,]\d{1,3})?)\s?(л|l|литр[а-я]*|кг|kg)(?![a-zа-я])/gu;
+/** «(1/20)», «1*4»: how many packs a box holds — the owner's 1С writes it into the name; it is not a pack size. */
+const PACKS_IN_BOX = /(?<![0-9a-zа-я.,/*])1\s?[/*]\s?\d{1,3}(?![0-9a-zа-я/*])/gu;
+
+export interface ProductPack { amount: number; key: string; unit: "kg" | "l" }
+
+/**
+ * The pack a liquid is sold in, and what is left of the name without it. «9066 5W-50 Synthoil High Tech 1л» and
+ * «9067 5W-50 Synthoil High Tech 4л» give one `key` and different amounts: two packs of one product. The key drops
+ * the pack, the product's own article (every pack has its own) and the word order («Масло моторное» / «Моторное
+ * масло»); the viscosity, the line and the approvals stay in it, so another oil is never another pack.
+ * Null when the name is not a liquid's or states no single amount («4л/5л»).
+ */
+export function packOf(name: string, sku?: string | null): ProductPack | null {
+  const text = name.toLowerCase().replaceAll("ё", "е");
+  // An oil's name may not say «масло» at all: «ALPHA'S 10W40 SN (бензин, синтетика) 1л» — its viscosity says it.
+  if (!/масл|жидкост|антифриз|тосол|омыв|oil|(?<![a-z0-9])\d{1,2}w-?\d{2}(?![0-9])/u.test(text) || /\d\s?(?:л|l|кг|kg)\s?\/\s?\d/u.test(text)) return null;
+  const withoutBox = text.replace(PACKS_IN_BOX, " ");
+  const stated = [...withoutBox.matchAll(PACK_AMOUNT)];
+  if (stated.length !== 1) return null;
+  const amount = Number(stated[0]![1]!.replace(",", "."));
+  if (!(amount > 0)) return null;
+  const article = (sku ?? "").toLowerCase().replace(/[^a-zа-я0-9]+/gu, "");
+  const key = withoutBox.replace(PACK_AMOUNT, " ").split(/[^a-zа-я0-9]+/u)
+    .filter((token) => token !== "" && !(article.length >= 4 && token === article)).sort().join(" ");
+  return key ? { amount, key, unit: /^[кk]/u.test(stated[0]![2]!) ? "kg" : "l" } : null;
+}
+
+/** «4 л», «0,5 л», «10 кг»: a pack as the product page names it. */
+export function packLabel(pack: Pick<ProductPack, "amount" | "unit">): string {
+  return `${String(pack.amount).replace(".", ",")} ${pack.unit === "kg" ? "кг" : "л"}`;
+}

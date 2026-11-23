@@ -302,3 +302,6 @@
 /* Hovered section reads bolder (rows are full width, nothing shifts). */
 .treeLink { transition: color var(--store-duration-fast) var(--store-ease), font-weight var(--store-duration-fast) var(--store-ease); }
 .treeLink:hover { font-weight: 700; }
+
+/* What a filter group reads its answer from, under its options. */
+.groupNote { margin: 6px 0 0; color: var(--store-muted); font-size: .78rem; line-height: 1.4; }

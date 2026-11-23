@@ -153,6 +153,7 @@ interface ProductRow {
   attributes: Record<string, unknown>; brand_id: string | null; category_id: string | null;
   deleted_at: Date | null; description: string | null; external_id: string; id: string;
   is_active: boolean; name: string; one_c_group_external_id?: string | null; search_text: string | null; sku: string; slug: string;
+  vehicle_kind?: string | null;
 }
 interface GroupRow {
   category_id: string | null; group_external_id: string; group_name: string; is_active: boolean;
@@ -483,10 +484,11 @@ class FakeCatalogDatabase {
       return found ? [found] : [];
     }
     if (sql.startsWith("INSERT INTO app.products (")) {
-      const [externalId, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive, , groupId] = values as [
-        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean, string, string | null,
+      const [externalId, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive, , groupId, vehicleKind] = values as [
+        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean, string, string | null, string | null,
       ];
       const row: ProductRow = {
+        vehicle_kind: vehicleKind ?? null,
         attributes: JSON.parse(attributesJson) as Record<string, unknown>, brand_id: brandId, category_id: categoryId,
         deleted_at: isActive ? null : new Date(), description, external_id: externalId,
         id: randomUUID(), is_active: isActive, name, one_c_group_external_id: groupId ?? null, search_text: searchText, sku, slug,
@@ -495,10 +497,11 @@ class FakeCatalogDatabase {
       return [];
     }
     if (sql.startsWith("UPDATE app.products SET sku")) {
-      const [id, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive, , groupId] = values as [
-        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean, string, string | null,
+      const [id, sku, name, slug, brandId, categoryId, description, attributesJson, searchText, isActive, , groupId, vehicleKind] = values as [
+        string, string, string, string, string | null, string | null, string | null, string, string | null, boolean, string, string | null, string | null,
       ];
       const row = this.products.get(id)!;
+      row.vehicle_kind = vehicleKind ?? null;
       row.one_c_group_external_id = groupId ?? null;
       row.sku = sku; row.name = name; row.slug = slug; row.brand_id = brandId; row.category_id = categoryId;
       row.description = description; row.attributes = JSON.parse(attributesJson) as Record<string, unknown>;
@@ -1381,5 +1384,76 @@ describe("OneCExchangeService warehouses, split files and shared brands", () => 
     expect(detectFileKind("import0_1.xml")).toBe("catalog");
     expect(detectFileKind("import_files/ab/photo.jpg")).toBeNull();
     expect(detectFileKind("documents.xml")).toBeNull();
+  });
+});
+
+function importXmlForVehicleKinds(): string {
+  const product = (id: string, name: string, group?: string) => `
+      <Товар>
+        <Ид>${id}</Ид>
+        <Артикул>${id.toUpperCase()}</Артикул>
+        <Наименование>${name}</Наименование>${group ? `
+        <Группы><Ид>${group}</Ид></Группы>` : ""}
+      </Товар>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<КоммерческаяИнформация ДатаФормирования="2026-11-23T03:00:00">
+  <Классификатор>
+    <Группы>
+      <Группа>
+        <Ид>grp-cars</Ид>
+        <Наименование>01. Легковая</Наименование>
+        <Группы>
+          <Группа>
+            <Ид>grp-cars-brakes</Ид>
+            <Наименование>Тормозная система</Наименование>
+          </Группа>
+        </Группы>
+      </Группа>
+      <Группа>
+        <Ид>grp-kamaz</Ид>
+        <Наименование>25. Камаз</Наименование>
+      </Группа>
+      <Группа>
+        <Ид>grp-mtz</Ид>
+        <Наименование>MT3</Наименование>
+      </Группа>
+      <Группа>
+        <Ид>grp-oils</Ид>
+        <Наименование>10. Масла</Наименование>
+      </Группа>
+    </Группы>
+  </Классификатор>
+  <Каталог СодержитТолькоИзменения="false">
+    <Товары>${product("kind-car", "Колодки тормозные передние", "grp-cars-brakes")}${product("kind-truck", "Фильтр масляный двигателя", "grp-kamaz")}${product("kind-tractor", "Фильтр топливный тонкой очистки", "grp-mtz")}${product("kind-by-name", "Вал карданный КАМАЗ-5320", "grp-oils")}${product("kind-group-first", "Фильтр воздушный КАМАЗ", "grp-cars")}${product("kind-none", "Лампа H7 12V 55W")}
+    </Товары>
+  </Каталог>
+</КоммерческаяИнформация>`;
+}
+
+describe("OneCExchangeService: the kind of vehicle a product is for", () => {
+  let harness: Harness;
+
+  beforeAll(async () => {
+    harness = await createHarness();
+    seedKnownCategories(harness.database);
+    await driveFullSequence(harness, "import_files/vehicle-kinds/import.xml", importXmlForVehicleKinds());
+  });
+
+  afterAll(async () => {
+    await rm(harness.storageRoot, { force: true, recursive: true });
+  });
+
+  const kindOf = (externalId: string) => [...harness.database.products.values()].find((row) => row.external_id === externalId)?.vehicle_kind;
+
+  it("takes it from the owner's top 1С group, whatever the subgroup", () => {
+    expect(kindOf("kind-car")).toBe("passenger");
+    expect(kindOf("kind-truck")).toBe("truck");
+    expect(kindOf("kind-tractor")).toBe("tractor");
+  });
+
+  it("reads the make in the name only when the groups name no vehicle, and leaves the rest without a kind", () => {
+    expect(kindOf("kind-by-name")).toBe("truck");
+    expect(kindOf("kind-group-first")).toBe("passenger");
+    expect(kindOf("kind-none")).toBeNull();
   });
 });

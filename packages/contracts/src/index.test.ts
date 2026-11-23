@@ -258,7 +258,7 @@ describe("public contracts", () => {
     expect(CatalogProductsQuerySchema.safeParse({ minPriceKopeks: 200, maxPriceKopeks: 100 }).success)
       .toBe(false);
     expect(CatalogProductsQuerySchema.safeParse({ q: "x" }).success).toBe(false);
-    expect(CatalogProductsQuerySchema.safeParse({ limit: 49 }).success).toBe(false);
+    expect(CatalogProductsQuerySchema.safeParse({ limit: 97 }).success).toBe(false);
     expect(CatalogProductsQuerySchema.safeParse({ offset: 4_801 }).success).toBe(false);
   });
 
@@ -381,3 +381,39 @@ describe("what a product page says of the part beyond 1С's fields", () => {
   });
 });
 
+
+describe("the kind of vehicle, the popularity order, the page size and the other packs", () => {
+  it("accepts the three kinds of vehicle, the popularity order and every page size the storefront offers", async () => {
+    const { CATALOG_MAX_PAGE_SIZE, CATALOG_PAGE_SIZES, CATALOG_VEHICLE_KIND_LABELS, CATALOG_VEHICLE_KINDS } = await import("./index.js");
+    expect(CATALOG_VEHICLE_KINDS).toEqual(["passenger", "truck", "tractor"]);
+    expect(Object.keys(CATALOG_VEHICLE_KIND_LABELS).sort()).toEqual([...CATALOG_VEHICLE_KINDS].sort());
+    for (const vehicleKind of CATALOG_VEHICLE_KINDS) {
+      expect(CatalogProductsQuerySchema.parse({ vehicleKind })).toMatchObject({ vehicleKind });
+    }
+    expect(CatalogProductsQuerySchema.parse({}).vehicleKind).toBeUndefined();
+    expect(CatalogProductsQuerySchema.safeParse({ vehicleKind: "bus" }).success).toBe(false);
+    expect(CatalogProductsQuerySchema.parse({ sort: "popular" }).sort).toBe("popular");
+    expect(Math.max(...CATALOG_PAGE_SIZES)).toBe(CATALOG_MAX_PAGE_SIZE);
+    for (const limit of CATALOG_PAGE_SIZES) {
+      expect(CatalogProductsQuerySchema.parse({ limit: String(limit) }).limit).toBe(limit);
+    }
+    // The default page stays the one every list had before the choice appeared.
+    expect(CatalogProductsQuerySchema.parse({}).limit).toBe(CATALOG_PAGE_SIZES[0]);
+  });
+
+  it("counts the products of each kind", async () => {
+    const { CatalogVehicleKindsResponseSchema } = await import("./index.js");
+    expect(CatalogVehicleKindsResponseSchema.parse({ items: [{ kind: "truck", productCount: 1949 }] }).items).toHaveLength(1);
+    expect(CatalogVehicleKindsResponseSchema.safeParse({ items: [{ kind: "bus", productCount: 1 }] }).success).toBe(false);
+    expect(CatalogVehicleKindsResponseSchema.safeParse({ items: [{ kind: "truck", productCount: -1 }] }).success).toBe(false);
+  });
+
+  it("carries the other packs of a product on its page, none by default", async () => {
+    const { CatalogProductDetailSchema } = await import("./index.js");
+    const packs = CatalogProductDetailSchema.shape.packSizes;
+    expect(packs.parse(undefined)).toEqual([]);
+    const pack = { availableQuantity: 3, label: "4 л", name: "Масло 5W-40 4л", priceKopeks: null, slug: "maslo-5w-40-4l" };
+    expect(packs.parse([pack])).toEqual([pack]);
+    expect(packs.safeParse([{ ...pack, slug: "../x" }]).success).toBe(false);
+  });
+});

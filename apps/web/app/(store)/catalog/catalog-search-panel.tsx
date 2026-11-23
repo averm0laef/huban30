@@ -1,3 +1,4 @@
+import { CATALOG_VEHICLE_KIND_LABELS } from "@an30/contracts";
 import Link from "next/link";
 
 import { AddToCartButton } from "../_components/cart-actions";
@@ -12,10 +13,11 @@ import { catalogCategoryPhoto } from "../_lib/store-categories";
 import { isValidVin } from "../_lib/vin";
 import { CatalogResultRow, RowBadge } from "./catalog-result-row";
 import layoutStyles from "./catalog-layout.module.css";
-import { CATALOG_LAST_PAGE, catalogPageHref, catalogPageNumbers, clearCatalogFiltersHref, type CatalogPageQuery } from "./catalog-query";
+import { catalogLastPage, catalogPageHref, catalogPageNumbers, clearCatalogFiltersHref, type CatalogPageQuery } from "./catalog-query";
 import resultsStyles from "./catalog-results.module.css";
 import { CATALOG_SEARCH_FORM_ID } from "./catalog-search-form";
-import { CatalogFilterTrigger, CatalogSortSelect, Checkmark20Regular, Grid20Regular, TextBulletList20Regular } from "./catalog-toolbar-controls";
+import { CatalogSelectionRequest } from "./catalog-selection-request";
+import { CatalogFilterTrigger, CatalogPageSizeSelect, CatalogSortSelect, Checkmark20Regular, Grid20Regular, TextBulletList20Regular } from "./catalog-toolbar-controls";
 import { CatalogVinHelpLink } from "./catalog-vin-help-link";
 import { ExpertHelpQueryLink } from "./expert-help-query-link";
 
@@ -55,12 +57,17 @@ export function CatalogSearchPanel({
   const isSearch = state.query.trim().length >= 2;
   const isVin = isValidVin(state.query.trim());
   // A list opens up to its last reachable page: «Дальше» past it used to start the list again from page 1.
-  const totalPages = Math.min(CATALOG_LAST_PAGE, Math.max(1, Math.ceil(total / pageSize)));
+  const totalPages = Math.min(catalogLastPage(pageSize), Math.max(1, Math.ceil(total / pageSize)));
   const currentPage = Math.min(state.page, totalPages);
   const showPagination = !errorMessage && total > pageSize;
   const serviceLinks = isSearch && !isVin ? searchServiceLinks(state.query) : [];
   const categoryLinks = emptyState && isSearch ? suggestedCatalogSections(state.query) : [];
+  const selectionRequest = { query: state.query, sectionName, vehicleKind: state.vehicleKind };
   const filters = [
+    ...(state.vehicleKind === null ? [] : [{
+      label: CATALOG_VEHICLE_KIND_LABELS[state.vehicleKind],
+      href: catalogPageHref(action, { ...state, vehicleKind: null }),
+    }]),
     ...(state.availability === "all" ? [] : [{
       label: state.availability === "in_stock" ? "В наличии" : "Под заказ",
       href: catalogPageHref(action, { ...state, availability: "all" }),
@@ -84,18 +91,23 @@ export function CatalogSearchPanel({
     <section className={isSearch ? `${styles.emptyState} ${resultsStyles.searchEmptyState}` : styles.emptyState}>
       <h2>{emptyState.heading}</h2>
       <p>{emptyState.body}</p>
-      {isSearch ? <div className={resultsStyles.emptyLinks}>
-        {categoryLinks.map(({ href, label }) => (
-          <Link className={`${buttons.button} ${buttons.quiet}`} key={href} href={href}><Grid20Regular aria-hidden="true" />{label}</Link>
-        ))}
-        <Link className={`${buttons.button} ${buttons.soft}`} href={`/podbor?q=${encodeURIComponent(state.query.trim().slice(0, 140))}`}>
-          <VehicleCar20Regular aria-hidden="true" />
-          Подобрать по автомобилю и аналогам
-        </Link>
-      </div> : null}
+      {/* Every empty list — a search, a filter, a section with no products yet — offers the selection request. */}
+      <div className={resultsStyles.emptyLinks}>
+        <CatalogSelectionRequest empty {...selectionRequest} />
+        {isSearch ? <>
+          {categoryLinks.map(({ href, label }) => (
+            <Link className={`${buttons.button} ${buttons.quiet}`} key={href} href={href}><Grid20Regular aria-hidden="true" />{label}</Link>
+          ))}
+          <Link className={`${buttons.button} ${buttons.soft}`} href={`/podbor?q=${encodeURIComponent(state.query.trim().slice(0, 140))}`}>
+            <VehicleCar20Regular aria-hidden="true" />
+            Подобрать по автомобилю и аналогам
+          </Link>
+        </> : null}
+      </div>
     </section>
   ) : (
     <>
+      <CatalogSelectionRequest {...selectionRequest} />
       {matchMode === "any" && isSearch ? (
         <p className={resultsStyles.looseMatchNote} role="status">
           Точного совпадения по запросу «{state.query.trim()}» нет. Ниже — похожие товары. Уточните запрос или <Link href="/expert-help">спросите специалиста</Link>.
@@ -187,6 +199,7 @@ export function CatalogSearchPanel({
         {state.view === "list" && <input name="view" type="hidden" value={state.view} />}
         <CatalogFilterTrigger count={filters.length} />
         <CatalogSortSelect value={state.sort} />
+        <CatalogPageSizeSelect value={state.pageSize} />
         <Link aria-label={state.availability === "in_stock" ? "Сбросить фильтр наличия" : "В наличии"}
           data-active={state.availability === "in_stock"} className={layoutStyles.quickFilter}
           href={catalogPageHref(action, { ...state, availability: state.availability === "in_stock" ? "all" : "in_stock" })}>

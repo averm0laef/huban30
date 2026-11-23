@@ -7,6 +7,7 @@ export {
   Box24Regular,
   Chat24Regular,
   Location24Regular,
+  PersonSupport20Regular,
   ArrowUndo24Regular,
   VehicleTruck24Regular,
   Search20Regular,

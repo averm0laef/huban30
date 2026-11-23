@@ -162,6 +162,22 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
           <h1>{product.name}</h1>
           {specs.length > 1 ? <SpecTable specs={specs.filter(([label]) => label !== "Бренд" && label !== "Артикул").slice(0, 4)} /> : null}
+          {product.packSizes.length > 0 ? (
+            <nav aria-label="Другие фасовки" className={layout.packSizes}>
+              <strong>Другие фасовки</strong>
+              <ul>
+                {product.packSizes.map((pack) => (
+                  <li key={pack.slug}>
+                    <Link href={`/catalog/product/${encodeURIComponent(pack.slug)}`} title={pack.name}>
+                      <b>{pack.label}</b>
+                      <span>{pack.priceKopeks === null ? "Цена по запросу" : formatRubles(pack.priceKopeks)}</span>
+                      <small data-available={pack.availableQuantity > 0}>{pack.availableQuantity > 0 ? "В наличии" : "Под заказ"}</small>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ) : null}
           <div className={layout.compatibility}>
             <strong>Подойдёт к вашему автомобилю?</strong>
             <ExpertHelpQueryLink className={`${buttons.button} ${buttons.soft}`} prefillMessage={prefill}>
