@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { vehicleRows } from "./parts-finder";
+import { pickerStep, vehicleRows } from "./parts-finder";
+
+const toyota = { id: 2, name: "Toyota", slug: "toyota" };
+const allion = { id: 33, name: "Allion" };
+
+describe("which step the make and model picker of /podbor shows", () => {
+  it("walks make, model, generation, engine as the choices are made", () => {
+    expect(pickerStep({ family: null, make: null, model: null })).toBe(1);
+    expect(pickerStep({ family: null, make: toyota, model: null })).toBe(2);
+    expect(pickerStep({ family: "Allion", make: toyota, model: null })).toBe(3);
+    expect(pickerStep({ family: "Allion", make: toyota, model: allion })).toBe(4);
+  });
+
+  // The «Toyota» breadcrumb cleared the make and the model but not the model family: the picker stood on
+  // «Поколение» with nothing under it, and only closing it helped.
+  it("goes back to the list of makes when the make is gone, whatever was chosen under it", () => {
+    expect(pickerStep({ family: "Allion", make: null, model: null })).toBe(1);
+    expect(pickerStep({ family: "Allion", make: null, model: allion })).toBe(1);
+  });
+});
 
 describe("engine volume in the VIN result", () => {
   const volume = (value: unknown) => vehicleRows({ vehicle: { displacement_l: value } });
