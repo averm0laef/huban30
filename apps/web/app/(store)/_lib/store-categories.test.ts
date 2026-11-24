@@ -15,10 +15,11 @@ describe("pictures of the catalogue tree", () => {
     expect(named.filter((image) => !existsSync(path.join(categoriesDir, `${image}.webp`)))).toEqual([]);
   });
 
-  it("gives every section its own picture, and a subsection without one the section's", () => {
+  it("gives every section and every subsection its own picture (24.11.2026: 125 subsections showed the section's)", () => {
     expect(STOREFRONT_TAXONOMY.filter((section) => !section.image).map((section) => section.slug)).toEqual([]);
+    expect(STOREFRONT_TAXONOMY.flatMap((section) => section.children).filter((child) => !child.image).map((child) => child.slug)).toEqual([]);
     expect(storefrontSectionImage("podveska")).toBe("podveska");
-    expect(storefrontSectionImage("amortizatory")).toBe("podveska");
+    expect(storefrontSectionImage("amortizatory")).toBe("amortizatory");
     expect(storefrontSectionImage("maslyanye-filtry")).toBe("maslyanye-filtry");
     expect(storefrontSectionImage("no-such-section")).toBeNull();
   });
