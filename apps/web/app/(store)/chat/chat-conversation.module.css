@@ -391,3 +391,17 @@
 .intakeRows dd[data-empty] { color: var(--store-muted); font-weight: 500; }
 .intakeComment { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--store-bg); font-size: .9rem; line-height: 1.42; white-space: pre-wrap; }
 .intakeTime { position: absolute; right: 12px; bottom: 6px; color: var(--store-muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+
+/* A chosen file, shown before it is sent: «Убрать» or «Отправить фото». */
+.stage { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 10px 12px; padding: 10px; border-radius: 14px; background: #f2f3f8; }
+.stageThumb { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: var(--store-surface); }
+.stageThumb[data-video] { display: grid; place-items: center; color: var(--store-brand); font-size: 1.4rem; }
+.stageInfo { display: grid; gap: 2px; min-width: 0; }
+.stageInfo strong { overflow: hidden; font-size: 0.88rem; text-overflow: ellipsis; white-space: nowrap; }
+.stageInfo span { color: var(--store-muted); font-size: 0.8rem; }
+.stageActions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.stageQuiet,
+.stageSend { min-height: 44px; padding: 0 16px; border-radius: 12px; font: inherit; font-size: 0.86rem; font-weight: 700; cursor: pointer; }
+.stageQuiet { border: 1px solid var(--store-border); background: var(--store-surface); color: var(--store-text); }
+.stageSend { border: 0; background: var(--store-brand); color: var(--store-on-brand); }
+.stageSend:disabled { background: #e3e5ef; color: #9a9db3; cursor: default; }

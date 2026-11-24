@@ -15,6 +15,7 @@ import { apiRequest, errorText, StorefrontApiError } from "../_lib/storefront-ap
 import { SocialLogin } from "./social-login";
 import styles from "./storefront.module.css";
 import { notifyAfterNavigation } from "../_lib/toast";
+import { EmailField as MaskedEmailField } from "./masked-fields";
 
 export type AuthMode = "forgot" | "login" | "register" | "reset" | "staff-accept" | "verify";
 
@@ -132,7 +133,7 @@ function EmailField({ registerHint }: { registerHint?: boolean }) {
   return (
     <div className={authStyles.formField}>
       <label htmlFor="auth-email">Email</label>
-      <input id="auth-email" name="email" type="email" required maxLength={254} autoComplete="email" inputMode="email"
+      <MaskedEmailField id="auth-email" name="email" required maxLength={254}
         aria-describedby={registerHint ? "auth-email-hint" : undefined} />
       {registerHint ? <small id="auth-email-hint">На этот адрес придёт ссылка для подтверждения регистрации.</small> : null}
     </div>

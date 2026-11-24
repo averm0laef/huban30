@@ -270,6 +270,9 @@
   margin: 0;
   color: #ffb4ac;
 }
+/* The counter sits where the error would, light on the dark band. */
+.homeVin .vinForm .vinCount { grid-column: 1 / -1; grid-row: 2; color: rgb(255 255 255 / 72%); }
+.homeVin .vinForm .vinCount[data-done] { color: var(--store-accent); }
 .homeAction svg,
 .headingLink svg,
 .deliveryBanner svg { flex: none; }
@@ -401,6 +404,8 @@
   font-size: 1rem;
 }
 .vinForm .vinError { color: var(--store-danger); }
+.vinForm .vinCount { margin: 0; color: var(--store-muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.vinForm .vinCount[data-done] { color: var(--store-success); font-weight: 700; }
 .vinSubmit {
   display: grid;
   place-items: center;

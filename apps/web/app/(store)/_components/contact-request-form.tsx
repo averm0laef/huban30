@@ -15,6 +15,7 @@ import { EXPERT_HELP_VIN_STORAGE_KEY, isValidVin } from "../_lib/vin";
 import { apiRequest, errorText } from "../_lib/storefront-api";
 import styles from "./storefront.module.css";
 import { notify } from "../_lib/toast";
+import { EmailField, PhoneField } from "./masked-fields";
 
 interface ContactResponse {
   createdAt: string;
@@ -131,8 +132,8 @@ export function ContactRequestForm({
       <form className={styles.stackForm} onSubmit={submit}>
         <label className={styles.field}>Имя<input name="name" required minLength={2} maxLength={160} autoComplete="name" /></label>
         <div className={styles.splitFields}>
-          <label className={styles.field}>Email<input name="email" type="email" maxLength={254} autoComplete="email" /></label>
-          <label className={styles.field}>Телефон<input name="phone" type="tel" pattern="\+[1-9][0-9]{6,14}" placeholder="+79240000000" autoComplete="tel" /></label>
+          <label className={styles.field}>Email<EmailField name="email" maxLength={254} /></label>
+          <label className={styles.field}>Телефон<PhoneField name="phone" /></label>
         </div>
         <p className={styles.fieldNote}>Укажите хотя бы один способ связи.</p>
         <label className={styles.field}>Сообщение<textarea name="message" required minLength={10} maxLength={4000} placeholder={messagePlaceholder ?? "Опишите ваш вопрос"} /></label>

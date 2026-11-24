@@ -19,6 +19,7 @@ import commerce from "./commerce.module.css";
 import { useCart } from "./cart-provider";
 import { computeShopStatusNow } from "./shop-status";
 import styles from "./storefront.module.css";
+import { EmailField, PhoneField } from "./masked-fields";
 
 interface CheckoutResponse {
   guestAccessToken: string | null;
@@ -269,8 +270,8 @@ export function CheckoutClient({
                 <legend><span><i className={commerce.stepNumber} aria-hidden="true">2</i>Контактные данные</span></legend>
                 <div className={commerce.contactGrid}>
                   <label className={styles.field}>Имя<input name="name" required minLength={2} maxLength={160} value={contact.name} onChange={(event) => setContact((current) => ({ ...current, name: event.target.value }))} autoComplete="name" /></label>
-                  <label className={styles.field}>Email<input name="email" type="email" required maxLength={254} value={contact.email} onChange={(event) => setContact((current) => ({ ...current, email: event.target.value }))} autoComplete="email" /></label>
-                  <label className={styles.field}>Телефон<input name="phone" type="tel" required pattern="\+[1-9][0-9]{6,14}" placeholder="+79240000000" value={contact.phone} onChange={(event) => setContact((current) => ({ ...current, phone: event.target.value }))} autoComplete="tel" /></label>
+                  <label className={styles.field}>Email<EmailField name="email" required maxLength={254} value={contact.email} onChange={(email) => setContact((current) => ({ ...current, email }))} /></label>
+                  <label className={styles.field}>Телефон<PhoneField name="phone" required value={contact.phone} onChange={(phone) => setContact((current) => ({ ...current, phone }))} /></label>
                 </div>
               </fieldset>
             </section>

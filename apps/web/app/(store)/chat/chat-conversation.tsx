@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -26,6 +27,7 @@ import {
 } from "./chat-state";
 import { buildTimeline, timeLabel, type DeliveryMark } from "./chat-timeline";
 import styles from "./chat-conversation.module.css";
+import { checkChatAttachment, formatSize } from "./attachment-check";
 
 /**
  * Messenger-style pieces shared by the floating widget and the /chat page:
@@ -263,6 +265,26 @@ export function ChatComposer(props: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [failedFile, setFailedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
+  // A chosen file waits here, shown, until «Отправить» (board «Маски полей и предпросмотр фото»).
+  const [staged, setStaged] = useState<{ file: File; kind: "image" | "video"; url: string | null } | null>(null);
+  const [stageError, setStageError] = useState("");
+
+  useEffect(() => () => { if (staged?.url) URL.revokeObjectURL(staged.url); }, [staged]);
+
+  function stage(file: File): void {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    const check = checkChatAttachment(file);
+    if (!check.ok) { setStaged(null); setStageError(check.message); return; }
+    setStageError("");
+    setStaged({ file, kind: check.kind, url: check.kind === "image" ? URL.createObjectURL(file) : null });
+  }
+
+  async function sendStaged(): Promise<void> {
+    if (!staged) return;
+    const { file } = staged;
+    setStaged(null);
+    await upload(file);
+  }
   const setTextarea = (node: HTMLTextAreaElement | null) => {
     ownRef.current = node;
     if (textareaRef) textareaRef.current = node;
@@ -296,6 +318,25 @@ export function ChatComposer(props: ChatComposerProps) {
           <span aria-hidden="true" className={styles.uploadBar}><span /></span>
         </div>
       ) : null}
+      {staged && !filePending ? (
+        <div className={styles.stage}>
+          {staged.url
+            // A picture of the customer's own file, made in the browser: nothing is uploaded until «Отправить».
+            ? <img alt="Выбранное фото" className={styles.stageThumb} height={64} src={staged.url} width={64} />
+            : <span aria-hidden="true" className={styles.stageThumb} data-video="">▶</span>}
+          <div className={styles.stageInfo}>
+            <strong>{staged.file.name}</strong>
+            <span>{staged.kind === "image" ? "Фото" : "Видео"} · {formatSize(staged.file.size)}</span>
+          </div>
+          <div className={styles.stageActions}>
+            <button className={styles.stageQuiet} onClick={() => setStaged(null)} type="button">Убрать</button>
+            <button className={styles.stageSend} disabled={attachDisabled} onClick={() => void sendStaged()} type="button">
+              {staged.kind === "image" ? "Отправить фото" : "Отправить видео"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {stageError ? <p className={styles.error} role="alert">{stageError}</p> : null}
       {sendError ? <p className={styles.error} role="alert">{sendError}</p> : null}
       {fileError ? (
         <p className={styles.error} role="alert">
@@ -318,7 +359,7 @@ export function ChatComposer(props: ChatComposerProps) {
           accept={CHAT_ATTACHMENT_ACCEPT}
           className={styles.visuallyHidden}
           id={`${idPrefix}-file`}
-          onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }}
+          onChange={(event) => { const file = event.target.files?.[0]; if (file) stage(file); }}
           ref={fileInputRef}
           tabIndex={-1}
           type="file"

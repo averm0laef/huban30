@@ -64,6 +64,7 @@ import { UmapiCarCatalogue } from "./umapi-car-catalogue";
 import { numberMakers } from "./number-makers";
 import { OfferRow } from "./offer-row";
 import { VehiclePicker } from "./vehicle-picker";
+import { normalizeVin } from "../_lib/input-masks";
 
 type Mode = "parts" | "vin";
 
@@ -688,7 +689,7 @@ export function PartsFinder() {
               disabled={enabled === null}
               id={`${inputId}-vin`}
               maxLength={32}
-              onChange={(event) => setVinInput(event.target.value)}
+              onChange={(event) => setVinInput(normalizeVin(event.target.value))}
               placeholder="VIN из 17 символов или номер кузова"
               spellCheck={false}
               value={vinInput}

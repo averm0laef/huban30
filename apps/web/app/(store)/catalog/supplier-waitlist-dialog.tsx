@@ -14,6 +14,7 @@ import { formatRubles } from "../_lib/catalog-format";
 import { clearIdempotencyKey, stableIdempotencyKey } from "../_lib/idempotency";
 import { apiRequest, errorText } from "../_lib/storefront-api";
 import styles from "../_components/storefront.module.css";
+import { EmailField, PhoneField } from "../_components/masked-fields";
 
 /**
  * Everything the dialog needs to build a `/suppliers/waitlist` request for
@@ -148,8 +149,8 @@ export function SupplierWaitlistDialog({ onClose, target }: SupplierWaitlistDial
             <form className={styles.stackForm} onSubmit={submit}>
               <label className={styles.field}>Имя<input autoComplete="name" maxLength={160} minLength={2} name="name" required /></label>
               <div className={styles.splitFields}>
-                <label className={styles.field}>Email<input autoComplete="email" maxLength={254} name="email" type="email" /></label>
-                <label className={styles.field}>Телефон<input autoComplete="tel" name="phone" pattern="\+[1-9][0-9]{6,14}" placeholder="+79240000000" type="tel" /></label>
+                <label className={styles.field}>Email<EmailField maxLength={254} name="email" /></label>
+                <label className={styles.field}>Телефон<PhoneField name="phone" /></label>
               </div>
               <p className={styles.fieldNote}>Укажите хотя бы один способ связи.</p>
               <label className={styles.field}>Количество<input defaultValue={1} max={quantityCap} min={1} name="quantity" type="number" /></label>

@@ -17,6 +17,7 @@ import { GaragePanel } from "./garage-panel";
 import { SocialConnections } from "./social-login";
 import styles from "./storefront.module.css";
 import { notifyAfterNavigation } from "../_lib/toast";
+import { PhoneField } from "./masked-fields";
 
 interface AccountView {
   /** False while the picture is the automatic one. */
@@ -512,7 +513,7 @@ export function ProfileClient({ initialTab = "orders", socialStatus }: { initial
                   <h3>{editingAddress ? `Изменить адрес «${editingAddress.label}»` : "Новый адрес"}</h3>
                   <label className={styles.field}>Название<input name="label" required maxLength={80} defaultValue={editingAddress?.label ?? ""} placeholder="Например, Дом" /></label>
                   <label className={styles.field}>Получатель<input name="recipientName" required maxLength={160} defaultValue={editingAddress?.recipientName ?? data.account.displayName ?? ""} autoComplete="name" /></label>
-                  <label className={styles.field}>Телефон<input name="phone" required type="tel" pattern="\+[1-9][0-9]{6,14}" placeholder="+79240000000" defaultValue={editingAddress?.phone ?? data.account.phone ?? ""} autoComplete="tel" /></label>
+                  <label className={styles.field}>Телефон<PhoneField name="phone" required defaultValue={editingAddress?.phone ?? data.account.phone ?? ""} /></label>
                   <label className={styles.field}>Индекс<input name="postalCode" inputMode="numeric" pattern="[0-9]{6}" defaultValue={editingAddress?.postalCode ?? ""} autoComplete="postal-code" /></label>
                   <label className={styles.field}>Регион<input name="region" required maxLength={200} defaultValue={editingAddress?.region ?? "Забайкальский край"} autoComplete="address-level1" /></label>
                   <label className={styles.field}>Город или посёлок<input name="city" required maxLength={200} defaultValue={editingAddress?.city ?? "Чернышевск"} autoComplete="address-level2" /></label>
@@ -542,7 +543,7 @@ export function ProfileClient({ initialTab = "orders", socialStatus }: { initial
                 />
                 <form className={`${styles.twoColumnForm} ${styles.accountContactForm}`} onSubmit={saveProfile} onChange={() => setProfileDirty(true)}>
                   <label className={styles.field}>Имя<input name="displayName" required minLength={2} maxLength={160} defaultValue={data.account.displayName ?? ""} autoComplete="name" /></label>
-                  <label className={styles.field}>Телефон<input name="phone" type="tel" pattern="\+[1-9][0-9]{6,14}" placeholder="+79240000000" defaultValue={data.account.phone ?? ""} autoComplete="tel" /></label>
+                  <label className={styles.field}>Телефон<PhoneField name="phone" defaultValue={data.account.phone ?? ""} /></label>
                   <div className={`${styles.field} ${styles.fullField}`}>
                     <label htmlFor="account-email">Email</label>
                     <input id="account-email" type="email" value={data.account.email} readOnly aria-describedby="email-note" />
