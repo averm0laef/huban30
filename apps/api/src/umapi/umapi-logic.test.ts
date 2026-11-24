@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { combinedVerdict, groupCars, verdictFor } from "./umapi-fitment.js";
-import { bracketedNumbers, umapiCatalogueApplies } from "@an30/contracts";
+import { bracketedNumbers, umapiCatalogueApplies, umapiPhotoApplies } from "@an30/contracts";
 
 import { partCandidates, sameMaker } from "./umapi-identify.js";
 import { normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, normalizeMedias } from "./umapi-normalize.js";
@@ -45,6 +45,19 @@ describe("which part a product is", () => {
     expect(umapiCatalogueApplies({ brand: null, name: "Хомут 20-22", section: "homuty", sku: "20-22" })).toBe(false);
     expect(umapiCatalogueApplies({ brand: "LIQUI MOLY", name: "Масло 5W-40", section: "motornye-masla", sku: "3930" })).toBe(false);
     expect(umapiCatalogueApplies({ brand: "TRW", name: "Колодки", section: "tormoznaya-sistema", sku: "GDB1550" })).toBe(true);
+  });
+
+  it("asks for a photo of an oil or a fluid only of the makers the catalogue has (measured 24.11.2026)", () => {
+    expect(umapiPhotoApplies({ brand: "LIQUI MOLY", name: "2322 5W-30 TOP TEC 4400 5л", section: "motornye-masla", sku: "2322" })).toBe(true);
+    expect(umapiPhotoApplies({ brand: "Mobil", name: "Mobil Super 3000 XE 5w30 4 л", section: "motornye-masla", sku: "153018" })).toBe(true);
+    expect(umapiPhotoApplies({ brand: "MILES", name: "Антифриз MILES G11 1кг", section: "antifriz", sku: "AFGR001" })).toBe(true);
+    // Measured: none of these makers' oils is in the catalogue — a button would only spend a press.
+    expect(umapiPhotoApplies({ brand: "Shell", name: "Масло моторное Shell Helix HX7 5W-40 4л", section: "motornye-masla", sku: "550040341" })).toBe(false);
+    expect(umapiPhotoApplies({ brand: "TOTACHI", name: "Антифриз TOTACHI -40C 4л", section: "antifriz", sku: "41604" })).toBe(false);
+    expect(umapiPhotoApplies({ brand: null, name: "Тосол А-40 (200 кг)", section: "antifriz", sku: "AT40200" })).toBe(false);
+    // A part keeps the rule of the other buttons; the car list for an oil stays off.
+    expect(umapiPhotoApplies({ brand: "TRW", name: "Колодки", section: "tormoznaya-sistema", sku: "GDB1550" })).toBe(true);
+    expect(umapiCatalogueApplies({ brand: "LIQUI MOLY", name: "Масло", section: "motornye-masla", sku: "2322" })).toBe(false);
   });
 
   it("asks for our own brand and number first, and for bracketed numbers only without a brand of ours", () => {

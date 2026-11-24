@@ -101,7 +101,7 @@ function MakerSpecs({ specs }: { specs: UmapiSpec[] }) {
  * and «Фото по запросу»): an invitation to look, not «no photo»; the button and every answer stay inside the frame.
  * Never another part's picture.
  */
-function MissingPhoto({ article, ask, load, state }: { article: string; ask: ReactNode; load: () => void; state: CataloguePhotos }) {
+function MissingPhoto({ article, ask, fluid, load, state }: { article: string; ask: ReactNode; fluid: boolean; load: () => void; state: CataloguePhotos }) {
   if (state.status === "loading") {
     return <div className={styles.photoEmpty} data-state="loading"><WheelLoader label="Ищем фото и характеристики…" /></div>;
   }
@@ -109,7 +109,7 @@ function MissingPhoto({ article, ask, load, state }: { article: string; ask: Rea
     return (
       <div className={styles.photoEmpty}>
         <Camera20Regular aria-hidden="true" className={styles.photoInvite} />
-        <p className={styles.photoTitle}>Посмотрите деталь вблизи</p>
+        <p className={styles.photoTitle}>{fluid ? "Посмотрите товар вблизи" : "Посмотрите деталь вблизи"}</p>
         <p className={styles.photoText}>Покажем фото и характеристики от производителя по артикулу {article} — бесплатно, за пару секунд.</p>
         <button className={`${buttons.button} ${buttons.primary}`} onClick={load} type="button">
           <Camera20Regular aria-hidden="true" />Показать фото и характеристики
@@ -131,16 +131,20 @@ function MissingPhoto({ article, ask, load, state }: { article: string; ask: Rea
   return (
     <div className={styles.photoEmpty} role={state.status === "none" || state.status === "error" ? "status" : undefined}>
       <Camera20Regular aria-hidden="true" className={styles.photoInvite} />
-      <p className={styles.photoTitle}>{state.status === "error" ? state.message : "Сфотографируем её для вас"}</p>
-      <p className={styles.photoText}>Сделаем фото на складе и пришлём в чат — увидите деталь до покупки.</p>
+      <p className={styles.photoTitle}>{state.status === "error" ? state.message : fluid ? "Сфотографируем для вас" : "Сфотографируем её для вас"}</p>
+      <p className={styles.photoText}>{fluid
+        ? "Сделаем фото на складе — с этикеткой и датой розлива — и пришлём в чат."
+        : "Сделаем фото на складе и пришлём в чат — увидите деталь до покупки."}</p>
       {ask}
     </div>
   );
 }
 
-export function ProductGallery({ article, catalogPhotos, images, kept = null, productId, requestMessage }: {
+export function ProductGallery({ article, catalogPhotos, fluid = false, images, kept = null, productId, requestMessage }: {
   article: string;
   catalogPhotos: boolean;
+  /** Oils, fluids, car care: the copy speaks of the product, not of a part. */
+  fluid?: boolean;
   images: GalleryImage[];
   kept?: KeptCatalogueCard | null;
   productId: string;
@@ -178,7 +182,7 @@ export function ProductGallery({ article, catalogPhotos, images, kept = null, pr
             />
             {fromCatalogue ? <span className={styles.photoBadge}>{state.label}</span> : null}
           </>
-        ) : <MissingPhoto article={article} ask={askShop(state.status !== "error" || !state.retry)} load={() => { setActiveIndex(0); void load(); }} state={state} />}
+        ) : <MissingPhoto article={article} fluid={fluid} ask={askShop(state.status !== "error" || !state.retry)} load={() => { setActiveIndex(0); void load(); }} state={state} />}
       </div>
       {photos.length > 1 ? (
         <div className={styles.thumbs} role="group" aria-label={fromCatalogue ? "Фото производителя" : "Фотографии товара"}>

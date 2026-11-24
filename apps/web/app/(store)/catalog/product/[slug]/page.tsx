@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 
-import { partNumberCatalogueApplies, umapiCatalogueApplies } from "@an30/contracts";
+import { partNumberCatalogueApplies, UMAPI_FLUID_SECTIONS, umapiCatalogueApplies, umapiPhotoApplies } from "@an30/contracts";
 
 import { STORE_HOURS, STORE_LOCALITY, STORE_STREET } from "../../../../site-config";
 import { ProductBuyButton } from "../../../_components/cart-actions";
@@ -116,9 +116,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const prefill = productCompatibilityPrefillMessage(product.name, product.sku);
   // The parts catalogue (UMAPI) may be asked about it on a button: compatibility, photo, analogs.
-  const catalogueApplies = umapiCatalogueApplies({
+  const catalogueProduct = {
     brand: product.brand?.name ?? null, name: product.name, section: categoryAncestors[0] ?? product.category?.slug ?? null, sku: product.sku,
-  });
+  };
+  const catalogueApplies = umapiCatalogueApplies(catalogueProduct);
+  // Oils and fluids: the photo button only for the makers the catalogue has; never a car list.
+  const photoApplies = umapiPhotoApplies(catalogueProduct);
+  const fluid = catalogueProduct.section !== null && UMAPI_FLUID_SECTIONS.includes(catalogueProduct.section);
   const detailPanels = [
     ...(product.description ? [{ id: "about", label: "Описание", content: <p className={layout.detailsText}>{product.description}</p> }] : []),
     { id: "specs", label: "Характеристики", content: <SpecTable specs={specs} /> },
@@ -158,7 +162,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <span className={layout.crumbCurrent} aria-current="page">{product.name}</span>
       </nav>
       <article className={layout.hero}>
-        <ProductGallery article={product.sku} catalogPhotos={catalogueApplies} images={images} kept={product.catalogueCard ?? null} key={`gallery-${product.id}`} productId={product.id}
+        <ProductGallery article={product.sku} catalogPhotos={photoApplies} fluid={fluid} images={images} kept={product.catalogueCard ?? null} key={`gallery-${product.id}`} productId={product.id}
           requestMessage={productPhotoPrefillMessage(product.name, product.sku)} />
 
         <div className={layout.info}>

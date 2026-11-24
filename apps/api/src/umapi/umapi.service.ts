@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { normalizeArticleNumber, umapiCatalogueApplies, type ShopOffer } from "@an30/contracts";
+import { normalizeArticleNumber, umapiCatalogueApplies, umapiPhotoApplies, type ShopOffer } from "@an30/contracts";
 
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
@@ -65,7 +65,8 @@ const KNOWN_MAKERS = [
   "SAKURA", "BLUEPRINT", "KYB", "SACHS", "LEMFORDER", "FEBIBILSTEIN", "MEYLE", "SKF", "NTN", "SNR", "JTEKTKOYO", "NSK", "DENSO", "NGK",
   "CTR", "555", "GATES", "DAYCO", "CONTINENTALCTAM", "AISIN", "EXEDY", "VALEO", "LUK", "NISSHINBO", "AKEBONO", "SANGSIN", "LYNXAUTO",
 ];
-function makerRank(brand: string): number {
+/** Where a maker stands among KNOWN_MAKERS (their number when not among them): known makers are listed first. */
+export function makerRank(brand: string): number {
   const index = KNOWN_MAKERS.findIndex((known) => sameMaker(known, brand));
   return index === -1 ? KNOWN_MAKERS.length : index;
 }
@@ -215,10 +216,11 @@ export class UmapiService {
     return ambiguous ? "ambiguous" : null;
   }
 
-  private async checkable(productId: string): Promise<ProductRow | UmapiProductAnswer> {
+  /** `photo`: the photo button, which also serves the few oils and fluids the catalogue has (umapiPhotoApplies). */
+  private async checkable(productId: string, purpose: "fitment" | "photo" = "fitment"): Promise<ProductRow | UmapiProductAnswer> {
     const product = await this.product(productId);
     if (!product) return { status: "not_found" };
-    if (!umapiCatalogueApplies(product)) return { status: "not_applicable" };
+    if (!(purpose === "photo" ? umapiPhotoApplies(product) : umapiCatalogueApplies(product))) return { status: "not_applicable" };
     return product;
   }
 
@@ -340,7 +342,7 @@ export class UmapiService {
   async productPhotos(productId: string, caller: UmapiCaller): Promise<UmapiProductAnswer | { status: "not_available" } | UmapiPhotoAnswer> {
     const base = this.gateway.mediaBaseUrl;
     if (!base) return { status: "not_available" };
-    const product = await this.checkable(productId);
+    const product = await this.checkable(productId, "photo");
     if ("status" in product) return product;
     const identified = await this.identify(product, caller, true);
     if (identified === "ambiguous") return { status: "ambiguous" };

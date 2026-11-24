@@ -1,4 +1,4 @@
-import { normalizeArticleNumber } from "./catalog-search-normalize.js";
+import { normalizeArticleNumber, normalizeBrand } from "./catalog-search-normalize.js";
 import { UNLINKABLE_SECTIONS } from "./parts-finder.js";
 
 /**
@@ -37,4 +37,22 @@ export function umapiCatalogueApplies(product: { brand: string | null; name: str
   const number = normalizeArticleNumber(product.sku).length;
   if (product.brand) return number >= 4;
   return number >= 5 || bracketedNumbers(product.name).length > 0;
+}
+
+/**
+ * Oils, coolants, brake and power-steering fluids, car care: no car list, but the catalogue has the maker's photo
+ * and characteristics for a few makers. Measured on the owner's base (24.11.2026, 118 products of 29 makers asked
+ * by their own number): LIQUI MOLY, Mobil (in the catalogue «MOBIL» / «EXXONMOBIL»), Motul, MILES and AIRLINE —
+ * 16 of their 20 found; Shell, ZIC, TOTACHI, ENEOS, KIXX, Castrol, IDEMITSU, Лукойл, Роснефть, Газпромнефть and the
+ * rest — 0 of 98. A button that would find nothing is not shown: the page offers the shop's own photo at once.
+ */
+export const UMAPI_FLUID_SECTIONS: readonly string[] = ["motornye-masla", "transmissionnye-masla", "antifriz", "gidravlicheskaya-zhidkost", "avtohimiya"];
+export const UMAPI_FLUID_MAKERS: readonly string[] = ["LIQUIMOLY", "MOBIL", "EXXONMOBIL", "MOTUL", "MILES", "AIRLINE"];
+
+/** Whether «Показать фото и характеристики» may ask the catalogue: every part it can identify, and the fluids above. */
+export function umapiPhotoApplies(product: { brand: string | null; name: string; section: string | null; sku: string }): boolean {
+  if (product.section && UMAPI_FLUID_SECTIONS.includes(product.section)) {
+    return product.brand !== null && UMAPI_FLUID_MAKERS.includes(normalizeBrand(product.brand)) && normalizeArticleNumber(product.sku).length >= 4;
+  }
+  return umapiCatalogueApplies(product);
 }
