@@ -86,3 +86,48 @@ export function readableName(name: string): string {
     .replace(/\(([^()]*)\)/gu, (_whole, inside: string) => `(${inside.replace(/_/gu, "").replace(/\s*,\s*/gu, ", ").trim()})`)
     .replace(/[A-ZА-ЯЁ][A-ZА-ЯЁ]{3,}/gu, (word) => word[0] + word.slice(1).toLowerCase());
 }
+
+/* ---------------- «Каталог запчастей по машине» (apps/api/src/umapi/umapi-car-catalogue.*) ---------------- */
+
+export interface CarCategory { children: CarCategory[]; id: number; name: string }
+export interface CarGroup { categoryIds: number[]; hint: string; id: number; name: string }
+export interface CarCategoryMatch { id: number; leaf: boolean; name: string; path: string[] }
+export type CarCatalogueAnswer = { status: "unknown_car" } | { groups: CarGroup[]; matches: CarCategoryMatch[]; status: "ok"; tree: CarCategory[] };
+export interface CarPartType { id: number; name: string; original: string }
+export interface CarPartView {
+  article: string;
+  brand: string;
+  criteria: Array<{ name: string; value: string }>;
+  /** The maker's picture of this catalogue part, shown straight from the catalogue's image server. */
+  image: string | null;
+  name: string | null;
+  shop: ShopOffer[];
+}
+export type CarPartsAnswer =
+  | { status: "unknown_car" | "unknown_category" }
+  | { category: { id: number; name: string; path: string[] }; status: "choose_type"; types: CarPartType[] }
+  | {
+    brands: Array<{ count: number; name: string }>;
+    catalogue: CarPartView[];
+    category: { id: number; name: string; path: string[] };
+    hasMore: boolean;
+    ours: CarPartView[];
+    page: number;
+    status: "ok";
+    total: number;
+    truncated: boolean;
+    type: CarPartType;
+    types: CarPartType[];
+  };
+
+export function carCategories(modificationId: number, query: string | null): Promise<CarCatalogueAnswer> {
+  return umapiGet<CarCatalogueAnswer>(`car/${modificationId}/categories${query ? `?q=${encodeURIComponent(query.slice(0, 80))}` : ""}`);
+}
+
+export function carParts(modificationId: number, input: { brand?: string | null; category: number; page?: number; type?: number | null }): Promise<CarPartsAnswer> {
+  const parameters = new URLSearchParams({ category: String(input.category) });
+  if (input.type) parameters.set("type", String(input.type));
+  if (input.brand) parameters.set("brand", input.brand);
+  if (input.page && input.page > 1) parameters.set("page", String(input.page));
+  return umapiGet<CarPartsAnswer>(`car/${modificationId}/parts?${parameters.toString()}`);
+}

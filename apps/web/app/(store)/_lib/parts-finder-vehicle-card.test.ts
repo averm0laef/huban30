@@ -58,3 +58,16 @@ describe("the chosen car as the header names it", () => {
     expect(chosenCarCaption({ label: "   " }).caption).toBe("Ваш автомобиль");
   });
 });
+
+describe("the car's parts catalogue from UMAPI (podbor/umapi-car-catalogue.tsx)", () => {
+  const base = { saved: false, signedIn: false, source: "local" as const, useVehicle: true };
+  it("opens for a car of our vehicle catalog with its engine, asks for the engine otherwise", () => {
+    expect(vehicleCardActions({ ...base, picked: { label: "Audi A4", modelId: 100000002, modificationId: 100000777 }, umapi: true }).carCatalog).toBe("open");
+    expect(vehicleCardActions({ ...base, picked: { label: "Audi A4", modelId: 100000002 }, umapi: true }).carCatalog).toBe("needs-engine");
+  });
+
+  it("is not offered while the catalogue does not answer, nor when parts are not picked for the car", () => {
+    expect(vehicleCardActions({ ...base, picked: { label: "Audi A4", modificationId: 100000777 }, umapi: false }).carCatalog).toBeNull();
+    expect(vehicleCardActions({ ...base, picked: { label: "Audi A4", modificationId: 100000777 }, umapi: true, useVehicle: false }).carCatalog).toBeNull();
+  });
+});

@@ -1,0 +1,99 @@
+/* The chosen car's parts catalogue on /podbor (UMAPI): sections, categories, parts — the shop's own first.
+   Built from the same tokens and shapes as car-catalog.module.css and parts-finder.module.css. */
+.catalogue { display: grid; gap: 16px; padding: clamp(16px, 2.4vw, 24px); border: 1px solid var(--store-border); border-radius: 20px; background: var(--store-surface); scroll-margin-top: 128px; }
+.head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.head h2 { margin: 0; font-family: var(--store-font-display); font-size: clamp(1.15rem, 2vw, 1.4rem); line-height: 1.25; overflow-wrap: anywhere; }
+.head h2:focus { outline: none; }
+
+/* The chosen car, in sight on every step. */
+.plate { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--store-header-bg-strong); color: var(--store-header-text); }
+.plate > div { display: grid; gap: 2px; min-width: 0; }
+.plate strong { font-family: var(--store-font-display); font-size: 1rem; line-height: 1.3; overflow-wrap: anywhere; }
+.plate small { color: var(--store-header-muted); font-size: .82rem; line-height: 1.4; }
+.mark { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--store-accent); color: var(--store-accent-text); font-family: var(--store-font-display); font-size: .7rem; font-weight: 800; letter-spacing: .02em; overflow: hidden; }
+
+.find { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 4px 4px 4px 14px; border: 1px solid var(--store-border); border-radius: 14px; background: var(--store-bg); }
+.find:focus-within { border-color: var(--store-brand); }
+.find > svg { flex: none; color: var(--store-brand); }
+.find input { flex: 1; min-width: 0; min-height: 44px; border: 0; background: transparent; color: var(--store-text); font: inherit; font-size: 1rem; }
+.find input:focus { outline: none; }
+
+.frequent { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.frequent > span { color: var(--store-muted); font-size: .86rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid var(--store-border); border-radius: var(--store-radius-full); background: var(--store-surface); color: var(--store-text); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease); }
+.chip small { color: var(--store-muted); font-size: .76rem; font-weight: 500; }
+.chip:hover { border-color: var(--store-brand); }
+.chip[aria-pressed="true"] { border-color: var(--store-brand); background: var(--store-brand-soft); color: var(--store-brand-strong); }
+
+.groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 10px; }
+.group { display: grid; align-content: start; gap: 4px; min-height: 84px; padding: 14px; border: 1px solid var(--store-border); border-radius: 14px; background: var(--store-bg); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease); }
+.group strong { font-size: .95rem; overflow-wrap: anywhere; }
+.group small { color: var(--store-muted); font-size: .8rem; line-height: 1.35; overflow-wrap: anywhere; }
+.group:hover { border-color: var(--store-brand); background: var(--store-surface); }
+.group[data-all] { border-style: dashed; }
+
+.matches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 8px; align-items: start; }
+.matches > p { grid-column: 1 / -1; }
+.matches > button:last-child { justify-self: start; }
+.match { display: grid; gap: 2px; min-height: 56px; padding: 10px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); color: var(--store-text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease), background-color var(--store-duration-fast) var(--store-ease); }
+.match:hover { border-color: var(--store-brand); background: var(--store-surface); }
+.match strong { font-size: .95rem; overflow-wrap: anywhere; }
+.match small { color: var(--store-muted); font-size: .8rem; }
+
+.tree { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); align-items: start; gap: 8px; }
+.branch { border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); }
+.branch[open] { background: var(--store-surface); }
+.branch > summary { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px 0 14px; font-weight: 650; list-style: none; cursor: pointer; }
+.branch > summary::-webkit-details-marker { display: none; }
+.branch > summary span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.branch > summary small { color: var(--store-muted); font-size: .78rem; font-weight: 500; }
+.branch > summary svg { flex: none; color: var(--store-muted); transition: transform var(--store-duration-fast) var(--store-ease); }
+.branch[open] > summary svg { transform: rotate(180deg); }
+.branch > summary:hover { color: var(--store-brand); }
+.branchBody { display: grid; gap: 4px; padding: 0 8px 8px; }
+.branchBody .branch { border-color: transparent; background: transparent; }
+.leaf { display: block; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--store-text); font: inherit; font-size: .92rem; text-align: left; cursor: pointer; overflow-wrap: anywhere; transition: background-color var(--store-duration-fast) var(--store-ease), color var(--store-duration-fast) var(--store-ease); }
+.leaf:hover { background: var(--store-brand-soft); color: var(--store-brand-strong); }
+.tree > .leaf { border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); padding-inline: 14px; font-weight: 650; }
+
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--store-muted); font-size: .86rem; }
+.crumbs > span { display: inline-flex; gap: 6px; }
+.crumbs button { min-height: 44px; padding: 0; border: 0; background: none; color: var(--store-brand); font: inherit; font-weight: 600; cursor: pointer; }
+
+.loading { display: grid; place-items: center; min-height: 140px; }
+.empty { display: grid; justify-items: start; gap: 8px; padding: 14px 16px; border: 1px dashed var(--store-border); border-radius: 12px; background: var(--store-bg); }
+.empty p { margin: 0; color: var(--store-muted); font-size: .9rem; line-height: 1.5; }
+.empty a { color: var(--store-brand); }
+.types { display: grid; gap: 10px; }
+
+.parts { display: grid; gap: 18px; }
+.parts > div > .chips { margin-bottom: 12px; }
+.list { display: grid; gap: 12px; }
+.part { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--store-border); border-radius: var(--store-radius); background: var(--store-surface); }
+.part[data-ours] { border: 2px solid var(--store-brand); }
+.partHead { display: flex; align-items: flex-start; gap: 14px; }
+.photo { flex: none; display: grid; place-items: center; width: 88px; height: 88px; overflow: hidden; border: 1px solid var(--store-border); border-radius: 12px; background: #fff; }
+.photo img { width: 100%; height: 100%; object-fit: contain; }
+.photo span { padding: 6px; color: var(--store-muted); font-size: .75rem; line-height: 1.3; text-align: center; }
+.identity { display: grid; gap: 4px; min-width: 0; }
+.name { margin: 0; font-size: .98rem; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+.number { margin: 0; color: var(--store-muted); font-size: .88rem; overflow-wrap: anywhere; }
+.number strong { color: var(--store-text); }
+.criteria { margin: 0; color: var(--store-muted); font-size: .82rem; line-height: 1.45; overflow-wrap: anywhere; }
+
+.note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 14px 16px; border: 1px dashed var(--store-border); border-radius: 14px; background: var(--store-bg); font-size: .9rem; line-height: 1.5; }
+
+@media (max-width: 560px) {
+  .photo { width: 72px; height: 72px; }
+  .find { padding-left: 12px; }
+  .find > svg { display: none; }
+  /* «Часто ищут» stays one line on a phone, swiped sideways inside itself — the page never scrolls sideways. */
+  .frequent { flex-wrap: nowrap; overflow-x: auto; margin-inline: -4px; padding: 2px 4px 6px; scrollbar-width: none; }
+  .frequent::-webkit-scrollbar { display: none; }
+  .frequent > * { flex: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip, .group, .match, .leaf, .branch > summary svg { transition: none; }
+}

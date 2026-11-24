@@ -13,6 +13,7 @@ import {
   PickerModelsQuerySchema,
   PickerModificationsQuerySchema,
   PickerSuggestQuerySchema,
+  VehicleUnderstandQuerySchema,
   type PartsFinderResolveResponse,
   type PartsFinderShopAnalogsResponse,
   type PartsFinderStaffOverview,
@@ -365,6 +366,12 @@ export class PartsFinderService {
   async suggest(query: unknown) {
     const { q } = parse(PickerSuggestQuerySchema, query);
     return { items: await this.run(() => this.vehicles.suggest(q)) };
+  }
+
+  /** The search page's «деталь + машина» hint: the car named in a request, never a paid call. */
+  async understand(query: unknown) {
+    const { q } = parse(VehicleUnderstandQuerySchema, query);
+    return { vehicle: await this.run(() => this.vehicles.understand(q)) };
   }
 
   async usage(): Promise<JsonRecord> {

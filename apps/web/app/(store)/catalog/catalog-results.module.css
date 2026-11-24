@@ -395,3 +395,17 @@
 @media (max-width: 520px) {
   .selectionRequest > a { flex: 1 1 100%; justify-content: center; }
 }
+
+/* «фильтр салона ауди а4»: the part in the catalogue of the car the request names (catalog-car-part-hint.tsx). */
+.carHint { display: grid; gap: 12px; margin-block: 12px; padding: 16px; border: 2px solid var(--store-brand); border-radius: var(--store-radius); background: var(--store-surface); }
+.carHintHead { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; }
+.carHintHead > svg { flex: none; margin-top: 3px; color: var(--store-brand); }
+.carHintHead > div { flex: 1 1 260px; min-width: 0; }
+.carHintHead h2 { margin: 0; font-family: var(--store-font-display); font-size: 1.1rem; line-height: 1.3; overflow-wrap: anywhere; }
+.carHintHead p { margin: 4px 0 0; color: var(--store-muted); font-size: .9rem; line-height: 1.45; }
+.carHintChips { display: flex; flex-wrap: wrap; gap: 8px; }
+.carHintChips a { display: inline-grid; align-content: center; gap: 1px; min-height: 48px; padding: 4px 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-bg); color: var(--store-text); text-decoration: none; transition: border-color var(--store-duration-fast) var(--store-ease); }
+.carHintChips a:hover { border-color: var(--store-brand); }
+.carHintChips strong { font-size: .9rem; }
+.carHintChips small { color: var(--store-muted); font-size: .76rem; }
+@media (prefers-reduced-motion: reduce) { .carHintChips a { transition: none; } }

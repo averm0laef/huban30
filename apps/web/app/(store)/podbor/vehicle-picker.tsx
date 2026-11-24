@@ -83,9 +83,11 @@ export function groupFamilies(models: readonly PickerModel[]): FamilyGroup[] {
  * makes and models. The step row shows where the customer is and lets them
  * step back; every choice is a 44 px button reachable from the keyboard.
  */
-export function VehiclePicker({ onCancel, onPick, source = "local" }: {
+export function VehiclePicker({ onCancel, onPick, preset = null, source = "local" }: {
   onCancel: () => void;
   onPick: (vehicle: PickedVehicle) => void;
+  /** The make (and model) a search named («фильтр салона ауди а4»): the picker opens on them. */
+  preset?: { make: string; model?: number } | null;
   /** "tecdoc": makes, generations and engines come from the TecDoc catalogue, asked step by step. */
   source?: "local" | "tecdoc";
 }) {
@@ -180,6 +182,26 @@ export function VehiclePicker({ onCancel, onPick, source = "local" }: {
       .then((data) => setModifications({ data, status: "ready" }))
       .catch((caught: unknown) => setModifications({ message: message(caught), status: "error" }));
   }
+
+  // Opened from a search that named the car: straight to its models — or, with the model, to its engines.
+  const presetDone = useRef(false);
+  useEffect(() => {
+    if (!preset || presetDone.current || catalog !== "local") return;
+    presetDone.current = true;
+    catalogGet<ModelsResponse>("models", { make: preset.make })
+      .then((data) => {
+        const found = preset.model ? data.models.find((item) => item.id === preset.model) : undefined;
+        if (found) {
+          setModels({ data, status: "ready" });
+          openModel(data.make, found);
+        } else {
+          openMake(data.make);
+        }
+      })
+      .catch(() => undefined);
+    // Once, for the preset the page was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset, catalog]);
 
   function pickSuggestion(item: SuggestItem) {
     setQuery("");

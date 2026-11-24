@@ -37,6 +37,18 @@ interface Snapshot {
 
 export interface CatalogSuggestion { family?: string; label: string; make: CatalogPickerMake; model: CatalogPickerModel | null }
 
+/** A search request that names a car: the car, and what is left of the words — the part. */
+export interface VehicleInQuery {
+  family: string;
+  label: string;
+  make: CatalogPickerMake;
+  /** The generations of that model; narrowed by a body code or a year typed along («b8», «2012»). */
+  models: CatalogPickerModel[];
+  part: string;
+}
+
+const PART_STOP_WORDS = new Set(["для", "на", "в", "к", "с", "по", "от", "купить", "нужен", "нужна", "нужны", "цена"]);
+
 export interface CatalogSelectedVehicle {
   capacity: string | null; engine: string | null; fapiMakeId: null; fapiModelId: null; fapiModificationId: null; label: string; make: string; model: string;
 }
@@ -267,6 +279,73 @@ export class VehicleCatalogService implements OnModuleInit {
       .sort((a, b) => a.score - b.score || a.label.localeCompare(b.label, "ru"))
       .slice(0, 10)
       .map(({ score: _score, ...item }) => item);
+  }
+
+  /**
+   * «фильтр салона ауди а4», «колодки камри 70»: the car a search request names, read from our own catalog (no paid
+   * call). A make must be named in full, a model by its name (in any layout, Russian spelling or transliteration);
+   * without a make only a model name of four letters or more of a make the shop knows counts, so that a part's own
+   * word never reads as a car. What remains is the part; a request without such a remainder is not one.
+   */
+  async understand(query: string): Promise<VehicleInQuery | null> {
+    const { families, makes } = await this.load();
+    const raw = words(query).slice(0, 12);
+    if (raw.length < 2) return null;
+    const variants = raw.map((word) => new Set([word, ...words(toLatinLayout(word)), ...phoneticLatin(word)].flatMap((item) => [item, ALIASES[item] ?? item])));
+    const used = new Set<number>();
+    const consume = (key: string): number[] | null => {
+      const parts = key.split(" ").filter(Boolean);
+      if (parts.length === 0) return null;
+      const taken = new Set(used);
+      const hit: number[] = [];
+      for (const part of parts) {
+        const index = variants.findIndex((set, position) => !taken.has(position) && set.has(part));
+        if (index === -1) return null;
+        hit.push(index);
+        taken.add(index);
+      }
+      return hit;
+    };
+    const makeKeys = (make: MakeView) => [keyOf(make.name), keyOf(make.slug.replaceAll("-", " ")), ...(make.nameRu ? [keyOf(make.nameRu)] : [])];
+    let make: { hit: number[]; view: MakeView } | null = null;
+    for (const candidate of makes) {
+      // «Toyota (FAW)»: a joint-venture make is never read from the plain name.
+      if (/\(/u.test(candidate.name)) continue;
+      for (const key of makeKeys(candidate)) {
+        const hit = consume(key);
+        if (hit && (!make || hit.length > make.hit.length || (hit.length === make.hit.length && (candidate.rank ?? 99) < (make.view.rank ?? 99)))) make = { hit, view: candidate };
+      }
+    }
+    for (const index of make?.hit ?? []) used.add(index);
+    let model: { family: Family; hit: number[] } | null = null;
+    for (const family of families) {
+      if (make ? family.make.id !== make.view.id : family.make.rank === null || family.key.replaceAll(" ", "").length < 4) continue;
+      const hit = consume(family.key);
+      if (hit && (!model || hit.length > model.hit.length || (hit.length === model.hit.length && (family.make.rank ?? 99) < (model.family.make.rank ?? 99)))) model = { family, hit };
+    }
+    if (!model) return null;
+    for (const index of model.hit) used.add(index);
+    // A body code, series or year typed along narrows the generations («a4 b8», «камри 70», «королла 2012»).
+    let generations = model.family.models;
+    for (let index = 0; index < raw.length; index += 1) {
+      if (used.has(index) || !/\d/u.test(raw[index]!)) continue;
+      const year = /^(19|20)\d{2}$/u.test(raw[index]!) ? Number(raw[index]) : null;
+      const narrowed = generations.filter((item) => {
+        if (year) return (item.yearFrom ?? 0) <= year && (item.yearTo ?? 9999) >= year;
+        const names = words([item.bodyCode, item.series, item.generation].filter(Boolean).join(" "));
+        return [...variants[index]!].some((variant) => names.includes(variant));
+      });
+      if (narrowed.length > 0) { generations = narrowed; used.add(index); }
+    }
+    const part = raw.filter((word, index) => !used.has(index) && !PART_STOP_WORDS.has(word));
+    if (!part.some((word) => /^\p{L}{3,}$/u.test(word))) return null;
+    return {
+      family: model.family.family,
+      label: `${model.family.make.name} ${model.family.family}`,
+      make: publicMake(model.family.make),
+      models: [...generations].sort((a, b) => (a.yearFrom ?? 0) - (b.yearFrom ?? 0)).slice(-10),
+      part: part.join(" "),
+    };
   }
 
   /**

@@ -4,9 +4,10 @@ import { ProductPhotoNormalizer } from "../catalog/product-photo-normalizer.js";
 import { PartsFinderShopService } from "../parts-finder/parts-finder-shop.service.js";
 import { UmapiBudgetService } from "./umapi-budget.service.js";
 import { UmapiCacheService } from "./umapi-cache.service.js";
+import { UmapiCarCatalogueService } from "./umapi-car-catalogue.service.js";
 import { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import { UmapiProductCardService } from "./umapi-product-card.service.js";
-import { StaffUmapiController, UmapiController } from "./umapi.controller.js";
+import { StaffUmapiController, UmapiCarCatalogueController, UmapiController } from "./umapi.controller.js";
 import { UmapiGateway } from "./umapi.gateway.js";
 import { UmapiService } from "./umapi.service.js";
 
@@ -17,8 +18,8 @@ import { UmapiService } from "./umapi.service.js";
  * no state, so this module has its own instance.
  */
 @Module({
-  controllers: [UmapiController, StaffUmapiController],
+  controllers: [UmapiController, UmapiCarCatalogueController, StaffUmapiController],
   exports: [UmapiService],
-  providers: [PartsFinderShopService, ProductPhotoNormalizer, UmapiPhotoArchiveService, UmapiProductCardService, UmapiBudgetService, UmapiCacheService, UmapiGateway, UmapiService],
+  providers: [PartsFinderShopService, ProductPhotoNormalizer, UmapiPhotoArchiveService, UmapiProductCardService, UmapiBudgetService, UmapiCacheService, UmapiCarCatalogueService, UmapiGateway, UmapiService],
 })
 export class UmapiModule {}

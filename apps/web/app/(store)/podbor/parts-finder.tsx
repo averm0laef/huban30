@@ -25,12 +25,13 @@ import type { FormEvent, ReactNode } from "react";
 
 import { AddToCartButton } from "../_components/cart-actions";
 import buttons from "../_components/store-button.module.css";
-import { umapiGet } from "../_lib/umapi";
+import { umapiGet, umapiStatus } from "../_lib/umapi";
 import { formatRubles } from "../_lib/catalog-format";
 import {
   CHOICE_LABELS,
   CROSS_GROUP_LABELS,
   FinderError,
+  VEHICLE_CATALOG_ID_BASE,
   VEHICLE_WARNINGS,
   finderRequest,
   bestSupplierStock,
@@ -59,6 +60,7 @@ import { EXPERT_HELP_VIN_STORAGE_KEY } from "../_lib/vin";
 import { ExpertHelpQueryLink } from "../catalog/expert-help-query-link";
 import styles from "./parts-finder.module.css";
 import { CarCatalog } from "./car-catalog";
+import { UmapiCarCatalogue } from "./umapi-car-catalogue";
 import { numberMakers } from "./number-makers";
 import { OfferRow } from "./offer-row";
 import { VehiclePicker } from "./vehicle-picker";
@@ -327,6 +329,11 @@ function NumberAnswer({ article, shop }: { article: string; shop: ShopOffer[] })
   );
 }
 
+/** Our vehicle catalog's modification of a picked car (a car picked before the switch to it has none). */
+function catalogueModification(car: PickedVehicle): number | null {
+  return car.modificationId !== undefined && car.modificationId >= VEHICLE_CATALOG_ID_BASE ? car.modificationId : null;
+}
+
 /* ---------------- Page ---------------- */
 
 export function PartsFinder() {
@@ -350,6 +357,10 @@ export function PartsFinder() {
   const [source, setSource] = useState<"local" | "tecdoc">("local");
   // The chosen car's parts catalogue is opened by the visitor (a pick, a request, a button), never on page load.
   const [carBrowse, setCarBrowse] = useState<{ query: string | null } | null>(null);
+  // The car's parts catalogue from UMAPI: the vehicle catalog is UMAPI's own file and the catalogue answers.
+  const [umapiCatalogue, setUmapiCatalogue] = useState(false);
+  // «фильтр салона» handed over from a search («деталь + машина»): opened in the car's catalogue once a car is chosen.
+  const [pendingPart, setPendingPart] = useState<string | null>(() => parameters?.get("part")?.trim().slice(0, 80) || null);
   const [vinCars, setVinCars] = useState<Load<VinCandidate[]>>({ status: "idle" });
   const [garage, setGarage] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const resultRef = useRef<HTMLDivElement>(null);
@@ -371,9 +382,35 @@ export function PartsFinder() {
     // A signed-in customer who picked no car on this device shops for the main car of the garage.
     if (!listed) void activeCar().then((car) => { if (car) { setPicked(car); setVehicle(car.label); } });
     finderRequest<{ catalog?: string; enabled?: boolean }>("status")
-      .then((data) => { setEnabled(data.enabled === true); setSource(data.catalog === "tecdoc" ? "tecdoc" : "local"); })
+      .then((data) => {
+        setEnabled(data.enabled === true);
+        setSource(data.catalog === "tecdoc" ? "tecdoc" : "local");
+        if (data.catalog === "umapi") void umapiStatus().then((umapi) => setUmapiCatalogue(umapi.enabled));
+      })
       .catch(() => setEnabled(false));
   }, []);
+
+  // The car the UMAPI catalogue can open: one of our vehicle catalog with its engine chosen.
+  const catalogueCar = umapiCatalogue && picked && catalogueModification(picked) ? { ...picked, modificationId: catalogueModification(picked)! } : null;
+  // A search «фильтр салона ауди а4» hands over the car it named: the picker opens on that make and model.
+  const presetMake = parameters?.get("make")?.trim();
+  const presetModel = Number(parameters?.get("model"));
+  const pickerPreset = presetMake && /^[a-z0-9-]{1,60}$/u.test(presetMake)
+    ? { make: presetMake, ...(Number.isInteger(presetModel) && presetModel > 0 ? { model: presetModel } : {}) }
+    : null;
+
+  // Handed a part from a search: with a car already chosen its catalogue opens at once; without one — the picker.
+  useEffect(() => {
+    if (!umapiCatalogue || !pendingPart) return;
+    if (catalogueCar && !pickerPreset) {
+      setCarBrowse({ query: pendingPart });
+      setPendingPart(null);
+    } else {
+      setShowPicker(true);
+    }
+    // Once, when the catalogue is known to answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [umapiCatalogue]);
 
   const run = useCallback((next: SearchState) => {
     setSearch(next);
@@ -445,7 +482,7 @@ export function PartsFinder() {
       decode(text);
       return;
     }
-    if (source === "tecdoc" && picked?.tecdoc?.genId && useVehicle) {
+    if ((source === "tecdoc" && picked?.tecdoc?.genId && useVehicle) || (catalogueCar && useVehicle)) {
       setResult({ status: "idle" });
       setCarBrowse({ query: text.slice(0, 80) });
       return;
@@ -473,7 +510,9 @@ export function PartsFinder() {
     setGarage("idle");
     setMode("parts");
     // The car was just chosen: its parts catalogue is what the visitor came for.
-    setCarBrowse(next.tecdoc?.genId ? { query: null } : null);
+    const part = pendingPart;
+    setPendingPart(null);
+    setCarBrowse(next.tecdoc?.genId || (umapiCatalogue && catalogueModification(next)) ? { query: part } : null);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
@@ -483,7 +522,7 @@ export function PartsFinder() {
     addGarageVehicle(picked, true).then(() => setGarage("saved")).catch(() => setGarage("error"));
   }
   // What the car's card offers under the car; saving to the garage does not depend on TecDoc (_lib/parts-finder.ts).
-  const cardActions = vehicleCardActions({ picked, saved: garage === "saved", signedIn: signedIn(), source, useVehicle });
+  const cardActions = vehicleCardActions({ picked, saved: garage === "saved", signedIn: signedIn(), source, umapi: umapiCatalogue, useVehicle });
 
   // TecDoc names the exact modifications a VIN may be; asked only on the visitor's click.
   function findVinCars() {
@@ -604,7 +643,7 @@ export function PartsFinder() {
               </div>
             </div>
           ) : null}
-          {showPicker ? <VehiclePicker onCancel={() => setShowPicker(false)} onPick={pickVehicle} source={source} /> : null}
+          {showPicker ? <VehiclePicker onCancel={() => setShowPicker(false)} onPick={pickVehicle} preset={pickerPreset} source={source} /> : null}
           <form className={styles.form} onSubmit={submitParts}>
             <label className={styles.visuallyHidden} htmlFor={inputId}>Деталь и машина или артикул</label>
             <Search20Regular aria-hidden="true" />
@@ -700,6 +739,12 @@ export function PartsFinder() {
       {mode === "parts" && carBrowse && picked?.tecdoc?.genId && useVehicle ? (
         <div className={styles.body}>
           <CarCatalog car={picked} onClearQuery={() => { setInput(""); setCarBrowse({ query: null }); }} query={carBrowse.query} />
+        </div>
+      ) : null}
+
+      {mode === "parts" && carBrowse && catalogueCar && useVehicle ? (
+        <div className={styles.body}>
+          <UmapiCarCatalogue car={catalogueCar} key={catalogueCar.modificationId} onClearQuery={() => { setInput(""); setCarBrowse({ query: null }); }} query={carBrowse.query} />
         </div>
       ) : null}
 

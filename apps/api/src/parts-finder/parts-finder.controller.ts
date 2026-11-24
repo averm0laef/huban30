@@ -94,6 +94,12 @@ export class PartsFinderController {
     return this.finder.suggest(query);
   }
 
+  @Get("vehicles/understand")
+  async understand(@Query() query: unknown, @Req() request: FastifyRequest) {
+    await this.throttle("suggest", request);
+    return this.finder.understand(query);
+  }
+
   private async throttle(route: keyof typeof PARTS_FINDER_RATE_LIMITS, request: FastifyRequest) {
     const { limit, scope, windowSeconds } = PARTS_FINDER_RATE_LIMITS[route];
     await this.rateLimit.consume(scope, request.ip, limit, windowSeconds);

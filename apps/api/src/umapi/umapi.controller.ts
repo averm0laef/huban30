@@ -6,6 +6,7 @@ import { Public, RequirePermissions } from "../auth/auth.decorators.js";
 import { RateLimitService } from "../security/rate-limit.service.js";
 import { UmapiBudgetService } from "./umapi-budget.service.js";
 import { UmapiCacheService } from "./umapi-cache.service.js";
+import { UmapiCarCatalogueService } from "./umapi-car-catalogue.service.js";
 import { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import { UmapiError, UmapiGateway, type UmapiCaller } from "./umapi.gateway.js";
 import { UmapiService } from "./umapi.service.js";
@@ -81,6 +82,42 @@ export class UmapiController {
   async photos(@Param("productId") productId: string, @Req() request: FastifyRequest) {
     const product = parse(z.uuid(), productId);
     return this.umapi.productPhotos(product, caller(request)).catch((error: unknown) => { throw umapiHttpError(error); });
+  }
+}
+
+const CarQuery = z.object({ q: z.string().trim().max(80).optional() });
+const CarPartsQuery = z.object({
+  brand: z.string().trim().min(1).max(80).optional(),
+  category: id,
+  page: z.coerce.number().int().min(1).max(20).default(1),
+  type: id.optional(),
+});
+
+/**
+ * «Каталог запчастей по машине»: the sections of the customer's car and the parts of a section, our products first.
+ * The car is our own vehicle catalog's modification; each step is a visitor's click. A per-address guard keeps a
+ * script from walking the catalogue: a person opens a few sections a minute.
+ */
+@Public()
+@Controller("umapi/car")
+export class UmapiCarCatalogueController {
+  constructor(private readonly catalogue: UmapiCarCatalogueService, private readonly limits: RateLimitService) {}
+
+  @Get(":modificationId/categories")
+  async categories(@Param("modificationId") modificationId: string, @Query() query: unknown, @Req() request: FastifyRequest) {
+    const car = parse(id, modificationId);
+    const { q } = parse(CarQuery, query);
+    await this.limits.consume("umapi-car-catalogue", request.ip, 60, 60);
+    return this.catalogue.categories(car, q || undefined, caller(request)).catch((error: unknown) => { throw umapiHttpError(error); });
+  }
+
+  @Get(":modificationId/parts")
+  async parts(@Param("modificationId") modificationId: string, @Query() query: unknown, @Req() request: FastifyRequest) {
+    const car = parse(id, modificationId);
+    const { brand, category, page, type } = parse(CarPartsQuery, query);
+    await this.limits.consume("umapi-car-catalogue", request.ip, 60, 60);
+    return this.catalogue.parts({ brand, categoryId: category, modificationId: car, page, typeId: type }, caller(request))
+      .catch((error: unknown) => { throw umapiHttpError(error); });
   }
 }
 

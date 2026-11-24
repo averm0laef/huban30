@@ -144,6 +144,12 @@ export class PartsFinderVehiclesService {
     return this.catalog.suggest(query);
   }
 
+  /** «фильтр салона ауди а4»: the car a search request names and its part (our own catalog only). */
+  async understand(query: string) {
+    if (!await this.catalog.ready()) return null;
+    return this.catalog.understand(query);
+  }
+
   /**
    * What the guided search needs for a picked car. A car picked in the former
    * list (an id under CATALOG_ID_BASE, kept in a browser or a garage from

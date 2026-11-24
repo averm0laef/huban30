@@ -9,6 +9,7 @@ import { formatRubles } from "../_lib/catalog-api";
 import type { CatalogBrand, CatalogItem } from "../_lib/catalog-api";
 import { searchServiceLinks, suggestedCatalogSections } from "../_lib/search-guidance";
 import { isValidVin } from "../_lib/vin";
+import { CatalogCarPartHint } from "./catalog-car-part-hint";
 import { CatalogResultRow, RowBadge } from "./catalog-result-row";
 import layoutStyles from "./catalog-layout.module.css";
 import { catalogLastPage, catalogPageHref, catalogPageNumbers, clearCatalogFiltersHref, type CatalogPageQuery } from "./catalog-query";
@@ -224,6 +225,8 @@ export function CatalogSearchPanel({
           <li><Link className={resultsStyles.clearFilters} href={clearCatalogFiltersHref(action, state)}>Сбросить всё</Link></li>
         </ul>
       )}
+
+      {isSearch && !isVin && !sectionName && !errorMessage ? <CatalogCarPartHint query={state.query} /> : null}
 
       {isVin ? (
         <section className={styles.emptyState} aria-label="Подбор по VIN">

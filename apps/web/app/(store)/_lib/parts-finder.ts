@@ -382,10 +382,15 @@ export function vehicleCardActions(state: {
   saved: boolean;
   signedIn: boolean;
   source: "local" | "tecdoc";
+  /** The UMAPI parts catalogue answers (podbor/umapi-car-catalogue.tsx): it opens for a car of our vehicle catalog with its engine. */
+  umapi?: boolean;
   useVehicle: boolean;
 }): { carCatalog: "needs-engine" | "open" | null; saveToGarage: boolean } {
+  const umapiCar = state.umapi === true && state.useVehicle && state.picked !== null
+    ? (state.picked.modificationId !== undefined && state.picked.modificationId >= VEHICLE_CATALOG_ID_BASE ? "open" : "needs-engine")
+    : null;
   return {
-    carCatalog: state.source === "tecdoc" && state.useVehicle ? (state.picked?.tecdoc?.genId ? "open" : "needs-engine") : null,
+    carCatalog: state.source === "tecdoc" && state.useVehicle ? (state.picked?.tecdoc?.genId ? "open" : "needs-engine") : umapiCar,
     saveToGarage: state.picked !== null && state.signedIn && !state.saved,
   };
 }

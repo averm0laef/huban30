@@ -269,6 +269,8 @@ export type PickerSuggestResponse = z.infer<typeof PickerSuggestResponseSchema>;
 export const PickerModelsQuerySchema = z.object({ make: z.string().trim().min(1).max(64).regex(/^[a-z0-9-]+$/u) });
 export const PickerModificationsQuerySchema = z.object({ model: z.coerce.number().int().positive().max(2_147_483_647) });
 export const PickerSuggestQuerySchema = z.object({ q: z.string().trim().min(1).max(60).regex(SAFE_SINGLE_LINE) });
+/** «фильтр салона ауди а4» from the search page: a whole request, longer than a typed car name. */
+export const VehicleUnderstandQuerySchema = z.object({ q: z.string().trim().min(3).max(120).regex(SAFE_SINGLE_LINE) });
 
 /** Staff card «Подбор и поставщики». */
 export const PartsFinderStaffOverviewSchema = z.object({
