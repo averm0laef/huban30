@@ -3,6 +3,7 @@ import { normalizeArticleNumber, umapiCatalogueApplies, umapiPhotoApplies, type 
 
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
+import { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.store.js";
 import { PartsFinderShopService, type ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
 import { combinedVerdict, groupCars, verdictFor, type FitMake, type UmapiCar, type UmapiVerdict } from "./umapi-fitment.js";
 import { makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
@@ -71,6 +72,8 @@ export function makerRank(brand: string): number {
   return index === -1 ? KNOWN_MAKERS.length : index;
 }
 const SHOP_OFFERS_PER_ANALOG = 2;
+/** The same part's analogs are written to the cross base at most this often (the display cache answers between). */
+const KEEP_CROSSES_EVERY_MS = 60 * 60_000;
 const MAX_ANALOG_OFFERS = 24;
 
 /** `info` (the card with photos) is known for an exact match; for an analogue stand-in it is asked only for a photo. */
@@ -86,12 +89,14 @@ interface ProductRow { brand: string | null; id: string; name: string; section: 
 @Injectable()
 export class UmapiService {
   private readonly logger = new Logger(UmapiService.name);
+  private readonly keptCrosses = new Map<string, number>();
   constructor(
     private readonly gateway: UmapiGateway,
     private readonly database: DatabaseService,
     private readonly shop: PartsFinderShopService,
     private readonly archive: UmapiPhotoArchiveService,
     private readonly cards: UmapiProductCardService,
+    private readonly crosses: PartsFinderCrossStore,
   ) {}
 
   /** What the product page may offer: the buttons, and the photo button only when the photo address is known. */
@@ -125,9 +130,28 @@ export class UmapiService {
     return this.gateway.get("/v2/cross/parts/Analogs/getCrossInfo", { article, brand }, caller, normalizeCrossInfo, { fresh, isEmpty: (info) => info === null, whenNotFound: null });
   }
 
-  private articlesOf(article: string, brand: string, caller: UmapiCaller, fresh = false): Promise<UmapiArticleRow[]> {
-    return this.gateway.get(`/Analogs/${encodeURIComponent(article)}/${encodeURIComponent(brand)}`, { limit: ANALOG_ROWS }, caller, normalizeArticleRows,
+  private async articlesOf(article: string, brand: string, caller: UmapiCaller, fresh = false): Promise<UmapiArticleRow[]> {
+    const rows = await this.gateway.get(`/Analogs/${encodeURIComponent(article)}/${encodeURIComponent(brand)}`, { limit: ANALOG_ROWS }, caller, normalizeArticleRows,
       { fresh, isEmpty: (list) => list.length === 0, whenNotFound: [] });
+    this.keepCrosses(article, brand, rows);
+    return rows;
+  }
+
+  /**
+   * Every analog answer grows the shop's own cross base (owner, 24.11.2026; migration 0063): «the part ↔ each
+   * analog», unconfirmed. A pair another source names too is confirmed by the database's merge rule. Written once
+   * an hour per part at most, never awaited: a press is never slowed or failed by it.
+   */
+  private keepCrosses(article: string, brand: string, rows: readonly UmapiArticleRow[]): void {
+    if (rows.length === 0) return;
+    const key = `${brand.toUpperCase()}|${normalizeArticleNumber(article)}`;
+    const now = Date.now();
+    if ((this.keptCrosses.get(key) ?? 0) > now - KEEP_CROSSES_EVERY_MS) return;
+    if (this.keptCrosses.size > 5_000) this.keptCrosses.clear();
+    this.keptCrosses.set(key, now);
+    const pairs = rows.filter((row) => !(normalizeArticleNumber(row.article) === normalizeArticleNumber(article) && sameMaker(row.brand, brand)))
+      .map((row) => ({ article, brand, confirmed: false, crossArticle: row.article, crossBrand: row.brand }));
+    void this.crosses.rememberPairs(pairs, "umapi").catch(() => undefined);
   }
 
   /**

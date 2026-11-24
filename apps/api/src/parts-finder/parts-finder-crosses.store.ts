@@ -10,7 +10,7 @@ export interface CrossRow {
   confirmed: boolean;
 }
 
-export type CrossSource = "fapi" | "rossko";
+export type CrossSource = "fapi" | "rossko" | "umapi";
 
 /** Groups of a FAPI part card that name the same part: never a guess. */
 const TRUSTED_GROUPS = new Set(["oe", "replaced_by", "replaces"]);

@@ -2,6 +2,7 @@ import type { ShopOffer } from "@an30/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DatabaseService } from "../infrastructure/database.service.js";
+import type { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.store.js";
 import type { PartsFinderShopService, ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
 import type { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import type { UmapiProductCardService } from "./umapi-product-card.service.js";
@@ -67,8 +68,10 @@ function setup(options: { answers?: Answers; media?: string | null; product?: Te
   const shop = {
     lookup: async () => ({ for: (request: ShopOfferRequest) => shopOffers[`${request.brand}|${request.article}`] ?? [] }),
   };
-  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService, { keep } as unknown as UmapiProductCardService);
-  return { asked, fresh, keep, remember, service };
+  const crosses: Array<{ pairs: unknown[]; source: string }> = [];
+  const crossStore = { rememberPairs: async (pairs: unknown[], source: string) => { crosses.push({ pairs, source }); return pairs.length; } };
+  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService, { keep } as unknown as UmapiProductCardService, crossStore as unknown as PartsFinderCrossStore);
+  return { asked, crosses, fresh, keep, remember, service };
 }
 
 const VISITOR = { ip: "203.0.113.7" };
@@ -145,6 +148,21 @@ describe("UmapiService: analogs and photo", () => {
     const answer = await service.productAnalogs(AFW.id, VISITOR);
     if (answer.status !== "ok") throw new Error("expected an answer");
     expect(answer.offers.map((item) => [item.productId, item.basis])).toEqual([["p-filtron", "catalogue"], ["p-bosch", "catalogue"]]);
+  });
+
+  it("keeps every analog answer in the shop's cross base as unconfirmed «umapi» pairs, once per part", async () => {
+    const { crosses, service } = setup();
+    await service.productAnalogs(AFW.id, VISITOR);
+    await service.productAnalogs(AFW.id, VISITOR);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(crosses.length).toBeGreaterThan(0);
+    expect(crosses.every((entry) => entry.source === "umapi")).toBe(true);
+    const pairs = crosses.flatMap((entry) => entry.pairs) as Array<{ article: string; brand: string; confirmed: boolean; crossArticle: string; crossBrand: string }>;
+    expect(pairs.every((pair) => pair.confirmed === false)).toBe(true);
+    expect(pairs.some((pair) => pair.crossBrand === "BOSCH")).toBe(true);
+    // The part itself is never its own cross; a second press within the hour writes nothing more.
+    expect(pairs.some((pair) => pair.crossArticle.replace(/\s/g, "") === pair.article.replace(/\s/g, "") && pair.crossBrand === pair.brand)).toBe(false);
+    expect(new Set(crosses.map((entry) => JSON.stringify(entry.pairs))).size).toBe(crosses.length);
   });
 
   it("gives photo addresses on the media host, and nothing without one", async () => {
