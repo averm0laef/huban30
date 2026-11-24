@@ -453,6 +453,11 @@ export class UmapiService {
       title = info?.title ?? title;
       if (photos.length > 0) break;
     }
+    // A number of the name is this very part only when it is our maker's («AVX13X1385 … Contitech»); another
+    // maker's number there («(334243) Амортизатор … Ti•GUAR» = KYB) is an analogue, and is labelled one.
+    if (part.via === "name" && !part.through && !(product.brand && sameMaker(product.brand, part.brand))) {
+      part = { ...part, through: { article: product.sku, brand: product.brand ?? "" } };
+    }
     // The maker's characteristics, for the product's own part only: an analogue's sizes may differ.
     const card: UmapiArticleCard = part.through
       ? { specs: [], title: null }

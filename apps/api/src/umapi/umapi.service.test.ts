@@ -340,5 +340,13 @@ describe("UmapiService: the maker's photo and characteristics are kept for the p
     expect(answer).toMatchObject({ part: { brand: "FILTRON", through: { article: "SG1091", brand: "SUFIX" } }, photos: ["https://media.example/256/k1288.webp"], status: "ok" });
     expect(keep).not.toHaveBeenCalled();
   });
+
+  it("labels another maker's number of the name as an analogue, with no characteristics of its own", async () => {
+    // AFW1272 names FILTRON K1288 and MANN CU3569 in brackets: their photo is an analogue's, not this part's.
+    const { keep, service } = setup({ answers: { ...FILTER_ANSWERS, "/Article/7001": { CRITERIAS: [{ CRI_DES: "Длина [мм]", VALUE: "254" }] } } });
+    const answer = await service.productPhotos(AFW.id, VISITOR);
+    expect(answer).toMatchObject({ part: { brand: "FILTRON", through: { article: "AFW1272", brand: "" } }, photos: ["https://media.example/256/k1288.webp"], specs: [] });
+    expect(keep).not.toHaveBeenCalled();
+  });
 });
 
