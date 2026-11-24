@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
 
+import { SuppliersModule } from "../suppliers/suppliers.module.js";
+
 import { ProductPhotoNormalizer } from "../catalog/product-photo-normalizer.js";
 import { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.store.js";
 import { PartsFinderShopService } from "../parts-finder/parts-finder-shop.service.js";
@@ -19,6 +21,8 @@ import { UmapiService } from "./umapi.service.js";
  * no state, so this module has its own instance.
  */
 @Module({
+  // Rossko's answer names the analogues of a product the catalogue cannot name (photo by an analogue).
+  imports: [SuppliersModule],
   controllers: [UmapiController, UmapiCarCatalogueController, StaffUmapiController],
   exports: [UmapiService],
   providers: [PartsFinderCrossStore, PartsFinderShopService, ProductPhotoNormalizer, UmapiPhotoArchiveService, UmapiProductCardService, UmapiBudgetService, UmapiCacheService, UmapiCarCatalogueService, UmapiGateway, UmapiService],

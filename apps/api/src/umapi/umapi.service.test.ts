@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.store.js";
 import type { PartsFinderShopService, ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
+import type { SupplierSearchService } from "../suppliers/supplier-search.service.js";
 import type { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import type { UmapiProductCardService } from "./umapi-product-card.service.js";
 import type { UmapiGateway } from "./umapi.gateway.js";
@@ -39,7 +40,7 @@ function offer(productId: string, brand: string, sku: string, matchedVia: ShopOf
   return { availableQuantity: available, brand, matchedVia, name: `${brand} ${sku}`, priceKopeks: 50_000, productId, sku, slug: productId };
 }
 
-function setup(options: { answers?: Answers; media?: string | null; product?: TestProduct | null; shop?: Record<string, ShopOffer[]> } = {}) {
+function setup(options: { answers?: Answers; media?: string | null; product?: TestProduct | null; shop?: Record<string, ShopOffer[]>; supplier?: unknown } = {}) {
   const answers = options.answers ?? FILTER_ANSWERS;
   const asked: string[] = [];
   const fresh: string[] = [];
@@ -70,7 +71,8 @@ function setup(options: { answers?: Answers; media?: string | null; product?: Te
   };
   const crosses: Array<{ pairs: unknown[]; source: string }> = [];
   const crossStore = { rememberPairs: async (pairs: unknown[], source: string) => { crosses.push({ pairs, source }); return pairs.length; } };
-  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService, { keep } as unknown as UmapiProductCardService, crossStore as unknown as PartsFinderCrossStore);
+  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService, { keep } as unknown as UmapiProductCardService, crossStore as unknown as PartsFinderCrossStore,
+    options.supplier ? { search: async () => options.supplier } as unknown as SupplierSearchService : undefined);
   return { asked, crosses, fresh, keep, remember, service };
 }
 
@@ -325,6 +327,18 @@ describe("UmapiService: the maker's photo and characteristics are kept for the p
       status: "ok",
     });
     expect(keep).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ artId: 7002 }), expect.objectContaining({ photos: [] }));
+  });
+
+  it("finds a photo of a part the catalogue lacks through the analogues Rossko names, a known maker first", async () => {
+    const product = { ...AFW, brand: "SUFIX", name: "SG-1091 Опора шаровая | перед прав | SUFIX", sku: "SG1091" };
+    const supplier = { parts: [{ brand: "SUFIX", partNumber: "SG-1091", crosses: [
+      { brand: "NONAME", crosses: [], partNumber: "X1" }, { brand: "FILTRON", crosses: [], partNumber: "K 1288" }, { brand: "MANN-FILTER", crosses: [], partNumber: "CU 3569" },
+    ] }], success: true };
+    const { keep, service } = setup({ answers: { ...FILTER_ANSWERS, "/BrandRefinement/SG1091": [] }, product, supplier });
+    const answer = await service.productPhotos(product.id, VISITOR);
+    // MANN first (a known maker) has no picture; FILTRON's card has one. Labelled as an analogue of our number.
+    expect(answer).toMatchObject({ part: { brand: "FILTRON", through: { article: "SG1091", brand: "SUFIX" } }, photos: ["https://media.example/256/k1288.webp"], status: "ok" });
+    expect(keep).not.toHaveBeenCalled();
   });
 });
 

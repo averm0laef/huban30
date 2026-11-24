@@ -19,11 +19,15 @@ type CataloguePhotos =
   | { status: "off" | "idle" | "loading" }
   | { specs: UmapiSpec[]; status: "none" }
   | { message: string; retry: boolean; status: "error" }
-  | { label: string; photos: string[]; specs: UmapiSpec[]; status: "ready" };
+  /** `analog`: the photo is of an analogue (`source`), not of this very part. */
+  | { analog: boolean; label: string; photos: string[]; source: string; specs: UmapiSpec[]; status: "ready" };
 
 function keptState(card: KeptCatalogueCard | null): CataloguePhotos | null {
   if (!card) return null;
-  if (card.photos.length > 0) return { label: `Фото производителя · ${card.brand} ${card.article}`, photos: card.photos, specs: card.specs, status: "ready" };
+  if (card.photos.length > 0) {
+    const source = `${card.brand} ${card.article}`;
+    return { analog: false, label: `Фото этой детали · ${source}`, photos: card.photos, source, specs: card.specs, status: "ready" };
+  }
   return card.specs.length > 0 ? { specs: card.specs, status: "none" } : null;
 }
 
@@ -51,9 +55,10 @@ function useCataloguePhotos(productId: string, wanted: boolean, kept: KeptCatalo
     try {
       const data = await umapiGet<UmapiPhotos>(`product/${encodeURIComponent(productId)}/photos`);
       if (data.status === "ok" && "photos" in data && data.photos.length > 0) {
-        // An analogue standing in for a number without a card is named as such: the photo is of that analogue.
-        const kind = data.part.through ? "Фото аналога" : "Фото производителя";
-        setState({ label: `${kind} · ${data.part.brand} ${data.part.article}`, photos: [...new Set(data.photos)], specs: data.specs ?? [], status: "ready" });
+        // An analogue standing in for this part is named as such: the photo is of that analogue, not of this part.
+        const analog = Boolean(data.part.through);
+        const source = `${data.part.brand} ${data.part.article}`;
+        setState({ analog, label: `${analog ? "Фото аналога" : "Фото этой детали"} · ${source}`, photos: [...new Set(data.photos)], source, specs: data.specs ?? [], status: "ready" });
       } else if (data.status === "ambiguous" || data.status === "unknown_part") {
         setState({ message: "Покажем эту деталь вживую", retry: false, status: "error" });
       } else {
@@ -180,7 +185,7 @@ export function ProductGallery({ article, catalogPhotos, fluid = false, images, 
               src={active.url}
               unoptimized={fromCatalogue}
             />
-            {fromCatalogue ? <span className={styles.photoBadge}>{state.label}</span> : null}
+            {fromCatalogue ? <span className={styles.photoBadge} data-analog={state.analog || undefined}>{state.label}</span> : null}
           </>
         ) : <MissingPhoto article={article} fluid={fluid} ask={askShop(state.status !== "error" || !state.retry)} load={() => { setActiveIndex(0); void load(); }} state={state} />}
       </div>
@@ -196,7 +201,13 @@ export function ProductGallery({ article, catalogPhotos, fluid = false, images, 
       ) : null}
       {fromCatalogue || state.status === "idle" || specs.length > 0 ? (
         <figcaption className={styles.photoActions}>
-          {fromCatalogue ? <p className={styles.catalogueNote} role="status">Фото от производителя — нажмите, чтобы увеличить. Внешний вид детали на складе может отличаться.</p> : null}
+          {fromCatalogue ? (
+            <p className={styles.catalogueNote} data-analog={state.analog || undefined} role="status">
+              {state.analog
+                ? <><strong>Это фото аналога</strong> — {state.source}, детали другого производителя, которая подходит вместо этой. Сама деталь может выглядеть иначе: пришлём её фото со склада по запросу.</>
+                : <><strong>Фото производителя именно этой детали</strong> — {state.source}. Нажмите, чтобы увеличить.</>}
+            </p>
+          ) : null}
           <MakerSpecs specs={specs} />
           {fromCatalogue || state.status === "idle" ? askShop(false) : null}
         </figcaption>

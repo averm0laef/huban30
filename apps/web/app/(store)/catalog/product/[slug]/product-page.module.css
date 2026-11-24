@@ -78,6 +78,10 @@
   pointer-events: none;
 }
 .gallery[data-multiple="true"] .photoBadge { left: 12px; }
+/* An analogue's photo must never pass for this part's: the badge and the note say so in the accent colour. */
+.photoBadge[data-analog] { background: color-mix(in srgb, var(--store-accent) 30%, var(--store-surface)); color: var(--store-accent-text); }
+.catalogueNote strong { color: var(--store-text); }
+.catalogueNote[data-analog] { padding: 8px 10px; border-radius: var(--store-radius-sm); background: color-mix(in srgb, var(--store-accent) 12%, var(--store-surface)); color: var(--store-text); }
 .thumbs { grid-row: 1; grid-column: 1; display: grid; align-content: start; gap: 8px; }
 .thumb {
   width: 64px;
