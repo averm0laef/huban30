@@ -354,6 +354,23 @@ export function ChatWidget() {
     previousUnreadRef.current = unreadCount;
   }, [unreadCount]);
 
+  // A manager closed the conversation while it was open: say so once, and keep it closed for the next visit.
+  const announcedClosedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!thread || threadStatus !== "closed" || thread.status === "closed" || announcedClosedRef.current === thread.id) return;
+    announcedClosedRef.current = thread.id;
+    setAnnouncement("Обращение завершено. Переписка сохранится; можно начать новое обращение.");
+    setThread((current) => (current && current.id === thread.id ? { ...current, status: "closed" } : current));
+    if (viewer.kind === "guest") {
+      try {
+        const stored = parseStoredGuestThreads(window.localStorage.getItem(GUEST_CHAT_STORAGE_KEY));
+        window.localStorage.setItem(GUEST_CHAT_STORAGE_KEY, serializeGuestThreads(stored.map((item) => (item.id === thread.id ? { ...item, status: "closed" } : item))));
+      } catch {
+        // Best effort: the closed state still shows for this page view.
+      }
+    }
+  }, [thread, threadStatus, viewer.kind]);
+
   const handleOpen = useCallback(() => {
     setShopStatus(computeShopStatusNow());
     focusComposerOnOpenRef.current = true;
@@ -417,7 +434,7 @@ export function ChatWidget() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!online || !thread || thread.status === "closed" || sendPending) return;
+    if (!online || !thread || threadClosed || sendPending) return;
     if (viewer.kind !== "guest" && viewer.kind !== "customer") return;
     const body = draft.trim();
     if (!body || body.length > 4_000) return;
@@ -427,7 +444,7 @@ export function ChatWidget() {
   }
 
   async function handleFile(file: File): Promise<boolean> {
-    if (!online || !thread || thread.status === "closed") return false;
+    if (!online || !thread || threadClosed) return false;
     if (viewer.kind !== "guest" && viewer.kind !== "customer") return false;
     return submitAttachment(file);
   }
@@ -435,8 +452,10 @@ export function ChatWidget() {
   if (hidden) return null;
 
   const canChat = viewer.kind === "guest" || viewer.kind === "customer";
-  const hasOpenThread = Boolean(thread) && thread?.status !== "closed";
-  const showStartForm = !thread || (thread.status === "closed" && startingNewConversation);
+  // The status the channel reports now: a manager closing the conversation is seen at once, not on the next open.
+  const threadClosed = Boolean(thread) && (threadStatus ?? thread?.status) === "closed";
+  const hasOpenThread = Boolean(thread) && !threadClosed;
+  const showStartForm = !thread || (threadClosed && startingNewConversation);
   const attachDisabled = !hasOpenThread || filePending || !online;
   const sendDisabled = !hasOpenThread || !draft.trim() || !online || sendPending;
   const isRetry = Boolean(sendAttemptId) && !sendPending;
@@ -450,7 +469,7 @@ export function ChatWidget() {
             connection: thread && !showStartForm ? connection : null,
             online,
             shopStatus,
-            threadClosed: thread?.status === "closed" && !startingNewConversation,
+            threadClosed: threadClosed && !startingNewConversation,
           });
   const topic = INTAKE_TOPICS.find((item) => item.intent === requestIntent) ?? INTAKE_TOPICS[0]!;
 
@@ -590,7 +609,7 @@ export function ChatWidget() {
               ) : (
                 <ChatMessageLog
                   empty={<><strong>Здравствуйте!</strong>Напишите, что нужно: марку, модель и год автомобиля или артикул детали.</>}
-                  footer={thread.status === "closed" ? <ChatSystemPill>Обращение завершено</ChatSystemPill> : null}
+                  footer={threadClosed ? <ChatSystemPill>Обращение завершено</ChatSystemPill> : null}
                   hasOlderMessages={hasOlderMessages}
                   lastStaffReadMessageId={lastStaffReadMessageId}
                   logId={`${titleId}-message-log`}
@@ -612,7 +631,7 @@ export function ChatWidget() {
           ) : null}
         </div>
 
-        {canChat && thread && thread.status !== "closed" ? (
+        {canChat && thread && !threadClosed ? (
           <div className={styles.footer}>
             <ManagerJoinNotice
               key={thread.id}
@@ -641,10 +660,13 @@ export function ChatWidget() {
               textareaRef={textareaRef}
             />
           </div>
-        ) : canChat && thread?.status === "closed" && !startingNewConversation ? (
+        ) : canChat && threadClosed && !startingNewConversation ? (
           <div className={styles.closedBar}>
-            <p>Если остался вопрос или нужен новый подбор, начните новое обращение.</p>
-            <button className={styles.primaryButton} type="button" onClick={() => setStartingNewConversation(true)}>Новое обращение</button>
+            <p>Переписка сохранится. Если появится вопрос — начните новое обращение.</p>
+            <div className={styles.closedActions}>
+              <Link className={styles.secondaryButton} href="/chat" onClick={handleClose}>Все обращения</Link>
+              <button className={styles.primaryButton} type="button" onClick={() => setStartingNewConversation(true)}>Новое обращение</button>
+            </div>
             <OtherChannels />
           </div>
         ) : null}

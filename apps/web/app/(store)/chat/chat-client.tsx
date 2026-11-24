@@ -119,6 +119,17 @@ export function ChatClient() {
     viewingLatest,
   } = useChatThread(selectedThread, viewerKind, true);
 
+  useEffect(() => {
+    if (!selectedThread || threadStatus !== "closed" || selectedThread.status === "closed") return;
+    setThreads((current) => {
+      const next = current.map((item) => (item.id === selectedThread.id ? { ...item, status: "closed" as const } : item));
+      if (viewer.kind === "guest") {
+        try { window.localStorage.setItem(GUEST_CHAT_STORAGE_KEY, serializeGuestThreads(next)); } catch { /* the page still shows it */ }
+      }
+      return next;
+    });
+  }, [selectedThread, threadStatus, viewer.kind]);
+
   const persistGuestThreads = useCallback((next: ChatThread[]) => {
     try {
       window.localStorage.setItem(GUEST_CHAT_STORAGE_KEY, serializeGuestThreads(next));
@@ -325,7 +336,8 @@ export function ChatClient() {
     return <div className={styles.page}><div className={styles.statePanel}><h1>Клиентский чат</h1><p>Для рабочей очереди сотрудников используйте защищённую админку.</p><Link href="/admin/chats">Открыть рабочее место</Link></div></div>;
   }
 
-  const threadClosed = selectedThread?.status === "closed";
+  // The status the channel reports now: a manager closing the conversation is seen at once.
+  const threadClosed = Boolean(selectedThread) && (threadStatus ?? selectedThread?.status) === "closed";
   const query = search.trim().toLocaleLowerCase("ru");
   const visibleThreads = query
     ? threads.filter((thread) => `${thread.subject ?? ""} ${thread.orderId ?? ""} ${previews[thread.id]?.text ?? ""}`.toLocaleLowerCase("ru").includes(query))
@@ -468,8 +480,11 @@ export function ChatClient() {
               )}
               {threadClosed ? (
                 <div className={styles.closedBar}>
-                  <span>Чат закрыт. Если вопрос остался, начните новое обращение.</span>
-                  <button className={styles.primaryButton} onClick={openCreateForm} type="button">Новое обращение</button>
+                  <span>Переписка сохранится. Если появится вопрос — начните новое обращение.</span>
+                  <div className={styles.closedActions}>
+                    <button className={styles.secondaryButton} onClick={showThreads} type="button">К обращениям</button>
+                    <button className={styles.primaryButton} onClick={openCreateForm} type="button">Новое обращение</button>
+                  </div>
                 </div>
               ) : (
                 <div className={styles.footer}>

@@ -344,6 +344,11 @@
   background: var(--store-surface);
 }
 .closedBar > p { margin: 0; color: var(--store-muted); font-size: 0.84rem; line-height: 1.45; }
+/* «Все обращения» and «Новое обращение» side by side: a way out of a closed conversation is always on screen. */
+.closedActions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.closedActions > * { min-height: 48px; padding-inline: 10px; font-size: 0.88rem; white-space: nowrap; }
+.secondaryButton { display: inline-flex; align-items: center; justify-content: center; padding: 0 14px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-surface); color: var(--store-text); font: inherit; font-weight: 700; text-decoration: none; }
+.secondaryButton:hover { border-color: var(--store-brand); color: var(--store-brand); }
 
 /* On mobile the launcher occupies its own tab instead of covering page content. */
 @media (max-width: 767px) {

@@ -453,3 +453,9 @@
   .primaryButton { transition: none; }
   .workspace[data-mobile-view="conversation"] .conversation { animation: none; }
 }
+
+/* A closed conversation: «К обращениям» and «Новое обращение», never a dead end. */
+.closedActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.closedActions > * { min-height: 44px; }
+.secondaryButton { display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; border: 1px solid var(--store-border); border-radius: 12px; background: var(--store-surface); color: var(--store-text); font: inherit; font-weight: 700; cursor: pointer; }
+.secondaryButton:hover { border-color: var(--store-brand); color: var(--store-brand); }
