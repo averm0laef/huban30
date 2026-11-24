@@ -35,6 +35,7 @@ import { useChatThread } from "../chat/use-chat-thread";
 import styles from "./chat-widget.module.css";
 import { MessengerIcon } from "./messenger-icon";
 import { computeShopStatusNow, type ShopStatus } from "./shop-status";
+import { notify, TOAST_OPEN_EVENT } from "../_lib/toast";
 
 type Viewer =
   | { kind: "customer" }
@@ -350,9 +351,17 @@ export function ChatWidget() {
       setAnnouncement(unreadCount === 1
         ? "Пришло новое сообщение от магазина"
         : `Пришли новые сообщения от магазина: ${unreadCount}`);
+      // The chat is closed: the customer sees the answer wherever they are on the site.
+      if (!isOpen) {
+        notify({
+          action: { label: "Открыть", open: "chat" }, key: "chat-reply", kind: "info",
+          text: unreadCount === 1 ? "Новое сообщение в обращении." : `Новых сообщений: ${unreadCount}.`, title: "Магазин ответил в чате",
+        });
+      }
     }
     previousUnreadRef.current = unreadCount;
-  }, [unreadCount]);
+  }, [unreadCount, isOpen]);
+
 
   // A manager closed the conversation while it was open: say so once, and keep it closed for the next visit.
   const announcedClosedRef = useRef<string | null>(null);
@@ -377,6 +386,13 @@ export function ChatWidget() {
     setHasOpenedOnce(true);
     setIsOpen(true);
   }, []);
+
+  // «Открыть» in the notification opens this chat.
+  useEffect(() => {
+    const open = (event: Event) => { if ((event as CustomEvent<string>).detail === "chat") handleOpen(); };
+    window.addEventListener(TOAST_OPEN_EVENT, open);
+    return () => window.removeEventListener(TOAST_OPEN_EVENT, open);
+  }, [handleOpen]);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);

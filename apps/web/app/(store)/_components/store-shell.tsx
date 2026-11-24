@@ -25,6 +25,7 @@ import { CartButton } from "./cart-actions";
 import { CartProvider } from "./cart-provider";
 import { CatalogMenu } from "./catalog-menu";
 import { ChatWidget } from "./chat-widget";
+import { Toaster } from "./toaster";
 import { createHeaderCollapseState, getNextHeaderCollapseState } from "./header-scroll-collapse";
 import { HeaderVehicle } from "./header-vehicle";
 import { CompactMenuButton, MobileCatalogButton, MobileStoreMenu } from "./mobile-store-menu";
@@ -332,6 +333,7 @@ export function StoreShell({ catalogMenu, children, initialSessionPresent }: {
           <main className={styles.main} id="main-content">{children}</main>
           <StoreFooter catalogMenu={catalogMenu} />
           <MobileNavigation hasCatalog={catalogMenu.length > 0} />
+          <Toaster />
         </div>
       </CartProvider>
     </SessionNavigationProvider>

@@ -14,6 +14,7 @@ import { catalogQueryPrefillMessage, EXPERT_HELP_CATALOG_QUERY_STORAGE_KEY, EXPE
 import { EXPERT_HELP_VIN_STORAGE_KEY, isValidVin } from "../_lib/vin";
 import { apiRequest, errorText } from "../_lib/storefront-api";
 import styles from "./storefront.module.css";
+import { notify } from "../_lib/toast";
 
 interface ContactResponse {
   createdAt: string;
@@ -104,6 +105,7 @@ export function ContactRequestForm({
       });
       clearIdempotencyKey(window.sessionStorage, `contact:${source}`);
       setSuccess(response);
+      notify({ kind: "success", text: "Менеджер свяжется с вами удобным способом.", title: `Обращение ${response.id.slice(0, 8).toUpperCase()} принято` });
       element.reset();
     } catch (caught) {
       setError(errorText(caught));

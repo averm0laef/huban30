@@ -16,6 +16,7 @@ import { CatalogPhoto } from "./catalog-photo";
 import { GaragePanel } from "./garage-panel";
 import { SocialConnections } from "./social-login";
 import styles from "./storefront.module.css";
+import { notifyAfterNavigation } from "../_lib/toast";
 
 interface AccountView {
   /** False while the picture is the automatic one. */
@@ -370,6 +371,7 @@ export function ProfileClient({ initialTab = "orders", socialStatus }: { initial
     setPending("logout"); setError("");
     try {
       await apiRequest<void>("/auth/logout", { method: "POST" });
+      notifyAfterNavigation({ kind: "success", title: "Вы вышли из кабинета" });
       router.replace("/auth?mode=login");
       router.refresh();
     } catch (caught) { setError(errorText(caught)); setPending(""); }

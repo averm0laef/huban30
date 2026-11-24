@@ -11,6 +11,7 @@ import type { CartLineView } from "../_lib/cart-products";
 import { CatalogPhoto } from "./catalog-photo";
 import commerce from "./commerce.module.css";
 import { useCart } from "./cart-provider";
+import { notify } from "../_lib/toast";
 
 /** Renders the catalog identity of one cart line, or an honest fallback state. */
 export function CartLineIdentity({ line, position }: { line: CartLineView; position: number }) {
@@ -130,6 +131,7 @@ export function AddToCartButton({ disabled, onAdded, productId }: {
         if (isRepeatClick(lastAddAt.current, event.timeStamp)) return;
         lastAddAt.current = event.timeStamp;
         addItem(productId);
+        notify({ action: { href: "/cart", label: "Оформить" }, key: "cart", kind: "success", text: "Можно оформить сейчас или продолжить выбор.", title: "Товар в корзине" });
         onAdded?.(event.timeStamp);
         setAdded(true);
         window.clearTimeout(timerRef.current);

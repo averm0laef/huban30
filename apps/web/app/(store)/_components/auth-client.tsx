@@ -14,6 +14,7 @@ import { consumeAuthToken } from "../_lib/auth-token";
 import { apiRequest, errorText, StorefrontApiError } from "../_lib/storefront-api";
 import { SocialLogin } from "./social-login";
 import styles from "./storefront.module.css";
+import { notifyAfterNavigation } from "../_lib/toast";
 
 export type AuthMode = "forgot" | "login" | "register" | "reset" | "staff-accept" | "verify";
 
@@ -343,6 +344,8 @@ export function AuthClient({
           method: "POST",
           body: { email: form.get("email"), password: form.get("password") },
         });
+        // Staff go to /admin, which has no storefront notifications: theirs would surface later on a random page.
+        if (result.role === "customer") notifyAfterNavigation({ kind: "success", title: "Вы вошли в кабинет" });
         router.replace(result.role === "customer" ? "/profile" : "/admin");
         router.refresh();
         return;

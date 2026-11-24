@@ -1,0 +1,102 @@
+/* Notifications (board «Уведомления»): top right on a computer, above the bottom menu on a phone. */
+.region {
+  position: fixed;
+  /* Below the header's search row: never over «Найти» or the cart. */
+  top: 92px;
+  right: 16px;
+  z-index: 70;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 14px 10px 14px 14px;
+  overflow: hidden;
+  border: 1px solid var(--store-border);
+  border-radius: 16px;
+  background: var(--store-surface);
+  box-shadow: 0 12px 28px -12px rgb(18 16 70 / 30%);
+  color: var(--store-text);
+  pointer-events: auto;
+  animation: toastIn 180ms var(--store-ease);
+}
+
+.icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; }
+.toast[data-kind="success"] .icon { background: #17803d; }
+.toast[data-kind="info"] .icon { background: var(--store-brand); }
+.toast[data-kind="warning"] .icon { background: var(--store-accent); color: var(--store-accent-text); }
+.toast[data-kind="error"] .icon { background: var(--store-danger); }
+
+.body { display: grid; justify-items: start; gap: 2px; min-width: 0; }
+.title { margin: 0; font-size: 0.92rem; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.text { margin: 0; color: var(--store-muted); font-size: 0.84rem; line-height: 1.4; overflow-wrap: anywhere; }
+.action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--store-brand-soft);
+  color: var(--store-brand-strong);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.action:hover { background: color-mix(in srgb, var(--store-brand) 16%, var(--store-surface)); }
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: -6px -2px 0 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--store-muted);
+  cursor: pointer;
+}
+.close:hover { background: var(--store-bg); color: var(--store-text); }
+
+/* How long it stays, as a thin line along the bottom. */
+.timer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.18;
+  transform-origin: left;
+  animation: toastTimer linear forwards;
+}
+
+.timer[data-paused] { animation-play-state: paused; }
+
+@keyframes toastIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes toastTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+@media (max-width: 767px) {
+  .region {
+    top: auto;
+    right: 12px;
+    bottom: calc(64px + env(safe-area-inset-bottom) + 12px);
+    left: 12px;
+    width: auto;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+  .timer { display: none; }
+}
