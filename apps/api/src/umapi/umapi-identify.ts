@@ -38,7 +38,8 @@ const MAKER_ALIASES: Readonly<Record<string, string>> = {
 
 /** A maker's name as compared: «MANN-FILTER», «Mann filter» and «MANN» are one maker. */
 export function makerKey(name: string): string {
-  const key = normalizeBrand(name);
+  // The catalogue writes «JTEKT (Koyo)», «A.B.S.»: brackets and dots are not part of the name (KOYO missed, 24.11.2026).
+  const key = normalizeBrand(name).replace(/[^\p{L}\p{N}]+/gu, "");
   return MAKER_ALIASES[key] ?? key;
 }
 
@@ -75,10 +76,23 @@ function looksLikePartNumber(token: string): boolean {
   return /[A-Z]/iu.test(bare) || bare.length >= 7;
 }
 
+/**
+ * A number of six digits the name puts alone in brackets or first: «(334243) Амортизатор 4407211-GS Ti•GUAR»,
+ * «333455 Стойка … Double Force» — the maker's number the shop sells it as (KYB here). Digits alone elsewhere in a
+ * name are sizes or model codes and stay out.
+ */
+function leadingNumbers(name: string): string[] {
+  const found: string[] = [];
+  for (const [, inside] of name.matchAll(/\(\s*(\d{6})\s*\)/gu)) found.push(inside!);
+  const first = /^\s*(\d{6})(?=\s)/u.exec(name)?.[1];
+  if (first) found.push(first);
+  return found;
+}
+
 /** The part numbers a name carries, in their order, without our own number. */
 export function nameNumbers(name: string, sku: string): string[] {
   const own = normalizeArticleNumber(sku);
-  const found: string[] = [];
+  const found: string[] = leadingNumbers(name).filter((number) => number !== own);
   for (const [token] of name.matchAll(/[A-Za-z0-9][A-Za-z0-9\-/.]{3,24}[A-Za-z0-9]/gu)) {
     const bare = normalizeArticleNumber(token);
     if (!looksLikePartNumber(token) || bare === own || found.some((known) => normalizeArticleNumber(known) === bare)) continue;
@@ -96,7 +110,10 @@ export function partCandidates(product: { brand: string | null; name: string; sk
     // also keeps it without the dash («ST0411164345» = 04111-64345); then only a long run of digits counts, so
     // that an article that merely starts with «ST» («STD24», a wiper) is never cut.
     const sku = product.sku.trim();
-    const original = /^ST-(.+)$/iu.exec(sku)?.[1] ?? /^ST(\d{8,}[A-Z]?)$/iu.exec(normalizeArticleNumber(sku))?.[1];
+    const original = /^ST-(.+)$/iu.exec(sku)?.[1] ?? /^ST(\d{8,}[A-Z]?)$/iu.exec(normalizeArticleNumber(sku))?.[1]
+      // NOK and SAT seals and gaskets: «K» before a Japanese original number of five and five characters
+      // («K90311-35030» = TOYOTA 90311-35030, «K91212PR4A01» = HONDA 91212-PR4-A01; measured 24.11.2026).
+      ?? /^K(\d{5}[0-9A-Z]{5})$/iu.exec(normalizeArticleNumber(sku))?.[1];
     if (original && normalizeArticleNumber(original).length >= 6) own.push({ article: original, brand: null, via: "own" });
   }
   const labelled = bracketedNumbers(product.name)
@@ -117,4 +134,29 @@ export function makerNamedIn(name: string, makers: readonly string[]): string | 
     return key.length >= 3 && words.includes(key);
   });
   return named.length === 1 ? named[0]! : null;
+}
+
+const TITLE_STOP = new Set(["для", "или", "комплект", "передний", "задний", "левый", "правый", "система"]);
+
+function stemsOf(text: string): string[] {
+  return (text.toLowerCase().replace(/ё/gu, "е").match(/\p{L}{4,}/gu) ?? []).filter((word) => !TITLE_STOP.has(word)).map((word) => word.slice(0, 5));
+}
+
+/**
+ * Several makers keep one number («334243»: KYB's shock absorber, MCS's mirror cover, IMASAF's catalyst): the one
+ * whose kind of part the product's name names («Амортизатор …»). One maker's regional copies («KYB», «KYB-AU»)
+ * count as that maker; null when none or more than one maker fits.
+ */
+export function makerByPartKind(name: string, rows: ReadonlyArray<{ brand: string; title: string | null }>): string | null {
+  const words = new Set(stemsOf(name));
+  const fitting = rows.filter((row) => row.title && stemsOf(row.title).some((stem) => words.has(stem)));
+  // «KYB-AU», «KYB-MEA»: one maker's regional catalogues — the first word names the maker.
+  const family = (a: string, b: string) => sameMaker(a, b) || (a.split(/[\s-]/u)[0]!.length >= 3 && a.split(/[\s-]/u)[0]!.toUpperCase() === b.split(/[\s-]/u)[0]!.toUpperCase());
+  const makers: string[] = [];
+  for (const row of fitting) {
+    const same = makers.findIndex((maker) => family(maker, row.brand));
+    if (same === -1) makers.push(row.brand);
+    else if (row.brand.length < makers[same]!.length) makers[same] = row.brand;
+  }
+  return makers.length === 1 ? makers[0]! : null;
 }

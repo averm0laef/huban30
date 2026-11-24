@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { combinedVerdict, groupCars, verdictFor } from "./umapi-fitment.js";
 import { bracketedNumbers, umapiCatalogueApplies, umapiPhotoApplies } from "@an30/contracts";
 
-import { partCandidates, sameMaker } from "./umapi-identify.js";
+import { makerByPartKind, nameNumbers, partCandidates, sameMaker } from "./umapi-identify.js";
 import { normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, normalizeMedias } from "./umapi-normalize.js";
 
 // Shapes follow the UMAPI OpenAPI 2.1.1 schemas; values are made up for the tests (no paid call in tests).
@@ -100,5 +100,29 @@ describe("compatibility", () => {
     expect(makes.map((make) => [make.make, make.mine])).toEqual([["MERCEDES-BENZ", true], ["VW", false]]);
     expect(makes[0]!.models[0]).toMatchObject({ mine: true, model: "SPRINTER 3,5-t Фургон (B906)", yearFrom: 2006, yearTo: null });
     expect(makes[0]!.models[0]!.cars.map((car) => [car.name, car.mine])).toEqual([["313 CDI", true], ["316 CDI", false]]);
+  });
+
+  it("reads the cases the 300-product sample of 24.11.2026 lost", () => {
+    // The catalogue writes «JTEKT (Koyo)»: brackets are not part of a maker's name.
+    expect(sameMaker("KOYO", "JTEKT (Koyo)")).toBe(true);
+    expect(sameMaker("ABS", "A.B.S.")).toBe(true);
+    // NOK and SAT seals: «K» before a Japanese original number.
+    expect(partCandidates({ brand: "NOK", name: "Сальник раздатки NOK K90311-50014", sku: "K9031150014" })[1]).toEqual({ article: "9031150014", brand: null, via: "own" });
+    expect(partCandidates({ brand: "FILTRON", name: "Фильтр салона", sku: "K1288" })).toHaveLength(1);
+    // Six digits alone in brackets or first in the name: the number the part is sold as.
+    expect(nameNumbers("(334243) Амортизатор 4407211-GS Ti•GUAR", "4407211-GS")).toContain("334243");
+    expect(nameNumbers("333455 Стойка амортизационная Double Force (FR) DF333455", "DF333455")).toContain("333455");
+    expect(nameNumbers("Рессора 65117-2902012 (65115) 3-х листовая", "65117-2902012")).not.toContain("65115");
+  });
+
+  it("picks among makers of one number the one whose kind of part the name names", () => {
+    const rows = [
+      { brand: "DT Spare Parts", title: "Клиновой ремень" }, { brand: "IMASAF", title: "Катализатор" },
+      { brand: "KYB", title: "Амортизатор" }, { brand: "KYB-AU", title: "Амортизатор" }, { brand: "MCS", title: "Покрытие, внешнее зеркало" },
+    ];
+    expect(makerByPartKind("(334243) Амортизатор 4407211-GS Ti•GUAR", rows)).toBe("KYB");
+    expect(makerByPartKind("Стойка амортизационная", [{ brand: "KYB-AU", title: "Амортизатор" }, { brand: "KYB-MEA", title: "Амортизатор" }])).toBe("KYB-AU");
+    expect(makerByPartKind("Ремень клиновой", [...rows, { brand: "GATES", title: "Клиновой ремень" }])).toBeNull();
+    expect(makerByPartKind("Деталь", rows)).toBeNull();
   });
 });

@@ -312,4 +312,19 @@ describe("UmapiService: the maker's photo and characteristics are kept for the p
     });
     expect(keep).toHaveBeenCalledWith(expect.objectContaining({ id: product.id }), expect.objectContaining({ artId: 7001 }), expect.objectContaining({ photos: ["https://media.example/256/k1288.webp"] }));
   });
+
+  it("shows an analogue's photo, labelled, when the part's own card has none, and keeps no photo for the product", async () => {
+    const product = { ...AFW, brand: "MANN", name: "Фильтр салона MANN CU3569", sku: "CU3569" };
+    const answers: Answers = { ...FILTER_ANSWERS, "/Article/7002": { CRITERIAS: [{ CRI_DES: "Длина [мм]", CRI_UNIT_DES: "мм", VALUE: "254" }] } };
+    const { keep, service } = setup({ answers, product });
+    const answer = await service.productPhotos(product.id, VISITOR);
+    expect(answer).toMatchObject({
+      part: { article: "K 1288", brand: "FILTRON", through: { article: "CU 3569", brand: "MANN-FILTER" } },
+      photos: ["https://media.example/256/k1288.webp"],
+      specs: [{ label: "Длина", value: "254 мм" }],
+      status: "ok",
+    });
+    expect(keep).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ artId: 7002 }), expect.objectContaining({ photos: [] }));
+  });
 });
+

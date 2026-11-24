@@ -6,7 +6,7 @@ import { DatabaseService } from "../infrastructure/database.service.js";
 import { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.store.js";
 import { PartsFinderShopService, type ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
 import { combinedVerdict, groupCars, verdictFor, type FitMake, type UmapiCar, type UmapiVerdict } from "./umapi-fitment.js";
-import { makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
+import { makerByPartKind, makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
 import {
   normalizeArticleCard, normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, type UmapiArticleCard, type UmapiArticleRow,
   type UmapiBrandRow, type UmapiCarLink, type UmapiCrossInfo, type UmapiSpec,
@@ -179,7 +179,8 @@ export class UmapiService {
     } else if (makers.length === 1) {
       brand = makers[0];
     } else if (makers.length > 1) {
-      brand = makerNamedIn(product.name, makers) ?? undefined;
+      brand = makerNamedIn(product.name, makers)
+        ?? makerByPartKind(product.name, all.filter((row) => row.type === "ArticleNumber")) ?? undefined;
       if (!brand) return "ambiguous";
     } else {
       // No maker's own number: an original number of a car maker («TOYOTA 23300-31090», NOK's «90311-48009»), or
@@ -387,9 +388,23 @@ export class UmapiService {
       ? { specs: [], title: null }
       : await this.gateway.get(`/Article/${part.artId}`, { Criterias: true }, caller, normalizeArticleCard, { whenNotFound: { specs: [], title: null } })
         .catch(() => ({ specs: [], title: null }));
-    const answer = { part, photos, specs: card.specs, status: photos.length > 0 || card.specs.length > 0 ? "ok" as const : "none" as const, title: card.title ?? title };
+    const own = { part, photos, specs: card.specs, status: photos.length > 0 || card.specs.length > 0 ? "ok" as const : "none" as const, title: card.title ?? title };
+    // The part is known but its maker's card has no picture (KYB-AU 551112, KOYO 62102RSCM — 9 of 300 products,
+    // 24.11.2026): an analogue's photo, shown as such, with this part's own characteristics. Never kept as ours.
+    let answer: UmapiPhotoAnswer = own;
+    if (photos.length === 0 && !part.through) {
+      const analogues = await this.standIns(part.asked, part.brand, { article: part.article, brand: part.brand, via: part.via }, caller, false).catch(() => null);
+      for (const found of analogues ?? []) {
+        const info = await this.crossInfo(found.part.asked, found.part.brand, caller, false).catch(() => null);
+        const shown = info ? cataloguePhotoUrls(info.medias, base) : [];
+        if (shown.length > 0) {
+          answer = { part: found.part, photos: shown, specs: card.specs, status: "ok", title: own.title };
+          break;
+        }
+      }
+    }
     if (part.via === "own" && !part.through) {
-      await this.cards.keep(product, part, answer).catch(() => this.logger.warn("Could not keep the maker's card of a product"));
+      await this.cards.keep(product, part, own).catch(() => this.logger.warn("Could not keep the maker's card of a product"));
       if (photos.length > 0 && product.brand && sameMaker(product.brand, part.brand)) {
         await this.archive.remember({ ...product, brand: product.brand }, part, photos).catch(() => {
           this.logger.warn("Could not record UMAPI photo references for staff");
