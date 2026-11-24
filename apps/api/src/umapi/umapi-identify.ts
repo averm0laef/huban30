@@ -11,7 +11,9 @@
  * rest were original numbers behind a «ST-» prefix, makers named otherwise in UMAPI, numbers written only in the
  * name, and 1С's own codes («00-00022450»), which are never a part number.
  */
-import { bracketedNumbers, normalizeArticleNumber, normalizeBrand } from "@an30/contracts";
+import { bracketedNumbers, normalizeArticleNumber, normalizeBrand, STOREFRONT_TAXONOMY } from "@an30/contracts";
+
+import { expandAbbreviations, partDictionaryMatch } from "../catalog/catalog-part-dictionary.js";
 
 export interface PartCandidate {
   article: string;
@@ -67,7 +69,7 @@ function looksLikePartNumber(token: string): boolean {
   if (bare.length < 5 || bare.length > 18 || !/\d/u.test(bare)) return false;
   // Sizes, voltages, years and the like: «185/75R16C», «60/55W», «12V», «02-09», «D=430», «19X0.075», «M22*1.5».
   if (/^\d{2,3}\/\d{2}R\d{2}/iu.test(token) || /^\d+(?:[.,]\d+)?(?:MM|ММ|W|V|A|А|Л|L|КГ|KG|СМ|CM|Г|G)$/iu.test(token)) return false;
-  if (/^\d{2}-\d{2}/u.test(token) || /[*×]/u.test(token) || /^\d+[XХ]\d/iu.test(token) || /^[MМ]\d/iu.test(token)) return false;
+  if (/^\d{2}-\d{2}(?!\d)/u.test(token) || /[*×]/u.test(token) || /^\d+[XХ]\d/iu.test(token) || /^[MМ]\d/iu.test(token)) return false;
   // Engine and chassis codes of the car the part is for, not the part: «1KZ-TE», «3RZ-FE», «NZE120», «KZJ95», «MH34S».
   if (/^\d[A-Z]{1,3}-?[A-Z]{0,3}$/iu.test(token) || /^[A-Z]{3}\d{2,3}[A-Z]?$/iu.test(bare) || /^[A-Z]{2}\d{2}[A-Z]$/iu.test(bare)) return false;
   // A list of models or engines run together with «/»: «3RZ/2TR/1GR/5VZ», «SURF/4RUNNER».
@@ -136,10 +138,60 @@ export function makerNamedIn(name: string, makers: readonly string[]): string | 
   return named.length === 1 ? named[0]! : null;
 }
 
+/**
+ * The number as the catalogues are asked: our normalised number without the «_» 1С sometimes writes («8500986_SX» =
+ * STELLOX 85-00986-SX). The shop's own normalisation is not changed: search and the 1С exchange rely on it.
+ */
+export function catalogueNumber(value: string): string {
+  return normalizeArticleNumber(value).replace(/_/gu, "");
+}
+
 const TITLE_STOP = new Set(["для", "или", "комплект", "передний", "задний", "левый", "правый", "система"]);
 
+// Latin letters 1С names mix into Russian words («Hакладки»): read as the Cyrillic ones they look like.
+const LOOKALIKE: Readonly<Record<string, string>> = { a: "а", b: "в", c: "с", e: "е", h: "н", k: "к", m: "м", o: "о", p: "р", t: "т", x: "х", y: "у" };
+
 function stemsOf(text: string): string[] {
-  return (text.toLowerCase().replace(/ё/gu, "е").match(/\p{L}{4,}/gu) ?? []).filter((word) => !TITLE_STOP.has(word)).map((word) => word.slice(0, 5));
+  const words = text.toLowerCase().replace(/ё/gu, "е").match(/\p{L}{4,}/gu) ?? [];
+  return words.map((word) => (/[а-я]/u.test(word) ? [...word].map((char) => LOOKALIKE[char] ?? char).join("") : word))
+    .filter((word) => !TITLE_STOP.has(word)).map((word) => word.slice(0, 5));
+}
+
+/**
+ * Whether a catalogue part of another maker than ours can be this product: the kind of part it is («Датчик
+ * импульсов») shares a word with the product's name («Накладки тормозные … AS5061» does not — 24.11.2026, a sensor's
+ * photo and description stood on brake linings). A name without Russian words of four letters says nothing: kept.
+ */
+export function kindAgrees(name: string, title: string | null, section: string | null = null): boolean {
+  if (!title) return true;
+  const own = stemsOf(name).filter((stem) => /[а-я]/u.test(stem));
+  if (own.length === 0) return true;
+  const theirs = stemsOf(title);
+  // «торм.» in a short name and «тормозных» in the catalogue are one word.
+  if (theirs.some((stem) => own.some((word) => word.startsWith(stem) || stem.startsWith(word)))) return true;
+  // The shop and the catalogue name one part differently («Сайлентблок» / «Подвеска, рычаг», «Фильтр АКПП» /
+  // «Гидрофильтр»): the shop's part dictionary puts both on its shelves. Another section only is another part.
+  // «Без категории» and other shelves outside the storefront tree say nothing.
+  const known = section && STOREFRONT_TAXONOMY.some((item) => item.slug === section) ? section : null;
+  const ours = known ?? sectionOfName(name);
+  const theirSection = sectionOfName(title);
+  return !ours || !theirSection || ours === theirSection;
+}
+
+/** Parts every unit of a car has (seals, gaskets, bearings, hoses, fasteners): their shelf says nothing of the unit. */
+const ANY_UNIT: ReadonlySet<string> = new Set([
+  "prokladki-i-salniki", "stupitsy-i-podshipniki", "krestoviny-i-podshipniki", "patrubki-i-shlangi", "tormoznye-shlangi",
+  "trubki-i-shlangi-na-metrazh", "homuty", "bolty-i-gayki", "klipsy", "fitingi-metallicheskie", "soediniteli-shlangov", "rvd",
+]);
+
+/** The storefront section the shop's part dictionary puts a name in («Датчик импульсов» → «elektrika»), or null. */
+function sectionOfName(name: string): string | null {
+  const slug = partDictionaryMatch(expandAbbreviations(name.replace(/[a-z](?=[а-я])/giu, (char) => LOOKALIKE[char.toLowerCase()] ?? char)));
+  if (!slug || ANY_UNIT.has(slug)) return null;
+  for (const section of STOREFRONT_TAXONOMY) {
+    if (section.slug === slug || section.children.some((child) => child.slug === slug)) return section.slug;
+  }
+  return null;
 }
 
 /**

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { combinedVerdict, groupCars, verdictFor } from "./umapi-fitment.js";
 import { bracketedNumbers, umapiCatalogueApplies, umapiPhotoApplies } from "@an30/contracts";
 
-import { makerByPartKind, nameNumbers, partCandidates, sameMaker } from "./umapi-identify.js";
+import { catalogueNumber, kindAgrees, makerByPartKind, nameNumbers, partCandidates, sameMaker } from "./umapi-identify.js";
 import { normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, normalizeMedias } from "./umapi-normalize.js";
 
 // Shapes follow the UMAPI OpenAPI 2.1.1 schemas; values are made up for the tests (no paid call in tests).
@@ -125,4 +125,26 @@ describe("compatibility", () => {
     expect(makerByPartKind("Ремень клиновой", [...rows, { brand: "GATES", title: "Клиновой ремень" }])).toBeNull();
     expect(makerByPartKind("Деталь", rows)).toBeNull();
   });
+
+  it("never takes another kind of part for the product (a sensor for brake linings, 24.11.2026)", () => {
+    const linings = "19283 Hакладки тормозные комплект с заклепками 1-й ремонт 189x178; 422 (4+4) SAF AS5061";
+    expect(kindAgrees(linings, "Датчик импульсов")).toBe(false);
+    expect(kindAgrees(linings, "Комплект тормозных башмаков, барабанные тормоза")).toBe(true);
+    expect(kindAgrees("85-00986-SX_накладки торм. с ЗАКЛЕПКАМИ STD", "Комплект тормозных башмаков, барабанные тормоза")).toBe(true);
+    expect(kindAgrees("Фильтр салона AFW1272", "Фильтр, воздух во внутренном пространстве")).toBe(true);
+    // The shop and the catalogue name one part differently; a seal's shelf says nothing of the unit it seals.
+    expect(kindAgrees("TAB-168RUB САЙЛЕНТБЛОК ЗАДНЕЙ ЦАПФЫ", "Подвеска, рычаг независимой подвески колеса", "podveska")).toBe(true);
+    expect(kindAgrees("Сальник редуктора FR TOYOTA MARK2", "Уплотняющее кольцо, вал", "transmissiya")).toBe(true);
+    expect(kindAgrees("Крышка топливного бака D=60мм", "Комплект тормозных колодок, дисковый тормоз", "toplivnaya-sistema")).toBe(false);
+    expect(kindAgrees("(SAMPA 040.503) р/к реакт.тяги сайлентблок", "ремонтный комплект, рычаг подвески", "bez-kategorii")).toBe(true);
+    // A name without Russian words says nothing about the kind of part.
+    expect(kindAgrees("GDB1550 TRW", "Комплект тормозных колодок")).toBe(true);
+  });
+
+  it("asks the catalogues with the number 1С wrote with «_», and reads «85-00986-SX» in a name", () => {
+    expect(catalogueNumber("8500986_SX")).toBe("8500986SX");
+    expect(nameNumbers("85-00986-SX_накладки торм. с ЗАКЛЕПКАМИ STD !19283", "8500986_SX")).toContain("85-00986-SX");
+    expect(nameNumbers("Фонарь 02-09 TOYOTA", "X1")).not.toContain("02-09");
+  });
 });
+

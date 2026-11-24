@@ -7,7 +7,7 @@ import { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.stor
 import { PartsFinderShopService, type ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
 import { SupplierSearchService } from "../suppliers/supplier-search.service.js";
 import { combinedVerdict, groupCars, verdictFor, type FitMake, type UmapiCar, type UmapiVerdict } from "./umapi-fitment.js";
-import { isOwnCode, makerByPartKind, makerKey, makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
+import { catalogueNumber, isOwnCode, kindAgrees, makerByPartKind, makerKey, makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
 import {
   normalizeArticleCard, normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, type UmapiArticleCard, type UmapiArticleRow,
   type UmapiBrandRow, type UmapiCarLink, type UmapiCrossInfo, type UmapiSpec,
@@ -168,7 +168,7 @@ export class UmapiService {
    */
   private async resolve(candidate: PartCandidate, product: ProductRow, caller: UmapiCaller, fresh: boolean): Promise<ResolvedPart[] | "ambiguous" | null> {
     // UMAPI is asked with the bare number: «W 914/2» as «W9142» (a «/» in the address breaks the path; checked 23.11.2026).
-    const number = normalizeArticleNumber(candidate.article);
+    const number = catalogueNumber(candidate.article);
     if (number.length < 3) return null;
     const all = await this.brandsOf(number, caller, fresh);
     const makers = [...new Set(all.filter((row) => row.type === "ArticleNumber").map((row) => row.brand))];
@@ -192,9 +192,13 @@ export class UmapiService {
       const original = [...new Set(all.filter((row) => row.type === "OENumber").map((row) => row.brand))];
       const crosses = [...new Set(all.map((row) => row.brand))];
       const maker = makerNamedIn(product.name, original) ?? original[0] ?? (crosses.length === 1 ? crosses[0] : undefined);
+      if (maker && !kindAgrees(product.name, all.find((row) => row.brand === maker)?.title ?? null, product.section)) return null;
       return maker ? this.standIns(number, maker, candidate, caller, fresh) : null;
     }
     if (!brand) return null;
+    // A maker chosen otherwise than by our own maker must make this kind of part (not a sensor for brake linings).
+    const chosenByUs = Boolean(ours && sameMaker(brand, ours));
+    if (!chosenByUs && !kindAgrees(product.name, all.find((row) => row.type === "ArticleNumber" && row.brand === brand)?.title ?? null, product.section)) return null;
     const info = await this.crossInfo(number, brand, caller, fresh);
     if (info && normalizeArticleNumber(info.article) === number && sameMaker(info.brand, brand)) {
       return [{ info, part: { article: info.article, artId: info.artId, asked: number, brand: info.brand, via: candidate.via } }];
@@ -381,8 +385,8 @@ export class UmapiService {
     ).catch(() => ({ rows: [] as Array<{ article: string; brand: string }> }));
     found.push(...stored.rows.filter((row) => row.article && row.brand));
     if (this.suppliers && !isOwnCode(product.sku) && normalizeArticleNumber(product.sku).length >= 4) {
-      const answer = await this.suppliers.search({ q: product.sku.slice(0, 60) }).catch(() => null);
-      const number = normalizeArticleNumber(product.sku);
+      const number = catalogueNumber(product.sku);
+      const answer = await this.suppliers.search({ q: number.slice(0, 60) }).catch(() => null);
       const same = (answer?.parts ?? []).filter((part) => normalizeArticleNumber(part.partNumber) === number
         && (product.brand ? sameMaker(part.brand, product.brand) : true));
       // Without a maker of ours the number must belong to one maker in Rossko's answer, or it is somebody else's part.
