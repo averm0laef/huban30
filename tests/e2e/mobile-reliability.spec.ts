@@ -149,3 +149,19 @@ test("the product card fits the storefront at 1440, 768 and 375 pixels", async (
     }
   }
 });
+
+test("product breadcrumb separators are on the same line as the link text", async ({ page }) => {
+  await page.goto(product);
+  const breadcrumbs = page.getByRole("navigation", { name: "Хлебные крошки" });
+  const textPositions = await breadcrumbs.evaluate(async (nav) => {
+    await nav.ownerDocument.fonts.ready;
+    return Array.from(nav.querySelectorAll('span[aria-hidden="true"]'), (separator) => {
+      const glyph = nav.ownerDocument.createRange();
+      glyph.selectNodeContents(separator);
+      const { top, height } = glyph.getBoundingClientRect();
+      return top + height / 2;
+    });
+  });
+  expect(textPositions).toHaveLength(3);
+  expect(Math.max(...textPositions) - Math.min(...textPositions)).toBeLessThanOrEqual(1);
+});
