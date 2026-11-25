@@ -1,3 +1,5 @@
+import { parseChatIntakeMessage } from "@an30/contracts";
+
 import { isOwnMessage, type ChatMessage } from "./chat-state";
 
 /**
@@ -114,6 +116,9 @@ export function buildTimeline(
 /** One line for a conversation list: text, or the attachment kind. */
 export function messagePreview(message: ChatMessage | undefined): string {
   if (!message) return "";
+  // The opening questionnaire is a form, not something the customer «said»: «Заявка: Помочь подобрать деталь · Probox».
+  const intake = message.attachments.length === 0 ? parseChatIntakeMessage(message.body) : null;
+  if (intake) return `Заявка: ${intake.intent}${intake.vehicle ? ` · ${intake.vehicle}` : ""}`;
   const prefix = isOwnMessage(message) ? "Вы: " : "";
   if (message.body && message.messageType !== "attachment") return `${prefix}${message.body.replace(/\s+/gu, " ").trim()}`;
   const attachment = message.attachments[0];

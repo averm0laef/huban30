@@ -46,7 +46,8 @@ type Previews = Record<string, { at: string; text: string }>;
 
 /** The thread list endpoint has no last-message text, so the page keeps the
  * last line it has seen per conversation on this device (preview only). */
-const PREVIEW_STORAGE_KEY = "an30_chat_previews_v1";
+// v2: a questionnaire is previewed as «Заявка: …»; v1 kept it as «Вы: Что нужно: …» (owner, 25.11.2026).
+const PREVIEW_STORAGE_KEY = "an30_chat_previews_v2";
 function readPreviews(): Previews {
   try {
     const parsed: unknown = JSON.parse(window.localStorage.getItem(PREVIEW_STORAGE_KEY) ?? "{}");

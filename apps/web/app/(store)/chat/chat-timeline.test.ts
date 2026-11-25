@@ -1,3 +1,4 @@
+import { CHAT_INTAKE_INTENT_LABELS, formatChatIntakeMessage } from "@an30/contracts";
 import { describe, expect, it } from "vitest";
 
 import type { ChatMessage } from "./chat-state";
@@ -50,6 +51,11 @@ describe("messenger timeline", () => {
   it("previews text, own messages and attachments in one line", () => {
     expect(messagePreview(message("staff", now, { body: "Есть\n в наличии" }))).toBe("Есть в наличии");
     expect(messagePreview(message("customer", now, { body: "Спасибо" }))).toBe("Вы: Спасибо");
+    // The opening questionnaire is a form, not a line the customer said.
+    const intake = formatChatIntakeMessage({ articleNumber: null, comment: null, intent: "advice", vehicle: "Toyota Probox 2014" });
+    expect(messagePreview(message("customer", now, { body: intake }))).toBe(`Заявка: ${CHAT_INTAKE_INTENT_LABELS.advice} · Toyota Probox 2014`);
+    expect(messagePreview(message("customer", now, { body: formatChatIntakeMessage({ articleNumber: null, comment: null, intent: "advice", vehicle: null }) })))
+      .toBe(`Заявка: ${CHAT_INTAKE_INTENT_LABELS.advice}`);
     expect(messagePreview(message("customer", now, { attachments: [{ byteSize: 1, id: "a", mimeType: "image/png", originalName: "a.png" }], body: null, messageType: "attachment" }))).toBe("Вы: Фото");
     expect(messagePreview(undefined)).toBe("");
   });

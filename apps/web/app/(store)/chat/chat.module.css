@@ -253,18 +253,22 @@
   color: var(--store-muted);
   font-size: 0.75rem;
 }
+/* A quiet action of the device, not a link across the row: it only hides the conversation here. */
 .forgetButton {
   min-height: 44px;
-  margin: -4px 0 6px 70px;
-  padding: 0;
+  margin: -6px 0 4px 70px;
+  padding: 0 10px;
   border: 0;
+  border-radius: 10px;
   background: transparent;
   color: var(--store-muted);
   cursor: pointer;
-  font-size: 0.78rem;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: none;
+  justify-self: start;
 }
+.forgetButton:hover { background: color-mix(in srgb, var(--store-danger) 8%, transparent); }
 .forgetButton:hover { color: var(--store-danger); }
 .forgetConfirm {
   display: flex;
