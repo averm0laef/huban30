@@ -176,3 +176,41 @@ PNG переводятся в WebP 512×512 (качество 84) и кладу�
 Синяя машинка там, где сайт показывает машину покупателя: шапка («Моя машина»), меню телефона, блок «Подойдёт к вашему автомобилю?» на карточке товара (решение владельца 25.11.2026, вместо значка из набора иконок). Компонент — `apps/web/app/(store)/_components/car-picture.tsx`.
 
 Сделана через Codex тем же способом, что картинки разделов (образцы `filtry`, `tormoznye-kolodki`, `podveska`, `akkumulyatory`). Предмет: generic compact five-door city hatchback, front three-quarter view, deep blue body (#173ea5 / #0f2d66), cool grey wheels and mirror caps, a small yellow (#f5c400) running-light strip as the only accent, no badge, no number plate, no recognisable real brand; landscape 3:2. Ореол с альфой меньше 24 убран, машина обрезана по краю и вписана в 128×86 (2x) и 192×129 (3x), WebP качество 88.
+
+## Машины покупателей (`apps/web/public/brand/fleet/<вид>@2x.webp`, `@3x`)
+
+18 синих машин с логотипом на передней двери — по одной на вид машины (кей-кар, хэтчбек, седаны трёх размеров, универсал, купе, кабриолет, кроссовер, большой внедорожник, классический внедорожник, минивэн, пикап, фургон, микроавтобус, бортовой грузовик, маленький фургон, электрокроссовер). Просьба владельца 25.11.2026: на «Подборе» показывать машину, похожую на машину покупателя. Какая картинка у какой машины — `apps/web/app/(store)/_lib/car-look.ts` (тип кузова из справочника UMAPI, объём двигателя, известные имена моделей: Probox — универсал, Hiace — фургон, ГАЗель — бортовой, УАЗ — внедорожник), тесты рядом.
+
+Сделаны через Codex (`codex exec … -i car-an30.webp -i logo.png`), образец — `car-an30.webp`. Логотип Codex накладывал сам из `logo.png` (перекрашен в белый, искажён по плоскости двери), потому что генератор путает буквы. Обрезка по краю машины, вписаны в 360×240 и 540×360 по нижнему краю, WebP 82. Промт:
+
+```
+Make a fleet of 18 car pictures for an auto-parts shop's "your car" card. Work in the current folder, save results in ./out as PNG with a transparent background, file names exactly as listed. Use your image generation tool; do several at a time if you can.
+
+Reference: reference-car-an30.webp is the shop's existing mascot car (deep blue paint, the shop logo «АН-30 АВТОЗАПЧАСТИ» on the front door, front three-quarter view from the front-left corner, soft studio light, transparent background). Every new car must look like it was shot in the same session: same camera angle (front-left three-quarter, slightly from above), same light from the upper left, same deep blue paint (#1d2fd0 to #12207f, glossy), same dark grey alloy wheels, dark tinted windows, gentle contact shadow, transparent background, car facing the same direction, filling about 88 percent of the width.
+
+The logo: put the shop logo (logo.png: the word mark «ан-30» with a wheel in the «0», and «АВТОЗАПЧАСТИ» under it) in white on the front door, the same size and place as on the reference car. Generators often garble letters: after each picture, look at it closely; if the logo is not exactly «ан-30» over «АВТОЗАПЧАСТИ», regenerate, or composite logo.png yourself (recolour it white, warp it to the door's perspective with Pillow / OpenCV, keep a slight shading so it sits on the paint). Wrong letters are not acceptable.
+
+Look of the cars: realistic, like real cars common in Siberia and the Russian Far East (Japanese right-hand-drive imports, Korean cars, Lada, UAZ, GAZ) — the proportions and body type a driver recognises at a glance. But each must be a generic design: no real manufacturer's badge, grille shape, signature lights or name, no number plate characters (a blank plate or none), no other text anywhere.
+
+Files and bodies:
+- kei.png — Japanese kei car, tall boxy micro hatchback, 3.4 m long, tiny wheels
+- hatch.png — compact five-door hatchback, 4.1 m
+- sedan-compact.png — compact four-door sedan, 4.4 m
+- sedan.png — mid-size family sedan, 4.8 m
+- sedan-large.png — large executive sedan, 5 m, long bonnet
+- wagon.png — Japanese compact station wagon / light commercial wagon, long flat roof, 4.2 m
+- coupe.png — two-door sports coupe, low and wide
+- cabrio.png — two-door convertible with the soft top down
+- crossover.png — compact crossover SUV, 4.4 m
+- suv.png — large body-on-frame SUV, tall and square, 4.9 m, spare-wheel-free rear
+- offroad.png — classic boxy off-roader with a short bonnet and round headlights, high clearance (generic, not a UAZ or Niva replica)
+- minivan.png — Japanese one-box minivan with a sliding side door, 4.8 m
+- pickup.png — double-cab pickup truck with an open load bed
+- van.png — Japanese one-box cargo/passenger van with sliding door, flat front
+- bus.png — small 18-seat minibus
+- truck.png — light cab-over truck with a dropside flatbed
+- compact-van.png — small car-based delivery van (high roof, panel sides behind the front doors)
+- electric.png — modern compact electric crossover with a closed smooth front
+
+When all are done, make sheet.png: all 18 on a light grey (#eef0f6) background in a 6x3 grid at the same scale, with the file name small under each, so the set can be checked as a whole (angle, scale, light, logo). Fix the ones that stand out. Finally write report.txt: one line per file — done or not, and whether the logo was generated or composited.
+```

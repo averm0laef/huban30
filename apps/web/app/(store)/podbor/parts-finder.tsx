@@ -25,6 +25,8 @@ import type { FormEvent, ReactNode } from "react";
 
 import { AddToCartButton } from "../_components/cart-actions";
 import buttons from "../_components/store-button.module.css";
+import { CarLineIcon } from "../_components/car-picture";
+import { carLook, carLookPicture } from "../_lib/car-look";
 import { umapiGet, umapiStatus } from "../_lib/umapi";
 import { formatRubles } from "../_lib/catalog-format";
 import {
@@ -594,7 +596,7 @@ export function PartsFinder() {
         <section className={styles.mode} aria-label="Подбор по детали и машине">
           {vehicle && !showPicker ? (
             <div className={styles.garage} data-off={!useVehicle || undefined}>
-              <VehicleCar20Regular aria-hidden="true" className={styles.garageIcon} />
+              <CarLineIcon className={styles.garageIcon} />
               <div className={styles.garageBody}>
                 <span className={styles.garageKicker}>Ваш автомобиль</span>
                 <strong className={styles.garageName}>{picked?.make && picked.model ? `${picked.make} ${picked.model}` : vehicle}</strong>
@@ -726,7 +728,11 @@ export function PartsFinder() {
         </section>
       ) : null}
         </div>
-        <Image alt="" className={styles.heroCar} height={339} priority sizes="(max-width: 767px) 220px, 420px" src="/brand/car-side.webp" width={720} />
+        {/* With a car chosen, one of our blue cars of the same kind (body type, engine size, model — `_lib/car-look.ts`), as on
+            the canvas «Подбор · вариант А»; without one, the shop's car. */}
+        {vehicle && picked
+          ? <img alt="" className={`${styles.heroCar} ${styles.heroLook}`} data-look={carLook(picked)} decoding="async" height={360} width={540} {...carLookPicture(carLook(picked))} />
+          : <Image alt="" className={styles.heroCar} height={339} priority sizes="(max-width: 767px) 220px, 420px" src="/brand/car-side.webp" width={720} />}
       </section>
 
       {mode === "parts" && result.status === "idle" && !carBrowse ? (
