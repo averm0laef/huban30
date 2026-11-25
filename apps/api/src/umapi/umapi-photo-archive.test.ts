@@ -29,10 +29,11 @@ describe.skipIf(!url)("private UMAPI photo archive in PostgreSQL", () => {
   it("deduplicates a product's link, saves a staff JPEG and blocks its public reimport", async () => {
     const database = new DatabaseService({ get: () => "test", getOrThrow: () => url } as unknown as ConfigService);
     const tag = randomUUID();
+    const code = `code-${tag}`;
+    const storageKey = `umapi-test/${tag}`;
     try {
       const brand = `UMAPI TEST ${tag}`;
       const sku = `sku-${tag}`;
-      const code = `code-${tag}`;
       const brandId = (await database.query<{ id: string }>(
         "INSERT INTO app.brands (name,slug) VALUES ($1,$2) RETURNING id", [brand, tag],
       )).rows[0]!.id;
@@ -40,7 +41,7 @@ describe.skipIf(!url)("private UMAPI photo archive in PostgreSQL", () => {
         "INSERT INTO app.products (external_id,sku,name,slug,brand_id) VALUES ($1,$2,'Test private photo',$3,$4) RETURNING id",
         [code, sku, tag, brandId],
       )).rows[0]!.id;
-      const jpeg = Buffer.from("test-normalized-jpeg");
+      const jpeg = Buffer.from(`test-normalized-jpeg-${tag}`);
       const archive = new UmapiPhotoArchiveService(database, { mediaBaseUrl } as UmapiGateway,
         { assertClean: async () => undefined } as unknown as MalwareScannerService,
         { assertValid: async () => undefined } as unknown as MediaValidationService,
@@ -64,7 +65,7 @@ describe.skipIf(!url)("private UMAPI photo archive in PostgreSQL", () => {
       const storageId = (await database.query<{ id: string }>(
         `INSERT INTO app.storage_objects (provider,storage_key,original_name,mime_type,byte_size,sha256,status)
          VALUES ('local',$1,'renamed.jpg','image/jpeg',$2,$3,'available') RETURNING id`,
-        [`umapi-test/${tag}`, jpeg.length, createHash("sha256").update(jpeg).digest()],
+        [storageKey, jpeg.length, createHash("sha256").update(jpeg).digest()],
       )).rows[0]!.id;
       const attached = await database.query(
         "INSERT INTO app.product_images (product_id,storage_object_id,alt_text) VALUES ($1,$2,'test') RETURNING id", [id, storageId],
@@ -74,7 +75,15 @@ describe.skipIf(!url)("private UMAPI photo archive in PostgreSQL", () => {
       await expect(archive.file(photo.id)).rejects.toThrow("Сохранённое фото не найдено");
     } finally {
       vi.unstubAllGlobals();
-      await database.onModuleDestroy();
+      try {
+        await database.transaction(async (client) => {
+          await client.query("DELETE FROM app.products WHERE external_id=$1", [code]);
+          await client.query("DELETE FROM app.storage_objects WHERE storage_key=$1", [storageKey]);
+          await client.query("DELETE FROM app.brands WHERE slug=$1", [tag]);
+        });
+      } finally {
+        await database.onModuleDestroy();
+      }
     }
   });
 });

@@ -91,7 +91,7 @@ export function readableName(name: string): string {
 
 export interface CarCategory { children: CarCategory[]; id: number; name: string }
 export interface CarGroup { categoryIds: number[]; hint: string; id: number; name: string }
-export interface CarCategoryMatch { id: number; leaf: boolean; name: string; path: string[] }
+export interface CarCategoryMatch { id: number; leaf: boolean; name: string; path: string[]; related?: true }
 export type CarCatalogueAnswer = { status: "unknown_car" } | { groups: CarGroup[]; matches: CarCategoryMatch[]; status: "ok"; tree: CarCategory[] };
 export interface CarPartType { id: number; name: string; original: string }
 export interface CarPartView {

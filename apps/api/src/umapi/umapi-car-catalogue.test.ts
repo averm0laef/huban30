@@ -45,6 +45,19 @@ describe("UMAPI car catalogue rules", () => {
     expect(matchCarCategories(tree, "для")).toEqual([]);
   });
 
+  it("suggests only related systems for pressure when no exact category exists", () => {
+    const tree = [
+      { id: 21, name: "Система смазки", children: [{ id: 22, name: "Масляный насос", children: [] }] },
+      { id: 23, name: "Топливная система", children: [{ id: 24, name: "Топливный насос", children: [] }] },
+      { id: 25, name: "Расходники", children: [{ id: 26, name: "Свечи", children: [] }] },
+    ];
+    expect(matchCarCategories(tree, "Давления").map(({ id, related }) => ({ id, related })))
+      .toEqual([{ id: 21, related: true }, { id: 23, related: true }]);
+    expect(matchCarCategories(tree, "давление топлива").map(({ id }) => id)).toEqual([23]);
+    expect(matchCarCategories([...tree, { id: 27, name: "Датчик давления топлива", children: [] }], "давление топлива"))
+      .toEqual([{ id: 27, leaf: true, name: "Датчик давления топлива", path: [] }]);
+  });
+
   it("puts a part type the catalogue names as a list of words the way customers say it", () => {
     expect(normalizePartTypes([{ PRODUCT: "Фильтр, воздух во внутренном пространстве", PT_ID: 424 }, { PRODUCT: "Фильтр, воздух во внутренном пространстве", PT_ID: 424 }]))
       .toEqual([{ id: 424, name: "Фильтр салона", original: "Фильтр, воздух во внутренном пространстве" }]);
