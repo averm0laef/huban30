@@ -48,9 +48,15 @@ function findCategory(tree: readonly CarCategory[], id: number): CarCategory | n
  * shop's own first, with price and «В корзину», the rest «под заказ». The car stays in sight on every step. Each step
  * is the visitor's own click: nothing is loaded ahead.
  */
-export function UmapiCarCatalogue({ car, onClearQuery, query }: {
+export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, onClearQuery, onClose, query }: {
   car: PickedVehicle & { modificationId: number };
+  /** Inside «Подбор» variant A (canvas «Подбор · вариант А»): the page above shows the car and the search, so no second
+   *  plate, field or «Часто ищут» here; «Все разделы» goes back to the page's own section tiles. */
+  embedded?: boolean;
+  /** A section tile of the page was pressed («Тормоза»): open that section once the catalogue answers; «*» — every section. */
+  initialGroup?: string | null;
   onClearQuery: () => void;
+  onClose?: () => void;
   query: string | null;
 }) {
   const modificationId = car.modificationId;
@@ -81,7 +87,11 @@ export function UmapiCarCatalogue({ car, onClearQuery, query }: {
         // The request names exactly one category: open it without one more click.
         const leaves = data.matches.filter((match) => match.leaf);
         if (asked && leaves.length === 1 && data.matches.length <= 2) open({ id: leaves[0]!.id, name: leaves[0]!.name });
-        else bringIntoView();
+        else {
+          // A tile of the page: its section of this car, or every section when this car's catalogue has none by that name.
+          if (!asked && initialGroup) setGroup(data.groups.find((item) => item.name === initialGroup) ?? "all");
+          bringIntoView();
+        }
       })
       .catch((caught: unknown) => { if (live) setCatalogue({ message: message(caught), status: "error" }); });
     return () => { live = false; };
@@ -135,7 +145,7 @@ export function UmapiCarCatalogue({ car, onClearQuery, query }: {
 
   const name = carName(car);
   const facts = [car.engine, car.power, car.years].filter(Boolean).join(" · ");
-  const plate = (
+  const plate = embedded ? null : (
     <div className={styles.plate}>
       <span aria-hidden="true" className={styles.mark}>{(car.make ?? name).slice(0, 5).toUpperCase()}</span>
       <div>
@@ -194,15 +204,17 @@ export function UmapiCarCatalogue({ car, onClearQuery, query }: {
         <h2 id="car-catalogue-title" ref={headingRef} tabIndex={-1}>
           {shownGroup ? shownGroup.name : group === "all" ? "Все разделы каталога" : "Каталог запчастей для вашей машины"}
         </h2>
-        {group ? <button className={quietButton} onClick={() => setGroup(null)} type="button"><ArrowLeft20Regular aria-hidden="true" /> Все разделы</button> : null}
+        {group || (embedded && onClose) ? (
+          <button className={quietButton} onClick={() => (embedded && onClose ? onClose() : setGroup(null))} type="button"><ArrowLeft20Regular aria-hidden="true" /> Все разделы</button>
+        ) : null}
       </div>
-      <form className={styles.find} onSubmit={submit} role="search">
+      {embedded ? null : <form className={styles.find} onSubmit={submit} role="search">
         <label className={shared.visuallyHidden} htmlFor="car-catalogue-find">Что ищете для этой машины</label>
         <Search20Regular aria-hidden="true" />
         <input autoComplete="off" id="car-catalogue-find" onChange={(event) => setTyped(event.target.value)} placeholder="Что ищете: колодки, фильтр салона…" type="search" value={typed} />
         <button className={`${buttons.button} ${buttons.primary}`} type="submit">Найти</button>
-      </form>
-      {!group ? (
+      </form>}
+      {!group && !embedded ? (
         <div className={styles.frequent}>
           <span>Часто ищут:</span>
           {FREQUENT.map((item) => (
@@ -224,7 +236,7 @@ export function UmapiCarCatalogue({ car, onClearQuery, query }: {
           <div className={styles.matches}>
             <p className={shared.groupTitle}>«{asked}» в каталоге вашей машины</p>
             {matches.map((match) => <MatchButton key={match.id} match={match} onOpen={(next) => (next.leaf ? open(next) : setGroup("all"))} />)}
-            <button className={quietButton} onClick={() => { setAsked(null); setTyped(""); onClearQuery(); }} type="button">Показать все разделы</button>
+            <button className={quietButton} onClick={() => { setAsked(null); setTyped(""); onClearQuery(); if (embedded && onClose) onClose(); }} type="button">Показать все разделы</button>
           </div>
         ) : (
           <div className={styles.empty}>
