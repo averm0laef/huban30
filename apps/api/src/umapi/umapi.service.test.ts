@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { DatabaseService } from "../infrastructure/database.service.js";
 import type { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.store.js";
 import type { PartsFinderShopService, ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
-import type { SupplierSearchService } from "../suppliers/supplier-search.service.js";
 import type { UmapiPhotoArchiveService } from "./umapi-photo-archive.service.js";
 import type { UmapiProductCardService } from "./umapi-product-card.service.js";
 import type { UmapiGateway } from "./umapi.gateway.js";
@@ -40,7 +39,7 @@ function offer(productId: string, brand: string, sku: string, matchedVia: ShopOf
   return { availableQuantity: available, brand, matchedVia, name: `${brand} ${sku}`, priceKopeks: 50_000, productId, sku, slug: productId };
 }
 
-function setup(options: { answers?: Answers; media?: string | null; product?: TestProduct | null; shop?: Record<string, ShopOffer[]>; supplier?: unknown } = {}) {
+function setup(options: { confirmedAnalogues?: { article: string; brand: string }[]; answers?: Answers; media?: string | null; product?: TestProduct | null; shop?: Record<string, ShopOffer[]> } = {}) {
   const answers = options.answers ?? FILTER_ANSWERS;
   const asked: string[] = [];
   const fresh: string[] = [];
@@ -62,6 +61,7 @@ function setup(options: { answers?: Answers; media?: string | null; product?: Te
       if (sql.includes("FROM app.products")) return { rows: options.product === null ? [] : [options.product ?? AFW] };
       if (sql.includes("vehicle_catalog_modifications")) return { rows: [{ ms: 5590, pc: 32001 }] };
       if (sql.includes("vehicle_catalog_models")) return { rows: [{ ms: 5590 }] };
+      if (sql.includes("FROM app.article_crosses") && sql.includes("status='confirmed'")) return { rows: options.confirmedAnalogues ?? [] };
       return { rows: [] };
     },
   };
@@ -71,8 +71,7 @@ function setup(options: { answers?: Answers; media?: string | null; product?: Te
   };
   const crosses: Array<{ pairs: unknown[]; source: string }> = [];
   const crossStore = { rememberPairs: async (pairs: unknown[], source: string) => { crosses.push({ pairs, source }); return pairs.length; } };
-  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService, { keep } as unknown as UmapiProductCardService, crossStore as unknown as PartsFinderCrossStore,
-    options.supplier ? { search: async () => options.supplier } as unknown as SupplierSearchService : undefined);
+  const service = new UmapiService(gateway as unknown as UmapiGateway, database as unknown as DatabaseService, shop as unknown as PartsFinderShopService, { remember } as unknown as UmapiPhotoArchiveService, { keep } as unknown as UmapiProductCardService, crossStore as unknown as PartsFinderCrossStore);
   return { asked, crosses, fresh, keep, remember, service };
 }
 
@@ -168,8 +167,9 @@ describe("UmapiService: analogs and photo", () => {
   });
 
   it("gives photo addresses on the media host, and nothing without one", async () => {
-    const { service, remember } = setup();
-    expect(await service.productPhotos(AFW.id, VISITOR)).toMatchObject({ photos: ["https://media.example/256/k1288.webp"], status: "ok" });
+    const product = { ...AFW, name: "Фильтр салона FILTRON K1288", sku: "K1288" };
+    const { service, remember } = setup({ product });
+    expect(await service.productPhotos(product.id, VISITOR)).toMatchObject({ photos: ["https://media.example/256/k1288.webp"], status: "ok" });
     expect(remember).not.toHaveBeenCalled();
     const { asked, service: noMedia } = setup({ media: null });
     expect(await noMedia.productPhotos(AFW.id, VISITOR)).toEqual({ status: "not_available" });
@@ -213,6 +213,7 @@ describe("UmapiService: products our own number alone did not find (sample of 24
   const SAT: TestProduct = { brand: null, id: "00000000-0000-4000-8000-000000000101", name: "Фильтр топливный TOYOTA HILUX SURF/4RUNNER 3RZ 02-09", section: "filtry", sku: "ST-23300-31090" };
   const OE_ANSWERS: Answers = {
     "/BrandRefinement/ST2330031090": [],
+    "/BrandRefinement/WK6015": [{ BRAND: "MANN-FILTER", DISPLAY_NR: "WK 6015", TYPE: "ArticleNumber" }],
     // Only original numbers: the catalogue keeps no card of TOYOTA 23300-31090 itself.
     "/BrandRefinement/2330031090": [{ BRAND: "TOYOTA", DISPLAY_NR: "23300-31090", TYPE: "OENumber" }, { BRAND: "LEXUS", DISPLAY_NR: "23300-31090", TYPE: "OENumber" }],
     "/Analogs/2330031090/TOYOTA": { data: [{ ARTICLE_NR: "WK 6015", ART_ID: 9101, BRAND: "MANN-FILTER" }, { ARTICLE_NR: "PP 968/1", ART_ID: 9102, BRAND: "FILTRON" }] },
@@ -231,8 +232,9 @@ describe("UmapiService: products our own number alone did not find (sample of 24
   });
 
   it("shows an analogue's photo for it, and never keeps it as the product's own", async () => {
-    const { remember, service } = setup({ answers: OE_ANSWERS, product: SAT });
-    expect(await service.productPhotos(SAT.id, VISITOR)).toMatchObject({ part: { article: "WK 6015", through: { brand: "TOYOTA" } }, photos: ["https://media.example/4/wk6015.webp"], status: "ok" });
+    const product = { ...SAT, brand: "SAT" };
+    const { remember, service } = setup({ answers: OE_ANSWERS, product, confirmedAnalogues: [{ article: "WK 6015", brand: "MANN-FILTER" }] });
+    expect(await service.productPhotos(product.id, VISITOR)).toMatchObject({ part: { article: "WK 6015", through: { brand: "SAT" } }, photos: ["https://media.example/4/wk6015.webp"], status: "ok" });
     expect(remember).not.toHaveBeenCalled();
   });
 
@@ -318,10 +320,10 @@ describe("UmapiService: the maker's photo and characteristics are kept for the p
   it("shows an analogue's photo, labelled, when the part's own card has none, and keeps no photo for the product", async () => {
     const product = { ...AFW, brand: "MANN", name: "Фильтр салона MANN CU3569", sku: "CU3569" };
     const answers: Answers = { ...FILTER_ANSWERS, "/Article/7002": { CRITERIAS: [{ CRI_DES: "Длина [мм]", CRI_UNIT_DES: "мм", VALUE: "254" }] } };
-    const { keep, service } = setup({ answers, product });
+    const { keep, service } = setup({ answers, product, confirmedAnalogues: [{ article: "K 1288", brand: "FILTRON" }] });
     const answer = await service.productPhotos(product.id, VISITOR);
     expect(answer).toMatchObject({
-      part: { article: "K 1288", brand: "FILTRON", through: { article: "CU 3569", brand: "MANN-FILTER" } },
+      part: { article: "K 1288", brand: "FILTRON", through: { article: "CU3569", brand: "MANN" } },
       photos: ["https://media.example/256/k1288.webp"],
       specs: [{ label: "Длина", value: "254 мм" }],
       status: "ok",
@@ -329,24 +331,32 @@ describe("UmapiService: the maker's photo and characteristics are kept for the p
     expect(keep).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ artId: 7002 }), expect.objectContaining({ photos: [] }));
   });
 
-  it("finds a photo of a part the catalogue lacks through the analogues Rossko names, a known maker first", async () => {
-    const product = { ...AFW, brand: "SUFIX", name: "SG-1091 Опора шаровая | перед прав | SUFIX", sku: "SG1091" };
-    const supplier = { parts: [{ brand: "SUFIX", partNumber: "SG-1091", crosses: [
-      { brand: "NONAME", crosses: [], partNumber: "X1" }, { brand: "FILTRON", crosses: [], partNumber: "K 1288" }, { brand: "MANN-FILTER", crosses: [], partNumber: "CU 3569" },
-    ] }], success: true };
-    const { keep, service } = setup({ answers: { ...FILTER_ANSWERS, "/BrandRefinement/SG1091": [] }, product, supplier });
-    const answer = await service.productPhotos(product.id, VISITOR);
-    // MANN first (a known maker) has no picture; FILTRON's card has one. Labelled as an analogue of our number.
-    expect(answer).toMatchObject({ part: { brand: "FILTRON", through: { article: "SG1091", brand: "SUFIX" } }, photos: ["https://media.example/256/k1288.webp"], status: "ok" });
-    expect(keep).not.toHaveBeenCalled();
+  it("ignores a single catalogue's unconfirmed analogue when selecting an image", async () => {
+    const product = { ...AFW, brand: "MANN", name: "Фильтр салона MANN CU3569", sku: "CU3569" };
+    const { keep, service } = setup({ product });
+    expect(await service.productPhotos(product.id, VISITOR)).toMatchObject({ photos: [], status: "none" });
+    expect(keep).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ artId: 7002 }), expect.objectContaining({ photos: [] }));
   });
 
-  it("labels another maker's number of the name as an analogue, with no characteristics of its own", async () => {
+  it("requires evidence for another maker’s number mentioned in a name", async () => {
     // AFW1272 names FILTRON K1288 and MANN CU3569 in brackets: their photo is an analogue's, not this part's.
     const { keep, service } = setup({ answers: { ...FILTER_ANSWERS, "/Article/7001": { CRITERIAS: [{ CRI_DES: "Длина [мм]", VALUE: "254" }] } } });
     const answer = await service.productPhotos(AFW.id, VISITOR);
-    expect(answer).toMatchObject({ part: { brand: "FILTRON", through: { article: "AFW1272", brand: "" } }, photos: ["https://media.example/256/k1288.webp"], specs: [] });
+    expect(answer).toEqual({ status: "unknown_part" });
     expect(keep).not.toHaveBeenCalled();
+  });
+
+  it("rejects an analogue media card whose actual maker disagrees with the confirmed pair", async () => {
+    const product = { ...AFW, brand: "MANN", name: "Фильтр салона MANN CU3569", sku: "CU3569" };
+    const answers = {
+      ...FILTER_ANSWERS,
+      "/v2/cross/parts/Analogs/getCrossInfo?article=K1288&brand=FILTRON": {
+        article: "K 1288", brand: "BOSCH", catalogId: 7001,
+        td: { ARTICLE_NR: "K 1288", ART_ID: 7001, BRAND: "BOSCH", MEDIAS: [{ FILE_NAME: "wrong.webp", SUP_ID: 256 }] },
+      },
+    };
+    const { service } = setup({ answers, product, confirmedAnalogues: [{ article: "K 1288", brand: "FILTRON" }] });
+    expect(await service.productPhotos(product.id, VISITOR)).toMatchObject({ photos: [], status: "none" });
   });
 });
 

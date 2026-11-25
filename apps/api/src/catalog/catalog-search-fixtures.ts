@@ -272,7 +272,9 @@ export async function seedCatalogSearchFixtures(client: Queryable, products: Fix
     categoryIds.set(category.slug, row.rows[0]!.id);
   }
   const brandIds = new Map<string, unknown>();
-  for (const [order, brand] of FIXTURE_BRANDS.entries()) {
+  const brands = new Set<string>(FIXTURE_BRANDS);
+  for (const { brand } of products) if (brand) brands.add(brand);
+  for (const [order, brand] of [...brands].entries()) {
     const row = await client.query(
       `INSERT INTO app.brands (external_id,name,slug,is_active) VALUES ($1,$2,$3,$4) RETURNING id`,
       [`${PREFIX}brand:${order}`, brand, `sf-brand-${order}`, !INACTIVE_BRANDS.has(brand)],

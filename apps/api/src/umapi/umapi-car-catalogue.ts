@@ -21,7 +21,7 @@ export interface CarArticle {
   name: string | null;
 }
 export interface CarArticlePage { articles: CarArticle[]; total: number }
-export interface CategoryMatch { id: number; leaf: boolean; name: string; path: string[] }
+export interface CategoryMatch { id: number; leaf: boolean; name: string; path: string[]; related?: true }
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -202,22 +202,43 @@ function stem(word: string): string {
   return word.length <= 4 ? word : word.slice(0, Math.max(4, word.length - 2));
 }
 
+const PRESSURE_SYSTEMS = [
+  { words: /^(масл|смаз)/u, category: /^(система смазки|смазка двигателя|смазочная система)$/iu },
+  { words: /^топлив/u, category: /^(топливная система|система подачи топлива|подготовка топливной смеси)$/iu },
+  { words: /^(турбин|турбонаддув|наддув)/u, category: /^(турбонаддув|система наддува|турбонагнетатель)$/iu },
+  { words: /^(шин|колес)/u, category: /^(шины|колеса|контроль давления в шинах)$/iu },
+];
+
+function pressureSystems(asked: string[]) {
+  if (!asked.some((word) => word.startsWith("давлен"))) return [];
+  const context = asked.filter((word) => !/^(давлен|датчик|регулятор)/u.test(word));
+  const scoped = PRESSURE_SYSTEMS.filter((system) => context.some((word) => system.words.test(word)));
+  if (context.length > 0 && !context.every((word) => scoped.some((system) => system.words.test(word)))) return [];
+  return context.length > 0 ? scoped : PRESSURE_SYSTEMS;
+}
+
 /** The categories a typed request names («фильтр салона», «колодки»): every word starts a word of the name. */
 export function matchCarCategories(tree: readonly CarCategory[], query: string, limit = 12): CategoryMatch[] {
-  const wanted = words(query).filter((word) => !STOP_WORDS.has(word) && word.length >= 2).map((word) => stem(SYNONYMS[word] ?? word));
+  const asked = words(query).filter((word) => !STOP_WORDS.has(word) && word.length >= 2);
+  const wanted = asked.map((word) => stem(SYNONYMS[word] ?? word));
   if (wanted.length === 0) return [];
+  const nearby = pressureSystems(asked);
   const matches: Array<CategoryMatch & { score: number }> = [];
+  const related: Array<CategoryMatch & { score: number }> = [];
   const visit = (node: CarCategory, path: string[]): void => {
     const own = words(node.name);
     if (wanted.every((want) => own.some((word) => word.startsWith(want)))) {
       matches.push({ id: node.id, leaf: node.children.length === 0, name: node.name, path, score: (own.length - wanted.length) * 2 + path.length + (node.children.length === 0 ? 0 : 1) });
+    }
+    if (nearby.some((system) => system.category.test(node.name.replace(/ё/giu, "е")))) {
+      related.push({ id: node.id, leaf: node.children.length === 0, name: node.name, path, related: true, score: path.length });
     }
     for (const child of node.children) visit(child, [...path, node.name]);
   };
   for (const root of tree) visit(root, []);
   // One category often stands under two sections («Фильтр салона» in «Фильтр» and in «Отопление»): shown once.
   const seen = new Set<string>();
-  return matches.sort((a, b) => a.score - b.score || a.name.localeCompare(b.name, "ru"))
+  return (matches.length > 0 ? matches : related).sort((a, b) => a.score - b.score || a.name.localeCompare(b.name, "ru"))
     .filter((match) => {
       const key = `${match.leaf ? "leaf" : "node"}:${match.name.toLowerCase()}`;
       return seen.has(key) ? false : (seen.add(key), true);

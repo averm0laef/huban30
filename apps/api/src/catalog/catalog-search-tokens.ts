@@ -74,6 +74,9 @@ const UNIT_WORD = new RegExp(`^(\\d+(?:[.,]\\d+)?)(${UNITS.map((unit) => unit.un
 // "5w40", "5W-40", "5w 40", "5в40", "5ц40" (w on the Russian layout).
 const VISCOSITY = /(^|[^0-9a-zа-я])(\d{1,2})\s*[wвц]\s*-?\s*(\d{2})(?![0-9])/gu;
 
+// «DOT-4», «dot4», «ДОТ 4». The spec is one token and must match the label on the product.
+const DOT_GRADE = /(^|[^a-zа-я0-9])(?:dot|дот)\s*-?\s*(3|4|5(?:[.,]1)?)(?![a-zа-я0-9]|[.,][0-9])/gu;
+
 // Common Russian noun/adjective endings, longest first.
 const ENDINGS = [
   "ями", "ами", "ыми", "ими", "ого", "его", "ому", "ему", "ых", "их", "ый", "ий", "ой", "ая", "яя",
@@ -165,6 +168,7 @@ function numberPattern(value: string): string {
 /** Join the parts of a measurement the customer separated with spaces or hyphens. */
 export function joinMeasurements(query: string): string {
   return query
+    .replace(DOT_GRADE, (_match, before: string, grade: string) => `${before}dot${grade.replace(",", ".")}`)
     .replace(VISCOSITY, (_match, before: string, winter: string, summer: string) => `${before}${winter}w-${summer}`)
     .replace(NUMBER_WITH_UNIT, (_match, before: string, amount: string, unit: string) => (
       `${before}${amount.replace(",", ".")}${UNIT_BY_SPELLING.get(unit)!.unit}`
@@ -180,6 +184,17 @@ function joinBrandPhrases(query: string): string {
 }
 
 function wordAlternatives(word: string): { alternatives: Array<Omit<SearchTokenAlternative, "word">>; lead: string | null } {
+  const dot = /^dot(3|4|5(?:\.1)?)$/u.exec(word);
+  if (dot) {
+    const grade = dot[1]!;
+    return {
+      alternatives: [{
+        text: null, fuzzy: false, measure: `dot:${grade}`,
+        pattern: `(^|[^[:alnum:]])(dot|дот)[[:space:]-]*${numberPattern(grade)}(?![[:alnum:]]|[.,][0-9])`,
+      }],
+      lead: "жидкост",
+    };
+  }
   const viscosity = /^(\d{1,2})w-(\d{2})$/u.exec(word);
   if (viscosity) {
     return { alternatives: [{ text: null, fuzzy: false, measure: `visc:${Number(viscosity[1])}w${viscosity[2]}`, pattern: `(^|[^0-9])${viscosity[1]} ?[wв] ?-? ?${viscosity[2]}([^0-9]|$)` }], lead: null };

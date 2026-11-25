@@ -1,13 +1,12 @@
-import { Injectable, Logger, Optional } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { normalizeArticleNumber, umapiCatalogueApplies, umapiPhotoApplies, type ShopOffer } from "@an30/contracts";
 
 import { VISIBLE_CATEGORIES_CTE } from "../catalog/catalog-visibility.sql.js";
 import { DatabaseService } from "../infrastructure/database.service.js";
 import { PartsFinderCrossStore } from "../parts-finder/parts-finder-crosses.store.js";
 import { PartsFinderShopService, type ShopOfferRequest } from "../parts-finder/parts-finder-shop.service.js";
-import { SupplierSearchService } from "../suppliers/supplier-search.service.js";
 import { combinedVerdict, groupCars, verdictFor, type FitMake, type UmapiCar, type UmapiVerdict } from "./umapi-fitment.js";
-import { catalogueNumber, isOwnCode, kindAgrees, makerByPartKind, makerKey, makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
+import { catalogueNumber, kindAgrees, makerByPartKind, makerKey, makerNamedIn, partCandidates, sameMaker, type PartCandidate } from "./umapi-identify.js";
 import {
   normalizeArticleCard, normalizeArticleRows, normalizeBrandRows, normalizeCarLinks, normalizeCrossInfo, type UmapiArticleCard, type UmapiArticleRow,
   type UmapiBrandRow, type UmapiCarLink, type UmapiCrossInfo, type UmapiSpec,
@@ -100,7 +99,6 @@ export class UmapiService {
     private readonly archive: UmapiPhotoArchiveService,
     private readonly cards: UmapiProductCardService,
     private readonly crosses: PartsFinderCrossStore,
-    @Optional() private readonly suppliers?: SupplierSearchService,
   ) {}
 
   /** What the product page may offer: the buttons, and the photo button only when the photo address is known. */
@@ -367,41 +365,26 @@ export class UmapiService {
   /* ---------------- Photo ---------------- */
 
   /**
-   * Analogues of our product the shop already knows: its pairs in app.article_crosses (any source, never a pair
-   * staff rejected) and Rossko's live answer for our number (which also grows that base). Rossko knew 36 of 40
-   * products of ours with a maker (24.11.2026); the catalogue often has a card of one of their analogues.
+   * Public photos may use one confirmed pair from the product's own brand and article.
+   * A supplier answer or a number mentioned in the 1C title is not enough to select a photo.
    */
   private async knownAnalogues(product: ProductRow): Promise<Array<{ article: string; brand: string }>> {
-    const found: Array<{ article: string; brand: string }> = [];
+    if (!product.brand) return [];
     const stored = await this.database.query<{ article: string; brand: string }>(
-      `WITH own AS (SELECT app.normalize_article($1) AS a, app.normalize_brand(COALESCE($2,'')) AS b)
-       SELECT CASE WHEN cross_pair.article_a=own.a THEN cross_pair.article_b_raw ELSE cross_pair.article_a_raw END AS article,
-              CASE WHEN cross_pair.article_a=own.a THEN cross_pair.brand_b_raw ELSE cross_pair.brand_a_raw END AS brand
-       FROM app.article_crosses AS cross_pair, own
-       WHERE cross_pair.status<>'rejected'
-         AND ((cross_pair.article_a=own.a AND (own.b='' OR cross_pair.brand_a=own.b)) OR (cross_pair.article_b=own.a AND (own.b='' OR cross_pair.brand_b=own.b)))
-       ORDER BY (cross_pair.status='confirmed') DESC, cross_pair.last_seen_at DESC LIMIT 40`,
+      `WITH own AS (SELECT app.normalize_article($1) AS article, app.canonical_brand($2) AS brand),
+       candidates AS (
+         SELECT article_b_raw AS article,brand_b_raw AS brand
+         FROM app.article_crosses,own
+         WHERE status='confirmed' AND brand_b<>'' AND article_a=own.article AND app.canonical_brand(brand_a)=own.brand
+         UNION
+         SELECT article_a_raw AS article,brand_a_raw AS brand
+         FROM app.article_crosses,own
+         WHERE status='confirmed' AND brand_a<>'' AND article_b=own.article AND app.canonical_brand(brand_b)=own.brand
+       )
+       SELECT article,brand FROM candidates ORDER BY brand,article LIMIT 40`,
       [product.sku, product.brand],
     ).catch(() => ({ rows: [] as Array<{ article: string; brand: string }> }));
-    found.push(...stored.rows.filter((row) => row.article && row.brand));
-    if (this.suppliers && !isOwnCode(product.sku) && normalizeArticleNumber(product.sku).length >= 4) {
-      const number = catalogueNumber(product.sku);
-      const answer = await this.suppliers.search({ q: number.slice(0, 60) }).catch(() => null);
-      const same = (answer?.parts ?? []).filter((part) => normalizeArticleNumber(part.partNumber) === number
-        && (product.brand ? sameMaker(part.brand, product.brand) : true));
-      // Without a maker of ours the number must belong to one maker in Rossko's answer, or it is somebody else's part.
-      const makers = new Set(same.map((part) => makerKey(part.brand)));
-      if (product.brand || makers.size === 1) {
-        for (const part of same) for (const cross of part.crosses) found.push({ article: cross.partNumber, brand: cross.brand });
-      }
-    }
-    const seen = new Set<string>();
-    return found.filter((item) => {
-      const key = `${makerKey(item.brand)}|${normalizeArticleNumber(item.article)}`;
-      if (seen.has(key) || (normalizeArticleNumber(item.article) === normalizeArticleNumber(product.sku) && product.brand && sameMaker(item.brand, product.brand))) return false;
-      seen.add(key);
-      return true;
-    }).sort((a, b) => makerRank(a.brand) - makerRank(b.brand));
+    return stored.rows.sort((a, b) => makerRank(a.brand) - makerRank(b.brand));
   }
 
   /**
@@ -420,8 +403,10 @@ export class UmapiService {
         .find((row) => row.type === "ArticleNumber" && sameMaker(row.brand, analogue.brand))?.brand;
       if (!maker) continue;
       const info = await this.crossInfo(number, maker, caller, false).catch(() => null);
-      const photos = info ? cataloguePhotoUrls(info.medias, base) : [];
-      if (!info || photos.length === 0) continue;
+      if (!info || catalogueNumber(info.article) !== number || !sameMaker(info.brand, analogue.brand)
+        || !kindAgrees(product.name, info.title, product.section)) continue;
+      const photos = cataloguePhotoUrls(info.medias, base);
+      if (photos.length === 0) continue;
       return {
         part: { article: info.article, artId: info.artId, asked: number, brand: info.brand, through: { article: product.sku, brand: product.brand ?? "" }, via: "own" },
         photos, specs: specs ?? [], status: "ok", title: info.title,
@@ -442,59 +427,28 @@ export class UmapiService {
     const product = await this.checkable(productId, "photo");
     if ("status" in product) return product;
     const identified = await this.identify(product, caller, true);
-    // The catalogue cannot name the part (a maker it lacks: SUFIX, Ti-Guar, MARUICHI…): its analogues may be there.
-    if (identified === "ambiguous" || !identified) {
-      return await this.analogPhoto(product, null, caller, base) ?? { status: identified === "ambiguous" ? "ambiguous" : "unknown_part" };
+    const exact = Array.isArray(identified) ? identified.find(({ part, info }) => info && !part.through
+      && catalogueNumber(part.article) === catalogueNumber(product.sku)
+      && (!product.brand || sameMaker(product.brand, part.brand))) : undefined;
+    if (!exact?.info) {
+      return await this.analogPhoto(product, null, caller, base)
+        ?? { status: identified === "ambiguous" ? "ambiguous" : "unknown_part" };
     }
-    // The first part with a photo: an analogue stand-in has its card asked only now.
-    let part = identified[0]!.part;
-    let photos: string[] = [];
-    let title: string | null = identified[0]!.info?.title ?? null;
-    for (const found of identified.slice(0, STAND_INS)) {
-      const info = found.info ?? await this.crossInfo(found.part.asked, found.part.brand, caller, false);
-      photos = info ? cataloguePhotoUrls(info.medias, base) : [];
-      part = found.part;
-      title = info?.title ?? title;
-      if (photos.length > 0) break;
+
+    const { info, part } = exact;
+    const photos = cataloguePhotoUrls(info.medias, base);
+    const card = await this.gateway.get(`/Article/${part.artId}`, { Criterias: true }, caller, normalizeArticleCard,
+      { whenNotFound: { specs: [], title: null } }).catch(() => ({ specs: [], title: null }));
+    const own: UmapiPhotoAnswer = {
+      part, photos, specs: card.specs, status: photos.length > 0 || card.specs.length > 0 ? "ok" : "none",
+      title: card.title ?? info.title,
+    };
+    await this.cards.keep(product, part, own).catch(() => this.logger.warn("Could not keep the maker's card of a product"));
+    if (photos.length > 0 && product.brand) {
+      await this.archive.remember({ ...product, brand: product.brand }, part, photos).catch(() => {
+        this.logger.warn("Could not record UMAPI photo references for staff");
+      });
     }
-    // A number of the name is this very part only when it is our maker's («AVX13X1385 … Contitech»); another
-    // maker's number there («(334243) Амортизатор … Ti•GUAR» = KYB) is an analogue, and is labelled one.
-    if (part.via === "name" && !part.through && !(product.brand && sameMaker(product.brand, part.brand))) {
-      part = { ...part, through: { article: product.sku, brand: product.brand ?? "" } };
-    }
-    // The maker's characteristics, for the product's own part only: an analogue's sizes may differ.
-    const card: UmapiArticleCard = part.through
-      ? { specs: [], title: null }
-      : await this.gateway.get(`/Article/${part.artId}`, { Criterias: true }, caller, normalizeArticleCard, { whenNotFound: { specs: [], title: null } })
-        .catch(() => ({ specs: [], title: null }));
-    const own = { part, photos, specs: card.specs, status: photos.length > 0 || card.specs.length > 0 ? "ok" as const : "none" as const, title: card.title ?? title };
-    // The part is known but its maker's card has no picture (KYB-AU 551112, KOYO 62102RSCM — 9 of 300 products,
-    // 24.11.2026): an analogue's photo, shown as such, with this part's own characteristics. Never kept as ours.
-    let answer: UmapiPhotoAnswer = own;
-    if (photos.length === 0 && !part.through) {
-      const analogues = await this.standIns(part.asked, part.brand, { article: part.article, brand: part.brand, via: part.via }, caller, false).catch(() => null);
-      for (const found of analogues ?? []) {
-        const info = await this.crossInfo(found.part.asked, found.part.brand, caller, false).catch(() => null);
-        const shown = info ? cataloguePhotoUrls(info.medias, base) : [];
-        if (shown.length > 0) {
-          answer = { part: found.part, photos: shown, specs: card.specs, status: "ok", title: own.title };
-          break;
-        }
-      }
-    }
-    // Still nothing: the analogues the shop's cross base and Rossko name for our own number.
-    if (answer.photos.length === 0) {
-      const viaCrosses = await this.analogPhoto(product, card.specs, caller, base);
-      if (viaCrosses) answer = viaCrosses;
-    }
-    if (part.via === "own" && !part.through) {
-      await this.cards.keep(product, part, own).catch(() => this.logger.warn("Could not keep the maker's card of a product"));
-      if (photos.length > 0 && product.brand && sameMaker(product.brand, part.brand)) {
-        await this.archive.remember({ ...product, brand: product.brand }, part, photos).catch(() => {
-          this.logger.warn("Could not record UMAPI photo references for staff");
-        });
-      }
-    }
-    return answer;
+    return photos.length > 0 ? own : (await this.analogPhoto(product, card.specs, caller, base) ?? own);
   }
 }

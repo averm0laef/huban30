@@ -1473,7 +1473,7 @@ button.promoControl {
 .productHelp > strong { font-size: 0.96rem; }
 .productHelp > span { color: var(--store-muted); font-size: 0.88rem; line-height: 1.4; }
 .productHelp .secondaryAction { justify-self: start; min-height: 44px; margin-top: 2px; }
-.breadcrumbStep { display: inline-flex; gap: var(--store-space-xs); }
+.breadcrumbStep { display: inline-flex; align-items: center; gap: var(--store-space-xs); }
 .productGallery { min-width: 0; display: grid; gap: var(--store-space-sm); }
 .productThumbs { display: flex; flex-wrap: wrap; gap: var(--store-space-xs); }
 .productThumb { position: relative; width: 72px; height: 72px; padding: 0; overflow: hidden; border: 1.5px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); cursor: pointer; transition: border-color var(--store-duration-fast) var(--store-ease); }
