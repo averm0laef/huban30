@@ -165,3 +165,34 @@ test("product breadcrumb separators are on the same line as the link text", asyn
   expect(textPositions).toHaveLength(3);
   expect(Math.max(...textPositions) - Math.min(...textPositions)).toBeLessThanOrEqual(1);
 });
+
+test("catalog view toggle changes the layout and keeps the selected filters", async ({ page }) => {
+  await page.goto("/catalog/filtry?availability=in_stock&sort=price_asc");
+  const results = page.getByRole("region", { name: "Товары каталога" });
+  const cards = results.getByRole("article");
+  const view = page.getByRole("group", { name: "Вид каталога" });
+  await expect(cards.first()).toBeVisible();
+  const firstRowCount = () => cards.evaluateAll((items) => {
+    const firstTop = items[0]!.getBoundingClientRect().top;
+    return items.filter((item) => Math.abs(item.getBoundingClientRect().top - firstTop) < 1).length;
+  });
+
+  for (const [width, columns] of [[320, 2], [390, 2], [768, 3], [1440, 4]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(firstRowCount).toBe(columns);
+    expect(await page.evaluate(() => {
+      const viewport = globalThis as unknown as { innerWidth: number; document: { documentElement: { scrollWidth: number } } };
+      return viewport.document.documentElement.scrollWidth - viewport.innerWidth;
+    })).toBeLessThanOrEqual(1);
+  }
+  await view.getByRole("link", { name: "Списком" }).click();
+  await expect(results).toHaveAttribute("data-catalog-view", "list");
+  await expect.poll(firstRowCount).toBe(1);
+  for (const [key, value] of [["availability", "in_stock"], ["sort", "price_asc"], ["view", "list"]] as const) {
+    expect(new URL(page.url()).searchParams.get(key)).toBe(value);
+  }
+  await page.reload();
+  await expect(view.getByRole("link", { name: "Списком" })).toHaveAttribute("aria-current", "page");
+  await view.getByRole("link", { name: "Плиткой" }).click();
+  await expect.poll(firstRowCount).toBe(4);
+});
