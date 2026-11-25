@@ -21,5 +21,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["playwright.config.ts", "tests/e2e/**/*.ts"]
+  "include": ["playwright.config.ts", "playwright.mobile.config.ts", "tests/e2e/**/*.ts"]
 }
