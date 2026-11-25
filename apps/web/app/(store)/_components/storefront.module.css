@@ -401,10 +401,6 @@
 .headerActions :global(.storefront-vehicle-button) { width: 104px; }
 .headerActions :global(.storefront-vehicle-label) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .headerActions :global(.storefront-vehicle-button[data-chosen]) svg { color: var(--store-brand); }
-/* Our blue car instead of the outline icon (owner 25.11.2026). Paler until a car is chosen: the place is there either way. */
-.headerActions :global(.storefront-vehicle-button) img { flex: 0 0 auto; width: 36px; height: 24px; object-fit: contain; opacity: .72; transition: opacity var(--store-duration-fast) var(--store-ease); }
-.headerActions :global(.storefront-vehicle-button[data-chosen]) img,
-.headerActions :global(.storefront-vehicle-button):hover img { opacity: 1; }
 .headerActions :global(.storefront-cart-count) {
   display: inline-block;
   min-width: 17px;
@@ -728,7 +724,6 @@
   text-decoration: none;
 }
 .drawerLocation > svg { color: var(--store-brand); }
-.drawerLocation > img { width: 36px; height: 24px; object-fit: contain; }
 .drawerLocation strong { display: block; font-size: .875rem; font-weight: 600; line-height: 1.3; }
 .drawerLocation small { display: block; color: var(--store-muted); font-size: .76rem; line-height: 1.35; }
 .drawerLocation:hover strong { color: var(--store-brand); }

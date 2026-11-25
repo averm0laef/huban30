@@ -27,7 +27,7 @@ import { CatalogMenu } from "./catalog-menu";
 import { ChatWidget } from "./chat-widget";
 import { Toaster } from "./toaster";
 import { createHeaderCollapseState, getNextHeaderCollapseState } from "./header-scroll-collapse";
-import { CarPicture } from "./car-picture";
+import { CarLineIcon } from "./car-picture";
 import { HeaderVehicle } from "./header-vehicle";
 import { CompactMenuButton, MobileCatalogButton, MobileStoreMenu } from "./mobile-store-menu";
 import { HeaderSearchForm } from "./search-box";
@@ -180,7 +180,7 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
               <HeaderSearchForm id="header-search-q" />
             </div>
             <div className={styles.headerActions}>
-              <HeaderVehicle icon={<CarPicture />} />
+              <HeaderVehicle icon={<CarLineIcon />} />
               <CartButton icon={<Cart24Regular aria-hidden="true" />} />
               <AccountNavigation icon={<Person24Regular aria-hidden="true" />} />
             </div>

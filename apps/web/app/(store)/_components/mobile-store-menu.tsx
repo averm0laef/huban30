@@ -19,7 +19,7 @@ import {
 } from "../../site-config";
 import { catalogDrawerSections, type CatalogMenuSection } from "../_lib/store-categories";
 import { BrandLockup } from "./brand-mark";
-import { CarPicture } from "./car-picture";
+import { CarLineIcon } from "./car-picture";
 import { DrawerVehicle } from "./header-vehicle";
 import { MessengerIcon } from "./messenger-icon";
 import { useAccountDestination } from "./session-navigation";
@@ -125,7 +125,7 @@ export function MobileStoreMenu({ catalogMenu }: { catalogMenu: CatalogMenuSecti
             </span>
             <ChevronRight20Regular aria-hidden="true" />
           </Link>
-          <DrawerVehicle className={styles.drawerLocation} icon={<CarPicture />} onNavigate={close} />
+          <DrawerVehicle className={styles.drawerLocation} icon={<CarLineIcon />} onNavigate={close} />
           <Link href="/map" className={styles.drawerLocation} onClick={close}>
             <Location24Regular aria-hidden="true" />
             <span><strong>{STORE_LOCALITY}, {STORE_STREET}</strong><small>{STORE_HOURS}</small></span>
