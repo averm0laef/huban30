@@ -170,3 +170,9 @@ PNG переводятся в WebP 512×512 (качество 84) и кладу�
 | `aptechki` | car first aid kit case, deep blue hard plastic box with a white cross symbol on the lid |
 | `znaki-avariynoy-ostanovki` | folding warning triangle, red reflective frame on a grey metal stand |
 | `zhilety-i-buksirnye-trosy` | folded high-visibility vest in yellow with grey reflective stripes next to a coiled deep blue tow rope with a grey metal hook |
+
+## Машинка сайта (`apps/web/public/brand/car-mini@2x.webp`, `@3x`)
+
+Синяя машинка там, где сайт показывает машину покупателя: шапка («Моя машина»), меню телефона, блок «Подойдёт к вашему автомобилю?» на карточке товара (решение владельца 25.11.2026, вместо значка из набора иконок). Компонент — `apps/web/app/(store)/_components/car-picture.tsx`.
+
+Сделана через Codex тем же способом, что картинки разделов (образцы `filtry`, `tormoznye-kolodki`, `podveska`, `akkumulyatory`). Предмет: generic compact five-door city hatchback, front three-quarter view, deep blue body (#173ea5 / #0f2d66), cool grey wheels and mirror caps, a small yellow (#f5c400) running-light strip as the only accent, no badge, no number plate, no recognisable real brand; landscape 3:2. Ореол с альфой меньше 24 убран, машина обрезана по краю и вписана в 128×86 (2x) и 192×129 (3x), WebP качество 88.

@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckmarkCircle20Regular, Info20Regular, List20Regular, ShieldCheckmark20Regular, VehicleCar20Regular, VehicleCar24Regular, Warning20Regular } from "@fluentui/react-icons";
+import { CheckmarkCircle20Regular, ChevronUp20Regular, Info20Regular, List20Regular, ShieldCheckmark20Regular, VehicleCar20Regular, Warning20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import { CarPicture } from "../../../_components/car-picture";
 import buttons from "../../../_components/store-button.module.css";
 import { WheelLoader } from "../../../_components/wheel-loader";
 import { FinderError, type PickedVehicle } from "../../../_lib/parts-finder";
@@ -48,11 +49,11 @@ function Answer({ children, tone, title }: { children?: ReactNode; title: string
   );
 }
 
-function CarList({ makes, total }: { makes: FitMake[]; total: number }) {
+function CarList({ hidden, id, makes, onCollapse, total }: { hidden: boolean; id: string; makes: FitMake[]; onCollapse: () => void; total: number }) {
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
-  if (total === 0) return <p className={styles.muted}>В каталоге не указано ни одной машины для этой детали.</p>;
+  if (total === 0) return <p className={styles.muted} hidden={hidden} id={id}>В каталоге не указано ни одной машины для этой детали.</p>;
   return (
-    <div className={styles.cars}>
+    <div className={styles.cars} hidden={hidden} id={id}>
       <p className={styles.muted}>{plural(makes.length, "марка", "марки", "марок")} · {plural(total, "модификация", "модификации", "модификаций")} — по каталогу</p>
       {makes.map((make) => (
         <details className={styles.make} key={make.make} open={make.mine || makes.length === 1}>
@@ -75,6 +76,12 @@ function CarList({ makes, total }: { makes: FitMake[]; total: number }) {
           })}
         </details>
       ))}
+      {/* A long list: the customer does not have to scroll back up to fold it. */}
+      {total > CARS_SHOWN ? (
+        <button aria-controls={id} aria-expanded="true" className={styles.collapse} onClick={onCollapse} type="button">
+          <ChevronUp20Regular aria-hidden="true" /> Свернуть список машин
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -88,6 +95,10 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
   const [enabled, setEnabled] = useState(false);
   const [car, setCar] = useState<PickedVehicle | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  // «Все машины, к которым подходит» folds the list it opened; the answer is kept, so opening it again asks nothing.
+  const [folded, setFolded] = useState(false);
+  const listButton = useRef<HTMLButtonElement>(null);
+  const listId = useId();
   const requestVersion = useRef(0);
 
   useEffect(() => {
@@ -122,6 +133,7 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
 
   async function load(mode: Mode) {
     const version = ++requestVersion.current;
+    setFolded(false);
     setResult({ mode, status: "loading" });
     try {
       const data = await umapiGet<UmapiFitment>(fitmentPath(productId, mode, ids));
@@ -133,12 +145,29 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
     }
   }
 
+  const listShown = result?.status === "ready" && result.mode === "list" && result.data.status === "ok";
+  const listTotal = listShown && result.data.status === "ok" ? result.data.total : 0;
+
+  function toggleList() {
+    setFolded((value) => !value);
+  }
+
+  /** Folded from the button under a long list: bring the customer back to the box instead of leaving them far below. */
+  function collapseFromBottom() {
+    setFolded(true);
+    const button = listButton.current;
+    if (!button) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    button.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+    button.focus({ preventScroll: true });
+  }
+
   return (
     <div className={`${layout.compatibility} ${styles.box}`}>
       <strong className={styles.title}>Подойдёт к вашему автомобилю?</strong>
       {car && ids ? (
         <div className={styles.car}>
-          <VehicleCar24Regular aria-hidden="true" className={styles.carIcon} />
+          <CarPicture className={styles.carIcon} height={43} width={64} />
           <span className={styles.carName}><b>{name}</b><small>{carDetails(car)}</small></span>
           <Link className={styles.carChange} href="/podbor">Сменить</Link>
         </div>
@@ -153,9 +182,17 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
         ) : (
           <Link className={`${buttons.button} ${buttons.primary}`} href="/podbor"><VehicleCar20Regular aria-hidden="true" /> Выбрать мою машину</Link>
         )}
-        <button className={`${buttons.button} ${buttons.soft}`} disabled={result?.status === "loading" && result.mode === "list"} onClick={() => { void load("list"); }} type="button">
-          <List20Regular aria-hidden="true" /> Все машины, к которым подходит
-        </button>
+        {listShown ? (
+          <button aria-controls={listId} aria-expanded={!folded} className={`${buttons.button} ${buttons.soft}`} onClick={toggleList} ref={listButton} type="button">
+            {folded
+              ? <><List20Regular aria-hidden="true" /> Показать машины{listTotal ? ` · ${listTotal}` : ""}</>
+              : <><ChevronUp20Regular aria-hidden="true" /> Свернуть список машин</>}
+          </button>
+        ) : (
+          <button className={`${buttons.button} ${buttons.soft}`} disabled={result?.status === "loading" && result.mode === "list"} onClick={() => { void load("list"); }} ref={listButton} type="button">
+            <List20Regular aria-hidden="true" /> Все машины, к которым подходит
+          </button>
+        )}
       </div>
 
       {result?.status === "loading" ? (
@@ -172,7 +209,7 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
       ) : null}
       {result?.status === "ready" ? (
         result.mode === "list" && result.data.status === "ok"
-          ? <CarList makes={result.data.makes} total={result.data.total} />
+          ? <CarList hidden={folded} id={listId} makes={result.data.makes} onCollapse={collapseFromBottom} total={result.data.total} />
           : <CheckAnswer car={name ?? "автомобиль"} data={result.data} vin={vin} />
       ) : null}
       {result === null ? <span className={styles.muted}>Проверка по каталогу производителя. Не уверены — специалист сверит по VIN.</span> : null}

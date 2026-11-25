@@ -2,7 +2,7 @@
 
 import {
   Call20Regular, Cart24Regular, Chat24Regular, Clock20Regular, Grid24Regular,
-  Home24Regular, Location20Regular, Person24Regular, VehicleCar24Regular,
+  Home24Regular, Location20Regular, Person24Regular,
 } from "@fluentui/react-icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -27,6 +27,7 @@ import { CatalogMenu } from "./catalog-menu";
 import { ChatWidget } from "./chat-widget";
 import { Toaster } from "./toaster";
 import { createHeaderCollapseState, getNextHeaderCollapseState } from "./header-scroll-collapse";
+import { CarPicture } from "./car-picture";
 import { HeaderVehicle } from "./header-vehicle";
 import { CompactMenuButton, MobileCatalogButton, MobileStoreMenu } from "./mobile-store-menu";
 import { HeaderSearchForm } from "./search-box";
@@ -179,7 +180,7 @@ function StoreHeader({ catalogMenu }: { catalogMenu: CatalogMenuSection[] }) {
               <HeaderSearchForm id="header-search-q" />
             </div>
             <div className={styles.headerActions}>
-              <HeaderVehicle icon={<VehicleCar24Regular aria-hidden="true" />} />
+              <HeaderVehicle icon={<CarPicture />} />
               <CartButton icon={<Cart24Regular aria-hidden="true" />} />
               <AccountNavigation icon={<Person24Regular aria-hidden="true" />} />
             </div>

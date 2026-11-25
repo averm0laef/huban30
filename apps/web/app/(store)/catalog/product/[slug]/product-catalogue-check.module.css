@@ -3,12 +3,19 @@
 .box { justify-items: stretch; gap: 12px; padding: clamp(14px, 1.6vw, 20px); border: 1px solid var(--store-border); }
 .title { font-family: var(--store-font-display); font-size: 1.02rem !important; font-weight: 800; line-height: 1.3; }
 /* The customer's car, as on the «Ваш автомобиль» card of /podbor (canvas «Карточка v2»). */
-.car { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 6px 10px 14px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); }
-.carIcon { flex: none; width: 26px; height: 26px; color: var(--store-brand); }
+.car { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px 6px 8px 8px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); }
+.carIcon { flex: none; width: 64px; height: 43px; object-fit: contain; }
 .carName { display: grid; flex: 1; gap: 2px; min-width: 0; }
 .carName b { font-size: .95rem; line-height: 1.3; overflow-wrap: anywhere; }
 .carName small { color: var(--store-muted); font-size: .8rem; line-height: 1.35; overflow-wrap: anywhere; }
 .carChange { display: inline-flex; align-items: center; flex: none; min-height: 44px; padding: 0 10px; font-size: .85rem; font-weight: 700; }
+/* A narrow info column (tablets): the picture keeps its size and the name its width, «Сменить» goes under the name. */
+.box { container-type: inline-size; }
+@container (width < 400px) {
+  .car { flex-wrap: wrap; row-gap: 0; }
+  .carName { flex-basis: calc(100% - 76px); }
+  .carChange { margin-left: 76px; padding: 0; }
+}
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .actions > :is(button, a) { flex: 1 1 210px; justify-content: center; min-height: 48px; white-space: normal; text-align: center; }
 .answerActions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -26,6 +33,7 @@
 
 /* «К каким машинам подходит»: makes open one by one, the customer's own first and open. */
 .cars { display: grid; gap: 8px; }
+.cars[hidden] { display: none; }
 .make { border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); }
 .make summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; font-family: var(--store-font-display); font-size: .92rem; font-weight: 800; }
 .make summary small { color: var(--store-muted); font-family: var(--store-font-sans); font-size: .78rem; font-weight: 500; }
@@ -37,6 +45,8 @@
 .engines li[data-mine] { background: color-mix(in srgb, var(--store-success) 12%, var(--store-surface)); color: color-mix(in srgb, var(--store-success) 82%, black); font-weight: 700; }
 .engines li:has(.more) { padding: 0; background: none; }
 .more { min-height: 30px; padding: 0 10px; border: 1px dashed color-mix(in srgb, var(--store-brand) 40%, transparent); border-radius: 8px; background: var(--store-surface); color: var(--store-brand); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.collapse { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid var(--store-border); border-radius: var(--store-radius-sm); background: var(--store-surface); color: var(--store-brand); font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; }
+.collapse:hover { border-color: color-mix(in srgb, var(--store-brand) 45%, var(--store-border)); }
 @media (pointer: coarse) {
   .more { min-height: 44px; }
 }
