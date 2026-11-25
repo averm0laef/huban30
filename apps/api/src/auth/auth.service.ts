@@ -67,6 +67,9 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 const MIN_DISTINCT_PASSWORD_CHARACTERS = 5;
+// A sign-up repeated this soon is the same attempt sent again (a retry, a second
+// click, a second tab), not a request for a new letter.
+const REPEATED_REGISTRATION_WINDOW_SECONDS = 60;
 
 // Keyboard rows and alphabets joined in typing order: a password that only
 // walks along one of them (in either direction) is a pattern, not a phrase.
@@ -153,13 +156,50 @@ export class AuthService {
         "SELECT pg_advisory_xact_lock(hashtextextended('an30-account-email:' || $1::text, 0))",
         [input.email],
       );
-      const existing = await client.query<{ id: string; status: string }>(
-        "SELECT id, status::text FROM app.users WHERE email = $1 FOR UPDATE",
+      const existing = await client.query<{ id: string; password_hash: string | null; status: string }>(
+        "SELECT id, password_hash, status::text FROM app.users WHERE email = $1 FOR UPDATE",
         [input.email],
       );
       const existingAccount = existing.rows[0];
       let userId = existingAccount?.id;
       if (!canRefreshPendingRegistration(existingAccount?.status)) return null;
+
+      if (existingAccount?.password_hash) {
+        // The same sign-up sent again makes nothing new: the letter that was
+        // just sent stays the valid one. A different password is a new
+        // request and goes on to a new letter, so the password of a pending
+        // account never changes without the mailbox being told.
+        const justSent = await client.query(
+          `SELECT 1 FROM app.email_verification_tokens
+           WHERE user_id = $1 AND used_at IS NULL AND expires_at > clock_timestamp()
+             AND created_at > clock_timestamp() - make_interval(secs => $2)
+           LIMIT 1`,
+          [existingAccount.id, REPEATED_REGISTRATION_WINDOW_SECONDS],
+        );
+        if (
+          justSent.rows.length > 0
+          && await this.passwords.verify(input.password, existingAccount.password_hash)
+        ) {
+          // Whoever sends the stored password is the person who signed up,
+          // so a corrected name is taken.
+          await client.query(
+            "UPDATE app.users SET display_name = $2 WHERE id = $1 AND display_name IS DISTINCT FROM $2",
+            [existingAccount.id, this.normalizeDisplayName(input.displayName)],
+          );
+          await this.audit.record({
+            action: "auth.registration.requested",
+            entityId: existingAccount.id,
+            entityType: "user",
+            ipAddress: metadata.ipAddress,
+            metadata: {
+              personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+              repeatedWithinSeconds: REPEATED_REGISTRATION_WINDOW_SECONDS,
+            },
+            userAgent: metadata.userAgent,
+          }, client);
+          return null;
+        }
+      }
 
       if (userId) {
         await client.query(

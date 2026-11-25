@@ -193,6 +193,72 @@ describe("auth account state policy", () => {
     }), expect.anything());
   });
 
+  it.each([
+    { name: "the same sign-up sent again right after the letter", justSent: true, samePassword: true, letters: 0 },
+    { name: "a different password right after the letter", justSent: true, samePassword: false, letters: 1 },
+    { name: "the same sign-up after the letter is no longer fresh", justSent: false, samePassword: true, letters: 1 },
+  ])("$name makes $letters new consent, link and letter", async ({ justSent, samePassword, letters }) => {
+    const userId = "019bf9ea-0d3e-7def-8c9a-0000000000cd";
+    const clientQuery = vi.fn(async (statement: string, _parameters?: unknown[]) => {
+      if (statement.includes("FROM app.users WHERE email")) {
+        return { rows: [{ id: userId, password_hash: "stored-password-hash", status: "pending_email" }] };
+      }
+      if (statement.includes("created_at > clock_timestamp() - make_interval")) {
+        return { rows: justSent ? [{}] : [] };
+      }
+      return { rows: [] };
+    });
+    const database = {
+      transaction: vi.fn(async (work: (client: { query: typeof clientQuery }) => Promise<unknown>) => (
+        work({ query: clientQuery })
+      )),
+    };
+    const audit = { record: vi.fn() };
+    const passwords = {
+      hash: vi.fn().mockResolvedValue("new-password-hash"),
+      verify: vi.fn().mockResolvedValue(samePassword),
+    };
+    const service = new AuthService(
+      configStub({ AUTH_DEBUG_TOKENS: true }),
+      audit as unknown as AuditService,
+      {
+        encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
+        opaqueHash: vi.fn().mockReturnValue(Buffer.from("hash")),
+        randomToken: vi.fn().mockReturnValue("verification-token"),
+      } as unknown as CryptoService,
+      database as unknown as DatabaseService,
+      passwords as unknown as PasswordService,
+      {} as SessionService,
+      {} as TotpService,
+    );
+
+    const answer = await service.register({
+      displayName: "Антон Ермолаев",
+      email: "client@example.test",
+      password: "correct-horse-battery-staple",
+      personalDataConsent: true,
+      personalDataConsentVersion: REGISTRATION_PERSONAL_DATA_CONSENT_VERSION,
+    }, { ipAddress: "203.0.113.30" });
+
+    const statements = clientQuery.mock.calls.map((call) => String(call[0]));
+    const count = (part: string) => statements.filter((statement) => statement.includes(part)).length;
+    expect(count("INSERT INTO app.personal_data_consents")).toBe(letters);
+    expect(count("INSERT INTO app.email_verification_tokens")).toBe(letters);
+    expect(count("UPDATE app.email_verification_tokens SET used_at")).toBe(letters);
+    expect(count("INSERT INTO app.outbox_events")).toBe(letters);
+    // The password of a pending account changes only together with a new letter;
+    // a corrected name is taken either way.
+    expect(count("password_hash = $3")).toBe(letters);
+    expect(clientQuery.mock.calls.find((call) => String(call[0]).includes("UPDATE app.users"))?.[1])
+      .toEqual(letters === 1 ? [userId, "Антон Ермолаев", "new-password-hash"] : [userId, "Антон Ермолаев"]);
+    if (justSent) {
+      expect(passwords.verify).toHaveBeenCalledWith("correct-horse-battery-staple", "stored-password-hash");
+    }
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect("developmentToken" in answer).toBe(letters === 1);
+    expect(answer.message).toBe("Если адрес подходит, инструкция будет отправлена.");
+  });
+
   it("does not create a session when the password hash changes after verification", async () => {
     const initial = {
       email: "client@example.test",
