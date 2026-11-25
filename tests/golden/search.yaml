@@ -1,0 +1,56 @@
+# Cases run against PostgreSQL with synthetic products and explicitly seeded evidence.
+# Source-specific fitment and VIN cases belong in the mobile/provider fixtures.
+catalog:
+  - query: KF6009SP
+    expect: [{ sku: KF6009SP, via: query }]
+  - query: kf 6009 sp
+    expect: [{ sku: KF6009SP, via: query }]
+  - query: STELLOX 81-00110-SX
+    expect: [{ sku: KF6009SP, via: cross }]
+  - query: стеллокс 8100110SX
+    expect: [{ sku: KF6009SP, via: cross }]
+  - query: 81 00110 sx
+    expect: [{ sku: KF6009SP, via: cross }]
+  - query: 81-00110-SX
+    expect: [{ sku: KF6009SP, via: cross }]
+  - query: 8100110SX
+    expect: [{ sku: KF6009SP, via: cross }]
+  - query: STELLOX 81-00110-SX
+    category: sf-tormoznaya-sistema
+    expect: []
+  - query: STELLOX 81-94110-SX
+    expect: []
+  - query: STELLOX 81-88710-SX
+    expect: [{ sku: 81-88710-SX, via: cross }]
+  - query: STELLOX 81-77410-SX
+    expect: []
+  - query: STELLOX 81-66510-SX
+    expect: []
+  - query: STELLOX 81-94111-SX
+    expect: [{ sku: 81-94111-SX, via: query }]
+  - query: STELLOX воздушный фильтр
+    expect: [{ sku: 81-94111-SX, via: query }]
+  - query: "87139-28010"
+    expect: [{ sku: ST-87139-28010, via: query }, { sku: LAC143, via: cross }]
+  - query: "8713928010"
+    expect: [{ sku: ST-87139-28010, via: query }, { sku: LAC143, via: cross }]
+  - query: VAG 87139-28010
+    expect: []
+  - query: LAC-201C
+    expect: [{ sku: LAC-201C, via: query }]
+  - query: LAC201C
+    expect: [{ sku: LAC-201C, via: query }]
+  - query: lac 201c
+    expect: [{ sku: LAC-201C, via: query }]
+  - query: тормозная жидкость DOT-4
+    expect: [{ sku: PFB401, via: query }, { sku: BF500, via: query }]
+  - query: dot4
+    expect: [{ sku: PFB401, via: query }, { sku: BF500, via: query }]
+  - query: ДОТ 4
+    expect: [{ sku: PFB401, via: query }, { sku: BF500, via: query }]
+  - query: DOT 5
+    expect: [{ sku: DOT51-A, via: query }]
+  - query: DOT 5.1
+    expect: [{ sku: DOT51-B, via: query }]
+  - query: xxzzqq
+    expect: []

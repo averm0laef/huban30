@@ -85,6 +85,7 @@ interface SearchState {
 }
 
 type SupplierBlock = ResolveResult["supplier"];
+type ArticleExtra = { alternatives: string[]; brand?: string; supplier: SupplierBlock };
 
 type Load<T> = { status: "idle" } | { status: "loading" } | { status: "error"; message: string } | { status: "ready"; data: T };
 
@@ -119,9 +120,10 @@ function AnalogsPanel({ article, brand, description, manufacturerId }: { article
   const loadCrosses = useCallback(async (selected?: FinderPart) => {
     setCrosses({ status: "loading" });
     let emptyCatalogue: CrossesResult | undefined;
+    const id = selected?.manufacturer_id ?? manufacturerId;
+    const maker = selected?.brand ?? brand;
     if (!selected?.manufacturer_id) {
       const params = new URLSearchParams({ article });
-      const maker = selected?.brand ?? brand;
       if (maker) params.set("brand", maker);
       try {
         const data = await umapiGet<CrossesResult>(`number/analogs?${params.toString()}`);
@@ -130,12 +132,12 @@ function AnalogsPanel({ article, brand, description, manufacturerId }: { article
           return;
         }
         emptyCatalogue = data;
-      } catch {
-        // The existing catalogue path remains available on a provider outage.
+      } catch (caught: unknown) {
+        if (maker && !id) { setCrosses({ message: errorMessage(caught), status: "error" }); return; }
       }
+      if (maker && !id && emptyCatalogue) { setCrosses({ data: emptyCatalogue, status: "ready" }); return; }
     }
     try {
-      const id = selected?.manufacturer_id ?? manufacturerId;
       const data = await finderRequest<CrossesResult>("crosses", { article, ...(id ? { manufacturer_id: id } : {}) });
       setCrosses({ data, status: "ready" });
     } catch (caught) {
@@ -290,8 +292,8 @@ function PartCard({ part }: { part: FinderPart }) {
  * LIQUI MOLY), the customer first says whose part is meant (number-makers.ts); then the part and its analogs are
  * those of that maker. Nothing paid is asked.
  */
-function NumberAnswer({ article, shop }: { article: string; shop: ShopOffer[] }) {
-  const makers = numberMakers(shop);
+function NumberAnswer({ article, brand, shop }: { article: string; brand?: string; shop: ShopOffer[] }) {
+  const makers = brand ? [] : numberMakers(shop);
   // undefined — not chosen yet; "all" — every offer of the number.
   const [chosen, setChosen] = useState<string | null | "all" | undefined>(undefined);
   if (makers.length > 0 && chosen === undefined) {
@@ -318,7 +320,8 @@ function NumberAnswer({ article, shop }: { article: string; shop: ShopOffer[] })
     );
   }
   const maker = chosen === "all" ? null : makers.find((item) => item.brand === chosen) ?? null;
-  const part: FinderPart = maker ? { article, ...(maker.brand ? { brand: maker.brand } : {}), shop: maker.offers } : { article, shop };
+  const selectedBrand = brand ?? maker?.brand;
+  const part: FinderPart = { article, ...(selectedBrand ? { brand: selectedBrand } : {}), shop: maker?.offers ?? shop };
   return (
     <>
       {makers.length > 0 ? (
@@ -351,7 +354,7 @@ export function PartsFinder() {
   const [vehicle, setVehicle] = useState<string | null>(null);
   const [picked, setPicked] = useState<PickedVehicle | null>(null);
   const [showPicker, setShowPicker] = useState(false);
-  const [articleExtra, setArticleExtra] = useState<{ alternatives: string[]; supplier: SupplierBlock }>({ alternatives: [], supplier: null });
+  const [articleExtra, setArticleExtra] = useState<ArticleExtra>({ alternatives: [], supplier: null });
   const [useVehicle, setUseVehicle] = useState(true);
   const [search, setSearch] = useState<SearchState | null>(null);
   const [result, setResult] = useState<Load<FinderResult>>({ status: "idle" });
@@ -456,7 +459,7 @@ export function PartsFinder() {
           setResult({ status: "idle" });
           setDecoded(data.vehicle ? { data: data.vehicle, status: "ready" } : { message: data.error ?? "VIN расшифровать не удалось.", status: "error" });
         } else if (data.kind === "article" && data.article) {
-          setArticleExtra({ alternatives: data.alternatives ?? [], supplier: data.supplier ?? null });
+          setArticleExtra({ alternatives: data.alternatives ?? [], ...(data.brand ? { brand: data.brand } : {}), supplier: data.supplier ?? null });
           setResult({ data: { article: data.article, shop: data.shop ?? [], status: "article" }, status: "ready" });
         } else if (data.kind === "vehicle_part" && data.search) {
           setResult({ data: data.search, status: "ready" });
@@ -821,7 +824,7 @@ export function PartsFinder() {
 }
 
 function ResultView({ articleExtra, onAlternative, onConfirm, onEdit, onPick, onSaveVehicle, onVin, query, result, vehicle }: {
-  articleExtra: { alternatives: string[]; supplier: SupplierBlock };
+  articleExtra: ArticleExtra;
   onAlternative: (article: string) => void;
   onConfirm: () => void;
   onEdit: () => void;
@@ -937,7 +940,7 @@ function ResultView({ articleExtra, onAlternative, onConfirm, onEdit, onPick, on
             ))}
           </p>
         ) : null}
-        <NumberAnswer article={data.article} key={data.article} shop={data.shop ?? []} />
+        <NumberAnswer article={data.article} brand={articleExtra.brand} key={`${articleExtra.brand ?? ""}:${data.article}`} shop={data.shop ?? []} />
         <SupplierOffers supplier={articleExtra.supplier} />
       </div>
     );

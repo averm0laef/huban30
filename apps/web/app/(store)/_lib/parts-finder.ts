@@ -316,6 +316,7 @@ export interface SupplierPart {
 export interface ResolveResult {
   alternatives?: string[];
   article?: string;
+  brand?: string;
   error?: string;
   kind: "article" | "text" | "vehicle_part" | "vin";
   query: string;

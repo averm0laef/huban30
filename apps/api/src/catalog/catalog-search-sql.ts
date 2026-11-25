@@ -49,6 +49,12 @@ export function escapeLike(value: string): string {
   return value.replace(/[\\%_]/gu, (character) => `\\${character}`);
 }
 
+function brandMatches(column: "brand_a" | "brand_b" | "brand.name", queryBrands: string): string {
+  return `app.canonical_brand(${column})=ANY(ARRAY(
+    SELECT app.canonical_brand(asked.name) FROM unnest(${queryBrands}::text[]) AS asked(name)
+  ))`;
+}
+
 /**
  * Every *confirmed* article-cross equivalent of the normalised query
  * article, read back in both stored directions (migration 0018 stores one
@@ -56,13 +62,16 @@ export function escapeLike(value: string): string {
  * article number alone is not an identity (docs/CATALOG_MATCHING.md).
  * Only status='confirmed' rows can widen a customer's search.
  */
-export function crossEquivalentsCte(article: string): string {
+function crossEquivalentsCte(article: string, queryBrands: string | null): string {
+  const sourceBrand = (column: "brand_a" | "brand_b") => queryBrands
+    ? ` AND ${brandMatches(column, queryBrands)}`
+    : "";
   return `cross_equivalents AS (
   SELECT article_b AS article,brand_b AS brand FROM app.article_crosses
-    WHERE article_a=${article} AND status='confirmed'
+    WHERE article_a=${article} AND status='confirmed'${sourceBrand("brand_a")}
   UNION
   SELECT article_a AS article,brand_a AS brand FROM app.article_crosses
-    WHERE article_b=${article} AND status='confirmed'
+    WHERE article_b=${article} AND status='confirmed'${sourceBrand("brand_b")}
 )`;
 }
 
@@ -230,7 +239,12 @@ function searchHits(p: SqlParameters, input: CatalogSearchInput, matchAny: boole
 export function catalogSearchCte(p: SqlParameters, input: CatalogSearchInput, visibleWithSubtree: (slug: string) => string) {
   const category = p.add(input.query.category ?? null);
   const article = p.add(input.identity.article);
-  return { article, sql: `${visibleWithSubtree(category)}, ${crossEquivalentsCte(article)}` };
+  const queryBrands = input.identity.brandKeys.length > 0 ? p.add(input.identity.brandKeys) : null;
+  return {
+    article,
+    directBrandMatch: queryBrands ? brandMatches("brand.name", queryBrands) : null,
+    sql: `${visibleWithSubtree(category)}, ${crossEquivalentsCte(article, queryBrands)}`,
+  };
 }
 
 const LATIN_TO_CYRILLIC_LOOKALIKE: Readonly<Record<string, string>> = {
@@ -252,7 +266,7 @@ export function codeWrittenInName(article: string): string[] {
 }
 
 /** WHERE clause for one pass (strict, or the any-word retry). */
-export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput, matchAny: boolean): string {
+export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput, matchAny: boolean, directBrandMatch: string | null): string {
   const { query, identity } = input;
   const filters = [
     "product.is_active AND product.deleted_at IS NULL",
@@ -267,6 +281,11 @@ export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput,
   if (query.availability === "in_stock") filters.push("stock.available_quantity>0");
   if (query.availability === "out_of_stock") filters.push("stock.available_quantity=0");
   if (input.folded !== null) filters.push(searchHits(p, input, matchAny));
+  for (const alternative of input.plan.alternatives) {
+    if (alternative.pattern && alternative.measure?.startsWith("dot:")) {
+      filters.push(`product.name_folded ~* ${p.add(alternative.pattern)}`);
+    }
+  }
   // A concrete part number may use punctuation, case or brand aliases, but
   // must never turn into a fuzzy match for a neighbouring numeric article.
   if (identity.articleOnly) {
@@ -277,7 +296,7 @@ export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput,
     ${codeWrittenInName(identity.article).map((spelling) => `OR product.search_text_folded ILIKE ${p.add(`%${escapeLike(spelling)}%`)}`).join("\n    ")}
     OR ${CROSS_FILTER})`);
   }
-  if (identity.brandKeys.length > 0) filters.push(`app.normalize_brand(brand.name)=ANY(${p.add(identity.brandKeys)}::text[])`);
+  if (directBrandMatch) filters.push(`(${directBrandMatch} OR ${CROSS_FILTER})`);
   return filters.join("\n  AND ");
 }
 
@@ -285,7 +304,7 @@ export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput,
  * ORDER BY for a search sorted by relevance, plus the LATERAL join that
  * computes the fuzzy text score once per matched row.
  */
-export function catalogSearchRelevanceOrder(p: SqlParameters, input: CatalogSearchInput, article: string): { join: string; order: string } {
+export function catalogSearchRelevanceOrder(p: SqlParameters, input: CatalogSearchInput, article: string, directBrandMatch: string | null): { join: string; order: string } {
   const q = p.add(input.folded ?? "");
   const alternates = p.add(input.alternates);
   const leads = p.add(input.plan.leads.map(escapeLike));
@@ -299,9 +318,10 @@ export function catalogSearchRelevanceOrder(p: SqlParameters, input: CatalogSear
     COALESCE((SELECT max(similarity(product.name_folded, alt_query))
       FROM unnest(${alternates}::text[]) AS alt_query WHERE length(alt_query)>=3), 0),
     word_similarity(${q}, product.search_text_folded)) AS score) AS relevance`;
-  const order = `(${article}<>'' AND product.sku_normalized=${article}) DESC,
+  const directBrand = directBrandMatch ? ` AND ${directBrandMatch}` : "";
+  const order = `(${article}<>'' AND product.sku_normalized=${article}${directBrand}) DESC,
     ${CROSS_MATCH} DESC,
-    (${article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}) DESC,
+    (${article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}${directBrand}) DESC,
     -- The name starts with the product type the customer named ("диски
     -- тормозные" -> "Диск тормозной ..." before "Колодки тормозные
     -- дисковые"): 1C names lead with the part type, after the article if

@@ -336,6 +336,15 @@ describe("resolve (header search)", () => {
     expect(result.shop).toEqual([expect.objectContaining({ matchedVia: "possible", productId: "p-analog" })]);
   });
 
+  it("preserves the requested manufacturer when resolving a branded article", async () => {
+    const { engine, query, service } = setup({ engine: { search: async () => ({ status: "no_data" }) } });
+    const result = await service.resolve({ query: "Стеллокс 81-00110-SX", supplier: false });
+    expect(result).toMatchObject({ article: "8100110SX", brand: "STELLOX", kind: "article" });
+    expect(engine.search).not.toHaveBeenCalled();
+    const search = query.mock.calls.find(([statement]) => statement === SHOP_OFFERS_SQL);
+    expect(JSON.parse(String(search?.[1]?.[0]))).toMatchObject([{ article: "8100110SX", brand: "STELLOX" }]);
+  });
+
   it("finds a number 1С keeps together with the part's second number in one field", async () => {
     const { query, service } = setup({
       engine: { search: async () => ({ article: "04152-40060", status: "article" }) },

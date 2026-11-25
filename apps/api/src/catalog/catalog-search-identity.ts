@@ -12,6 +12,8 @@ const BRANDS = [
   { spellings: ["ngk", "нжк", "нгк"], keys: ["NGK"], token: "ngk" },
   { spellings: ["denso", "денсо"], keys: ["DENSO"], token: "denso" },
   { spellings: ["mahle", "махле"], keys: ["MAHLE", "MAHLEORIGINAL"], token: "mahle" },
+  { spellings: ["stellox", "стеллокс", "стелокс"], keys: ["STELLOX"], token: "stellox" },
+  { spellings: ["lynxauto", "lynx auto", "линксавто", "линкс авто", "lynx", "линкс"], keys: ["LYNXAUTO", "LYNX"], token: "lynxauto" },
   { spellings: ["sachs", "сакс", "закс"], keys: ["SACHS"], token: "sachs" },
   { spellings: ["brembo", "брембо"], keys: ["BREMBO"], token: "brembo" },
   { spellings: ["kyb", "kayaba", "каяба", "кайба"], keys: ["KYB", "KAYABA"], token: "kyb" },
@@ -43,7 +45,7 @@ const BRANDS = [
   { spellings: ["lada", "лада", "лады", "ваз"], keys: ["LADA", "ЛАДА", "ВАЗ", "АВТОВАЗ"], token: "lada" },
   { spellings: ["hyundai", "хендай", "хундай", "хёндай", "хендэ"], keys: ["HYUNDAI"], token: "hyundai" },
   { spellings: ["nissan", "ниссан", "нисан"], keys: ["NISSAN"], token: "nissan" },
-  { spellings: ["volkswagen", "фольксваген", "фольцваген"], keys: ["VOLKSWAGEN", "VW", "VAG"], token: "volkswagen" },
+  { spellings: ["volkswagen", "фольксваген", "фольцваген", "vag", "vw", "ваг"], keys: ["VOLKSWAGEN", "VW", "VAG"], token: "volkswagen" },
   { spellings: ["renault", "рено"], keys: ["RENAULT"], token: "renault" },
   { spellings: ["skoda", "шкода"], keys: ["SKODA"], token: "skoda" },
   { spellings: ["mitsubishi", "митсубиси", "мицубиси", "митсубиши"], keys: ["MITSUBISHI"], token: "mitsubishi" },
@@ -80,7 +82,10 @@ export function searchBrandSpellings(token: string): string[] | null {
   return brand ? [...brand.spellings] : null;
 }
 
+const BRAKE_FLUID_GRADE = /^(?:dot|дот)\s*-?\s*(?:3|4|5(?:[.,]1)?)$/iu;
+
 function articleShaped(value: string) {
+  if (BRAKE_FLUID_GRADE.test(value)) return false;
   const normalized = normalizeArticleNumber(value);
   if (normalized.length < 4 || normalized.length > 64 || !/\d/u.test(normalized)
     || !/^[A-Z0-9]+$/u.test(normalized) || !/^[\p{L}\p{N} .\-/]+$/u.test(value)) return false;
@@ -108,6 +113,7 @@ export function catalogSearchIdentity(query: string | undefined): { article: str
     else if (lower.endsWith(` ${spelling}`)) article = raw.slice(0,raw.length-spelling.length).trim();
     if (article && articleShaped(article)) return { article: normalizeArticleNumber(article), brandKeys: [...brand.keys], articleOnly: true };
   }
+  if (BRAKE_FLUID_GRADE.test(raw)) return { article: "", brandKeys: [], articleOnly: false };
   const article = normalizeArticleNumber(raw);
   return { article: /^[\p{L}\p{N}]+$/u.test(article) ? article : "", brandKeys: [], articleOnly: articleShaped(raw) };
 }
