@@ -56,14 +56,20 @@ export function escapeLike(value: string): string {
  * article number alone is not an identity (docs/CATALOG_MATCHING.md).
  * Only status='confirmed' rows can widen a customer's search.
  */
-export function crossEquivalentsCte(article: string): string {
+function crossEquivalentsCte(article: string, brandKeys: string | null): string {
   return `cross_equivalents AS (
   SELECT article_b AS article,brand_b AS brand FROM app.article_crosses
-    WHERE article_a=${article} AND status='confirmed'
+    WHERE article_a=${article} AND status='confirmed'${brandKeys ? ` AND brand_a=ANY(${brandKeys}::text[])` : ""}
   UNION
   SELECT article_a AS article,brand_a AS brand FROM app.article_crosses
-    WHERE article_b=${article} AND status='confirmed'
+    WHERE article_b=${article} AND status='confirmed'${brandKeys ? ` AND brand_b=ANY(${brandKeys}::text[])` : ""}
 )`;
+}
+
+export function directBrandCondition(p: SqlParameters, input: CatalogSearchInput): string {
+  return input.identity.brandKeys.length
+    ? ` AND coalesce(app.normalize_brand(brand.name)=ANY(${p.add(input.identity.brandKeys)}::text[]),false)`
+    : "";
 }
 
 /**
@@ -230,7 +236,8 @@ function searchHits(p: SqlParameters, input: CatalogSearchInput, matchAny: boole
 export function catalogSearchCte(p: SqlParameters, input: CatalogSearchInput, visibleWithSubtree: (slug: string) => string) {
   const category = p.add(input.query.category ?? null);
   const article = p.add(input.identity.article);
-  return { article, sql: `${visibleWithSubtree(category)}, ${crossEquivalentsCte(article)}` };
+  const brandKeys = input.identity.brandKeys.length ? p.add(input.identity.brandKeys) : null;
+  return { article, sql: `${visibleWithSubtree(category)}, ${crossEquivalentsCte(article, brandKeys)}` };
 }
 
 const LATIN_TO_CYRILLIC_LOOKALIKE: Readonly<Record<string, string>> = {
@@ -272,12 +279,11 @@ export function catalogSearchFilter(p: SqlParameters, input: CatalogSearchInput,
   if (identity.articleOnly) {
     filters.push(identity.article === ""
       ? "false"
-      : `(product.sku_normalized LIKE ${p.add(`${escapeLike(identity.article)}%`)}
+      : `(((product.sku_normalized LIKE ${p.add(`${escapeLike(identity.article)}%`)}
     ${identity.article.length >= 4 ? `OR product.sku_normalized LIKE ${p.add(`%${escapeLike(identity.article)}%`)}` : ""}
     ${codeWrittenInName(identity.article).map((spelling) => `OR product.search_text_folded ILIKE ${p.add(`%${escapeLike(spelling)}%`)}`).join("\n    ")}
-    OR ${CROSS_FILTER})`);
+    )${directBrandCondition(p, input)}) OR ${CROSS_FILTER})`);
   }
-  if (identity.brandKeys.length > 0) filters.push(`app.normalize_brand(brand.name)=ANY(${p.add(identity.brandKeys)}::text[])`);
   return filters.join("\n  AND ");
 }
 
@@ -299,7 +305,7 @@ export function catalogSearchRelevanceOrder(p: SqlParameters, input: CatalogSear
     COALESCE((SELECT max(similarity(product.name_folded, alt_query))
       FROM unnest(${alternates}::text[]) AS alt_query WHERE length(alt_query)>=3), 0),
     word_similarity(${q}, product.search_text_folded)) AS score) AS relevance`;
-  const order = `(${article}<>'' AND product.sku_normalized=${article}) DESC,
+  const order = `(${article}<>'' AND product.sku_normalized=${article}${directBrandCondition(p, input)}) DESC,
     ${CROSS_MATCH} DESC,
     (${article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}) DESC,
     -- The name starts with the product type the customer named ("диски
