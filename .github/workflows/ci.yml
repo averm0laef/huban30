@@ -1,5 +1,5 @@
 # Checks every push to main and every pull request the way a developer does before a commit (AGENTS.md, «Проверка»).
-# Suites that need a database, Redis or a paid provider are skipped here: they are gated by their own variables.
+# Schema and catalog search run against a disposable PostgreSQL. No external providers are needed.
 name: CI
 
 on:
@@ -19,6 +19,16 @@ jobs:
     name: lint, types, tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: an30_search_scratch
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+        ports:
+          - 5432/tcp
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       # Actions are pinned to a commit: a tag can be moved, a commit cannot.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,4 +45,13 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Verify migrations, schema and catalog search on PostgreSQL
+        env:
+          DATABASE_ENVIRONMENT: development
+          DATABASE_URL: postgresql://postgres:ci-only@127.0.0.1:${{ job.services.postgres.ports[5432] }}/an30_search_scratch
+        run: |
+          node packages/database/dist/migrate.js up
+          psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f packages/database/verification/schema-smoke.sql
+          CATALOG_SEARCH_DATABASE_URL="$DATABASE_URL" pnpm --filter @an30/api exec vitest run --no-file-parallelism \
+            src/catalog/catalog-search-regression.test.ts src/one-c-exchange/one-c-exchange.integration.test.ts
       - run: pnpm --filter @an30/web build

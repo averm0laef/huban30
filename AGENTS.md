@@ -23,10 +23,10 @@ corepack pnpm test
 corepack pnpm --filter @an30/web build
 ```
 
-Реальный регрессионный набор поиска (188 запросов) — на отдельной пустой БД:
+Регрессия поиска (запросы и подтверждённые аналоги) — на отдельной пустой БД с UTF-8-локалью:
 
 ```bash
-createdb an30_search_scratch
+createdb --template=template0 --encoding=UTF8 --locale=C.UTF-8 an30_search_scratch
 DATABASE_URL=postgresql://localhost/an30_search_scratch DATABASE_ENVIRONMENT=development node packages/database/dist/migrate.js up
 CATALOG_SEARCH_DATABASE_URL=postgresql://localhost/an30_search_scratch corepack pnpm --filter @an30/api exec vitest run src/catalog/catalog-search-regression.test.ts
 dropdb an30_search_scratch
