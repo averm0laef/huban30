@@ -112,7 +112,8 @@ describe.skipIf(!url)("1С exchange (real PostgreSQL)", () => {
     const filename = `${PREFIX}shared-article.xml`;
     const outcome = await importCatalog(filename, importXml([
       { id: `${PREFIX}belt-gmb`, name: "4PK0820 Ремень поликлиновый GMB", sku: "4PK820" },
-      { id: `${PREFIX}belt-masuma`, name: "4PK0820 Ремень ручейковый MASUMA", sku: "4pk820" },
+      // Synthetic brand names keep this article-collision test independent of brand inference and existing rows.
+      { id: `${PREFIX}belt-second`, name: "4PK0820 Ремень ручейковый Тестмарка", sku: "4pk820" },
     ]));
 
     expect(outcome).toEqual({ kind: "success" });
@@ -122,7 +123,7 @@ describe.skipIf(!url)("1С exchange (real PostgreSQL)", () => {
     );
     expect(products.rows).toEqual([
       { external_id: `${PREFIX}belt-gmb`, sku: "4PK820" },
-      { external_id: `${PREFIX}belt-masuma`, sku: "4pk820" },
+      { external_id: `${PREFIX}belt-second`, sku: "4pk820" },
     ]);
     const run = await database.query<{ rows_rejected: number; rows_touched: number; status: string }>(
       "SELECT status, rows_touched, rows_rejected FROM app.one_c_exchange_runs WHERE filename = $1", [filename],

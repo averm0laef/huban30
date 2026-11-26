@@ -7,6 +7,7 @@ import { foldHomoglyphs, normalizeArticleNumber } from "./catalog-search-normali
 // spelling is also matched as text against the product name/brand, so
 // keep spellings specific enough not to occur inside unrelated words.
 const BRANDS = [
+  { spellings: ["stellox", "стеллокс"], keys: ["STELLOX", "СТЕЛЛОКС"], token: "stellox" },
   { spellings: ["mann-filter", "mann filter", "mannfilter", "mann", "манн фильтр", "манн-фильтр", "манн"], keys: ["MANN", "MANNFILTER"], token: "mann" },
   { spellings: ["bosch", "бош", "босх", "бошь"], keys: ["BOSCH"], token: "bosch" },
   { spellings: ["ngk", "нжк", "нгк"], keys: ["NGK"], token: "ngk" },

@@ -41,6 +41,7 @@ import {
   catalogSearchFilter,
   catalogSearchRelevanceOrder,
   CROSS_MATCH,
+  directBrandCondition,
   type CatalogSearchInput,
   escapeLike,
   NAME_ORDER,
@@ -517,7 +518,7 @@ export class CatalogPublicService {
     const items = await client.query<ProductRow & { is_cross_match: boolean; total_count: string }>(
       `${cte.sql}
        ${PRODUCT_SELECT},count(*) OVER()::text AS total_count,
-              (NOT (${cte.article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}) AND ${CROSS_MATCH}) AS is_cross_match,
+              (NOT (${cte.article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}${directBrandCondition(p, input)}) AND ${CROSS_MATCH}) AS is_cross_match,
               primary_image.id AS primary_image_id,
               primary_image.alt_text AS primary_image_alt_text,
               primary_image.is_primary AS primary_image_is_primary,
