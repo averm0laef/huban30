@@ -9,6 +9,8 @@
 import { chromium } from "@playwright/test";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3000").replace(/\/$/u, "");
+const credentials = process.env.SITE_USER && process.env.SITE_PASSWORD
+  ? { httpCredentials: { password: process.env.SITE_PASSWORD, username: process.env.SITE_USER } } : {};
 const PANEL = 'nav[aria-label="Меню каталога"]';
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -32,7 +34,7 @@ const sectionsWithSubsections = (page) => page.evaluate((selector) => [...docume
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL ?? "chrome" });
 let tooFew = false;
 for (const [width, height] of [[1440, 900], [1180, 720]]) {
-  const context = await browser.newContext({ deviceScaleFactor: 1, viewport: { height, width } });
+  const context = await browser.newContext({ ...credentials, deviceScaleFactor: 1, viewport: { height, width } });
   const page = await context.newPage();
   await page.goto(`${base}/`, { timeout: 45_000, waitUntil: "networkidle" });
   const panel = page.locator(PANEL);

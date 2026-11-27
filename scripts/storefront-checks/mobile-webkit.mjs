@@ -116,8 +116,10 @@ report(back > folded + 20, "шапка возвращается при прок�
 await sidewaysScroll("каталог");
 
 // 4. The catalogue drawer from the bottom bar.
+// The header transition lasts 320 ms and its scroll anchor settles at 360 ms.
+// Measure the drawer lock after that transition, so its movement is not counted as drawer scrolling.
 await page.evaluate(() => window.scrollTo(0, 400));
-await pause(300);
+await pause(500);
 const pageTop = await page.evaluate(() => window.scrollY);
 const catalogue = page.getByRole("navigation", { name: "Быстрая навигация" }).getByRole("button", { name: /Каталог/u })
   .or(page.getByRole("navigation", { name: "Быстрая навигация" }).getByRole("link", { name: /Каталог/u })).first();
