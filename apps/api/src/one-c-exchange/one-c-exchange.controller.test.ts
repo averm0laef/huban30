@@ -693,7 +693,7 @@ async function createHarness() {
   const tempStorage = new OneCExchangeTempStorageService(config);
   const controller = new OneCExchangeController(config, exchange, integration, rateLimit, session, tempStorage);
 
-  return { controller, database, exchange, limiter, storageRoot, tempStorage };
+  return { controller, database, exchange, limiter, session, storageRoot, tempStorage };
 }
 
 type Harness = Awaited<ReturnType<typeof createHarness>>;
@@ -771,6 +771,127 @@ async function driveFullSequence(harness: Harness, filename: string, content: st
 }
 
 // ---------------------------------------------------------------------------
+
+describe("OneCExchangeController bulk transfer budget", () => {
+  it("keeps a valid session usable when the unauthenticated request budget is exhausted", async () => {
+    const harness = await createHarness();
+    try {
+      const { cookieName, cookieValue } = await checkauth(harness);
+      const cookie: [string, string] = [cookieName, cookieValue];
+      harness.limiter.consume = async (scope) => {
+        if (scope === "one-c-exchange-request") throw new HttpException("too many", HttpStatus.TOO_MANY_REQUESTS);
+      };
+      await init(harness, cookie);
+      await uploadFile(harness, cookie, "import.xml", importXml());
+      await runImportToCompletion(harness, cookie, "import.xml");
+      expect(harness.database.products.size).toBe(3);
+      const reply = fakeReply();
+      const status = vi.spyOn(reply, "status");
+      const response = await harness.controller.get({ mode: "init", type: "catalog" }, fakeRequest({}), reply);
+      expect(status).toHaveBeenCalledWith(429);
+      expect(response).toBe("failure\nСлишком много запросов");
+    } finally {
+      vi.restoreAllMocks();
+      await rm(harness.storageRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("does not treat a revoked session as an authenticated transfer", async () => {
+    const harness = await createHarness();
+    try {
+      const { cookieName, cookieValue } = await checkauth(harness);
+      harness.database.integration.is_enabled = false;
+      const append = vi.spyOn(harness.tempStorage, "appendChunk");
+      const reply = fakeReply();
+      const status = vi.spyOn(reply, "status");
+      const response = await harness.controller.post(
+        { filename: "import.xml", mode: "file", type: "catalog" },
+        fakeRequest({ body: Buffer.from("fixture"), cookie: [cookieName, cookieValue] }), reply,
+      );
+      expect(status).toHaveBeenCalledWith(401);
+      expect(response).toBe("failure\nАутентификация не пройдена");
+      expect(append).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+      await rm(harness.storageRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("gives the two sources separate pre-authentication budgets on the same address", async () => {
+    const harness = await createHarness();
+    const calls: { scope: string; identity: unknown }[] = [];
+    harness.limiter.consume = async (scope, identity) => { calls.push({ scope, identity }); };
+    try {
+      for (const [url, source] of [["/integrations/1c/exchange", "one_c"], ["/integrations/1c/exchange/secondary", "one_c_secondary"]]) {
+        const request = fakeRequest({});
+        Object.assign(request, { url });
+        await harness.controller.get({ mode: "checkauth", type: "catalog" }, request, fakeReply());
+        expect(calls).toContainEqual({ scope: "one-c-exchange-request", identity: `${source}:${CLIENT_IP}` });
+        expect(calls).toContainEqual({ scope: "one-c-exchange-auth", identity: `${source}:${CLIENT_IP}` });
+      }
+    } finally {
+      await rm(harness.storageRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("uploads more than 1200 files in one session and then applies catalog and offers", async () => {
+    const harness = await createHarness();
+    const counts = new Map<string, number>();
+    harness.limiter.consume = async (scope, identity, limit) => {
+      const key = `${scope}:${identity}`;
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      if (count > Number(limit)) throw new HttpException("too many", HttpStatus.TOO_MANY_REQUESTS);
+    };
+    try {
+      const { cookieName, cookieValue } = await checkauth(harness);
+      const cookie: [string, string] = [cookieName, cookieValue];
+      await init(harness, cookie);
+      // The regression is the request budget, not disk writes; storage quotas have their own tests.
+      const append = vi.spyOn(harness.tempStorage, "appendChunk").mockResolvedValue(undefined);
+      for (let index = 0; index < 1250; index += 1) {
+        const response = await harness.controller.post(
+          { filename: `import_files/photo-${index}.jpg`, mode: "file", type: "catalog" },
+          fakeRequest({ body: Buffer.from("image fixture"), cookie }), fakeReply(),
+        );
+        expect(response, `file ${index + 1}`).toBe("success");
+      }
+      expect(append).toHaveBeenCalledTimes(1250);
+      append.mockRestore();
+      await uploadFile(harness, cookie, "import.xml", importXml());
+      await runImportToCompletion(harness, cookie, "import.xml");
+      await uploadFile(harness, cookie, "offers.xml", offersXml({ includeProd3: true, timestamp: "2026-08-01T04:00:00" }));
+      await runImportToCompletion(harness, cookie, "offers.xml");
+      expect(harness.database.products.size).toBe(3);
+      expect(harness.database.prices.size).toBe(3);
+      expect(harness.database.balances.size).toBe(3);
+    } finally {
+      vi.restoreAllMocks();
+      await rm(harness.storageRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("returns plain-text 503 when the session cannot be verified", async () => {
+    const harness = await createHarness();
+    try {
+      const { cookieName, cookieValue } = await checkauth(harness);
+      vi.spyOn(harness.session, "verify").mockRejectedValue(new Error("session store unavailable"));
+      const append = vi.spyOn(harness.tempStorage, "appendChunk");
+      const reply = fakeReply();
+      const status = vi.spyOn(reply, "status");
+      const response = await harness.controller.post(
+        { filename: "import.xml", mode: "file", type: "catalog" },
+        fakeRequest({ body: Buffer.from("fixture"), cookie: [cookieName, cookieValue] }), reply,
+      );
+      expect(status).toHaveBeenCalledWith(503);
+      expect(response).toBe("failure\nСервис обмена временно недоступен");
+      expect(append).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+      await rm(harness.storageRoot, { force: true, recursive: true });
+    }
+  });
+});
 
 describe("OneCExchangeController end-to-end (checkauth -> init -> file -> import)", () => {
   let harness: Harness;
