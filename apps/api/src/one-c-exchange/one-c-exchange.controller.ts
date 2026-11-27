@@ -35,9 +35,11 @@ import { sourceFromPath, type OneCSource } from "./one-c-source.js";
 // checkauth calls in a short window -- a tighter budget than the steady
 // stream of init/file/import polls a legitimate 40,000-SKU sync produces.
 const AUTH_RATE_LIMIT = { limit: 30, windowSeconds: 60 };
-// A chunked sync of 30-40k SKUs can mean well over a hundred file/import
-// round trips in a burst; generous on purpose so a real sync never trips it,
-// while still bounding a runaway or hostile client.
+// Applies before authentication, including the Basic fallback. A confirmed
+// exchange session may upload thousands of pictures before its first XML;
+// charging those requests here stranded the real export after 1198 files.
+// Session traffic is bounded by upload size, disk/file quotas, pending writes
+// and the single chunked importer, rather than a count of legitimate files.
 const REQUEST_RATE_LIMIT = { limit: 1_200, windowSeconds: 60 };
 // Turned-away requests are written to the request journal so the owner can see why an exchange did not go through
 // (app.integration_request_log, the admin's «Отказы на входе»). The journal is append-only, and a stranger may send
@@ -112,10 +114,9 @@ export class OneCExchangeController {
     // does not implement; fail closed rather than silently no-op.
     if (query.type !== "catalog") return "failure\nПоддерживается только type=catalog";
 
-    const requestFailure = await this.checkRateLimit("request", query.mode, request.ip, source, reply);
-    if (requestFailure) return requestFailure;
-
     if (query.mode === "checkauth") {
+      const requestFailure = await this.checkRateLimit("request", query.mode, request.ip, source, reply);
+      if (requestFailure) return requestFailure;
       const loginFailure = await this.checkRateLimit("auth", query.mode, request.ip, source, reply);
       if (loginFailure) return loginFailure;
       return this.checkauth(request, reply, source);
@@ -124,8 +125,16 @@ export class OneCExchangeController {
     // The session is bound to the address the login came from. A request it does not cover is let in when it
     // carries the login itself; that check also names the cause when the request is turned away.
     const sessionToken = request.cookies[this.session.cookieName];
-    let authorized = await this.session.verify(sessionToken, request.ip,source);
+    let authorized: boolean;
+    try {
+      authorized = await this.session.verify(sessionToken, request.ip,source);
+    } catch {
+      reply.status(HttpStatus.SERVICE_UNAVAILABLE);
+      return "failure\nСервис обмена временно недоступен";
+    }
     if (!authorized) {
+      const requestFailure = await this.checkRateLimit("request", query.mode, request.ip, source, reply);
+      if (requestFailure) return requestFailure;
       const login = await this.integration.checkExchangeLogin(request.headers.authorization, request.ip,source);
       authorized = login.revision !== null;
       if (!authorized) {
@@ -154,7 +163,7 @@ export class OneCExchangeController {
     const isLogin = budget === "auth";
     const { limit, windowSeconds } = isLogin ? AUTH_RATE_LIMIT : REQUEST_RATE_LIMIT;
     try {
-      await this.rateLimit.consume(`one-c-exchange-${budget}`, ip, limit, windowSeconds);
+      await this.rateLimit.consume(`one-c-exchange-${budget}`, `${source}:${ip}`, limit, windowSeconds);
       return null;
     } catch (error) {
       if (!(error instanceof HttpException) || error.getStatus() !== HttpStatus.TOO_MANY_REQUESTS) {
