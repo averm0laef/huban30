@@ -63,7 +63,7 @@ export class StaffDashboardService {
     private readonly database: DatabaseService,
     config: ConfigService,
   ) {
-    this.rosskoEnabled = config.get<string>("ROSSKO_ENABLED") === "true";
+    this.rosskoEnabled = config.get<boolean>("ROSSKO_ENABLED", false);
     this.smtpConfigured = Boolean(config.get<string>("SMTP_HOST") ?? process.env.SMTP_HOST);
   }
 
