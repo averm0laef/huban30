@@ -105,11 +105,14 @@ page = await scenarioPage();
 await page.goto(`${base}/catalog`, { waitUntil: "networkidle" });
 const header = page.locator("header").first();
 const open = (await header.boundingBox())?.height ?? 0;
-for (let y = 0; y <= 1200; y += 80) { await page.evaluate((top) => window.scrollTo(0, top), y); await pause(50); }
+// CSS smooth scrolling and the sticky header's scroll anchoring can turn an
+// absolute target into a movement in the opposite direction. Relative instant
+// steps model a finger's movement without replacing the header's animation.
+for (let step = 0; step < 16; step += 1) { await page.evaluate(() => window.scrollBy({ top: 80, behavior: "instant" })); await pause(50); }
 await pause(500);
 const folded = (await header.boundingBox())?.height ?? 0;
 report(folded < open - 20, "шапка сворачивается при прокрутке вниз", `${Math.round(open)} → ${Math.round(folded)} px`);
-for (let y = 1200; y >= 900; y -= 40) { await page.evaluate((top) => window.scrollTo(0, top), y); await pause(50); }
+for (let step = 0; step < 8; step += 1) { await page.evaluate(() => window.scrollBy({ top: -40, behavior: "instant" })); await pause(50); }
 await pause(500);
 const back = (await header.boundingBox())?.height ?? 0;
 report(back > folded + 20, "шапка возвращается при прокрутке вверх", `${Math.round(folded)} → ${Math.round(back)} px`);
@@ -118,7 +121,7 @@ await sidewaysScroll("каталог");
 // 4. The catalogue drawer from the bottom bar.
 // The header transition lasts 320 ms and its scroll anchor settles at 360 ms.
 // Measure the drawer lock after that transition, so its movement is not counted as drawer scrolling.
-await page.evaluate(() => window.scrollTo(0, 400));
+await page.evaluate(() => window.scrollTo({ top: 400, behavior: "instant" }));
 await pause(500);
 const pageTop = await page.evaluate(() => window.scrollY);
 const catalogue = page.getByRole("navigation", { name: "Быстрая навигация" }).getByRole("button", { name: /Каталог/u })
