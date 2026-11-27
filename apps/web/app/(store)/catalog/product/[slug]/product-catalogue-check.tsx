@@ -51,7 +51,6 @@ function Answer({ children, tone, title }: { children?: ReactNode; title: string
 
 function CarList({ hidden, id, makes, onCollapse, total }: { hidden: boolean; id: string; makes: FitMake[]; onCollapse: () => void; total: number }) {
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
-  if (total === 0) return <p className={styles.muted} hidden={hidden} id={id}>В каталоге не указано ни одной машины для этой детали.</p>;
   return (
     <div className={styles.cars} hidden={hidden} id={id}>
       <p className={styles.muted}>{plural(makes.length, "марка", "марки", "марок")} · {plural(total, "модификация", "модификации", "модификаций")} — по каталогу</p>
@@ -97,6 +96,7 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
   const [result, setResult] = useState<Result | null>(null);
   // «Все машины, к которым подходит» folds the list it opened; the answer is kept, so opening it again asks nothing.
   const [folded, setFolded] = useState(false);
+  const [noCatalogueData, setNoCatalogueData] = useState(false);
   const listButton = useRef<HTMLButtonElement>(null);
   const listId = useId();
   const requestVersion = useRef(0);
@@ -137,7 +137,11 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
     setResult({ mode, status: "loading" });
     try {
       const data = await umapiGet<UmapiFitment>(fitmentPath(productId, mode, ids));
-      if (version === requestVersion.current) setResult({ data, mode, status: "ready" });
+      if (version !== requestVersion.current) return;
+      if (data.status === "unknown_part" || (data.status === "ok" && data.total === 0 && (mode === "list" || data.verdict === "not_listed"))) {
+        setNoCatalogueData(true);
+      }
+      setResult({ data, mode, status: "ready" });
     } catch (caught) {
       if (version !== requestVersion.current) return;
       const limited = caught instanceof FinderError && caught.status === 429;
@@ -145,7 +149,7 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
     }
   }
 
-  const listShown = result?.status === "ready" && result.mode === "list" && result.data.status === "ok";
+  const listShown = result?.status === "ready" && result.mode === "list" && result.data.status === "ok" && result.data.total > 0;
   const listTotal = listShown && result.data.status === "ok" ? result.data.total : 0;
 
   function toggleList() {
@@ -174,7 +178,7 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
       ) : (
         <p className={styles.muted}>Выберите машину один раз — проверка заработает на всех товарах.</p>
       )}
-      <div className={styles.actions}>
+      {noCatalogueData ? null : <div className={styles.actions}>
         {ids ? (
           <button className={`${buttons.button} ${buttons.primary}`} disabled={result?.status === "loading" && result.mode === "check"} onClick={() => { void load("check"); }} type="button">
             <CheckmarkCircle20Regular aria-hidden="true" /> Проверить для моей машины
@@ -193,7 +197,7 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
             <List20Regular aria-hidden="true" /> Все машины, к которым подходит
           </button>
         )}
-      </div>
+      </div>}
 
       {result?.status === "loading" ? (
         <WheelLoader label={result.mode === "check" ? "Проверяем по каталогу…" : "Собираем список машин…"} size="sm" />
@@ -208,11 +212,15 @@ export function ProductCatalogueCheck({ applies, prefill, productId }: { applies
         </Answer>
       ) : null}
       {result?.status === "ready" ? (
-        result.mode === "list" && result.data.status === "ok"
-          ? <CarList hidden={folded} id={listId} makes={result.data.makes} onCollapse={collapseFromBottom} total={result.data.total} />
+        result.data.status === "ok" && result.mode === "list"
+          ? listShown
+            ? <CarList hidden={folded} id={listId} makes={result.data.makes} onCollapse={collapseFromBottom} total={result.data.total} />
+            : <Answer title="В каталоге не указано ни одной машины для этой детали." tone="info">{vin}</Answer>
           : <CheckAnswer car={name ?? "автомобиль"} data={result.data} vin={vin} />
       ) : null}
-      {result === null ? <span className={styles.muted}>Проверка по каталогу производителя. Не уверены — специалист сверит по VIN.</span> : null}
+      {result === null ? noCatalogueData
+        ? <CheckAnswer car={name ?? "автомобиль"} data={{ status: "unknown_part" }} vin={vin} />
+        : <span className={styles.muted}>Проверка по каталогу производителя. Не уверены — специалист сверит по VIN.</span> : null}
     </div>
   );
 }

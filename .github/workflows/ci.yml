@@ -1,5 +1,5 @@
 # Checks every push to main and every pull request the way a developer does before a commit (AGENTS.md, «Проверка»).
-# Suites that need a database, Redis or a paid provider are skipped here: they are gated by their own variables.
+# PostgreSQL search and mobile flows use isolated fixtures. Other integration suites retain their own environment gates.
 name: CI
 
 on:
@@ -36,3 +36,44 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @an30/web build
+
+  product-regression:
+    name: PostgreSQL search and mobile storefront
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: an30_search_scratch
+          POSTGRES_USER: an30
+          POSTGRES_PASSWORD: an30_fixture_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U an30 -d an30_search_scratch"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @an30/contracts --filter @an30/messaging --filter @an30/database build
+      - name: Migrate isolated fixture database
+        run: node packages/database/dist/migrate.js up
+        env:
+          DATABASE_ENVIRONMENT: development
+          DATABASE_URL: postgresql://an30:an30_fixture_only@127.0.0.1:5432/an30_search_scratch
+      - name: Run PostgreSQL search and CommerceML fixtures
+        run: >-
+          pnpm --filter @an30/api exec vitest run
+          src/catalog/catalog-search-regression.test.ts src/catalog/catalog-search-golden.test.ts
+          src/one-c-exchange/one-c-exchange.integration.test.ts src/umapi/umapi-photo-archive.test.ts
+        env:
+          CATALOG_SEARCH_DATABASE_URL: postgresql://an30:an30_fixture_only@127.0.0.1:5432/an30_search_scratch
+      - run: pnpm exec playwright install --with-deps chromium webkit
+      - run: pnpm test:e2e:mobile

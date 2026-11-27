@@ -68,6 +68,8 @@ export function catalogSearchEngineFromEnvironment(
  */
 export function catalogSearchIsFreeText(input: CatalogSearchInput): boolean {
   if (input.identity.articleOnly || input.plan.words.length === 0) return false;
+  // DOT is a mandatory product-name constraint that the optional index does not store yet.
+  if (input.plan.alternatives.some((alternative) => alternative.measure?.startsWith("dot:"))) return false;
   return input.plan.words.every((word, index) => !/\d/u.test(word)
     || input.plan.alternatives.some((alternative) => alternative.word === index + 1 && alternative.measure));
 }

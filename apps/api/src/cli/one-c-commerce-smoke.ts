@@ -150,8 +150,9 @@ async function main(): Promise<void> {
       signal: AbortSignal.timeout(30_000),
     });
     const body = await response.text();
-    if (!response.ok) {
-      throw new Error(`${mode} returned HTTP ${response.status}: ${JSON.stringify(body)}`);
+    if (response.status !== 200) {
+      const detail = mode === "checkauth" ? "" : `: ${JSON.stringify(body)}`;
+      throw new Error(`${mode} returned HTTP ${response.status}, expected 200${detail}`);
     }
     return body;
   };

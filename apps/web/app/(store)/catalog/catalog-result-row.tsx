@@ -82,7 +82,7 @@ export function CatalogResultRow({
       <div className={styles.resultRowItem}>
         <CatalogPhoto alt={imageAlt} className={styles.resultRowMedia}
           noteInside preview showNote={view === "grid"}
-          sizes={view === "list" ? "64px" : "(max-width: 640px) 42vw, 270px"} src={imageUrl} />
+          sizes={view === "list" ? "64px" : "(max-width: 670px) 46vw, (max-width: 1239px) 30vw, 240px"} src={imageUrl} />
         <div className={styles.resultRowIdentity}>
           {badges ? <div className={styles.resultRowBadges}>{badges}</div> : null}
           <p className={styles.resultRowMeta}>{brand ? `${brand} · ` : ""}Артикул: {sku}</p>

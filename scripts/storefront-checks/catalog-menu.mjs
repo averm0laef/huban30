@@ -9,6 +9,8 @@
 import { chromium } from "@playwright/test";
 
 const base = (process.argv[2] ?? "http://127.0.0.1:3000").replace(/\/$/u, "");
+const credentials = process.env.SITE_USER && process.env.SITE_PASSWORD
+  ? { httpCredentials: { password: process.env.SITE_PASSWORD, username: process.env.SITE_USER } } : {};
 const PANEL = 'nav[aria-label="Меню каталога"]';
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -32,7 +34,7 @@ const sectionsWithSubsections = (page) => page.evaluate((selector) => [...docume
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL ?? "chrome" });
 let tooFew = false;
 for (const [width, height] of [[1440, 900], [1180, 720]]) {
-  const context = await browser.newContext({ deviceScaleFactor: 1, viewport: { height, width } });
+  const context = await browser.newContext({ ...credentials, deviceScaleFactor: 1, viewport: { height, width } });
   const page = await context.newPage();
   await page.goto(`${base}/`, { timeout: 45_000, waitUntil: "networkidle" });
   const panel = page.locator(PANEL);
@@ -70,7 +72,6 @@ for (const [width, height] of [[1440, 900], [1180, 720]]) {
   // Not the first section (it is in hand when the panel opens), and one with others above it to cross.
   const first = names[Math.min(names.length - 1, 5)];
   const second = names[Math.min(names.length - 1, 7)] === first ? names[1] : names[Math.min(names.length - 1, 7)];
-  const keyboard = names[2] === first || names[2] === second ? names[1] : names[2];
   const row = panel.getByRole("link", { exact: true, name: first });
 
   // --- the mouse: a section, then one of its subsections ---
@@ -135,6 +136,7 @@ for (const [width, height] of [[1440, 900], [1180, 720]]) {
   await page.keyboard.press("Enter");
   await page.waitForTimeout(250);
   const before = await inHand(page);
+  const keyboard = names.find((name) => name !== before);
   await panel.getByRole("link", { exact: true, name: keyboard }).focus();
   await page.waitForTimeout(250);
   check(`${width}: focus alone does not switch the section`, before !== keyboard && (await inHand(page)) === before, `before: ${before}, after: ${await inHand(page)}`);

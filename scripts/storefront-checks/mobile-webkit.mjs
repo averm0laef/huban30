@@ -31,9 +31,13 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const browser = await webkit.launch();
 const context = await browser.newContext({ ...devices["iPhone 13"], ...credentials });
-const page = await context.newPage();
 const errors = [];
-page.on("pageerror", (error) => errors.push(`${new URL(page.url()).pathname}: ${error.message}`));
+async function scenarioPage() {
+  const tab = await context.newPage();
+  tab.on("pageerror", (error) => errors.push(`${new URL(tab.url()).pathname}: ${error.message}`));
+  return tab;
+}
+let page = await scenarioPage();
 
 async function sidewaysScroll(where) {
   const extra = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -78,7 +82,9 @@ if (count > 0) {
   await sidewaysScroll("карточка товара");
 }
 
+// Independent scenarios use separate tabs: a forced navigation would cancel the previous tab's prefetch in WebKit.
 // 2a. A typed VIN: «Подбор по VIN» banner on any page, and one action in the suggestions that opens the decoder.
+page = await scenarioPage();
 await page.goto(`${base}/catalog`, { waitUntil: "networkidle" });
 const banner = page.getByRole("link", { name: /Подбор по VIN/u }).first();
 report(await banner.isVisible().catch(() => false), "блок «Подбор по VIN» под поиском не только на главной");
@@ -92,12 +98,10 @@ if (vinShown) {
   await vinAction.tap();
   const opened = await page.waitForURL(/\/podbor\?vin=XTAGFK330JY144213/u, { timeout: 8000 }).then(() => true, () => false);
   report(opened, "касание открывает подбор по VIN");
-  // A customer stays on the page it opened: leaving it the same millisecond aborts its requests, and WebKit reports
-  // an aborted request as a page error («… due to access control checks», 24.11.2026) — the check's own doing.
-  if (opened) await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
 }
 
 // 3. Header folds on the way down and returns on the way up.
+page = await scenarioPage();
 await page.goto(`${base}/catalog`, { waitUntil: "networkidle" });
 const header = page.locator("header").first();
 const open = (await header.boundingBox())?.height ?? 0;
@@ -112,8 +116,10 @@ report(back > folded + 20, "шапка возвращается при прок�
 await sidewaysScroll("каталог");
 
 // 4. The catalogue drawer from the bottom bar.
+// The header transition lasts 320 ms and its scroll anchor settles at 360 ms.
+// Measure the drawer lock after that transition, so its movement is not counted as drawer scrolling.
 await page.evaluate(() => window.scrollTo(0, 400));
-await pause(300);
+await pause(500);
 const pageTop = await page.evaluate(() => window.scrollY);
 const catalogue = page.getByRole("navigation", { name: "Быстрая навигация" }).getByRole("button", { name: /Каталог/u })
   .or(page.getByRole("navigation", { name: "Быстрая навигация" }).getByRole("link", { name: /Каталог/u })).first();

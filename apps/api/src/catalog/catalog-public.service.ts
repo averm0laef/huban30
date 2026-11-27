@@ -512,12 +512,13 @@ export class CatalogPublicService {
     await client.query("SET LOCAL pg_trgm.word_similarity_threshold=0.4");
     const p = new SqlParameters();
     const cte = catalogSearchCte(p, input, visibleCategoriesWithSubtreeCte);
-    const where = catalogSearchFilter(p, input, matchAny);
-    const { join, order } = this.productOrder(p, input, cte.article);
+    const where = catalogSearchFilter(p, input, matchAny, cte.directBrandMatch);
+    const { join, order } = this.productOrder(p, input, cte);
+    const directBrand = cte.directBrandMatch ? ` AND ${cte.directBrandMatch}` : "";
     const items = await client.query<ProductRow & { is_cross_match: boolean; total_count: string }>(
       `${cte.sql}
        ${PRODUCT_SELECT},count(*) OVER()::text AS total_count,
-              (NOT (${cte.article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}) AND ${CROSS_MATCH}) AS is_cross_match,
+              (NOT (${cte.article}<>'' AND product.sku_normalized LIKE ${p.add(`${escapeLike(input.identity.article)}%`)}${directBrand}) AND ${CROSS_MATCH}) AS is_cross_match,
               primary_image.id AS primary_image_id,
               primary_image.alt_text AS primary_image_alt_text,
               primary_image.is_primary AS primary_image_is_primary,
@@ -543,7 +544,7 @@ export class CatalogPublicService {
     if (total === undefined && query.offset > 0) {
       const count = new SqlParameters();
       const countCte = catalogSearchCte(count, input, visibleCategoriesWithSubtreeCte);
-      const countWhere = catalogSearchFilter(count, input, matchAny);
+      const countWhere = catalogSearchFilter(count, input, matchAny, countCte.directBrandMatch);
       total = (await client.query<{ count: string }>(
         `${countCte.sql}
          SELECT count(*)::text AS count ${PUBLIC_PRODUCT_FROM}
@@ -799,7 +800,7 @@ export class CatalogPublicService {
     };
   }
 
-  private productOrder(p: SqlParameters, input: CatalogSearchInput, article: string): { join: string; order: string } {
+  private productOrder(p: SqlParameters, input: CatalogSearchInput, cte: { article: string; directBrandMatch: string | null }): { join: string; order: string } {
     switch (input.query.sort) {
       case "newest": return { join: "", order: "product.created_at DESC" };
       case "name": return { join: "", order: NAME_ORDER };
@@ -814,7 +815,7 @@ export class CatalogPublicService {
         order: `COALESCE(popularity.score,0) DESC,(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,${NAME_ORDER}`,
       };
       case "relevance": return input.folded !== null
-        ? catalogSearchRelevanceOrder(p, input, article)
+        ? catalogSearchRelevanceOrder(p, input, cte.article, cte.directBrandMatch)
         // Browsing a section: what can be bought today first, then priced
         // items, then alphabetical — never "last touched by the import".
         : { join: "", order: `(stock.available_quantity>0) DESC,(price.amount_kopeks IS NOT NULL) DESC,${NAME_ORDER}` };

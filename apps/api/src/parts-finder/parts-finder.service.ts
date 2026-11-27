@@ -1,6 +1,8 @@
 import { BadRequestException, HttpException, HttpStatus, Inject, Injectable, Logger, Optional } from "@nestjs/common";
 
 import {
+  normalizeArticleNumber,
+  normalizeBrand,
   PARTS_FINDER_DISABLED_MESSAGE,
   PARTS_FINDER_OFFERS_PER_PART,
   PARTS_FINDER_SHOP_ANALOGS_LIMIT,
@@ -25,6 +27,7 @@ import type { z } from "zod";
 
 import { SUPPLIER_PROVIDER, type SupplierProvider } from "../adapters/provider-contracts.js";
 import { CatalogPublicService } from "../catalog/catalog-public.service.js";
+import { catalogSearchIdentity } from "../catalog/catalog-search-identity.js";
 import { CatalogSearchLogService } from "../catalog/catalog-search-log.service.js";
 import { RedisService } from "../infrastructure/redis.service.js";
 import { SupplierSearchService } from "../suppliers/supplier-search.service.js";
@@ -41,6 +44,7 @@ import { PartsFinderShopService, type ShopOfferLookup, type ShopOfferRequest } f
 import { PartsFinderVehiclesService } from "./parts-finder-vehicles.service.js";
 
 type JsonRecord = Record<string, unknown>;
+type SupplierOffers = Pick<SupplierSearchResponse, "parts" | "totalFound" | "truncated">;
 type PartRecord = JsonRecord & { article: string; brand?: unknown; shop?: ShopOffer[] };
 
 const INVALID_REQUEST = "Проверьте запрос и повторите.";
@@ -257,9 +261,11 @@ export class PartsFinderService {
       }
     }
     if (!this.engine.enabled) return { kind: "text", query };
+    const identity = catalogSearchIdentity(query);
+    const brand = identity.articleOnly ? identity.brandKeys[0] : undefined;
     let first: JsonRecord;
     try {
-      first = await this.run(() => this.engineSearch({ query }, caller?.ip ?? null));
+      first = brand ? { article: identity.article, status: "article" } : await this.run(() => this.engineSearch({ query }, caller?.ip ?? null));
     } catch {
       return { kind: "text", query };
     }
@@ -267,25 +273,27 @@ export class PartsFinderService {
       const spellings = first.status === "article"
         ? [String(first.article)]
         : (Array.isArray(first.options) ? first.options : []).flatMap((option) => (isRecord(option) && typeof option.label === "string" ? [option.label] : []));
-      const offers = await this.shop.lookup(spellings.map((article) => ({ article, brand: null })), PARTS_FINDER_SHOP_ANALOGS_LIMIT);
+      const request = (article: string) => ({ article, brand: brand ?? null });
+      const offers = await this.shop.lookup(spellings.map(request), PARTS_FINDER_SHOP_ANALOGS_LIMIT);
       // Of two possible spellings ("ДКс 0127" / "LRC 0127") prefer the one the shop sells.
-      const article = spellings.find((spelling) => offers.for({ article: spelling }).length > 0) ?? spellings.at(-1)!;
+      const article = spellings.find((spelling) => offers.for(request(spelling)).length > 0) ?? spellings.at(-1)!;
       // «04152-40060» is kept in 1С as «04152-40060 (O-117)», «32215» as «7515 (32215)»: the shop does sell them.
       const filed = await this.shop.filedUnder(spellings);
-      const filedOffers = filed.length === 0 ? [] : await this.shop.lookup(filed.map((sku) => ({ article: sku, brand: null })), PARTS_FINDER_SHOP_ANALOGS_LIMIT)
-        .then((found) => filed.flatMap((sku) => found.for({ article: sku })));
+      const filedOffers = filed.length === 0 ? [] : await this.shop.lookup(filed.map(request), PARTS_FINDER_SHOP_ANALOGS_LIMIT)
+        .then((found) => filed.flatMap((sku) => found.for(request(sku))));
       const withFiled = (exact: ShopOffer[]): ShopOffer[] => {
         const seen = new Set(exact.map((offer) => offer.productId));
         return [...exact, ...filedOffers.filter((offer) => !seen.has(offer.productId) && seen.add(offer.productId))];
       };
-      let shop = withFiled(offers.for({ article }));
+      let shop = withFiled(offers.for(request(article)));
       // «масло 5w40», «лампа h7», «коробка 9» are a word and a size, and no number the shop keeps: the catalog search answers.
-      if (shop.length === 0 && await this.catalogAnswers(query)) return { kind: "text", query };
-      const supplier = withSupplier ? await this.supplierOffers(article) : null;
+      if (!brand && shop.length === 0 && await this.catalogAnswers(query)) return { kind: "text", query };
+      const rawSupplier = withSupplier ? await this.supplierOffers(brand ? `${brand} ${article}` : article) : null;
+      const supplier = rawSupplier && brand ? this.brandedSupplier(rawSupplier, identity.article, identity.brandKeys) : rawSupplier;
       // Nothing of ours in stock under this number: the catalogue names its
       // analogs (one call, short cache) and our catalog is asked for those —
       // matched for this answer only, nothing is stored.
-      if (tecdoc && !shop.some((offer) => offer.availableQuantity > 0)) {
+      if (tecdoc && !brand && !shop.some((offer) => offer.availableQuantity > 0)) {
         const viaCatalogue = await tecdoc.offersForNumber(article, caller!).catch(() => null);
         const known = new Set(shop.map((offer) => offer.productId));
         if (viaCatalogue) shop = [...shop, ...viaCatalogue.shop.filter((offer) => !known.has(offer.productId))];
@@ -294,12 +302,13 @@ export class PartsFinderService {
       // the supplier's answer (free) and its FAPI card (1 credit, cached),
       // then ask our catalog again. The routing-only call (supplier: false)
       // never spends anything.
-      if (withSupplier && !shop.some((offer) => offer.availableQuantity > 0) && await this.learnArticle(article, supplier, caller?.ip ?? null)) {
-        shop = withFiled((await this.shop.lookup([{ article, brand: null }], PARTS_FINDER_SHOP_ANALOGS_LIMIT)).for({ article }));
+      if (withSupplier && !shop.some((offer) => offer.availableQuantity > 0) && await this.learnArticle(article, supplier, caller?.ip ?? null, brand)) {
+        shop = withFiled((await this.shop.lookup([request(article)], PARTS_FINDER_SHOP_ANALOGS_LIMIT)).for(request(article)));
       }
       return {
         alternatives: spellings.filter((spelling) => spelling !== article),
         article,
+        ...(brand ? { brand } : {}),
         kind: "article",
         query,
         shop,
@@ -447,9 +456,9 @@ export class PartsFinderService {
   }
 
   /** What the supplier and FAPI know about one number, into app.article_crosses; true when anything was stored. */
-  private async learnArticle(article: string, supplier: { parts: SupplierSearchResponse["parts"] } | null, payer: FapiPayer): Promise<boolean> {
+  private async learnArticle(article: string, supplier: { parts: SupplierSearchResponse["parts"] } | null, payer: FapiPayer, brand?: string): Promise<boolean> {
     const stored = [supplier ? this.crossStore.rememberPairs(crossRowsFromSupplier(supplier.parts), "rossko") : Promise.resolve(0)];
-    if (this.engine.fapiKey && await this.autoLookupBudget(1)) {
+    if (!brand && this.engine.fapiKey && await this.autoLookupBudget(1)) {
       stored.push(this.engine.crosses({ article }, payer)
         // Several brands share the number: the customer picks one under «Аналоги».
         .then((card) => (card.status === "found" ? this.crossStore.remember(card) : 0))
@@ -486,8 +495,18 @@ export class PartsFinderService {
     return (await Promise.all(cards)).some((stored) => stored > 0);
   }
 
+  private brandedSupplier(
+    result: SupplierOffers,
+    article: string,
+    brandKeys: string[],
+  ) {
+    const parts = result.parts.filter((part) => normalizeArticleNumber(part.partNumber) === article
+      && part.brand && brandKeys.includes(normalizeBrand(part.brand)));
+    return { ...result, parts, totalFound: parts.length };
+  }
+
   /** Supplier "под заказ" offers with the shop's retail margin; never names the distributor. */
-  private async supplierOffers(article: string): Promise<{ parts: SupplierSearchResponse["parts"]; totalFound: number; truncated: boolean } | null> {
+  private async supplierOffers(article: string): Promise<SupplierOffers | null> {
     if (!this.supplierProvider.enabled || article.trim().length < 2) return null;
     try {
       const result = await this.suppliers.search({ q: article });

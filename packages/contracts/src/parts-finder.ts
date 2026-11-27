@@ -191,6 +191,7 @@ export type PartsFinderResolveKind = "article" | "text" | "vehicle_part" | "vin"
 export const PartsFinderResolveResponseSchema = z.looseObject({
   alternatives: z.array(z.string()).optional(),
   article: z.string().optional(),
+  brand: z.string().optional(),
   error: z.string().optional(),
   kind: z.enum(["article", "text", "vehicle_part", "vin"]),
   query: z.string(),

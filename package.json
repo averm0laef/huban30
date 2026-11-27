@@ -14,10 +14,11 @@
     "db:migrate": "pnpm --filter @an30/database build && pnpm --filter @an30/database migrate",
     "db:seed:dev": "pnpm --filter @an30/database build && pnpm --filter @an30/database seed:dev",
     "db:status": "pnpm --filter @an30/database build && pnpm --filter @an30/database migrate:status",
-    "lint": "eslint tests playwright.config.ts && pnpm -r --if-present run lint",
+    "lint": "eslint tests playwright.config.ts playwright.mobile.config.ts && pnpm -r --if-present run lint",
     "typecheck": "pnpm --filter @an30/messaging... build && tsc -p tsconfig.node.json --noEmit && pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "test:e2e": "playwright test",
+    "test:e2e:mobile": "playwright test --config playwright.mobile.config.ts",
     "audit:prod": "pnpm audit --prod --audit-level=high",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "verify:full": "pnpm verify && pnpm test:e2e && pnpm audit:prod"

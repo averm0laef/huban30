@@ -2,7 +2,7 @@
 
 import { ArrowLeft20Regular, Chat20Regular, ChevronDown16Regular, Clock20Regular, Search20Regular } from "@fluentui/react-icons";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import buttons from "../_components/store-button.module.css";
 import { WheelLoader } from "../_components/wheel-loader";
@@ -70,14 +70,16 @@ export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, 
   const [more, setMore] = useState<"idle" | "loading">("idle");
   const headingRef = useRef<HTMLHeadingElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
+  const requestVersion = useRef(0);
+  const moreFor = useRef<number | null>(null);
+  const invalidatePartsRequests = useCallback(() => ++requestVersion.current, []);
 
   useEffect(() => { setAsked(query); setTyped(query ?? ""); }, [query]);
 
   useEffect(() => {
     let live = true;
-    setOpened(null);
+    closeParts();
     setGroup(null);
-    setParts({ status: "idle" });
     setCatalogue({ status: "loading" });
     carCategories(modificationId, asked)
       .then((data) => {
@@ -85,7 +87,7 @@ export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, 
         if (data.status !== "ok") { setCatalogue({ message: "Этой машины нет в каталоге запчастей. Выберите её заново или пришлите VIN.", status: "error" }); return; }
         setCatalogue({ data, status: "ready" });
         // The request names exactly one category: open it without one more click.
-        const leaves = data.matches.filter((match) => match.leaf);
+        const leaves = data.matches.filter((match) => match.leaf && !match.related);
         if (asked && leaves.length === 1 && data.matches.length <= 2) open({ id: leaves[0]!.id, name: leaves[0]!.name });
         else {
           // A tile of the page: its section of this car, or every section when this car's catalogue has none by that name.
@@ -94,8 +96,7 @@ export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, 
         }
       })
       .catch((caught: unknown) => { if (live) setCatalogue({ message: message(caught), status: "error" }); });
-    return () => { live = false; };
-    // `open` only reads setters.
+    return () => { live = false; invalidatePartsRequests(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modificationId, asked]);
 
@@ -108,12 +109,22 @@ export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, 
     }, 0);
   }
 
+  function closeParts() {
+    invalidatePartsRequests();
+    setOpened(null);
+    setParts({ status: "idle" });
+    setMore("idle");
+  }
+
   function open(next: Opened, filter: string | null = null) {
+    const version = invalidatePartsRequests();
     setOpened(next);
     setBrand(filter);
+    setMore("idle");
     setParts({ status: "loading" });
     carParts(modificationId, { brand: filter, category: next.id, type: next.type ?? null })
       .then((data) => {
+        if (version !== requestVersion.current) return;
         if (!("category" in data)) {
           setParts({ message: "В этом разделе каталога для вашей машины ничего нет. Выберите другой или спросите специалиста.", status: "error" });
           return;
@@ -121,20 +132,37 @@ export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, 
         setParts({ data, status: "ready" });
         bringIntoView();
       })
-      .catch((caught: unknown) => setParts({ message: message(caught), status: "error" }));
+      .catch((caught: unknown) => {
+        if (version === requestVersion.current) setParts({ message: message(caught), status: "error" });
+      });
+  }
+
+  function chooseMatch(match: CarCategoryMatch) {
+    if (match.leaf) {
+      open(match);
+      return;
+    }
+    setGroup({ categoryIds: [match.id], hint: "", id: match.id, name: match.name });
+    bringIntoView();
   }
 
   function showMore() {
-    if (!opened || parts.status !== "ready" || parts.data.status !== "ok") return;
+    const version = requestVersion.current;
+    if (moreFor.current === version || !opened || parts.status !== "ready" || parts.data.status !== "ok") return;
     const current = parts.data;
+    moreFor.current = version;
     setMore("loading");
     carParts(modificationId, { brand, category: opened.id, page: current.page + 1, type: current.type.id })
       .then((data) => {
-        if (data.status !== "ok") return;
-        setParts({ data: { ...data, catalogue: [...current.catalogue, ...data.catalogue] }, status: "ready" });
+        if (version === requestVersion.current && data.status === "ok") {
+          setParts({ data: { ...data, catalogue: [...current.catalogue, ...data.catalogue] }, status: "ready" });
+        }
       })
       .catch(() => undefined)
-      .finally(() => setMore("idle"));
+      .finally(() => {
+        if (moreFor.current === version) moreFor.current = null;
+        if (version === requestVersion.current) setMore("idle");
+      });
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -163,12 +191,12 @@ export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, 
       <section aria-labelledby="car-catalogue-title" className={styles.catalogue} ref={sectionRef}>
         {plate}
         <nav aria-label="Путь по каталогу" className={styles.crumbs}>
-          <button onClick={() => { setOpened(null); setParts({ status: "idle" }); }} type="button">Все разделы</button>
+          <button onClick={closeParts} type="button">Все разделы</button>
           {crumbs.map((crumb) => <span key={crumb}><span aria-hidden="true">/</span>{crumb}</span>)}
         </nav>
         <div className={styles.head}>
           <h2 id="car-catalogue-title" ref={headingRef} tabIndex={-1}>{ready?.status === "ok" ? ready.type.name : opened.name}</h2>
-          <button className={quietButton} onClick={() => { setOpened(null); setParts({ status: "idle" }); }} type="button">
+          <button className={quietButton} onClick={closeParts} type="button">
             <ArrowLeft20Regular aria-hidden="true" /> Другой раздел
           </button>
         </div>
@@ -234,14 +262,17 @@ export function UmapiCarCatalogue({ car, embedded = false, initialGroup = null, 
       {data && asked && !group ? (
         matches.length > 0 ? (
           <div className={styles.matches}>
-            <p className={shared.groupTitle}>«{asked}» в каталоге вашей машины</p>
-            {matches.map((match) => <MatchButton key={match.id} match={match} onOpen={(next) => (next.leaf ? open(next) : setGroup("all"))} />)}
+            <p className={shared.groupTitle}>{matches[0]?.related ? `Ближайшие разделы по запросу «${asked}»` : `«${asked}» в каталоге вашей машины`}</p>
+            {matches.map((match) => <MatchButton key={match.id} match={match} onOpen={chooseMatch} />)}
             <button className={quietButton} onClick={() => { setAsked(null); setTyped(""); onClearQuery(); if (embedded && onClose) onClose(); }} type="button">Показать все разделы</button>
           </div>
         ) : (
           <div className={styles.empty}>
             <strong>Раздел «{asked}» для этой машины не нашёлся</strong>
             <p>Выберите раздел ниже или <Link href={`/catalog?q=${encodeURIComponent(asked)}`}>поищите «{asked}» в нашем каталоге</Link>.</p>
+            <ExpertHelpQueryLink className={softButton} prefillMessage={`Нужна деталь «${asked}» для ${car.label}. Пришлю VIN.`}>
+              <Chat20Regular aria-hidden="true" /> Запросить подбор
+            </ExpertHelpQueryLink>
           </div>
         )
       ) : null}

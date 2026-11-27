@@ -175,7 +175,9 @@ describe("CatalogPublicService", () => {
     const [sql,parameters]=query.mock.calls[0] as [string,unknown[]];
     expect(parameters).toContain("W9142");
     expect(parameters).toContainEqual(["MANN","MANNFILTER"]);
-    expect(sql).toMatch(/app\.normalize_brand\(brand\.name\)=ANY\(\$\d+::text\[\]\)/u);
+    expect(sql).toContain("app.canonical_brand(brand.name)=ANY");
+    expect(sql).toContain("app.canonical_brand(brand_a)=ANY");
+    expect(sql).toContain("app.canonical_brand(brand_b)=ANY");
   });
 
   it("recovers a Cyrillic word typed in Latin, both phonetically and via a wrong keyboard layout", async () => {
