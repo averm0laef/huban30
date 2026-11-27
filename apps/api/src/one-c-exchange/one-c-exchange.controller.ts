@@ -15,7 +15,7 @@
 // which mode does what, and in what plain-text shape.
 import { createHash } from "node:crypto";
 
-import { Controller, Get, Post, Query, Req, Res } from "@nestjs/common";
+import { Controller, Get, HttpCode, HttpException, HttpStatus, Post, Query, Req, Res } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
@@ -84,6 +84,7 @@ export class OneCExchangeController {
   }
 
   @Post()
+  @HttpCode(HttpStatus.OK)
   async post(
     @Query() query: unknown,
     @Req() request: FastifyRequest,
@@ -111,17 +112,14 @@ export class OneCExchangeController {
     // does not implement; fail closed rather than silently no-op.
     if (query.type !== "catalog") return "failure\nПоддерживается только type=catalog";
 
-    try {
-      await this.rateLimit.consume("one-c-exchange-request", request.ip, REQUEST_RATE_LIMIT.limit, REQUEST_RATE_LIMIT.windowSeconds);
-    } catch {
-      await this.journalRejection(request.ip, source, {
-        details: { outcome: "rate_limited", step: query.mode }, operation: "exchange_request", statusCode: 429,
-      });
-      reply.status(429);
-      return "failure\nСлишком много запросов";
-    }
+    const requestFailure = await this.checkRateLimit("request", query.mode, request.ip, source, reply);
+    if (requestFailure) return requestFailure;
 
-    if (query.mode === "checkauth") return this.checkauth(request, reply,source);
+    if (query.mode === "checkauth") {
+      const loginFailure = await this.checkRateLimit("auth", query.mode, request.ip, source, reply);
+      if (loginFailure) return loginFailure;
+      return this.checkauth(request, reply, source);
+    }
 
     // The session is bound to the address the login came from. A request it does not cover is let in when it
     // carries the login itself; that check also names the cause when the request is turned away.
@@ -150,6 +148,30 @@ export class OneCExchangeController {
     return "failure\nНеизвестный режим обмена";
   }
 
+  private async checkRateLimit(
+    budget: "request" | "auth", step: OneCExchangeQuery["mode"], ip: string, source: OneCSource, reply: FastifyReply,
+  ): Promise<string | null> {
+    const isLogin = budget === "auth";
+    const { limit, windowSeconds } = isLogin ? AUTH_RATE_LIMIT : REQUEST_RATE_LIMIT;
+    try {
+      await this.rateLimit.consume(`one-c-exchange-${budget}`, ip, limit, windowSeconds);
+      return null;
+    } catch (error) {
+      if (!(error instanceof HttpException) || error.getStatus() !== HttpStatus.TOO_MANY_REQUESTS) {
+        reply.status(HttpStatus.SERVICE_UNAVAILABLE);
+        return "failure\nСервис обмена временно недоступен";
+      }
+      await this.journalRejection(ip, source, {
+        details: isLogin ? { outcome: "rate_limited" } : { outcome: "rate_limited", step },
+        operation: isLogin ? "exchange_checkauth" : "exchange_request",
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      });
+      reply.status(HttpStatus.TOO_MANY_REQUESTS);
+      reply.header("Retry-After", String(windowSeconds));
+      return isLogin ? "failure\nСлишком много попыток входа" : "failure\nСлишком много запросов";
+    }
+  }
+
   /** Writes a turned-away request into the request journal, within the journal's own budget for the address. */
   private async journalRejection(
     ipAddress: string,
@@ -165,16 +187,6 @@ export class OneCExchangeController {
   }
 
   private async checkauth(request: FastifyRequest, reply: FastifyReply,source:OneCSource): Promise<string> {
-    try {
-      await this.rateLimit.consume("one-c-exchange-auth", request.ip, AUTH_RATE_LIMIT.limit, AUTH_RATE_LIMIT.windowSeconds);
-    } catch {
-      await this.journalRejection(request.ip, source, {
-        details: { outcome: "rate_limited" }, operation: "exchange_checkauth", statusCode: 429,
-      });
-      reply.status(429);
-      return "failure\nСлишком много попыток входа";
-    }
-
     // 1С gets the same bare «failure» whatever was wrong; the cause goes to the journal for the staff.
     const login = await this.integration.checkExchangeLogin(request.headers.authorization, request.ip,source);
     const authRevision = login.revision;

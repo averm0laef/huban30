@@ -22,6 +22,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { HttpException, HttpStatus, ServiceUnavailableException } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -1117,7 +1118,7 @@ describe("OneCExchangeController journal of turned-away requests", () => {
   });
 
   it("writes down a login turned away for too many attempts", async () => {
-    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-auth") throw new Error("too many"); };
+    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-auth") throw new HttpException("too many", HttpStatus.TOO_MANY_REQUESTS); };
     try {
       const response = await harness.controller.get(
         { mode: "checkauth", type: "catalog" },
@@ -1161,7 +1162,7 @@ describe("OneCExchangeController journal of turned-away requests", () => {
   });
 
   it("writes down an exchange stopped for sending too many requests", async () => {
-    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-request") throw new Error("too many"); };
+    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-request") throw new HttpException("too many", HttpStatus.TOO_MANY_REQUESTS); };
     try {
       const response = await harness.controller.get({ mode: "import", type: "catalog" }, fakeRequest({}), fakeReply());
       expect(response).toBe("failure\nСлишком много запросов");
@@ -1173,8 +1174,23 @@ describe("OneCExchangeController journal of turned-away requests", () => {
     }
   });
 
+  it.each(["one-c-exchange-request", "one-c-exchange-auth"])("reports an unavailable %s limiter separately from an exhausted budget", async (failedScope) => {
+    harness.limiter.consume = async (scope) => { if (scope === failedScope) throw new ServiceUnavailableException(); };
+    try {
+      const before = harness.database.requestLog.length;
+      const reply = fakeReply();
+      const status = vi.spyOn(reply, "status");
+      const response = await harness.controller.get({ mode: "checkauth", type: "catalog" }, fakeRequest({}), reply);
+      expect(status).toHaveBeenCalledWith(503);
+      expect(response).toBe("failure\nСервис обмена временно недоступен");
+      expect(harness.database.requestLog.length).toBe(before);
+    } finally {
+      harness.limiter.consume = async () => undefined;
+    }
+  });
+
   it("stops writing about one address once the journal's own budget for it is spent, and still turns the request away", async () => {
-    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-journal") throw new Error("too many"); };
+    harness.limiter.consume = async (scope) => { if (scope === "one-c-exchange-journal") throw new HttpException("too many", HttpStatus.TOO_MANY_REQUESTS); };
     try {
       const before = harness.database.requestLog.length;
       const response = await harness.controller.get({ mode: "init", type: "catalog" }, from(OUTSIDE_ADDRESS, {}), fakeReply());
