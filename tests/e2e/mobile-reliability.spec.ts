@@ -196,3 +196,32 @@ test("catalog view toggle changes the layout and keeps the selected filters", as
   await view.getByRole("link", { name: "Плиткой" }).click();
   await expect.poll(firstRowCount).toBe(4);
 });
+
+test("cart waits for hydration before accepting an add and preserves stored lines", async ({ page }) => {
+  const storedId = "01800000-0000-4000-8000-000000000101";
+  await page.addInitScript((productId) => {
+    (globalThis as unknown as { localStorage: { setItem: (key: string, value: string) => void } }).localStorage
+      .setItem("an30_cart_v1", JSON.stringify([{ productId, quantity: 2 }]));
+  }, storedId);
+  const scripts = gate();
+  await page.route(/\/_next\/.*\.js(?:\?.*)?$/u, async (route) => {
+    await scripts.wait;
+    await route.continue();
+  });
+  try {
+    await page.goto(product, { waitUntil: "commit" });
+    const add = page.getByRole("button", { name: "В корзину", exact: true }).first();
+    await expect(add).toBeVisible();
+    await expect(add).toBeDisabled();
+    scripts.open();
+    await expect(add).toBeEnabled({ timeout: 15_000 });
+    await add.tap();
+    await expect(page.getByRole("link", { name: "В корзине", exact: true }).first()).toBeVisible();
+    await expect.poll(() => page.evaluate(() => JSON.parse((globalThis as unknown as { localStorage: { getItem: (key: string) => string | null } }).localStorage.getItem("an30_cart_v1") ?? "[]"))).toEqual([
+      { productId: storedId, quantity: 2 },
+      { productId: "01800000-0000-4000-8000-000000000100", quantity: 1 },
+    ]);
+  } finally {
+    scripts.open();
+  }
+});

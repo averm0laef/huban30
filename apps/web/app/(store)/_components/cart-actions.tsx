@@ -111,7 +111,7 @@ export function AddToCartButton({ disabled, onAdded, productId }: {
   onAdded?: (at: number) => void;
   productId: string;
 }) {
-  const { addItem } = useCart();
+  const { addItem, hydrated } = useCart();
   const [added, setAdded] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
   const lastAddAt = useRef<number | null>(null);
@@ -125,7 +125,8 @@ export function AddToCartButton({ disabled, onAdded, productId }: {
       type="button"
       className="storefront-add-cart"
       data-added={added || undefined}
-      disabled={disabled}
+      aria-busy={!hydrated || undefined}
+      disabled={disabled || !hydrated}
       onClick={(event) => {
         // Keyboard activation reports timeStamp too, so a held Enter is covered.
         if (isRepeatClick(lastAddAt.current, event.timeStamp)) return;
